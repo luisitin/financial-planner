@@ -1018,3 +1018,272 @@ test("gap #21 (R14): the parts made from hand-written folds hold their figures: 
   const c = lever(d, "claim");
   assert.equal(partIn(r.root, "claim-ages").querySelector("p").textContent, `About ${down10(c.results[0].monthly)} a month claiming at ${c.results[0].age}, about ${down10(c.results.at(-1).monthly)} at 70.`);
 });
+
+// ---------------------------------------------------------------- gap list, next 60, #31 (map A8): when will your savings reach a
+// figure, and could you stop work then. Savings are what Will the money last? counts: today's four buckets, then each year's
+// end-of-year total in today's dollars of the plan run as it is; "stop then" is the line of that age in "N more ages".
+const o2 = await import("./compute.js");
+const tgt = (plan, figure, extra = {}) => compute(plan, { today: T13, only: [], target: figure, ...extra }).target;
+const rowAt = (plan, age, extra = {}) => compute(plan, { today: T13, only: [], ages: true, ...extra }).ages.rows.find((x) => x.age === age);
+const nearRetire = async () => { const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs"); const { migrate } = await import("../../../core/schema/migrate.js"); return migrate(structuredClone(ARCHETYPES.find((a) => a.id === "09-near-retirement").build())); };
+
+test("o2 (#31): reaching: the first year the plan's own savings reach the figure, by hand from Will the money last?'s run; stopping then is that age's line", async () => {
+  const p = familyPlan(T13);
+  const t = tgt(p, 1000000);
+  // by hand: the projection Will the money last? draws (the plan as it is), end-of-year totals in today's dollars
+  const I2 = buildInputs(familyPlan(T13), { today: T13 }).inputs;
+  const rows = project(I2).rows;
+  const k = rows.findIndex((x) => x.totalReal >= 1000000);
+  assert.ok(k > 0 && rows[k - 1].totalReal < 1000000);
+  assert.equal(rows[k].year, 2049);
+  assert.deepEqual(t.reach, { year: 2050, age: 60, already: false }, "reached by the start of the next year, the year Ana turns 60");
+  near(t.now, I2.balances.cash + I2.balances.taxable + I2.balances.deferred + I2.balances.free, 1e-9);
+  assert.equal(t.personId, "p-ana"); assert.equal(t.planned, 65); assert.equal(t.when, "earlier");
+  // stopping at 60 is the 60 line of "16 more ages": runs out at 79
+  const r60 = rowAt(p, 60);
+  assert.equal(t.stop.age, 60); assert.equal(t.stop.year, 2050);
+  assert.equal(t.stop.lasts, r60.lasts); assert.equal(t.stop.runsOutAt, r60.runsOutAt); assert.equal(t.stop.lastsTo, r60.lastsTo);
+  assert.equal(t.stop.runsOutAt, 79); assert.equal(t.stop.meets, false); assert.equal(o2.canUseAge(t), false, "no button to an age that runs out");
+  assert.equal(o2.reachWords(t), "Your savings would reach $1,000,000 by 2050, the year Ana turns 60, if markets do as well as average.");
+  assert.equal(o2.stopWords(t), "If Ana stopped work then, at 60, the money would run out at 79.");
+  // $1,100,000: by 2052, at 62, the card's own age, which lasts: one outlined "Use age 62"
+  const u = tgt(p, 1100000);
+  assert.deepEqual(u.reach, { year: 2052, age: 62, already: false });
+  assert.ok(u.stop.meets); assert.equal(o2.canUseAge(u), true);
+  assert.equal(o2.stopWords(u), "If Ana stopped work then, at 62, the money would last to 95.");
+  assert.equal(lever(compute(p, { today: T13, only: ["retire"] }), "retire").value, 62, "the card says 62 too");
+  // with an amount to leave and room for bad luck, the line follows the page's goal, as the ages do
+  for (const extra of [{ legacy: 500000 }, { spendingScale: 1.15 }]) {
+    const v = tgt(p, 1100000, extra), row = rowAt(p, 62, extra);
+    assert.equal(v.stop.meets, row.lasts, JSON.stringify(extra));
+    assert.deepEqual(v.reach, u.reach, "the savings are the plan's as it is: the goal does not move them");
+  }
+  assert.equal(o2.stopWords(tgt(p, 1100000, { legacy: 500000 }), { legacy: 500000 }), "If Ana stopped work then, at 62, the money would last to 95 but leave less than $500,000.");
+  // the plan is not changed by working it out
+  assert.equal(p.household.people[0].retirementAge, 65);
+});
+
+test("o2 (#31): never reached says so, with the highest figure and when; savings that only fall are highest today", () => {
+  const p = familyPlan(T13);
+  const t = tgt(p, 2100000);
+  const rows = project(buildInputs(familyPlan(T13), { today: T13 }).inputs).rows;
+  const top = rows.reduce((a, x) => (x.totalReal > a.totalReal ? x : a));
+  assert.equal(t.reach, null); assert.equal(t.when, null); assert.equal(t.stop, null);
+  near(t.peak.value, top.totalReal, 1e-9);
+  assert.deepEqual([t.peak.year, t.peak.age, t.peak.today], [top.year + 1, top.year + 1 - 1990, false]);
+  assert.deepEqual([t.peak.year, t.peak.age], [2055, 65]);
+  assert.equal(o2.reachWords(t), "Your savings never reach $2,100,000 with the plan as it is: the most is about $1,233,000, by 2055, the year Ana turns 65, if markets do as well as average.");
+  assert.equal(o2.stopWords(t), null); assert.equal(o2.canUseAge(t), false);
+  // just above the highest: still never, and the "about" figure is never above the figure asked for
+  const edge = tgt(p, Math.ceil(top.totalReal) + 1);
+  assert.equal(edge.reach, null);
+  assert.match(o2.reachWords(edge), /the most is about \$1,233,000,/);
+  // just at the highest: reached, the year it is highest
+  assert.deepEqual(tgt(p, Math.floor(top.totalReal)).reach, { year: 2055, age: 65, already: false });
+  // savings that only fall (every return -20% a year): highest today
+  const q = familyPlan(T13); q.assumptions = { ...q.assumptions, returnStocks: -0.2, returnBonds: -0.2, returnCash: -0.2 };
+  const f = tgt(q, 500000);
+  assert.equal(f.reach, null); assert.equal(f.peak.today, true); near(f.peak.value, f.now, 1e-9);
+  assert.equal(o2.reachWords(f), "Your savings never reach $500,000 with the plan as it is: they are highest today, about $192,000.");
+});
+
+test("o2 (#31): already there: today's savings, and stopping now is the plan with that adult stopping this year", async () => {
+  const p = await nearRetire();   // Gloria 61 (planned 65) and Frank; $1,347,500 saved
+  const t = tgt(p, 1000000);
+  assert.ok(t.now >= 1000000);
+  assert.deepEqual(t.reach, { year: 2026, age: 61, already: true });
+  assert.equal(t.when, "earlier"); assert.equal(t.stop.age, 61); assert.equal(t.stop.year, 2026);
+  // by hand: the plan with Gloria's retirement age set to 61, steady spending, run once
+  const q = structuredClone(p); q.household.people.find((x) => x.id === t.personId).retirementAge = 61; q.retirement = { ...q.retirement, strategy: "fixed-real" };
+  const inp = buildInputs(q, { today: T13 }).inputs, run = project({ ...inp, strategy: "fixed-real" });
+  assert.equal(t.stop.lasts, run.success); assert.equal(t.stop.lastsTo, inp.endYear - 1965);
+  assert.equal(o2.reachWords(t), "You already have more than $1,000,000 saved: about $1,348,000 today.");
+  assert.equal(o2.stopWords(t), "If Gloria stopped work now, at 61, the money would last to 95.");
+  assert.equal(o2.canUseAge(t), true);
+  assert.equal(o2.targetConfirmWords(t), "Change Gloria's retirement age from 65 to 61? The plan then counts Gloria as stopping work this year. Undo puts it back, and so does the People page.");
+  assert.equal(o2.targetSavedWords(t), "Saved: Gloria's retirement age is now 61, so Gloria stops work this year. The money would last to 95.");
+  // exactly today's savings is already there; a dollar more is not (it is reached later or never)
+  assert.equal(tgt(p, Math.floor(t.now)).reach.already, true);
+  assert.notEqual(tgt(p, Math.ceil(t.now) + 1).reach?.already, true);
+});
+
+test("o2 (#31): a couple, and a first adult who has stopped: only the adult the ages are about moves; on every qa plan the stop line is that age's line", async () => {
+  // the family: only Ana's age moves at the stop; Bo keeps his 62 (moving him too, to 60, would change the run)
+  const p = familyPlan(T13);
+  const t = tgt(p, 1100000);
+  const only = familyPlan(T13); only.household.people[0].retirementAge = 62; only.retirement.strategy = "fixed-real";
+  const both = familyPlan(T13); both.household.people[0].retirementAge = 62; both.household.people[1].retirementAge = 60; both.retirement.strategy = "fixed-real";
+  const a1 = project({ ...buildInputs(only, { today: T13 }).inputs, strategy: "fixed-real" }), a2 = project({ ...buildInputs(both, { today: T13 }).inputs, strategy: "fixed-real" });
+  near(t.stop.endReal, a1.endBalanceReal, 1e-9);
+  assert.notEqual(a1.endBalanceReal, a2.endBalanceReal, "moving Bo too would change it");
+  // Ana said she has stopped, Bo is paid: the question is about Bo, on the plan the card counts ("This counts Ana as stopped from
+  // this year"): its savings are that plan's, so they never read "reach $340,000 at 60" beside "stopping at 60 runs out at 56"
+  const s = familyPlan(T13); s.guide = { ...(s.guide ?? {}), setup: { ...(s.guide?.setup ?? {}), status: { "p-ana": "retired" } } };
+  const { workingNow, withStops } = await import("../../retirement/projection/compute.js");
+  const wn = workingNow(s, buildInputs(s, { today: T13 }).inputs, T13);
+  assert.deepEqual(wn.stopNow, [{ personId: "p-ana", age: 36 }]);
+  const b = tgt(s, 340000);
+  assert.equal(b.personId, "p-bo"); assert.equal(b.name, "Bo");
+  const sRows = project(buildInputs(withStops(s, wn.stopNow), { today: T13 }).inputs).rows;
+  const first = sRows.find((x) => x.totalReal >= 340000 - 0.5);
+  assert.deepEqual(b.reach, first ? { year: first.year + 1, age: first.year + 1 - 1988, already: false } : null);
+  if (b.stop) assert.ok(b.stop.runsOutAt === null || b.stop.runsOutAt >= b.stop.age, "never runs out before the age it stops at");
+  assert.match(o2.reachWords(b), /Bo turns \d+|highest today/);
+  // every qa plan, every chip figure the page would offer: the stop line is the ages' line for that age, and the reach is the
+  // first year of the plan's own run at or above the figure
+  const { compute: fire } = await import("../../retirement/fire/compute.js");
+  let checked = 0, earlier = 0;
+  for (const [name, plan] of await qaPlans()) {
+    const d = compute(plan, { today: T13, only: [], target: 0 });
+    if (!d.ready || !d.target) { if (d.ready) assert.equal(lever(compute(plan, { today: T13, only: ["retire"] }), "retire"), undefined, `${name}: no adult at work, no answer`); continue; }
+    const fi = fire(plan, { today: T13, withIncome: false });
+    const chips = o2.targetChips({ fi: fi.ready ? fi.fiNumber : null, years: fi.ready ? 1 / fi.withdrawalRate : null, spendingYearly: d.spendingMonthly * 12, peak: d.target.peak.value, now: d.target.now });
+    assert.ok(chips.length >= 2 && chips.length <= 4, `${name}: ${chips.length} chips`);
+    // fix round 1: one rule-of-thumb chip (F2), and the figure the part opens on is one of the chips (P5)
+    assert.equal(chips.filter((c) => c.kind !== "round").length, 1, `${name}: one rule of thumb`);
+    assert.ok(chips.some((c) => c.value === o2.targetDefault(chips, { now: d.target.now, peak: d.target.peak.value })), `${name}: the default is a chip`);
+    const ages = compute(plan, { today: T13, only: [], ages: true }).ages;
+    const wn = workingNow(plan, buildInputs(plan, { today: T13 }).inputs, T13);
+    const rows = project(buildInputs(withStops(plan, wn.stopNow), { today: T13 }).inputs).rows;
+    for (const c of chips) {
+      const x = tgt(plan, c.value);
+      checked++;
+      if (!x.reach) { assert.ok(rows.every((r) => r.totalReal < c.value - 0.5) && x.now < c.value - 0.5, `${name} ${c.value}: never`); continue; }
+      if (!x.reach.already) assert.equal(rows.find((r) => r.totalReal >= c.value - 0.5).year + 1, x.reach.year, `${name} ${c.value}`);
+      if (x.when !== "earlier") { assert.equal(x.stop, null); continue; }
+      earlier++;
+      const line = ages.rows.find((r) => r.age === x.stop.age);
+      if (line) { assert.equal(x.stop.lasts, line.lasts, `${name} ${c.value}`); assert.equal(x.stop.meets, line.lasts); assert.equal(x.stop.runsOutAt, line.runsOutAt); assert.equal(x.stop.lastsTo, line.lastsTo); }
+      assert.equal(o2.canUseAge(x), x.stop.meets);
+    }
+    // a chip the savings reach, when they reach any figure above today's
+    if (d.target.peak.value >= 10000 + d.target.now) assert.ok(chips.some((c) => c.value <= d.target.peak.value + 0.5), `${name}: one chip answers "by when"`);
+  }
+  assert.ok(checked >= 40 && earlier >= 10, `${checked} figures, ${earlier} with a stop line`);
+});
+
+test("o2 (#31): the chips: one rule of thumb (the Financial independence figure, else 25 times spending), round figures near it, low to high, at most four", async () => {
+  const { compute: fire } = await import("../../retirement/fire/compute.js");
+  const p = familyPlan(T13);
+  const fr = fire(p, { today: T13, withIncome: false }), fi = fr.fiNumber, d = compute(p, { today: T13, only: [], target: 0 });
+  assert.equal(Math.round(fi), 2100000); assert.equal(d.spendingMonthly * 12 * 25, 2100000); assert.equal(1 / fr.withdrawalRate, 25);
+  // the family: the rule of thumb, the round figure under it, and $1,000,000, which the savings do reach
+  const fam = o2.targetChips({ fi, years: 1 / fr.withdrawalRate, spendingYearly: d.spendingMonthly * 12, peak: d.target.peak.value, now: d.target.now });
+  assert.deepEqual(fam, [{ value: 1000000, kind: "round" }, { value: 2000000, kind: "round" }, { value: 2100000, kind: "fi", years: 25 }]);
+  // fix round 1, P3 and P4: "(enough to live on)" read as the plan failing beside "Your plan works", "(25 times spending)" was jargon
+  assert.deepEqual(fam.map((c) => o2.chipLabel(c)), ["$1,000,000", "$2,000,000", "$2,100,000 (25 years of spending)"]);
+  assert.equal(o2.ruleWords(fam), "\"25 years of spending\" is the figure on the Financial independence page: a common rule of thumb for living on savings alone. It counts no Social Security or pension, so a plan that has them can work with less.");
+  // reachable: the round figure under it and the one over it
+  assert.deepEqual(o2.targetChips({ fi: 2100000, spendingYearly: 84000, peak: 3e6, now: 1e5 }).map((c) => c.value), [2000000, 2100000, 2250000]);
+  // fix round 1, F2: the two figures 12% apart (01-single-adult's $811,200 and $910,500) or 2% apart are ONE chip, the Financial
+  // independence page's; 25 times spending is never shown beside it
+  for (const [fiN, yearly] of [[811200, 36420], [1397155, 66360], [1315838, 53800], [1649200, 55580]]) {
+    const cs = o2.targetChips({ fi: fiN, spendingYearly: yearly, peak: 5e6, now: 1e5 });
+    assert.deepEqual(cs.filter((c) => c.kind !== "round").map((c) => [c.value, c.kind]), [[fiN, "fi"]], String(fiN));
+  }
+  assert.deepEqual(o2.targetChips({ fi: 811200, spendingYearly: 36420, peak: 66710, now: 51000 }).map((c) => o2.chipLabel(c)), ["$60,000", "$800,000", "$811,200 (25 years of spending)"]);
+  // another withdrawal rate on the Financial independence page: its own number of years
+  assert.equal(o2.chipLabel(o2.targetChips({ fi: 2400000, years: 1 / 0.035, peak: 3e6, now: 1e5 }).find((c) => c.kind === "fi")), "$2,400,000 (29 years of spending)");
+  // four at most: the rule, the round under it, the one the savings reach (and no step over: three already)
+  assert.deepEqual(o2.targetChips({ fi: 1397155, spendingYearly: 66360, peak: 417089, now: 202200 }).map((c) => c.value), [400000, 1250000, 1397155]);
+  // a figure already round: the step under it; the steps by size
+  assert.equal(o2.targetChips({ fi: 2000000, peak: 5e6 })[0].value, 1750000);
+  assert.deepEqual([o2.targetStep(2e6), o2.targetStep(1e6), o2.targetStep(999999), o2.targetStep(1e5), o2.targetStep(99999)], [250000, 250000, 50000, 50000, 10000]);
+  // no Financial independence figure: 25 times spending is the rule of thumb, with the round figures either side, and says so
+  const own = o2.targetChips({ fi: null, spendingYearly: 36420, peak: 2e6, now: 0 });
+  assert.deepEqual(own.map((c) => [c.value, c.kind]), [[900000, "round"], [910500, "times25"], [950000, "round"]]);
+  assert.equal(o2.chipLabel(own[1]), "$910,500 (25 years of spending)");
+  assert.equal(o2.ruleWords(own), "\"25 years of spending\" is a common rule of thumb for living on savings alone: 25 times what your plan spends in a year. It counts no Social Security or pension, so a plan that has them can work with less.");
+  assert.equal(o2.ruleWords([{ value: 1e6, kind: "round" }]), null);
+  // the savings reach nothing above today's: no such chip; nothing to go on: no chips
+  assert.ok(o2.targetChips({ fi: 2100000, spendingYearly: 84000, peak: 192700, now: 192700 }).every((c) => c.value > 192700));
+  assert.deepEqual(o2.targetChips({}), []);
+});
+
+test("o2 (#31) fix round 1, P5: the figure answered as the part opens: the lowest chip reached later, else the rule of thumb, else the first", () => {
+  const fam = [{ value: 1000000, kind: "round" }, { value: 2000000, kind: "round" }, { value: 2100000, kind: "fi", years: 25 }];
+  assert.equal(o2.targetDefault(fam, { now: 177000, peak: 1233685 }), 1000000, "the family: reached by 2050");
+  assert.equal(o2.targetDefault(fam, { now: 1100000, peak: 2050000 }), 2000000, "today's savings are past the first: the next one reached");
+  assert.equal(o2.targetDefault(fam, { now: 192700, peak: 192700 }), 2100000, "none reached: the rule of thumb (the never sentence)");
+  assert.equal(o2.targetDefault(fam, { now: 3e6, peak: 3e6 }), 2100000, "all already there: the rule of thumb");
+  assert.equal(o2.targetDefault([{ value: 5e5, kind: "round" }, { value: 6e5, kind: "round" }], { now: 7e5, peak: 7e5 }), 5e5, "no rule chip: the first");
+  assert.equal(o2.targetDefault([], { now: 1, peak: 2 }), null);
+  assert.equal(o2.targetDefault(fam, { now: 177000 }), 1000000, "no peak known: the first above today's");
+});
+
+test("o2 (#31): one written sentence per case (R5): the reach, the stop, the question before the save, the green line and Undo", () => {
+  const base = { figure: 1000000, now: 192700, name: "Me", ageNow: 36, planned: 65, peak: { value: 1233685, year: 2055, age: 65, today: false } };
+  const later = { ...base, reach: { year: 2050, age: 60, already: false }, when: "earlier" };
+  const now = { ...base, figure: 150000, reach: { year: 2026, age: 36, already: true }, when: "earlier" };
+  // the reach: four cases
+  assert.equal(o2.reachWords(now), "You already have more than $150,000 saved: about $193,000 today.");
+  // fix round 1, P8: savings that round to the figure itself are not "more than" it
+  assert.equal(o2.reachWords({ ...now, figure: 193000, now: 192999.8 }), "You already have $193,000 saved today.");
+  assert.equal(o2.reachWords({ ...now, figure: 193000, now: 193000 }), "You already have $193,000 saved today.");
+  assert.equal(o2.reachWords({ ...now, figure: 192500, now: 192700 }), "You already have more than $192,500 saved: about $193,000 today.");
+  assert.equal(o2.reachWords(later), "Your savings would reach $1,000,000 by 2050, the year you turn 60, if markets do as well as average.");
+  assert.equal(o2.reachWords({ ...base, figure: 2100000, reach: null }), "Your savings never reach $2,100,000 with the plan as it is: the most is about $1,233,000, by 2055, the year you turn 65, if markets do as well as average.");
+  assert.equal(o2.reachWords({ ...base, figure: 500000, reach: null, peak: { value: 192700, year: 2026, age: 36, today: true } }), "Your savings never reach $500,000 with the plan as it is: they are highest today, about $192,000.");
+  assert.equal(o2.reachWords({ ...base, name: "My spouse", reach: later.reach }), "Your savings would reach $1,000,000 by 2050, the year your spouse turns 60, if markets do as well as average.");
+  assert.equal(o2.reachWords({ ...base, figure: 0 }), null);
+  // the stop: then and now, four outcomes each; at the planned age; after it
+  const stop = (s) => ({ age: 60, year: 2050, lasts: true, meets: true, runsOutAt: null, lastsTo: 95, ...s });
+  assert.equal(o2.stopWords({ ...later, stop: stop({ lasts: false, meets: false, runsOutAt: 79 }) }), "If you stopped work then, at 60, the money would run out at 79.");
+  assert.equal(o2.stopWords({ ...later, stop: stop({}) }), "If you stopped work then, at 60, the money would last to 95.");
+  assert.equal(o2.stopWords({ ...later, stop: stop({}) }, { legacy: 500000 }), "If you stopped work then, at 60, the money would last to 95 and leave at least $500,000.");
+  assert.equal(o2.stopWords({ ...later, stop: stop({ meets: false }) }, { legacy: 500000 }), "If you stopped work then, at 60, the money would last to 95 but leave less than $500,000.");
+  assert.equal(o2.stopWords({ ...now, stop: stop({ age: 36, lasts: false, meets: false, runsOutAt: 54 }) }), "If you stopped work now, at 36, the money would run out at 54.");
+  assert.equal(o2.stopWords({ ...now, stop: stop({ age: 36 }) }), "If you stopped work now, at 36, the money would last to 95.");
+  assert.equal(o2.stopWords({ ...now, stop: stop({ age: 36 }) }, { legacy: 250000 }), "If you stopped work now, at 36, the money would last to 95 and leave at least $250,000.");
+  assert.equal(o2.stopWords({ ...now, stop: stop({ age: 36, meets: false }) }, { legacy: 250000 }), "If you stopped work now, at 36, the money would last to 95 but leave less than $250,000.");
+  assert.equal(o2.stopWords({ ...later, name: "Ana", reach: { year: 2055, age: 65, already: false }, when: "planned", stop: null }), "That is the year Ana plans to stop work anyway, at 65.");
+  assert.equal(o2.stopWords({ ...later, reach: { year: 2055, age: 65, already: false }, when: "planned", stop: null }), "That is the year you plan to stop work anyway, at 65.");
+  assert.equal(o2.stopWords({ ...later, name: "Ana", reach: { year: 2057, age: 67, already: false }, when: "after", stop: null }), "The plan already has Ana stopping work before then, at 65.");
+  assert.equal(o2.stopWords({ ...base, reach: null }), null);
+  // the button only where stopping then meets the goal
+  assert.equal(o2.canUseAge({ ...later, stop: stop({}) }), true);
+  assert.equal(o2.canUseAge({ ...later, stop: stop({ meets: false }) }), false);
+  assert.equal(o2.canUseAge({ ...later, when: "planned", stop: null }), false);
+  // the phone's question, the green line, Undo
+  const t = { ...later, name: "Me", stop: stop({ age: 62, year: 2052 }) };
+  assert.equal(o2.targetConfirmWords(t), "Change your retirement age from 65 to 62? Undo puts it back, and so does the People page.");
+  assert.equal(o2.targetConfirmWords({ ...now, stop: stop({ age: 36 }) }), "Change your retirement age from 65 to 36? The plan then counts you as stopping work this year. Undo puts it back, and so does the People page.");
+  assert.equal(o2.targetSavedWords(t), "Saved: your retirement age is now 62, so you stop work in 2052. The money would last to 95.");
+  assert.equal(o2.targetSavedWords({ ...t, name: "Ana" }, { legacy: 500000 }), "Saved: Ana's retirement age is now 62, so Ana stops work in 2052. The money would last to 95 and leave at least $500,000.");
+  assert.equal(o2.targetSavedWords({ ...now, stop: stop({ age: 36 }) }), "Saved: your retirement age is now 36, so you stop work this year. The money would last to 95.");
+  assert.equal(o2.targetUndoneWords(t), "Back to retiring at 65, as before.");
+});
+
+test("o2 invariance (gap spec 3.5): without `target`, compute() has no target key; with it, only `target` is added, over every fixture and qa plan", async () => {
+  const path = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const dir = fileURLToPath(new URL("../../../qa/fixtures/", import.meta.url));
+  const all = [];
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) all.push([`${f}:${name}`, fn(T13)]);
+  }
+  for (const a of ARCHETYPES) all.push([a.id, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") all.push([`phone ${name}`, fn()]);
+  all.push(["empty", emptyPlan()]);
+  let withTarget = 0;
+  for (const [name, raw] of all) {
+    const p = migrate(structuredClone(raw));
+    const before = compute(structuredClone(p), { today: T13 });
+    assert.ok(!("target" in before), `${name}: no target unless asked`);
+    for (const params of [{ target: 1000000 }, { target: 0, legacy: 250000 }]) {
+      const { target, ...rest } = compute(structuredClone(p), { today: T13, ...params });
+      const plain = params.legacy ? compute(structuredClone(p), { today: T13, legacy: params.legacy }) : before;
+      assert.equal(JSON.stringify(rest), JSON.stringify(plain), `${name} ${JSON.stringify(params)}: asking changes nothing else`);
+      if (before.ready) { assert.ok("target" in compute(p, { today: T13, only: [], ...params }), name); if (target) withTarget++; }
+    }
+    // the ages are what they were (their run is shared with the stop line now)
+    if (before.ready && lever(before, "retire")) assert.equal(JSON.stringify(compute(structuredClone(p), { today: T13, only: [], ages: true, target: 1000000 }).ages), JSON.stringify(compute(structuredClone(p), { today: T13, only: [], ages: true }).ages), name);
+  }
+  assert.ok(all.length >= 30 && withTarget >= 20, `${all.length} plans, ${withTarget} answers`);
+  // a figure that is not a number asks nothing
+  for (const v of [undefined, null, "x", -5]) assert.ok(!("target" in compute(familyPlan(T13), { today: T13, only: [], target: v })), String(v));
+});

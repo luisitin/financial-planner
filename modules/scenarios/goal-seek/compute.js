@@ -199,13 +199,9 @@ export function retireAgeRows(plan, { today, legacy = 0, spendingScale = 1, answ
   const meetsAt = (inp, yearly) => { const r = project({ ...inp, strategy: "fixed-real", spending: { yearly } }); return r.success && r.endBalanceReal >= leave - 0.5; };
   const rows = [];
   for (let a = span.from; a <= span.to; a++) {
-    const p2 = JSON.parse(JSON.stringify(base));
-    p2.household.people.find((q) => q.id === w.self.id).retirementAge = a;
-    p2.retirement = { ...(p2.retirement ?? {}), strategy: "fixed-real" };
-    const inp = buildInputs(p2, { today }).inputs;
-    if (!inp) continue;
-    const r = project({ ...inp, strategy: "fixed-real", ...(scale !== 1 ? { spending: { ...inp.spending, yearly: inp.spending.yearly * scale } } : {}) });
-    const lasts = r.success && r.endBalanceReal >= leave - 0.5;
+    const run = runAtAge(base, w.self.id, a, { today, scale, leave });
+    if (!run) continue;
+    const { inp, r, lasts } = run;
     let monthly = null;
     if (lasts) {
       const most = leave > 0 ? largestWhere((s) => meetsAt(inp, s), 0, Math.max(12000, inp.spending.yearly * 2 * scale), 1) : affordableSpending(inp);
@@ -215,6 +211,224 @@ export function retireAgeRows(plan, { today, legacy = 0, spendingScale = 1, answ
   }
   return { personId: w.self.id, name: w.self.name, ageNow: w.ageNow, planned: w.planned, ...span, others: w.others, healthOnTop: w.healthOnTop, answer, rows };
 }
+
+/**
+ * runAtAge(base, selfId, age, { today, scale, leave }) -> { inp, r, lasts } | null: one line of "N more ages" (retireAgeRows) and
+ * the line under "When will your savings reach a figure?" (savingsTarget): the plan `base` with only that adult's `retirementAge`
+ * set to `age`, rebuilt by the projection's buildInputs, run once by project() at expected returns, spending the plan's amount
+ * the same every year after inflation (strategy "fixed-real") times `scale`; lasts = it lasts to the plan's end and leaves at
+ * least `leave` (today's dollars). null when the plan cannot be built with that age.
+ */
+function runAtAge(base, selfId, age, { today, scale = 1, leave = 0 } = {}) {
+  const p2 = JSON.parse(JSON.stringify(base));
+  p2.household.people.find((q) => q.id === selfId).retirementAge = age;
+  p2.retirement = { ...(p2.retirement ?? {}), strategy: "fixed-real" };
+  const inp = buildInputs(p2, { today }).inputs;
+  if (!inp) return null;
+  const r = project({ ...inp, strategy: "fixed-real", ...(scale !== 1 ? { spending: { ...inp.spending, yearly: inp.spending.yearly * scale } } : {}) });
+  return { inp, r, lasts: r.success && r.endBalanceReal >= leave - 0.5 };
+}
+
+// ---------------------------------------------------------------- when will your savings reach a figure? (gap list, next 60, #31)
+/** "25 years of spending": the rule-of-thumb chip when the Financial independence page has no figure, that page's rule at its
+ * usual 4% a year. */
+export const TARGET_TIMES = 25;
+/** The round figures' step near x: $250,000 from $1,000,000, $50,000 from $100,000, else $10,000. */
+export const targetStep = (x) => (x >= 1e6 ? 250000 : x >= 1e5 ? 50000 : 10000);
+
+/**
+ * savingsTarget(plan, { today, figure, legacy, spendingScale }) -> {
+ *   figure, now, personId, name, ageNow, planned,
+ *   reach: { year, age, already } | null, peak: { value, year, age, today },
+ *   when: "earlier" | "planned" | "after" | null, stop: { age, year, lasts, meets, runsOutAt, lastsTo, endReal } | null
+ * } | null
+ * When the plan's savings reach `figure` (today's dollars), with the plan as it is, and what stopping work then would do.
+ * - Savings are what Will the money last? counts and draws: today, the four buckets of buildInputs' balances (every checking,
+ *   savings, cash, brokerage, crypto, 401(k), IRA, cash-value life, Roth and HSA account at its counted balance); a year, the
+ *   engine's end-of-year total in today's dollars (`project(inputs).rows[i].totalReal`), the plan run as it is (its own rule,
+ *   expected returns, no room for bad luck). One case differs, as the card and the ages do: when the first adult stopped before
+ *   the age on file and the partner's pay is on Income (workingNow's stopNow), the plan counts the first adult stopped from this
+ *   year (withStops), so the savings and the stop line come from one plan.
+ * - reach: today when today's savings are at least the figure (`already`, the adult's age today, this year); else the first year
+ *   whose end-of-year total is at least the figure, reached by the start of the next year: year = that year + 1, age = year -
+ *   birth year (the engine's age in a year). A retirement age N stops work from the start of birth year + N, so "stopping then" is
+ *   retirement age N. null when it is never reached.
+ * - peak: the highest of today and each year's total (`today` when today's is the highest), dated the same way.
+ * - the adult is the one the "When ... can retire" card and the ages are about (agesWho: the projection's workingNow lead);
+ *   `planned` their age to stop on file. `when`: "earlier" (the reach age is before it), "planned" (at it), "after".
+ * - stop ("earlier" only): runAtAge at the reach age, on the same plan as the ages (withStops), with the page's goal (`legacy`)
+ *   and room for bad luck (`spendingScale`): exactly that age's line of "N more ages". meets = lasts and leaves `legacy`.
+ * `figure` 0 gives today's savings and the peak alone (the chips are drawn from them). null when nobody still works.
+ */
+export function savingsTarget(plan, { today, figure = 0, legacy = 0, spendingScale = 1 } = {}) {
+  const fig = Math.max(0, Number(figure) || 0);
+  const w = today ? agesWho(plan, today) : null;
+  if (!w) return null;
+  // the plan as the card and the ages count it: as it is, or, when the first adult stopped before the age on file and the
+  // partner's pay is on Income, with the first adult stopped from this year (the card says so); else "reach $340,000 at 60" came
+  // from one plan and "stopping at 60 runs out at 56" from the other
+  const base = withStops(plan, w.stopNow);
+  const I = buildInputs(base, { today }).inputs;
+  if (!I) return null;
+  const year = Number(String(today).slice(0, 4)), by = Number(String(w.self.birthDate).slice(0, 4));
+  const now = I.balances.cash + I.balances.taxable + I.balances.deferred + I.balances.free;
+  const rows = project(I).rows;
+  let peak = { value: now, year, age: w.ageNow, today: true };
+  for (const x of rows) if (x.totalReal > peak.value + 0.5) peak = { value: x.totalReal, year: x.year + 1, age: x.year + 1 - by, today: false };
+  let reach = null;
+  if (fig > 0 && now >= fig - 0.5) reach = { year, age: w.ageNow, already: true };
+  else if (fig > 0) { const row = rows.find((x) => x.totalReal >= fig - 0.5); if (row) reach = { year: row.year + 1, age: row.year + 1 - by, already: false }; }
+  const when = !reach ? null : reach.age < w.planned ? "earlier" : reach.age === w.planned ? "planned" : "after";
+  let stop = null;
+  if (when === "earlier") {
+    const scale = Number(spendingScale) > 0 ? Number(spendingScale) : 1, leave = Math.max(0, Number(legacy) || 0);
+    const run = runAtAge(base, w.self.id, reach.age, { today, scale, leave });
+    if (run) stop = { age: reach.age, year: Math.max(year, by + reach.age), lasts: run.r.success, meets: run.lasts, runsOutAt: run.r.success ? null : run.r.failYear - by, lastsTo: run.inp.endYear - by, endReal: run.r.endBalanceReal };
+  }
+  return { figure: fig, now, personId: w.self.id, name: w.self.name, ageNow: w.ageNow, planned: w.planned, reach, peak, when, stop };
+}
+
+/**
+ * targetChips({ fi, years, spendingYearly, peak, now }) -> [{ value, kind: "fi" | "times25" | "round", years? }], low to high, at
+ * most four. ONE rule-of-thumb figure, "N years of spending": the Financial independence page's own figure (`fi`, its "Enough to
+ * live on", `years` = 1 / its withdrawal rate, 25 at 4%) when it has one, else 25 times the plan's yearly spending (kind
+ * "times25"); never both (fix round 1, 2026-11-15, F2: "$811,200 (enough to live on)" beside "$910,500 (25 times spending)" were
+ * two names for one idea, 12% apart). Then a round figure near it (the step at or under it; a step under it when it is already
+ * round). When the savings reach none of these (`peak`, savingsTarget's), the largest round step they do reach, if that is more
+ * than today's savings (`now`), so one chip can answer "by when". With fewer than three, also the step over the rule. Pure.
+ */
+export function targetChips({ fi = null, years = null, spendingYearly = 0, peak = null, now = 0 } = {}) {
+  const f = Number(fi) > 0 ? Math.round(Number(fi)) : null;
+  const t = Number(spendingYearly) > 0 ? Math.round(Number(spendingYearly) * TARGET_TIMES) : null;
+  const rule = f ? { value: f, kind: "fi", years: Number(years) > 0 ? Math.round(Number(years)) : TARGET_TIMES }
+    : t ? { value: t, kind: "times25", years: TARGET_TIMES } : null;
+  if (!rule) return [];
+  const out = [rule];
+  const below = (x) => { const s = targetStep(x), r = Math.floor(x / s) * s; return r >= x ? r - s : r; };
+  const above = (x) => { const s = targetStep(x), r = Math.ceil(x / s) * s; return r <= x ? r + s : r; };
+  const has = (v) => out.some((c) => c.value === v);
+  const b = below(rule.value);
+  if (b > 0) out.push({ value: b, kind: "round" });
+  if (Number.isFinite(Number(peak)) && peak !== null && out.every((c) => c.value > Number(peak) + 0.5)) {
+    const r = Math.floor(Number(peak) / targetStep(Number(peak))) * targetStep(Number(peak));
+    if (r > 0 && r > (Number(now) || 0) && !has(r)) out.push({ value: r, kind: "round" });
+  }
+  if (out.length < 3) { const a = above(rule.value); if (!has(a)) out.push({ value: a, kind: "round" }); }
+  return out.sort((x, y) => x.value - y.value).slice(0, 4);
+}
+
+/** A chip's words: "$2,100,000 (25 years of spending)" (the rule of thumb, either kind; fix round 1, P4: "25 times spending" was
+ * jargon, P3: "enough to live on" read as the plan failing beside "Your plan works"), "$2,000,000". */
+export function chipLabel(c, cur = "USD") {
+  const m = fmtMoney(c.value, cur);
+  return c.kind === "fi" || c.kind === "times25" ? `${m} (${c.years ?? TARGET_TIMES} years of spending)` : m;
+}
+
+/**
+ * ruleWords(chips) -> the line under the answer for the rule-of-thumb chip, saying what it is and why a plan can work with less (fix
+ * round 1, P3: "Your savings never reach $2,100,000 (enough to live on)" beside "Your plan works" read as the plan failing), or null
+ * when no such chip is shown: "\"25 years of spending\" is the figure on the Financial independence page: a common rule of thumb for
+ * living on savings alone. It counts no Social Security or pension, so a plan that has them can work with less." (kind "times25":
+ * "... is a common rule of thumb for living on savings alone: 25 times what your plan spends in a year. ..."). True of both: fire's
+ * fiNumber with `withIncome: false` and 25 times the spending subtract no income.
+ */
+export function ruleWords(chips = []) {
+  const r = chips.find((c) => c.kind === "fi" || c.kind === "times25");
+  if (!r) return null;
+  const n = r.years ?? TARGET_TIMES, tail = "It counts no Social Security or pension, so a plan that has them can work with less.";
+  return r.kind === "fi"
+    ? `"${n} years of spending" is the figure on the Financial independence page: a common rule of thumb for living on savings alone. ${tail}`
+    : `"${n} years of spending" is a common rule of thumb for living on savings alone: ${n} times what your plan spends in a year. ${tail}`;
+}
+
+/**
+ * targetDefault(chips, { now, peak }) -> the figure answered as the part opens, before any tap (fix round 1, P5: it opened on
+ * chips and an empty space): the lowest chip the savings reach later (above today's savings, at or under their highest), else the
+ * rule-of-thumb chip, else the first; null without chips. A view choice like the rest: never the plan's.
+ */
+export function targetDefault(chips = [], { now = 0, peak = null } = {}) {
+  if (!chips.length) return null;
+  const later = chips.find((c) => c.value > (Number(now) || 0) + 0.5 && (peak === null || !Number.isFinite(Number(peak)) || c.value <= Number(peak) + 0.5));
+  return (later ?? chips.find((c) => c.kind !== "round") ?? chips[0]).value;
+}
+
+const thousandUp = (n) => Math.ceil(n / 1000 - 1e-9) * 1000, thousandDown = (n) => Math.floor(n / 1000 + 1e-9) * 1000;
+/**
+ * reachWords(t, cur) -> the first sentence of the answer, one written case each (R5): already there ("You already have more than
+ * $1,000,000 saved: about $1,348,000 today."; today's savings that round to the figure itself: "You already have $50,000 saved
+ * today."; fix round 1, P8: "at least $50,000 saved: about $528,000" read oddly), reached later ("Your savings would reach
+ * $1,000,000 by 2050, the year Ana turns 60, if markets do as well as average."), never, highest later ("... never reach $2,100,000 with the plan as it is: the most is about
+ * $1,233,000, by 2055, the year Ana turns 65, ..."), never, highest today ("... they are highest today, about $543,000.").
+ * "About" today rounds up to $1,000 when it is at least the figure and down when the figure is never reached, so the words never
+ * contradict the answer.
+ */
+export function reachWords(t, cur = "USD") {
+  if (!t || !(t.figure > 0)) return null;
+  const m = (n) => fmtMoney(Math.round(n), cur);
+  const who = nameIn(t.name), turns = verbFor(t.name, "turns", "turn");
+  if (t.reach?.already) return thousandUp(t.now) > t.figure + 0.5
+    ? `You already have more than ${m(t.figure)} saved: about ${m(thousandUp(t.now))} today.`
+    : `You already have ${m(t.figure)} saved today.`;
+  if (t.reach) return `Your savings would reach ${m(t.figure)} by ${t.reach.year}, the year ${who} ${turns} ${t.reach.age}, if markets do as well as average.`;
+  if (t.peak.today) return `Your savings never reach ${m(t.figure)} with the plan as it is: they are highest today, about ${m(thousandDown(t.now))}.`;
+  return `Your savings never reach ${m(t.figure)} with the plan as it is: the most is about ${m(thousandDown(t.peak.value))}, by ${t.peak.year}, the year ${who} ${turns} ${t.peak.age}, if markets do as well as average.`;
+}
+
+/**
+ * stopWords(t, { legacy, cur }) -> the second sentence, or null (never reached): what stopping work then would do, one written case
+ * each (R5). Before the planned age, then or now (already there) times four outcomes: "If Ana stopped work then, at 60, the money
+ * would run out at 79." / "... would last to 95." / "... would last to 95 and leave at least $500,000." / "... would last to 95 but
+ * leave less than $500,000."; at the planned age "That is the year Ana plans to stop work anyway, at 65."; after it "The plan
+ * already has Ana stopping work before then, at 65."
+ */
+export function stopWords(t, { legacy = 0, cur = "USD" } = {}) {
+  if (!t?.reach) return null;
+  const who = nameIn(t.name);
+  if (t.when === "planned") return `That is the year ${who} ${verbFor(t.name, "plans", "plan")} to stop work anyway, at ${t.planned}.`;
+  if (t.when === "after") return `The plan already has ${who} stopping work before then, at ${t.planned}.`;
+  const s = t.stop;
+  if (!s) return null;
+  const leave = fmtMoney(legacy, cur), now = !!t.reach.already;
+  if (s.runsOutAt !== null && s.runsOutAt !== undefined) return now
+    ? `If ${who} stopped work now, at ${s.age}, the money would run out at ${s.runsOutAt}.`
+    : `If ${who} stopped work then, at ${s.age}, the money would run out at ${s.runsOutAt}.`;
+  if (!s.meets) return now
+    ? `If ${who} stopped work now, at ${s.age}, the money would last to ${s.lastsTo} but leave less than ${leave}.`
+    : `If ${who} stopped work then, at ${s.age}, the money would last to ${s.lastsTo} but leave less than ${leave}.`;
+  if (legacy > 0) return now
+    ? `If ${who} stopped work now, at ${s.age}, the money would last to ${s.lastsTo} and leave at least ${leave}.`
+    : `If ${who} stopped work then, at ${s.age}, the money would last to ${s.lastsTo} and leave at least ${leave}.`;
+  return now
+    ? `If ${who} stopped work now, at ${s.age}, the money would last to ${s.lastsTo}.`
+    : `If ${who} stopped work then, at ${s.age}, the money would last to ${s.lastsTo}.`;
+}
+
+/** Whether "Use age N" is offered: stopping work earlier than planned, at the age the savings reach the figure, meets the page's
+ * goal (the money lasts and leaves what is set). Never a button to an age at which the money runs out. */
+export const canUseAge = (t) => !!(t?.when === "earlier" && t.stop?.meets);
+
+/** The phone's question before "Use age N" saves: "Change Ana's retirement age from 65 to 62? Undo puts it back, and so does the
+ * People page." (now: "... to 43? The plan then counts Ana as stopping work this year. ...") */
+export function targetConfirmWords(t) {
+  const whose = nameOf(t.name);
+  return t.reach?.already
+    ? `Change ${whose} retirement age from ${t.planned} to ${t.stop.age}? The plan then counts ${nameIn(t.name)} as stopping work this year. Undo puts it back, and so does the People page.`
+    : `Change ${whose} retirement age from ${t.planned} to ${t.stop.age}? Undo puts it back, and so does the People page.`;
+}
+
+/** The green line after "Use age N" (R7: it names the new answer): "Saved: Ana's retirement age is now 62, so Ana stops work in
+ * 2052. The money would last to 95." (with an amount to leave: "... last to 95 and leave at least $500,000."; now: "... this
+ * year."). */
+export function targetSavedWords(t, { legacy = 0, cur = "USD" } = {}) {
+  const s = t.stop, whose = nameOf(t.name), who = nameIn(t.name), stops = verbFor(t.name, "stops", "stop");
+  const when = t.reach?.already ? "this year" : `in ${s.year}`;
+  return legacy > 0
+    ? `Saved: ${whose} retirement age is now ${s.age}, so ${who} ${stops} work ${when}. The money would last to ${s.lastsTo} and leave at least ${fmtMoney(legacy, cur)}.`
+    : `Saved: ${whose} retirement age is now ${s.age}, so ${who} ${stops} work ${when}. The money would last to ${s.lastsTo}.`;
+}
+
+/** After Undo (ui.undoneWords adds a line when part was changed since): "Back to retiring at 65, as before." */
+export const targetUndoneWords = (t) => `Back to retiring at ${t.planned}, as before.`;
 
 /**
  * ageLine(row, { planned, legacy, cur }) -> one row's line, in one of three written cases (gap #21, R5):
@@ -270,6 +484,8 @@ export function agesWords(a, { legacy = 0, scale = 1, cur = "USD" } = {}) {
  * retirement age by halving (earliestRetireAge's `search`), for the score's speed. `savingInto` (fix round 1, 2026-11-12): "work"
  * solves the saving lever into an idle 401(k) (idleSaving) when there is one, "taxable" keeps the plain search into savings; the
  * default is "work", or "taxable" when `only` is given (the score's hint names no account).
+ * `target` (gap list, next 60, #31; a number >= 0): adds `target`, savingsTarget() for that figure with the page's goal and room
+ * for bad luck (null when nobody still works); without it there is no `target` key and every other field is as before.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
@@ -340,6 +556,10 @@ export function compute(plan, params = {}) {
   // result is what it was
   const ages = params.ages === true && self && ageNow < retireAge
     ? retireAgeRows(plan, { today, legacy, spendingScale: scale, answer: earliestOf(foundRetire()) }) : null;
+  // when the savings reach a figure (gap list, next 60, #31): only when asked (`target`, a figure in today's dollars, 0 for today's
+  // savings and the highest alone), from the part "N more ages"; left out otherwise, so every other caller's result is what it was
+  const asked = params.target !== undefined && params.target !== null && Number.isFinite(Number(params.target)) && Number(params.target) >= 0;
+  const target = asked ? savingsTarget(plan, { today, figure: Number(params.target), legacy, spendingScale: scale }) : undefined;
 
   // 3. saving: the extra (or the cut) a month, before retirement, into the accounts already used (the first person's biggest contribution, else taxable)
   if (want("saving") && I.retireYear > I.startYear) {
@@ -454,7 +674,7 @@ export function compute(plan, params = {}) {
   }
 
   const noSavings = !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })();
-  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers, ...(ages ? { ages } : {}) };
+  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers, ...(ages ? { ages } : {}), ...(asked ? { target } : {}) };
 }
 
 /** How a change card ranks for the first view: one that gets there on its own first, then room, "just right", "not on its own". */

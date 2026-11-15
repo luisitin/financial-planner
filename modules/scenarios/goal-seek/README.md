@@ -7,7 +7,7 @@
 Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes nothing. `heavy: true`.
 
 ## Outputs
-`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1). `ages: true` (gap #21) adds `ages`, a row for each retirement age (below); without it the result is what it was.
+`{ ready, missing, legacy, meets, success, failYear, endReal, spendingMonthly, strategy (the plan's withdrawal rule), levers[] }`; each lever `{ id, icon, title, value, current, unit: "month"|"age"|"rate"|"once", status: "room"|"same"|"needs"|"cannot", sentence, go }` (the claiming lever also has `results[]`: what the plan can spend at each age 62-70, and on a short plan `atBest`, the run at the best age; the return lever `info: true`, `line`, the page's grey line, and `more`, its detail for the fold; the saving lever `idle`, the 401(k) account ids it names, and `into`/`rest`, what to type into each and into other savings; 2026-11-11 and fix round 1, 2026-11-12). `noSavings` (gated) and then `nothingSaved` (the person told us there is nothing). Params also `savingInto` ("work" | "taxable"; see fix round 1). `ages: true` (gap #21) adds `ages`, a row for each retirement age (below); without it the result is what it was. `target` (a figure in today's dollars, 0 for today's savings and their highest alone; gap list, next 60, #31) adds `target`, when the plan's savings reach it and what stopping work then would do (below); without it the result is what it was.
 
 ## The goal and the levers
 The goal is met when the projection (expected returns) lasts to the end and `endBalanceReal >= legacy`. Each lever is solved alone, everything else as the plan has it:
@@ -362,22 +362,6 @@ Gap spec design #21 (map line G12; batch 4, commit 4.2). Other planners show wha
 quiet row, and the page's simple-first conversion (opt spec 6.2: class C, "How it is worked out" becomes "How this is worked out")
 is done in the same commit.
 
-**By default: nothing new.** The hero, the goal, the change cards with "When you can retire: age 62" stay first and as they were.
-Under the cards, one parts card holds two shut rows: "16 more ages · retiring at 55 to 70" (kind `more`) and "How this is worked
-out" (kind `how`, the old fold card's list, unchanged).
-
-**On request** ("16 more ages", built when opened and when the page prints, never before):
-- the words, one sentence each: "Each line is your plan with you stopping work at that age and everything else as it is, if markets
-  do as well as average every year." / "\"Could spend\" is the most a month, steady, in today's dollars, that still gets there[, on
-  top of health insurance]." / with an amount to leave: "\"Lasts\" here means it also leaves $500,000 in today's dollars." / with
-  room for bad luck: "Room for bad luck is on: every line is worked out for 15% more spending than you plan." / a couple: "Only
-  Ana's age changes: Bo still stops work at 62." (or "...: your spouse's plan stays as it is.", "...: everyone else's plan stays
-  as it is.");
-- then one line per age, worked out on the computer when it is connected (`ctx.computeRemote`, this device otherwise), with the
-  goal and room for bad luck the cards were worked out for: "55: runs out at 70" / "62: lasts to 95 · could spend $7,090 a month"
-  (the card's own age in bold) / "65, as planned: lasts to 95 · could spend $8,430 a month" / with an amount to leave, "61: lasts
-  to 95, but leaves less than $500,000".
-
 **Formulas** (`compute.js`: `ageSpan`, `agesFor`, `retireAgeRows`, `ageLine`, `agesWords`; all pure):
 - The ages: from the later of today's age and 55 to the later of 70 and the planned age (`AGES_FROM`, `AGES_TO`, the design's
   range), widened to take in the card's own age when it lies outside (a plan that works at 48 starts at 48; one that needs 72 ends
@@ -443,3 +427,122 @@ out" (kind `how`, the old fold card's list, unchanged).
   to take in the card's age; (5) "could spend" only on lines that last (the design's example), and with an amount to leave, the
   spending card's search instead of `affordableSpending`, which knows no amount to leave; (6) the planned age reads ", as
   planned", the card's age is in bold; (7) a line that cannot be built (no inputs) is left out; none on the qa plans.
+
+## When will your savings reach a figure? (gap list, next 60, #31; map A8, 2026-11-15)
+Other planners let a person retire "when savings reach $X" instead of at an age. Here it is one question: pick a figure, see when
+the plan's savings reach it, and what stopping work then would do. This part is the math; the page asks it in the next change.
+
+**By default: nothing new.** The first view is the page as it was (the first-view check: 299 words, 17 figures, 5 sections that
+open for the family, unchanged).
+
+**One tap away**, in "16 more ages" (the part about the ages to stop work), under its lines and a hairline:
+- "When will your savings reach a figure?" / "Pick a figure in today's dollars, or type your own." (and, when that chip is shown,
+  "\"Enough to live on\" is the figure on the Financial independence page.");
+- chips, low to high (`choice()` from core/ui/more.js, R23): for the family "$1,000,000", "$2,000,000", "$2,100,000 (enough to live
+  on)", then "Type my own" (one money box, the kit's own; its figure shows as "Yours: $1,100,000");
+- after a pick, two sentences, and an outlined "Use age N" only when stopping then meets the page's goal:
+  "Your savings would reach $1,100,000 by 2052, the year Ana turns 62, if markets do as well as average." / "If Ana stopped work
+  then, at 62, the money would last to 95." / [Use age 62]. The family's $1,000,000: "... by 2050, the year Ana turns 60 ..." /
+  "If Ana stopped work then, at 60, the money would run out at 79." (no button). Its $2,100,000: "Your savings never reach
+  $2,100,000 with the plan as it is: the most is about $1,233,000, by 2055, the year Ana turns 65, if markets do as well as average."
+- "Use age 62": the phone asks "Change Ana's retirement age from 65 to 62? Undo puts it back, and so does the People page."; OK
+  writes `household.people[Ana].retirementAge = 62` (People's own field, nothing else), and the page draws again with the part open
+  (R17) and, where the button was, "Saved: Ana's retirement age is now 62, so Ana stops work in 2052. The money would last to 95."
+  with Undo (`ui.undoable`, the kit's one way back), brought into view once the lines above it are drawn. Undo: "Back to retiring
+  at 65, as before." Cancel saves nothing. A chip, the box, opening or shutting change nothing in the plan.
+
+**Builder chose** (where the brief and the code differ, or the brief is silent):
+1. **Inside "16 more ages", not a row of its own.** The brief asked for one quiet row. The family's first view already has five
+   sections that open (Set my own numbers, See each age, 2 more changes, 16 more ages, How this is worked out), the most an answer
+   page may have (docs/OPTIONAL.md R1 and R12; the first-view check fails a sixth and the page has no entry to raise), and 299 of
+   its entry's 300 words. "16 more ages" is the part about when to stop work, so the question is one tap away there, after the
+   ages it is about. A reviewer may move it to a row of its own once the page frees a section.
+2. **A save path of its own, the kit's.** Goal seek wrote nothing before (`writes: []`; its retire card links to People), so there
+   was no retire-age save to reuse. "Use age N" is `ui.confirm`, then `ui.undoable(store, ...)` and `ui.notice("ok", ..., { undo })`,
+   as Social Security claiming's "Use these ages" (`writes: ["household"]` now).
+3. **No button to an age at which the money runs out** (or that leaves less than the amount set): the sentence says so and the
+   retire card above names the earliest age that does.
+4. **The figure picked is a view choice** (module state, like the amount to leave): kept while the app is open, never in the plan,
+   gone on reload. No new plan field, no device key.
+5. **The goal of the page applies to the stop line**: an amount to leave and room for bad luck, as the ages' lines (it is that
+   age's line); the savings themselves are the plan's as it is.
+6. **One rule of thumb among the chips, and one the savings reach.** The brief names the Financial independence figure and 25
+   times spending. Shown side by side they were two names for one idea, up to 20% apart ("$811,200 (enough to live on)" beside
+   "$910,500 (25 times spending)" for 01-single-adult: fix round 1, F2), so there is one: the Financial independence page's
+   figure, or 25 times the plan's spending when that page has none, both labelled "(25 years of spending)" (fix round 1, P4:
+   "25 times spending" was jargon; P3: "enough to live on" read as the plan failing beside "Your plan works"), with one line
+   under its answer saying that it counts no Social Security or pension, so a plan that has them can work with less. When
+   the plan's savings reach none of the figures (most qa households: their savings peak far under 25 years of their spending),
+   the largest round figure they do reach, so one chip can answer "by when". At most four chips.
+
+**Formulas** (`compute.js`: `savingsTarget`, `targetChips`, `targetStep`, `chipLabel`, `ruleWords`, `targetDefault`,
+`reachWords`, `stopWords`, `canUseAge`, `targetConfirmWords`, `targetSavedWords`, `targetUndoneWords`; all pure. `compute(plan, { ..., target })` adds `target`):
+- **Savings** = what Will the money last? counts and draws: today, the four buckets of `buildInputs(plan).inputs.balances` (every
+  checking, savings, cash, brokerage, crypto, 401(k), IRA, cash-value life, Roth and HSA account at its counted balance); a year,
+  the engine's end-of-year total in today's dollars, `project(inputs).rows[i].totalReal` (the line on that page's chart), of the
+  plan run as it is (its own withdrawal rule, expected returns, no room for bad luck). Not counted: a home, a car, debts. One case
+  follows the card instead: when the first adult stopped before the age on file and the partner's pay is on Income (`stopNow`),
+  the plan counts the first adult stopped from this year (`withStops`), as the card says ("This counts Ana as stopped from this
+  year"), so the savings and the stop line come from one plan (built first on Will the money last?'s plan, that case read "reach
+  $340,000 at 60" beside "stopping at 60 runs out at 56").
+- **Reach**: already, when today's savings >= the figure (age = today's age, this year); else the first year Y whose total >= the
+  figure, reached by the start of Y + 1: year = Y + 1, age = Y + 1 - birth year. A retirement age N means work stops from the
+  start of birth year + N (the engine's `retired = year >= retireYear`), so "stop then" is retirement age N exactly. Never reached:
+  null.
+- **Peak** (said when never reached): the largest of today's savings and each year's total, dated the same way; "about" rounds it
+  down to $1,000 (today's, when already there, rounds up), so the words never contradict the answer.
+- **When**: the reach age before the adult's planned age ("earlier"), at it ("That is the year Ana plans to stop work anyway, at
+  65."), after it ("The plan already has Ana stopping work before then, at 65.").
+- **Stop** ("earlier" only): `runAtAge`, the one run every line of "16 more ages" is (the plan with only that adult's
+  `retirementAge` moved, rebuilt by `buildInputs`, run once by `project()` at expected returns, spending the same every year after
+  inflation, times 1.15 with room for bad luck); lasts to = the plan's end year - birth year; runs out at = the fail year - birth
+  year; meets = lasts and leaves at least the amount set (- $0.50). `retireAgeRows` now calls the same function (its output is
+  byte-identical: see the sweep below). Not an exact pair with the reach (fix round 1, F1, said in "How this is worked out" too):
+  the reach is the plan as it is, the stop line that plan run again with the earlier age, and in the engine the savings move from
+  today's mix of stocks and bonds to the after-work mix by the household's retirement year, so they move sooner in the stop run,
+  and with a smaller stock share after work (every qa plan) they grow a little slower before it. By the stop date its savings are
+  a little under the plan's, and can be a little under the figure: at most 1.05% in a sweep of the qa households (their chips and
+  figures near their highest; the reviewer's sweep found up to 1.6%); with the same mix before and after work, the two paths are
+  identical (checked by hand on 11-self-employed and 14-unusual-structures).
+- **The adult**: the one the "When ... can retire" card and the ages are about (the projection's `workingNow` lead). Nobody at
+  work: no card, no part, no question.
+- **Chips** (`targetChips`): ONE rule-of-thumb figure, "N years of spending" (fix round 1, F2): the Financial independence
+  page's own "Enough to live on" (`retirement/fire` `fiNumber` with `withIncome: false`, its spending that goes on for good over
+  its withdrawal rate, plus loans still owed; N = 1 / that rate, 25 at 4%; asked by the view through `computeRemote`, because
+  importing that compute here would close an import cycle: fire imports this file), or, when that page has no figure, 25 times
+  the plan's yearly retirement spending (`spendingMonthly / scale x 12`, the figure the cards say the plan spends; 25 = 1 / 4%,
+  the Financial independence page's rule, sourced in its README: Bengen 1994). Neither subtracts Social Security or a pension
+  (`ruleWords` says so). Then the round figure under it (step 250,000 from $1,000,000, 50,000 from $100,000, else 10,000; a step
+  under when it is already round); when the savings reach none of them, the largest step at or under their highest, if above
+  today's; with fewer than three, the step over the rule too. Low to high, at most four.
+- **The figure answered first** (`targetDefault`, fix round 1, P5): as the part opens, before any tap, the lowest chip the savings
+  reach later (above today's savings, at or under their highest), else the rule-of-thumb chip, else the first. The family's is
+  $1,000,000 (by 2050, at 60).
+- **Sources**: no outside figure. Every number is the plan's own (Assumptions, the projection, the Financial independence page),
+  sourced on those pages. Nothing was fetched for this.
+
+**Tests** (`module.test.mjs`, "o2 ..."; written first against the design):
+1. reaching: the family's $1,000,000 by hand from the projection's own rows (2049's total is the first at or above it: by 2050, at
+   60), stopping then is the 60 line of "16 more ages" (runs out at 79, no button); $1,100,000 by 2052 at 62, the card's age, with
+   the button; the goal (leave $500,000, room for bad luck) moves the stop line as it moves that line, never the savings;
+2. never: $2,100,000, the highest by hand ($1,233,685 by 2055, at 65), just above and just at it; savings that only fall: highest
+   today;
+3. already: 09-near-retirement ($1,347,500) at $1,000,000: stopping now at 61, the plan rebuilt by hand; the question and the green
+   line say "this year"; exactly today's savings is already, a dollar more is not;
+4. a couple: only Ana's age moves (Bo keeps 62; moving him changes the run); Ana "retired" with Bo paid: the question is Bo's, on the
+   card's plan; on every qa plan and every chip it would show, the reach is the first year of the run and the stop line equals that
+   age's line of "N more ages" (couples and the stop-now case among them), the button only where it meets the goal;
+5. the chips: the family's three and their words, reachable, one rule of thumb where the two figures are 2% to 20% apart,
+   another withdrawal rate ("29 years of spending"), four at most, a round figure, no Financial independence figure (25 times
+   spending, its own line), nothing to go on; the figure answered first (reached later, none reached, all reached, no rule
+   chip); on every qa plan one rule chip and a default among the chips;
+6. one written sentence per case (R5): five reach cases (already more than the figure, already at it, later, never with the
+   highest later, never with the highest today), ten stop cases (then and now times four outcomes, at the planned age, after
+   it), you and your spouse, the question before the save (two), the green line (three), Undo;
+7. invariance (gap spec 3.5): over every qa/fixtures plan, the 14 households, the phone households and the empty plan, `compute()`
+   without `target` has no `target` key, and with it every other field is byte-identical; the ages too; a figure that is not a
+   number asks nothing;
+
+**Invariance, byte for byte against 461df76** (one-off sweep, the builder's log): 33 plans (qa/fixtures, the 14 households, the
+phone households, the empty plan) x 9 calls (Goal seek plain, with ages, leaving $500,000, room for bad luck with ages, leaving
+$250,000 with ages; Legacy goals, the Plan health score, Financial independence, What matters most): 297 of 297 identical.
