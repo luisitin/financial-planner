@@ -270,8 +270,11 @@ test("the hero: one sentence per case, the order's name once (critic of 2026-11-
   assert.deepEqual(heroWords({ best: mine, current: mine, five: flat, bracketsOn: false }, money), { title: "Your order is the best one at the real tax rates", lede: "Your order leaves about $840,251 at the end, after tax and in today's dollars. For this plan the order barely matters." });
   // an order of the plan's own that is none of the five
   assert.equal(heroWords({ best: share, current: null, five, bracketsOn: true }, money).lede, "This order leaves about $840,251 at the end, after tax and in today's dollars. The worst order leaves $18,123 less.");
-  // every order runs out
-  assert.equal(heroWords({ best: { ...share, success: false, failYear: 2064 }, current: tx, five, bracketsOn: true }, money).lede, 'The money runs out under every order; "A share from every account" lasts longest, to 2064. Will the money last? is the place to fix that first.');
+  // every order runs out (fix round r2: the alarm is the headline; the lede says which lasts longest, to when and what age)
+  const runs = (x, failYear) => ({ ...x, success: false, failYear });
+  const fiveFail = [runs(tx, 2061), runs(o("Pre-tax first", 0), 2062), runs(share, 2064)];
+  assert.deepEqual(heroWords({ best: runs(share, 2064), current: runs(tx, 2061), five, bracketsOn: true, orders: fiveFail, people: [{ name: "Sam", birthYear: 1990 }] }, money),
+    { title: "The money runs out under every order", lede: '"A share from every account" lasts longest: the money runs out in 2064, when you are 74; under yours it runs out in 2061. Fix that first on the page called Will the money last?' });
 });
 
 test("P1: the plan already on the best order with a flat rate keeps one filled button, the real rates, and says so in the headline", async () => {
@@ -287,4 +290,92 @@ test("P1: the plan already on the best order with a flat rate keeps one filled b
   // another order is best on a flat-rate plan: the hero's button is the filled one and the real rates' is outlined
   const t = await drawOrder(familyPlan(T22));
   assert.deepEqual(filled(t), ['Use "A share from every account" with the real tax rates']);
+});
+
+// ---------------------------------------------------------------- fix round r2: when every order runs out
+// The invented renter (qa/fixtures/renter-debt-plan.mjs: Riley, born 2002, tax at one flat rate) runs out in 2067 under every
+// one of the five orders; the page said "Your order is the best one at the real tax rates" above "The money runs out under
+// every order". The invented couple of qa/households 02 (Priya, born 1992, and Tom, 1989) run out in 2064 under four orders
+// and in 2065 taking a share from every account.
+test("r2: when every order runs out, one sentence per case: the same year, yours longest, another longer, yours none of the five", async () => {
+  const { allFailWords, whenWords, flatWords, allSameYear } = await import("./view.js");
+  const { agesIn } = await import("./compute.js");
+  // the age is the engine's: year less birth year (core/math/retirement.js, failAge = ages[0])
+  assert.deepEqual(agesIn(2067, [{ name: "Riley", birthYear: 2002 }]), [{ name: "Riley", age: 65 }]);
+  assert.deepEqual(agesIn(2065, [{ name: "Priya", birthYear: 1992 }, { name: "Tom", birthYear: 1989 }, { name: "Kid", birthYear: 2020 }]), [{ name: "Priya", age: 73 }, { name: "Tom", age: 76 }], "the first two people only");
+  assert.deepEqual(agesIn(null, [{ birthYear: 2002 }]), []);
+  assert.equal(whenWords(2067, [{ name: "Riley", birthYear: 2002 }]), "in 2067, when you are 65");
+  assert.equal(whenWords(2065, [{ name: "Priya", birthYear: 1992 }, { name: "Tom", birthYear: 1989 }]), "in 2065, when Priya is 73 and Tom is 76");
+  assert.equal(whenWords(2065, [{ name: "", birthYear: 1992 }, { name: "Tom", birthYear: 1989 }]), "in 2065, at age 73");
+  assert.equal(whenWords(2065, []), "in 2065");
+  const one = [{ name: "Riley", birthYear: 2002 }];
+  const o = (label, failYear, current = false) => ({ label, success: false, failYear, current });
+  const tie = [o("Taxable, then pre-tax, then Roth", 2067, true), o("Pre-tax, then taxable, then Roth", 2067), o("A share from every account", 2067)];
+  assert.equal(allSameYear(tie), true);
+  assert.equal(allFailWords({ best: tie[0], current: tie[0], orders: tie, people: one }), "All five orders run out in 2067, when you are 65. Fix that first on the page called Will the money last?");
+  const longer = [o("Taxable, then pre-tax, then Roth", 2067, true), o("A share from every account", 2069)];
+  assert.equal(allSameYear(longer), false);
+  assert.equal(allFailWords({ best: longer[0], current: longer[0], orders: longer, people: one }), "Yours lasts longest: the money runs out in 2067, when you are 65. Fix that first on the page called Will the money last?");
+  assert.equal(allFailWords({ best: longer[1], current: longer[0], orders: longer, people: one }), '"A share from every account" lasts longest: the money runs out in 2069, when you are 67; under yours it runs out in 2067. Fix that first on the page called Will the money last?');
+  assert.equal(allFailWords({ best: longer[1], current: null, orders: longer, people: one }), '"A share from every account" lasts longest: the money runs out in 2069, when you are 67. Fix that first on the page called Will the money last?');
+  // the flat-rate notice, one per case
+  const head = "Your plan works out tax at one flat rate, so the order changes nothing yet.";
+  assert.equal(flatWords({ yoursBest: true }), `${head} With the real rates, this order is the best one; they also change the figures on every retirement page.`);
+  // every order runs out: the hero says which lasts longest and when, so the notice does not say it again (a person critic's P3)
+  assert.equal(flatWords({ yoursBest: true, allFail: true }), `${head} Working tax out at the real rates makes it count, and changes the figures on every retirement page.`);
+  assert.equal(flatWords({ yoursBest: true, allFail: true, sameYear: true }), `${head} Working tax out at the real rates changes the figures on every retirement page.`);
+  for (const c of [{ yoursBest: true, allFail: true }, { yoursBest: true, allFail: true, sameYear: true }, { yoursBest: false, allFail: true }]) assert.ok(!/runs out|lasts longest/.test(flatWords(c)), JSON.stringify(c));
+  assert.equal(flatWords({ yoursBest: false }), `${head} Working tax out at the real rates makes it count, and changes the figures on every retirement page.`);
+  assert.equal(flatWords({ yoursBest: false, allFail: true }), flatWords({ yoursBest: false }));
+  // the headline: the alarm, at the real rates on a flat-rate plan
+  const { heroWords } = await import("./view.js");
+  assert.equal(heroWords({ best: tie[0], current: tie[0], five: { gainVsWorst: 0 }, bracketsOn: true, orders: tie, people: one }, String).title, "The money runs out under every order");
+  assert.equal(heroWords({ best: tie[0], current: tie[0], five: { gainVsWorst: 0 }, bracketsOn: false, orders: tie, people: one }, String).title, "At the real tax rates, the money runs out under every order");
+});
+
+test("r2 the page: the renter, every order to 2067: the alarm first, no order called best, no button that changes nothing", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const s = await drawOrder(renterDebtPlan());
+  const first = s.outside();
+  assert.ok(first.trim().startsWith("At the real tax rates, the money runs out under every order All five orders run out in 2067, when you are 65. Fix that first on the page called Will the money last?"), first.slice(0, 300));
+  assert.ok(!/best one|works best|lasts longest/.test(first), "nothing reads as good news");
+  // said once: the notice does not repeat that every order runs out the same year (a person critic's P3)
+  assert.equal(first.match(/run(s)? out/g).length, 3, first);
+  assert.match(first, /Your plan works out tax at one flat rate, so the order changes nothing yet\. Working tax out at the real rates changes the figures on every retirement page\./);
+  assert.ok(!/same year/.test(first), first);
+  // the page to fix it on is its link, at the end of the line under the headline
+  const lede = s.root.all().find((e) => e.tagName === "P" && /\blede\b/.test(e.className ?? ""));
+  const link = lede.all().find((e) => e.tagName === "A");
+  assert.equal(link?.textContent, "Will the money last?"); assert.equal(link.getAttribute("href"), "#/retirement/projection");
+  assert.ok(lede.textContent.replace(/\s+/g, " ").trim().endsWith("when you are 65. Fix that first on the page called Will the money last?"), lede.textContent);
+  assert.equal(s.root.all().filter((e) => /\bpill\b/.test(e.className ?? "") && /best/.test(e.textContent)).length, 0, "no order is called best in a tie");
+  assert.equal(s.root.all().filter((e) => e.tagName === "LI" && /accent-soft/.test(JSON.stringify(e.style ?? e.getAttribute?.("style") ?? ""))).length, 0, "nor drawn as the best");
+  assert.ok(!s.button("Use \""), "no Use button");
+  // the same plan on another order, tied: still no Use button (it would change nothing), and its row is the one in sight
+  const p = renterDebtPlan(); p.retirement = { ...(p.retirement ?? {}), withdrawalOrder: ["deferred", "taxable", "free"] };
+  const t = await drawOrder(p);
+  assert.ok(t.outside().includes("All five orders run out in 2067, when you are 65."));
+  assert.ok(!t.button("Use \""));
+});
+
+test("r2 the page: the couple of qa/households 02: a share from every account lasts a year longer, said with both ages", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const couple = () => ARCHETYPES.find((a) => a.id === "02-couple-no-kids").build();
+  const s = await drawOrder(couple());
+  assert.ok(s.outside().trim().startsWith('At the real tax rates, the money runs out under every order "A share from every account" lasts longest: the money runs out in 2065, when Priya is 73 and Tom is 76; under yours it runs out in 2064. Fix that first on the page called Will the money last?'), s.outside().slice(0, 300));
+  assert.ok(s.button('Use "A share from every account" with the real tax rates'), "the one that lasts longer, one tap away");
+  assert.match(s.outside(), /Working tax out at the real rates makes it count/);
+  // once the plan takes a share from every account: yours lasts longest
+  const p = couple(); p.retirement = { ...(p.retirement ?? {}), withdrawalSplit: "proportional", taxMode: "brackets" };
+  const t = await drawOrder(p);
+  assert.ok(t.outside().trim().startsWith("The money runs out under every order Yours lasts longest: the money runs out in 2065, when Priya is 73 and Tom is 76. Fix that first on the page called Will the money last?"), t.outside().slice(0, 300));
+  assert.ok(!t.button("Use \""));
+});
+
+test("r2 invariance: the page's compute is untouched (agesIn is not called by it); a plan where an order lasts is drawn as before", async () => {
+  const src = (await import("node:fs")).readFileSync(new URL("./compute.js", import.meta.url), "utf8");
+  const from = src.indexOf("export function compute("), body = src.slice(from, src.indexOf("\n}\n", from));
+  assert.ok(!/agesIn/.test(body), "compute() does not call agesIn");
+  const s = await drawOrder(familyPlan(T22));
+  assert.ok(s.outside().trim().startsWith('"A share from every account" works best for you This order leaves about $840,251 at the end, after tax and in today\'s dollars: $3,707 more than yours.'), s.outside().slice(0, 200));
 });

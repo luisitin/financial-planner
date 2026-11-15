@@ -4,7 +4,7 @@
 // item 22); the page is drawn simple first (docs/OPTIONAL.md; opt spec C14 for this page, done with it).
 import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
-import { compute, chooseOrder } from "./compute.js";
+import { compute, chooseOrder, agesIn } from "./compute.js";
 import { parts, rest } from "../../../core/ui/more.js";
 
 let pending = null;
@@ -36,7 +36,7 @@ export const backWords = (was, { withRates = false } = {}) => `Back to ${was ? `
  * plan's own (null for an order that is none of the five); five: compute's ranking over the five; bracketsOn: the plan works out tax
  * at the real rates. The tax over the plan and the figure before tax are in each order's row (critic of 2026-11-15, P2: the hero
  * said the order's name twice and four figures).
- *   every order runs out    -> "The money runs out under every order; "Pre-tax, then taxable, then Roth" lasts longest, to 2061. Will the money last? is the place to fix that first."
+ *   every order runs out    -> allFailWords below (the headline is then the alarm itself)
  *   yours is the best       -> "Your order leaves about $840,251 at the end, after tax and in today's dollars. The worst order leaves $18,123 less."
  *                              (... "For this plan the order barely matters." when the worst leaves $500 or less less)
  *   another; yours lasts    -> "This order leaves about $840,251 at the end, after tax and in today's dollars: $3,707 more than yours."
@@ -46,10 +46,13 @@ export const backWords = (was, { withRates = false } = {}) => `Back to ${was ? `
  * Headline: "Your order is the best one for this plan", or on a flat-rate plan, where the order changes nothing yet, "Your order
  * is the best one at the real tax rates" (P1: it read as done while the green line said nothing had changed); otherwise
  * ""Pre-tax, then taxable, then Roth" works best for you".
+ * Every order runs out (fix round r2: the renter's plan read "Your order is the best one ..." over "The money runs out under
+ * every order"): the alarm is the headline, "The money runs out under every order" ("At the real tax rates, the money runs
+ * out under every order" on a flat-rate plan), and the lede says which lasts longest, to when and what age (allFailWords).
  */
-export function heroWords({ best, current, five, bracketsOn }, money) {
+export function heroWords({ best, current, five, bracketsOn, orders = [], people = [] }, money) {
+  if (!best.success) return { title: bracketsOn ? "The money runs out under every order" : "At the real tax rates, the money runs out under every order", lede: allFailWords({ best, current, orders, people }) };
   const title = best.current ? (bracketsOn ? "Your order is the best one for this plan" : "Your order is the best one at the real tax rates") : `"${best.label}" works best for you`;
-  if (!best.success) return { title, lede: `The money runs out under every order; "${best.label}" lasts longest, to ${best.failYear}. Will the money last? is the place to fix that first.` };
   const left = `${best.current ? "Your" : "This"} order leaves about ${money(best.endAfterTaxReal)} at the end, after tax and in today's dollars`;
   if (current && !best.current) {
     if (!current.success) return { title, lede: `${left}; yours runs out in ${current.failYear}.` };
@@ -58,6 +61,60 @@ export function heroWords({ best, current, five, bracketsOn }, money) {
     return { title, lede: more > 500 ? `${left}: ${money(more)} more than yours.` : `${left}, about as much as yours: for this plan the order barely matters.` };
   }
   return { title, lede: `${left}. ${five.gainVsWorst > 500 ? `The worst order leaves ${money(five.gainVsWorst)} less.` : "For this plan the order barely matters."}` };
+}
+
+/**
+ * When the money runs out, in words: "in 2067, when you are 65" (one person), "in 2067, when Ana is 77 and Bo is 79" (two named
+ * people), "in 2067, at age 77" (a first person with no name), "in 2067" (no birth year).
+ */
+export function whenWords(year, people = []) {
+  const a = agesIn(year, people);
+  if (a.length === 1) return `in ${year}, when you are ${a[0].age}`;
+  if (a.length === 2 && a[0].name && a[1].name) return `in ${year}, when ${a[0].name} is ${a[0].age} and ${a[1].name} is ${a[1].age}`;
+  if (a.length) return `in ${year}, at age ${a[0].age}`;
+  return `in ${year}`;
+}
+/** Every one of the five runs out the same year: the order makes no difference to when. */
+export const allSameYear = (orders) => orders.length > 1 && orders.every((o) => !o.success && o.failYear === orders[0].failYear);
+/**
+ * The lede when every order runs out (one sentence per case; module.test.mjs reads each). best: the one that lasts longest
+ * (the plan's own when it lasts as long); current: the plan's (null for an order that is none of the five); orders: the five.
+ *   all the same year   -> "All five orders run out in 2067, when you are 65. Fix that first on the page called Will the money last?"
+ *   yours lasts longest -> "Yours lasts longest: the money runs out in 2069, when you are 67. Fix that first on the page called Will the money last?"
+ *   another lasts longer -> ""Pre-tax, then taxable, then Roth" lasts longest: the money runs out in 2069, when you are 67; under yours it runs out in 2067. Fix that first on the page called Will the money last?"
+ *   yours is none of the five -> ""Pre-tax, then taxable, then Roth" lasts longest: the money runs out in 2069, when you are 67. Fix that first on the page called Will the money last?"
+ * The page's name ends the sentence and is drawn as its link (ledeNodes; a person critic of r2: "Will the money last? is the
+ * place ..." named a page in bare text, its question mark mid-sentence).
+ */
+export function allFailWords({ best, current, orders = [], people = [] }) {
+  const fix = `Fix that first on the page called ${FIX_PAGE}`;
+  // (short: the headline already says every order runs out, and the first view's words may only go down)
+  if (allSameYear(orders)) return `All five orders run out ${whenWords(best.failYear, people)}. ${fix}`;
+  if (best.current) return `Yours lasts longest: the money runs out ${whenWords(best.failYear, people)}. ${fix}`;
+  if (current) return `"${best.label}" lasts longest: the money runs out ${whenWords(best.failYear, people)}; under yours it runs out in ${current.failYear}. ${fix}`;
+  return `"${best.label}" lasts longest: the money runs out ${whenWords(best.failYear, people)}. ${fix}`;
+}
+/** The page the money running out is fixed on: its title, the last words of allFailWords, drawn as its link. */
+export const FIX_PAGE = "Will the money last?";
+const FIX_HREF = "#/retirement/projection";
+/** The hero's lede as nodes: allFailWords' closing page name becomes its link; any other lede is its text. */
+export function ledeNodes(ui, lede) {
+  if (!lede.endsWith(` ${FIX_PAGE}`)) return [lede];
+  return [lede.slice(0, -FIX_PAGE.length), ui.h("a", { href: FIX_HREF }, FIX_PAGE)];
+}
+/**
+ * The flat-rate notice's first line (one per case): the order changes nothing yet, then what the real rates would show.
+ *   yours is the best     -> "... With the real rates, this order is the best one; they also change the figures on every retirement page."
+ *   every order runs out  -> "... Working tax out at the real rates changes the figures on every retirement page." (all the same year)
+ *                            or "... makes it count, and changes ..." (one lasts longer): the hero already says which lasts
+ *                            longest and when (a person critic of r2: the notice said "every order runs out the same year" again)
+ *   another is better     -> "... Working tax out at the real rates makes it count, and changes the figures on every retirement page."
+ */
+export function flatWords({ yoursBest, allFail = false, sameYear = false }) {
+  const head = "Your plan works out tax at one flat rate, so the order changes nothing yet.";
+  if (sameYear) return `${head} Working tax out at the real rates changes the figures on every retirement page.`;
+  if (!yoursBest || allFail) return `${head} Working tax out at the real rates makes it count, and changes the figures on every retirement page.`;
+  return `${head} With the real rates, this order is the best one; they also change the figures on every retirement page.`;
 }
 
 export function render(root, ctx) {
@@ -71,8 +128,13 @@ export function render(root, ctx) {
   }
   // the four orders and the fifth, a share from every account, ranked together (compute's `five`)
   const all = [...d.options, d.share];
-  const isBest = (o) => o.key === d.five.best;
-  const best = all.find(isBest), current = all.find((o) => o.current);
+  const current = all.find((o) => o.current);
+  // when every order runs out, the plan's own order is the one marked best while it lasts as long as any (a tie goes to the first
+  // listed: "Use ..." would change nothing); and in a tie, none is called best
+  const ranked = all.find((o) => o.key === d.five.best);
+  const best = d.five.allFail && current && current.failYear === ranked.failYear ? current : ranked;
+  const sameYear = d.five.allFail && allSameYear(all);
+  const isBest = (o) => o === best;
   // choosing an order on a flat-rate plan changes nothing until tax is worked out at the real rates, which moves every retirement
   // figure, often more than the order does. So the rows' buttons set the order only and say so, and the first card's filled button
   // on such a plan names both changes ("... with the real tax rates") and its green line says every page's figures change (stress
@@ -84,10 +146,10 @@ export function render(root, ctx) {
     if (ui.undoable) pend.undo = ui.undoable(store, change); else store.update(change);
   };
   const realRates = () => { pending = "Your plan now works out tax at the real rates (the federal brackets), so the order counts. Every retirement page's figures change with it; to go back, pick the flat rate under Retirement settings on Will the money last?"; store.update((p) => { p.retirement = p.retirement ?? {}; p.retirement.taxMode = "brackets"; }); };
-  const words = heroWords({ best, current, five: d.five, bracketsOn: d.bracketsOn }, money);
+  const words = heroWords({ best, current, five: d.five, bracketsOn: d.bracketsOn, orders: all, people: d.people }, money);
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, words.title),
-    ui.h("p", { class: "lede" }, words.lede),
+    ui.h("p", { class: "lede" }, ...ledeNodes(ui, words.lede)),
     // the best order, one tap away on the first screen (x-4: the three buttons were a screen and more below)
     !best.current ? ui.row(ui.button(d.bracketsOn ? `Use "${best.label}"` : `Use "${best.label}" with the real tax rates`, () => choose(best, !d.bracketsOn))) : null,
   ));
@@ -111,13 +173,13 @@ export function render(root, ctx) {
   for (const n of d.notes) root.append(ui.notice("info", n));
   // the plan works out tax at one flat rate: said plainly, with the switch here (x-4)
   if (!d.bracketsOn) root.append(ui.h("div", { class: "notice info" },
-    ui.h("p", { style: { margin: "0 0 8px" } }, best.current ? "Your plan works out tax at one flat rate, so the order changes nothing yet. With the real rates, this order is the best one; they also change the figures on every retirement page." : "Your plan works out tax at one flat rate, so the order changes nothing yet. Working tax out at the real rates makes it count, and changes the figures on every retirement page."),
+    ui.h("p", { style: { margin: "0 0 8px" } }, flatWords({ yoursBest: !!best.current, allFail: d.five.allFail, sameYear })),
     // filled when it is the one thing left to do (the plan already on the best order: no "Use ..." above), outlined beside the
     // hero's own filled button (critic of 2026-11-15, P1: after the choice the page had no filled button and no next step)
     ui.row(ui.button("Work out tax at the real rates", realRates, best.current ? {} : { class: "secondary" }))));
   // the best order and yours in sight, the others one tap away (opt spec C14: "3 more orders")
-  const row = (o) => ui.h("li", { style: isBest(o) ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
-    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.label, isBest(o) ? ui.h("span", { class: "pill accent" }, "best") : null, o.current ? ui.h("span", { class: "pill ok" }, "your plan") : null), ui.h("span", { class: "rec-value" }, o.success ? money(o.endAfterTaxReal) : `runs out ${o.failYear}`)),
+  const row = (o) => ui.h("li", { style: isBest(o) && !sameYear ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.label, isBest(o) && !sameYear ? ui.h("span", { class: "pill accent" }, "best") : null, o.current ? ui.h("span", { class: "pill ok" }, "your plan") : null), ui.h("span", { class: "rec-value" }, o.success ? money(o.endAfterTaxReal) : `runs out ${o.failYear}`)),
     ui.h("div", { class: "rec-sub" }, `${o.note.replace(/^./, (c) => c.toUpperCase())}. ${o.success ? `Left at the end after tax; ${money(o.endBalanceReal)} before it. ` : ""}Tax over the plan ${money(o.taxesReal)}; ${money(o.rmdReal)} of required withdrawals. Today's dollars.`),
     // the best order's own button is the hero's (one path: P4, it was offered twice)
     o.current || isBest(o) ? null : ui.h("div", { style: { marginTop: "8px" } }, ui.button(`Use this order`, () => choose(o), { class: "secondary" })));

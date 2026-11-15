@@ -57,6 +57,16 @@ export function compute(plan, params = {}) {
 }
 
 /**
+ * agesIn(year, people) -> [{ name, age }] for the first two people with a birth year: their age in that year, as the engine
+ * counts it (year - birth year; core/math/retirement.js gives the first person's as `failAge`). Pure; compute() does not call
+ * it, so its output is what it was (tests/withdrawal-ways-invariance.test.mjs).
+ */
+export function agesIn(year, people = []) {
+  if (year === null || year === undefined || year === "" || !Number.isFinite(Number(year))) return [];
+  return (people ?? []).slice(0, 2).filter((p) => Number.isFinite(Number(p?.birthYear))).map((p) => ({ name: String(p.name ?? "").trim(), age: Number(year) - Number(p.birthYear) }));
+}
+
+/**
  * chooseOrder(draft, option): what "Use this order" writes. One of the four: `withdrawalOrder` = its order, and the share taken off.
  * The share: `withdrawalSplit` = "proportional", the order kept as it is. withRates: the tax worked out at the real rates too.
  */

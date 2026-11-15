@@ -68,6 +68,42 @@ summing; the after-tax estate subtracts the last ordinary marginal rate times
 the remaining pre-tax balance. Ties retain the first listed option. Money is
 rounded to cents only for federal tax and final CSV outputs; rates have six places.
 
+## When every order runs out (fix round r2, claude-b, 2026-11-15)
+An earlier critic found the headline "Your order is the best one for this plan" above "The money runs out under every
+order". Reproduced on the invented renter (`qa/fixtures/renter-debt-plan.mjs`: Riley, born 2002, tax at one flat rate):
+"Your order is the best one at the real tax rates", then "... "Taxable, then pre-tax, then Roth" lasts longest, to 2067",
+while all five orders run out in 2067, a tie. Fifteen of the invented households run out under every order; in all but one
+every order runs out the same year.
+- **The alarm is the headline** (docs/OPTIONAL.md R3): "The money runs out under every order", or on a flat-rate plan "At
+  the real tax rates, the money runs out under every order" (the orders are always compared at the real rates; P1's rule).
+- **The lede, one sentence per case** (`allFailWords`, each in `module.test.mjs`):
+  - all the same year: "All five orders run out in 2067, when you are 65. Fix that first on the page called Will the money
+    last?" (the headline already says every order runs out. Short: the renter's first view has 132 words, 142 before)
+  - yours lasts longest (or as long as any): "Yours lasts longest: the money runs out in 2065, when Priya is 73 and Tom is
+    76. Fix that first ..." (the couple of `qa/households` 02 once it takes a share from every account)
+  - another lasts longer: ""A share from every account" lasts longest: the money runs out in 2065, when Priya is 73 and Tom
+    is 76; under yours it runs out in 2064. ..." (the same couple on taxable first)
+  - yours is none of the five: ""..." lasts longest: the money runs out in 2065, ...".
+- **When, in words** (`whenWords`): "in 2067, when you are 65" for one person; "when Priya is 73 and Tom is 76" for two
+  named people; "at age 73" when the first has no name; the year alone without a birth year. The age is the engine's own:
+  year less birth year (`core/math/retirement.js`, whose `failAge` is the first person's), from `agesIn(year, people)` in
+  compute.js, which `compute()` does not call.
+- **No button that changes nothing.** When the plan's own order runs out the same year as the longest, it is the one marked
+  best (the ranking gives a tie to the first listed, which put "Use ..." on an order no better than the plan's). When all
+  five run out the same year no row carries "best", nor the best row's tint. On a flat-rate plan the notice's second sentence follows the case
+  (`flatWords`): when every order runs out it does not say again what the hero says ("Working tax out at the real rates
+  changes the figures on every retirement page." when all run out the same year, "... makes it count, and changes ..." when
+  one lasts longer); otherwise "this order is the best one" (as before).
+- **The page to fix it on is a link.** Every case of the lede ends "Fix that first on the page called Will the money last?",
+  and the page's name is drawn as its link (`ledeNodes`, to `#/retirement/projection`). A person critic of the fix found
+  "Will the money last? is the place to fix that first." naming a page in bare text, its question mark mid-sentence, and the
+  notice repeating "every order runs out the same year" under the hero's "All five orders run out in 2067".
+- The flat-rate headline keeps "At the real tax rates, ...": the orders are compared at the real rates, and at one flat rate
+  the plan itself can last where every order runs out at the real rates (2 of 1,076 such invented plans, a scratch survey of
+  every fixture plan and household variant, 2026-11-15), so the bare alarm would not be true for them.
+- **Invariance**: `compute()` is not changed (`tests/withdrawal-ways-invariance.test.mjs` digests it against 154a597; the
+  module test checks it does not call `agesIn`); every page whose best order lasts reads as before.
+
 ## Ideas / not yet
 - The step-up in basis on taxable money left to heirs.
 - One search over the order, Roth conversions and gain harvesting together (gap list, next 60, item 23).
