@@ -3408,5 +3408,103 @@
   "trust": 2,
   "score": 10,
   "why": "Makes the new import findable on the page itself."
+ },
+ "2aaa66f": {
+  "reach": 1,
+  "size": 1,
+  "trust": 1,
+  "score": 3,
+  "why": "Coordination only."
+ },
+ "03927ae": {
+  "reach": 8,
+  "size": 4,
+  "trust": 5,
+  "score": 17,
+  "why": "Saves typing two figures most people do not know by heart."
+ },
+ "b7f957e": {
+  "reach": 3,
+  "size": 3,
+  "trust": 6,
+  "score": 12,
+  "why": "Stops a crash on damaged plans."
+ },
+ "09cbeed": {
+  "reach": 14,
+  "size": 6,
+  "trust": 14,
+  "score": 34,
+  "why": "Bank files no longer drop real purchases or misread thousands."
+ },
+ "27417e1": {
+  "reach": 12,
+  "size": 6,
+  "trust": 16,
+  "score": 34,
+  "why": "Three pages that answered the same question differently now agree."
+ },
+ "7344d45": {
+  "reach": 18,
+  "size": 20,
+  "trust": 18,
+  "score": 56,
+  "why": "The engine behind state tax from real brackets, tested against each state's examples."
+ },
+ "32ffeda": {
+  "reach": 26,
+  "size": 16,
+  "trust": 18,
+  "score": 60,
+  "why": "The month after tax counts state tax for the biggest states instead of leaving it out."
+ },
+ "1540c71": {
+  "reach": 16,
+  "size": 14,
+  "trust": 16,
+  "score": 46,
+  "why": "Retirement tax now includes the state's share, year by year."
+ },
+ "181b4e2": {
+  "reach": 20,
+  "size": 12,
+  "trust": 18,
+  "score": 50,
+  "why": "Four more states counted from their own figures."
+ },
+ "67fb2fa": {
+  "reach": 8,
+  "size": 8,
+  "trust": 18,
+  "score": 34,
+  "why": "Corrects two rules that could cost a 10% charge if followed."
+ },
+ "1ca64fe": {
+  "reach": 10,
+  "size": 4,
+  "trust": 16,
+  "score": 30,
+  "why": "Every health and Medicare figure checked at the source."
+ },
+ "6473520": {
+  "reach": 1,
+  "size": 1,
+  "trust": 1,
+  "score": 3,
+  "why": "Coordination only."
+ },
+ "1f6f57a": {
+  "reach": 1,
+  "size": 1,
+  "trust": 3,
+  "score": 5,
+  "why": "Keeps the test suite green."
+ },
+ "6ffb433": {
+  "reach": 1,
+  "size": 1,
+  "trust": 1,
+  "score": 3,
+  "why": "Coordination only."
  }
 }

@@ -1,0 +1,113 @@
+[
+ {
+  "id": "2aaa66f",
+  "kind": "coordination",
+  "summary": "Claimed the last three parts of smart guesses: grey guesses that count on Debts, Net worth, Spending and Home, previews in four calculators, and reports that mark guessed figures."
+ },
+ {
+  "id": "03927ae",
+  "kind": "improvement",
+  "summary": "Estimated payments: while last year's two figures are empty, one row offers \"Have last year's return? Paste it instead\", which opens the Document reader on a return and fills both figures.",
+  "points": [
+   "The safe amount to pay each quarter rests on last year's tax and income; most people have the return but not the two numbers in their head.",
+   "The row disappears once the figures are on file."
+  ]
+ },
+ {
+  "id": "b7f957e",
+  "kind": "fix",
+  "summary": "Document reader: using a W-2's or pay stub's 401(k) figure no longer fails on a plan whose list of accounts or contributions holds a damaged entry. That entry is skipped, as the tax forms already did."
+ },
+ {
+  "id": "09cbeed",
+  "kind": "fix",
+  "summary": "Import, any bank file: two identical purchases on the same day (two subway fares of $2.90) now both come in instead of one, and \"1,234\" is read as one thousand two hundred thirty-four dollars, not $1.23.",
+  "points": [
+   "A line already imported is still skipped when the same file is read twice: each line is matched once.",
+   "Files with the bank's own id on each line (OFX, QFX) were already right."
+  ]
+ },
+ {
+  "id": "27417e1",
+  "kind": "fix",
+  "summary": "Compare what-ifs and Ask the plan now save a new retirement spending figure the way Will the money last? does. For a household whose spending follows today's bills, the answer used to be up to 15 years off; now all three pages agree.",
+  "numbers": [
+   "up to 15 years off before",
+   "3 pages that now agree"
+  ]
+ },
+ {
+  "id": "7344d45",
+  "kind": "new-page",
+  "summary": "State income tax from each state's own 2026 brackets, deductions and retirement rules, for California, New York and Illinois first, each tested against the state's own worked example. The nine states with no income tax give $0.",
+  "points": [
+   "California's schedule example (joint taxable $125,000 gives $4,590.24), New York's 2026 tables and worksheets and Illinois' withholding example are all tests.",
+   "Any state not in the table gives exactly the same figures as before."
+  ]
+ },
+ {
+  "id": "32ffeda",
+  "kind": "improvement",
+  "summary": "The month after tax now takes off state income tax worked out from the state's brackets when you have not typed a state figure. Ana and Bo (about $158,000 after their 401(k) saving, one child) in California now see about $463 a month of state tax instead of \"state not counted\".",
+  "numbers": [
+   "$463 a month in California",
+   "$635 in New York",
+   "$617 in Illinois"
+  ],
+  "points": [
+   "Budget (50/30/20), Next best action and the Dashboard all use it.",
+   "A rate or last year's return typed on the State tax page still wins."
+  ]
+ },
+ {
+  "id": "1540c71",
+  "kind": "improvement",
+  "summary": "Tax, year by year now shows the state's income tax in each year of retirement. For Sam and Ruth (a pension, Social Security, rent and an IRA) in New York: about $27,287 over the plan, $941 a year on average, drawn as a dashed line under the federal one.",
+  "points": [
+   "\"How this is worked out\" names the state's rules in plain lines, such as \"Social Security is not taxed\".",
+   "The page is simpler first: six years, then \"23 more years\" one tap away."
+  ]
+ },
+ {
+  "id": "181b4e2",
+  "kind": "improvement",
+  "summary": "Four more states from their own 2026 figures: Georgia, North Carolina, New Jersey and Virginia. For Ana and Bo the month's state tax is now about $513 in Georgia, $485 in New Jersey and $640 in Virginia, where these were left out before, and $441 in North Carolina.",
+  "points": [
+   "Each state is tested against an example from its own forms.",
+   "Michigan's site refuses automated reads, so Michigan, Pennsylvania and Ohio keep today's figures and the page says they come next."
+  ],
+  "numbers": [
+   "7 states worked out from their brackets",
+   "9 states with no income tax"
+  ]
+ },
+ {
+  "id": "67fb2fa",
+  "kind": "fix",
+  "summary": "Money before 59\u00bd and Expected inheritance, rules re-read at irs.gov: equal yearly payments now say the account must be left alone until five years after the first payment or 59\u00bd, whichever is later, and a 401(k) can pay them only once its owner has left that job.",
+  "points": [
+   "Before, the page offered \"This year\" for a 401(k) whose owner still worked.",
+   "The 10% charge, the age-55 rule, the 10-year rule and both IRS life tables were confirmed and are pinned by tests with the IRS's own examples."
+  ]
+ },
+ {
+  "id": "1ca64fe",
+  "kind": "fix",
+  "summary": "Health costs, Medicare's income surcharge and the marketplace credit line, re-read on cms.gov and irs.gov: every figure the app uses agrees. Before Medicare now asks a household of one for its premium \"for you\", and Roth conversions no longer offers a stop age already passed."
+ },
+ {
+  "id": "6473520",
+  "kind": "coordination",
+  "summary": "State tax by brackets and the two re-read features landed; the claim was released and a note about the State tax page went to the builder who owns it."
+ },
+ {
+  "id": "1f6f57a",
+  "kind": "tooling",
+  "summary": "The glossary's check of money abbreviations now knows that YNAB is an app's name, like Monarch and Mint, not a money word that needs explaining."
+ },
+ {
+  "id": "6ffb433",
+  "kind": "coordination",
+  "summary": "Claimed six more of what other money apps offer: how the runs end and a file of every run, the rate that never touches the starting money, years to independence by saving rate, Quicken and European bank files, refinance offers side by side, and which shares to sell first."
+ }
+]
