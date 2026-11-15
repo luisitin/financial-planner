@@ -3107,3 +3107,138 @@ describe("move money between accounts", async () => {
   });
 });
 
+// ---- Move money between accounts, on the page (the part "Things that will happen") ---------------------------------------
+const hapChips = (root, id) => partOf(root, "happenings").all().find((e) => e.dataset?.choice === id)?.all().filter((e) => e.tagName === "BUTTON") ?? [];
+const hapChip = (root, id, re) => hapChips(root, id).find((b) => re.test(b.textContent));
+test("move money between accounts: a seventh chip, From and Into, the year and how much as chips; never on the first view; Roth and retirement accounts are not offered as they cannot be", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { movePair, moveYears } = await import("./view.js");
+  // a browser writes a null handed to replaceChildren as the word "null" (the fake DOM drops it): count any
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const was = FakeElement.prototype.replaceChildren, nulls = [];
+  FakeElement.prototype.replaceChildren = function (...ns) { if (ns.some((n) => n === null || n === undefined)) nulls.push(this.className); return was.apply(this, ns); };
+  try {
+  const plan = familyPlan(SF);
+  const r = await sfDraw(plan);
+  const first = await firstViewOf(r.root);
+  assert.ok(!first.includes("Move money between accounts"), "waits for a tap");
+  const part = partOf(r.root, "happenings");
+  inOrder(part.textContent, ["Add one:", "Spending changes for some years", "Move money between accounts", "Goals with a date"]);
+  hapAdd(r.root, "Move money between accounts").click();
+  const form = part.querySelector("form");
+  const boxes = form.all().filter((e) => ["INPUT", "SELECT"].includes(e.tagName) && !e.closest(".form-more"));
+  assert.deepEqual(boxes.map((e) => e.getAttribute("name")), ["fromId", "toId", "amount"], "three boxes, no More details; the year is chips");
+  const opts = (n) => form.querySelector(`[name="${n}"]`).all().filter((e) => e.tagName === "OPTION").map((e) => e.getAttribute("value"));
+  assert.deepEqual(opts("fromId"), ["a-chk", "a-sav", "a-401", "a-bk401", "a-brk"], "bank, 401(k)s and the brokerage: not Bo's Roth IRA, the home or a loan");
+  assert.deepEqual(opts("toId"), ["a-chk", "a-sav", "a-brk"], "bank and investment accounts only");
+  assert.equal(form.querySelector('[name="fromId"]').value, "a-sav", "starts on the savings"); assert.equal(form.querySelector('[name="toId"]').value, "a-brk", "into the brokerage");
+  // (critic of item 26, P3) one short line under each select; P4: the year as chips, nothing on until tapped; P5: how much
+  // is an amount or All of it, the amount first
+  inOrder(form.textContent, ["From", "Not Roth or health savings accounts.", "Into", "Bank or investment accounts. Money into a 401(k) or IRA is set under What you save for retirement.",
+    "The year", "Next year, 2027", "In 5 years, 2031", "When you retire, 20", "Type my own", "How much", "An amount", "All of it", "The amount", "in today's dollars", "Add it"]);
+  assert.deepEqual(hapChips(r.root, "moveYear").map((b) => b.getAttribute("aria-pressed")), ["false", "false", "false", "false"]);
+  assert.deepEqual(hapChips(r.root, "moveAll").map((b) => [b.textContent, b.getAttribute("aria-pressed")]), [["An amount", "true"], ["All of it", "false"]]);
+  assert.ok(!/leave (it )?blank/.test(form.textContent), "a blank box no longer means all of it");
+  // All of it: the box goes, and what that account holds today is said; it follows the From box
+  hapChip(r.root, "moveAll", /^All of it$/).click();
+  assert.equal(form.querySelector('[name="amount"]').closest(".field").hidden, true);
+  assert.equal(form.querySelector('[name="amount"]').closest(".field").style.display, "none", "gone in a browser too (.field's own display beats hidden)");
+  assert.match(form.textContent, /Ally savings holds \$11,500 today; all it holds in that year moves\./);
+  const from = form.querySelector('[name="fromId"]'); from.value = "a-bk401"; from.dispatch("change");
+  assert.match(form.textContent, /Bo's old 401\(k\) holds \$42,000 today; all it holds in that year moves\./);
+  hapChip(r.root, "moveAll", /^An amount$/).click();
+  assert.equal(form.querySelector('[name="amount"]').closest(".field").hidden, false); assert.equal(form.querySelector('[name="amount"]').closest(".field").style.display, ""); assert.ok(!/holds \$/.test(form.textContent));
+  assert.equal(r.saved.length, 0, "opening and tapping chips save nothing");
+  assert.deepEqual(nulls, [], "no null drawn as the word null under How much (seen at 390 px)");
+  } finally { FakeElement.prototype.replaceChildren = was; }
+  // the year chips: low to high, inside the plan, retirement only when still ahead and not one of the others
+  assert.deepEqual(moveYears(2026, 2080, 2040).map((c) => [c.value, c.label]), [[2027, "Next year, 2027"], [2031, "In 5 years, 2031"], [2040, "When you retire, 2040"]]);
+  assert.deepEqual(moveYears(2026, 2080, 2029).map((c) => c.value), [2027, 2029, 2031]);
+  assert.deepEqual(moveYears(2026, 2080, 2031).map((c) => c.value), [2027, 2031]);
+  assert.deepEqual(moveYears(2026, 2080, 2020).map((c) => c.value), [2027, 2031], "already retired");
+  assert.deepEqual(moveYears(2026, 2029, null).map((c) => c.value), [2027], "the plan ends before 2031");
+  // no help where the plan has no such account
+  const plain = familyPlan(SF); plain.accounts = plain.accounts.filter((a) => !["a-roth", "a-401", "a-bk401"].includes(a.id));
+  const rp = await sfDraw(plain);
+  hapAdd(rp.root, "Move money between accounts").click();
+  const fp = partOf(rp.root, "happenings").querySelector("form");
+  assert.ok(!/Not Roth|What you save for retirement/.test(fp.textContent), fp.textContent);
+  // no pair to move between: no chip (a plan with a 401(k) and a Roth only)
+  assert.equal(movePair([{ id: "k", type: "401k" }, { id: "r", type: "roth" }]).fromId, null);
+  assert.deepEqual(movePair([{ id: "c", type: "checking" }, { id: "k", type: "401k" }]), { from: [{ id: "c", type: "checking" }, { id: "k", type: "401k" }], into: [{ id: "c", type: "checking" }], fromId: "k", toId: "c" }, "a 401(k) into the bank");
+  const lone = familyPlan(SF); lone.accounts = lone.accounts.filter((a) => !["a-chk", "a-sav", "a-brk"].includes(a.id));
+  assert.equal(hapAdd((await sfDraw(lone)).root, "Move money between accounts"), undefined);
+});
+
+test("move money between accounts: adding one saves it, the green line names the new answer, the line says what moves, its tax and why; Remove has Undo", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  (await import("../../../qa/fixtures/fake-dom.mjs")).fullSelectors();   // "details.pj-settings", as a browser reads it
+  const route = { rest: [], query: {} };
+  const plan = familyPlan(SF), sav = plan.accounts.find((a) => a.id === "a-sav").name;
+  const r = await sfDraw(plan, { route });
+  hapAdd(r.root, "Move money between accounts").click();
+  hapChip(r.root, "moveYear", /^In 5 years, 2031$/).click();
+  assert.equal(hapChip(r.root, "moveYear", /^In 5 years, 2031$/).getAttribute("aria-pressed"), "true");
+  hapSubmit(r.root, { amount: 8000 });
+  assert.equal(r.saved.length, 1);
+  assert.deepEqual(r.saved[0].retirement.happenings, [{ id: "h1", kind: "move", year: 2031, fromId: "a-sav", toId: "a-brk", amount: 8000 }]);
+  const after = await sfDraw(r.saved[0], { route });
+  const part = partOf(after.root, "happenings");
+  assert.equal(part.open, true); assert.equal(part.querySelector(".fold-status").textContent, "1 set by you");
+  assert.match(part.querySelector(".notice").textContent, new RegExp(`^Added: Move \\$8,000 from ${sav} to Brokerage in 2031\\. Your retirement answer: lasts to the end, with about \\$[\\d,]+ more left at 95 \\(today's dollars\\)\\.$`));
+  // (P6) the gain says where it comes from
+  inOrder(part.textContent, [`Move $8,000 from ${sav} to Brokerage in 2031: no tax`, "more left at 95, because investments are assumed to grow more than savings.", "Edit", "Remove"]);
+  assert.equal(part.all().some((e) => e.tagName === "BUTTON" && /Choose tax brackets/.test(e.textContent)), false, "bank money: no tax left out");
+  assert.match(partOf(after.root, "how").textContent, /Moving money: money moved out of a 401\(k\) or IRA is taxed as income that year/);
+  // Edit opens on the saved year (its chip on) and the amount
+  part.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Edit").click();
+  assert.equal(hapChip(after.root, "moveYear", /^In 5 years, 2031$/).getAttribute("aria-pressed"), "true");
+  // all of a 401(k) before 59½, a year typed: the tax and its extra 10% on the line; with the one simple tax rate the effect says
+  // it may look better than it is, and one tap opens Retirement settings at How tax is worked out (M2, P1)
+  const r2 = await sfDraw(familyPlan(SF), { route });
+  hapAdd(r2.root, "Move money between accounts").click();
+  hapChip(r2.root, "moveAll", /^All of it$/).click();
+  hapChip(r2.root, "moveYear", /^Type my own$/).click();
+  const own = partOf(r2.root, "happenings").all().find((e) => e.tagName === "INPUT" && e.getAttribute("name") === "year");
+  own.value = "2030"; own.dispatch("change");
+  hapSubmit(r2.root, { fromId: "a-bk401", toId: "a-brk" });
+  assert.deepEqual(r2.saved[0].retirement.happenings, [{ id: "h1", kind: "move", year: 2030, fromId: "a-bk401", toId: "a-brk" }], "All of it: no amount");
+  const d2 = await sfDraw(r2.saved[0], { route }), p2 = partOf(d2.root, "happenings");
+  assert.match(p2.textContent, /Move all of Bo's old 401\(k\) to Brokerage in 2030: about \$[\d,]+ by then \(today's dollars\), with about \$[\d,]+ of tax, \$[\d,]+ of it the extra 10% before 59½/);
+  assert.match(p2.textContent, /left at 95, but with one simple tax rate the plan counts no tax on what investments earn, so this may look better than it is\./);
+  assert.ok(!/flat rate|pre-tax withdrawals/.test(p2.textContent), "no tax words a layperson does not use");
+  const go = p2.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Choose tax brackets in Retirement settings ↓");
+  assert.ok(go); assert.match(go.className, /secondary/);
+  const settings = partOf(d2.root, "settings");
+  assert.equal(settings.open, false);
+  go.click();
+  assert.equal(settings.open, true); assert.equal(settings.querySelector("details.pj-more").open, true, "More settings opened, where the box is");
+  assert.equal(d2.saved.length, 0, "the tap changes nothing in the plan");
+  // Remove, then Undo in the green line
+  const r3 = await sfDraw(r.saved[0], { route });
+  partOf(r3.root, "happenings").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Remove").click();
+  assert.equal(r3.saved[0].retirement.happenings, undefined);
+  const gone = partOf((await sfDraw(r3.saved[0], { route })).root, "happenings");
+  assert.match(gone.querySelector(".notice").textContent, new RegExp(`^Removed: Move \\$8,000 from ${sav} to Brokerage in 2031: no tax\\. Your retirement answer: .*Undo$`));
+});
+
+// (the words at the box are the kit's fieldError, drawn in a browser only: check()'s test above reads each sentence, the
+// browser walk sees it at the box)
+test("move money between accounts: no year, no amount (and not All of it), the same account twice, or $0, is refused and nothing is saved", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const r = await sfDraw(familyPlan(SF));
+  hapAdd(r.root, "Move money between accounts").click();
+  hapSubmit(r.root, { amount: 8000 });
+  assert.equal(r.saved.length, 0, "no year picked");
+  assert.match(partOf(r.root, "happenings").querySelector("form").textContent, /Pick the year the money moves\./);
+  hapChip(r.root, "moveYear", /^Next year, 2027$/).click();
+  hapSubmit(r.root, { amount: "" });
+  assert.equal(r.saved.length, 0, "a blank amount is no longer all of it (M5)");
+  hapSubmit(r.root, { fromId: "a-sav", toId: "a-sav", amount: 8000 });
+  assert.equal(r.saved.length, 0, "the same account twice");
+  hapSubmit(r.root, { fromId: "a-sav", toId: "a-brk", amount: 0 });
+  assert.equal(r.saved.length, 0, "$0");
+  hapSubmit(r.root, { fromId: "a-sav", toId: "a-brk", amount: 8000 });
+  assert.equal(r.saved.length, 1, "then a good one saves");
+  assert.equal(r.saved[0].retirement.happenings[0].year, 2027);
+});

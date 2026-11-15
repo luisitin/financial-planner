@@ -30,3 +30,18 @@ test("stress test: the key names the plan's withdrawal order", async () => {
   const p = retirementPlan(); p.retirement.withdrawalOrder = ["deferred", "taxable", "free"];
   assert.deepEqual(compute(p, { today: "2026-11-11" }).order, ["deferred", "taxable", "free"]);
 });
+
+// money moved between accounts (Will the money last?, gap list next 60 item 26): the year's record says it, one sentence per case
+test("a year with money moved between accounts says it, in the dollars shown", async () => {
+  const { moveSaid } = await import("./view.js");
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  assert.equal(moveSaid({ fromName: "Savings", toName: "Brokerage", amount: 20000, tax: 0, capped: false }, money), "Moved $20,000 from Savings to Brokerage");
+  assert.equal(moveSaid({ fromName: "Sam's 401(k)", toName: "Brokerage", amount: 20000, tax: 3000, capped: false }, money), "Moved $20,000 from Sam's 401(k) to Brokerage, $3,000 of tax");
+  assert.equal(moveSaid({ fromName: "Savings", toName: "Brokerage", amount: 38211, tax: 0, capped: true }, money), "Moved $38,211 from Savings to Brokerage, all it held");
+  assert.equal(moveSaid({ fromName: "Savings", toName: "Brokerage", amount: 0, tax: 0, capped: true }, money), "Nothing to move from Savings");
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const p = retirementPlan(); p.retirement.happenings = [{ id: "h1", kind: "move", fromId: "k401", toId: "brk", year: 2034, amount: 20000 }];
+  const r = await renderPage(new URL("./view.js", import.meta.url).href, p, "2026-09-16");
+  assert.match(r.root.textContent, /Moved \$20,000 from Sam's 401\(k\) to Brokerage, \$3,000 of tax\./, "the year's record on a phone");
+  assert.match(r.root.textContent, /2034: Moved \$20,000 from Sam's 401\(k\) to Brokerage, \$3,000 of tax\./, "the line under the table");
+});

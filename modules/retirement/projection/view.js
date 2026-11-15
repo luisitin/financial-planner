@@ -3,7 +3,7 @@
 // Simple first (owner, 2026-11-12 and 2026-11-13; docs/OPTIONAL.md): the first view is the answer, the one line of what it rests
 // on, the most it can pay a month and one filled button; the rest is one quiet tap away, in parts drawn by core/ui/more.js.
 import { part, parts, rest, choice } from "../../../core/ui/more.js";
-import { listOf as happeningsOf, effects as happeningEffects, lineWords, effectSay, noteWords, howWords, check as checkHappening, saveHappening, removeHappening, nextId, homeFacts, datedGoals, whoWords, clean as cleanHappening, AMOUNT_CEILING, MONTHLY_CEILING } from "../happenings.js";
+import { listOf as happeningsOf, effects as happeningEffects, lineWords, effectSay, noteWords, howWords, check as checkHappening, saveHappening, removeHappening, nextId, homeFacts, datedGoals, whoWords, clean as cleanHappening, AMOUNT_CEILING, MONTHLY_CEILING, MOVE_FROM, MOVE_INTO, MOVE_BUCKET, moveTail, wantsBrackets, moveHolds } from "../happenings.js";
 import { buildInputs, compute, earlyNote, earlyTaxWords, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords, SPEND_RULES, easeWords, easeSaveWords, easeAgeCheck, EASE_CHIPS } from "./compute.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
@@ -469,7 +469,7 @@ export function render(root, ctx) {
   // then too; P19: no deeper pages rank levers under a verdict that does not exist)
   // things that will happen (a home sold, working less, money in or out once, spending that changes) and goals with a date: one
   // quiet row; with nothing saved on file it shows only when something is already set (the answer counts it either way)
-  const hap = happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear: d.atRetirement?.year ?? null });
+  const hap = happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear: d.atRetirement?.year ?? null, openSettingsAt: (name, e) => openSettingsAt(root, name, e) });
   if (hap?.how) intoList.append(hap.how);
   root.append(parts(ctx,
     unknownYet ? null : { id: "numbers", kind: "more", n: careLine2 ? 5 : 4, noun: "numbers", one: "number", body: [careLine2, tiles, chart] },
@@ -489,7 +489,32 @@ export function render(root, ctx) {
 }
 
 // ---- Things that will happen (gap design #1; modules/retirement/happenings.js holds the sums and the words) --------------------
-const HAP_CHIPS = { home: "Sell or move to a smaller home", less: "Work less or take a break", after: "Work after you retire", in: "Money coming in once", out: "A big cost once", spend: "Spending changes for some years" };
+const HAP_CHIPS = { home: "Sell or move to a smaller home", less: "Work less or take a break", after: "Work after you retire", in: "Money coming in once", out: "A big cost once", spend: "Spending changes for some years", move: "Move money between accounts" };
+/**
+ * The accounts a move can come out of and go into (happenings.js MOVE_FROM, MOVE_INTO), and the pair a new move starts on: a
+ * savings account (else another bank account) into the first investment account, as most moves are ("the savings into the
+ * brokerage"), else the first
+ * two that differ; fromId null when the plan has no such pair (the chip is not offered; a move already saved can still be
+ * edited).
+ */
+export function movePair(accounts = []) {
+  const list = (Array.isArray(accounts) ? accounts : []).filter((a) => a && typeof a === "object" && a.id);
+  const from = list.filter((a) => MOVE_FROM.includes(a.type)), into = list.filter((a) => MOVE_INTO.includes(a.type));
+  const bank = (a) => into.some((t) => t.id !== a.id && MOVE_BUCKET[t.type] === "taxable") && MOVE_BUCKET[a.type] === "cash";
+  const f = from.find((a) => a.type === "savings" && bank(a)) ?? from.find(bank) ?? from.find((a) => into.some((t) => t.id !== a.id));
+  const t = f ? into.find((x) => x.id !== f.id && MOVE_BUCKET[x.type] === "taxable") ?? into.find((x) => x.id !== f.id) : null;
+  return { from, into, fromId: f?.id ?? null, toId: t?.id ?? null };
+}
+/**
+ * The year chips a move's form offers (docs/OPTIONAL.md R23; critic of item 26, P4: a blank year box gave nothing to go on):
+ * next year, in five years and the year retirement starts (when it is still ahead, and not one of the other two), low to high,
+ * each within the plan; "Type my own" takes any other year.
+ */
+export function moveYears(nowYear, endYear, retireYear = null) {
+  const out = [{ value: nowYear + 1, label: `Next year, ${nowYear + 1}` }, { value: nowYear + 5, label: `In 5 years, ${nowYear + 5}` }];
+  if (Number.isInteger(retireYear) && retireYear > nowYear + 1 && retireYear !== nowYear + 5) out.push({ value: retireYear, label: `When you retire, ${retireYear}` });
+  return out.filter((c) => c.value <= endYear).sort((a, b) => a.value - b.value);
+}
 const capFirst = (t) => String(t).replace(/^./, (c) => c.toUpperCase());
 /**
  * The part "Things that will happen" and its row for "How this is worked out": { part (what parts() takes) | null, how (an
@@ -498,7 +523,7 @@ const capFirst = (t) => String(t).replace(/^./, (c) => c.toUpperCase());
  * choice to take them from savings when due. Every save, add or remove says the new answer in a green line and leaves this
  * part open.
  */
-function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = null }) {
+function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = null, openSettingsAt = null }) {
   const { ui, fmt, store, plan } = ctx;
   const today = fmt.today();
   const items = happeningsOf(plan), rt = plan.retirement ?? {};
@@ -513,7 +538,8 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
     try { fx = happeningEffects(plan, (p, params) => buildInputs(p, { today, ...params }).inputs ?? null, { today }); } catch (e) { console.warn("[planner] things that will happen", e); fx = null; }
   }
   const facts = homeFacts(plan, { today });
-  const env = { nowYear, endYear, people, hasHome: !!facts };
+  const accounts = plan.accounts ?? [], pair = movePair(accounts), taxMode = I.tax?.mode === "brackets" ? "brackets" : "flat";
+  const env = { nowYear, endYear, people, hasHome: !!facts, accounts };
   const working = people.filter((p) => p.birthYear + p.retireAge > nowYear);
   const wasOpen = !!hapPending;
   // the green line: what was done, then the answer now against the answer before it
@@ -533,7 +559,7 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
   // read as if the new attempt had worked (F7)
   const dropNotice = () => { notice?.remove?.(); };
   const before = () => { try { return unknownYet ? null : answerOf(plan, { today }); } catch { return null; } };
-  const sayOf = (h) => { const it = fx?.items.find((x) => x.h.id === h.id); return lineWords(h, { people, sale: it?.sale ?? null, money }); };
+  const sayOf = (h) => { const it = fx?.items.find((x) => x.h.id === h.id); return lineWords(h, { people, sale: it?.sale ?? null, money, accounts, move: it?.move ?? null }); };
 
   const holder = ui.h("div", {});
   let openKind = null;
@@ -544,6 +570,8 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
     const whoList = kind === "less" ? working : people;
     const who = whoList.length > 1 ? [{ key: "personId", label: "Who", type: "select", options: whoList.map((p) => ({ value: p.id, label: whoWords(p) })) }] : [];
     let share = was?.share ?? 0;
+    // a move's year and "all of it", kept here until the form is saved (the chips below)
+    let moveYear = was?.year ?? null, moveAll = kind === "move" && !!was && !(Number(was.amount) > 0);
     const FIELDS = {
       home: [year("year", "The year you sell", { required: true }),
         { key: "buyFor", label: "Buy the next home for", type: "money", min: 0, max: AMOUNT_CEILING, help: "in today's dollars. Leave blank if you will rent, then fill in the rent below" },
@@ -561,11 +589,24 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
       spend: [year("year", "From year", { required: true }), year("untilYear", "Until year", { help: "leave blank if it is for good" }),
         { key: "direction", label: "Spending goes", type: "select", options: [{ value: "up", label: "Up" }, { value: "down", label: "Down" }] },
         { key: "amount", label: "By how much a month", type: "money", min: 0, max: MONTHLY_CEILING, required: true, help: "in today's dollars" }],
+      // money moved between accounts: From and Into, then the year and how much as chips (drawn below); a Roth or health savings
+      // account is never offered (happenings.js MOVE_FROM). The help is one short line, and only where the plan has such an
+      // account (critic of item 26, P3: two long grey paragraphs before the first box)
+      move: [
+        { key: "fromId", label: "From", type: "select", required: true, options: pair.from.map((a) => ({ value: a.id, label: a.name || "An account" })),
+          help: accounts.some((a) => MOVE_BUCKET[a.type] === "free") ? "Not Roth or health savings accounts." : "" },
+        { key: "toId", label: "Into", type: "select", required: true, options: pair.into.map((a) => ({ value: a.id, label: a.name || "An account" })),
+          help: accounts.some((a) => MOVE_BUCKET[a.type] === "deferred" || MOVE_BUCKET[a.type] === "free") ? "Bank or investment accounts. Money into a 401(k) or IRA is set under What you save for retirement." : "" },
+        { key: "amount", label: "The amount", type: "money", min: 0, max: AMOUNT_CEILING, help: "in today's dollars" }],
     }[kind];
-    const values = was ? { ...was, ...(kind === "spend" ? { direction: was.monthly < 0 ? "down" : "up", amount: Math.abs(was.monthly) } : {}), ...(kind === "home" && !(was.buyFor > 0) ? { buyFor: null } : {}) } : { personId: whoList[0]?.id, direction: "up" };
+    const values = was ? { ...was, ...(kind === "spend" ? { direction: was.monthly < 0 ? "down" : "up", amount: Math.abs(was.monthly) } : {}), ...(kind === "home" && !(was.buyFor > 0) ? { buyFor: null } : {}) } : { personId: whoList[0]?.id, direction: "up", ...(kind === "move" ? { fromId: pair.fromId, toId: pair.toId } : {}) };
     const form = ui.form(FIELDS, values, (v) => {
-      const rec = cleanHappening({ ...v, id: was?.id ?? nextId(plan), kind, personId: v.personId ?? whoList[0]?.id ?? null, ...(kind === "less" ? { share } : {}), ...(kind === "spend" ? { monthly: (v.direction === "down" ? -1 : 1) * (v.amount ?? 0) } : {}) });
-      const no = checkHappening(rec, env);
+      const rec = cleanHappening({ ...v, id: was?.id ?? nextId(plan), kind, personId: v.personId ?? whoList[0]?.id ?? null, ...(kind === "less" ? { share } : {}), ...(kind === "spend" ? { monthly: (v.direction === "down" ? -1 : 1) * (v.amount ?? 0) } : {}),
+        ...(kind === "move" ? { year: moveYear, amount: moveAll ? null : v.amount } : {}) });
+      // a move: no year picked, or no amount and not "All of it" (a blank box no longer means all of it: M5, P5)
+      const no = kind === "move" && moveYear === null ? { field: "year", words: "Pick the year the money moves." }
+        : kind === "move" && !moveAll && !(Number(v.amount) > 0) && (v.amount === null || v.amount === undefined || v.amount === "") ? { field: "amount", words: "Type how much, or choose All of it." }
+        : checkHappening(rec, env);
       if (no) {
         dropNotice();
         const box = form.querySelector?.(`[name="${kind === "spend" && no.field === "monthly" ? "amount" : no.field}"]`);
@@ -586,12 +627,38 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
       const at = form.querySelector?.(".form-more") ?? form.querySelector?.(".form-actions");
       if (at?.before) at.before(box); else form.append(box);
     }
+    if (kind === "move") {
+      // the year: chips from the plan's own dates, or one typed (moveYears); a chip redraws, a typed year stays in its box
+      const years = moveYears(nowYear, endYear, unknownYet ? null : retireYear);
+      const yearField = ui.h("div", { class: "field" });
+      const drawYear = () => yearField.replaceChildren?.(ui.h("span", { class: "field-label" }, "The year"),
+        choice(ctx, { id: "moveYear", label: "The year", presets: years, value: moveYear, own: { type: "number", name: "year", label: "The year", min: nowYear, max: endYear, whole: true },
+          onPick: (x) => { moveYear = x; if (years.some((c) => c.value === x)) drawYear(); } }));
+      drawYear();
+      // how much: an amount (the box) or all of it, said with what that account holds today (M5, P5)
+      const box = form.querySelector?.('[name="amount"]'), lab = box?.closest?.(".field") ?? null, fromBox = form.querySelector?.('[name="fromId"]');
+      const allField = ui.h("div", { class: "field" });
+      const drawAll = () => {
+        const held = moveAll ? moveHolds(accounts, fromBox?.value) : null, name = accounts.find((a) => a.id === fromBox?.value)?.name || "That account";
+        // (no null among the children: a browser's replaceChildren writes it as the word "null")
+        allField.replaceChildren?.(...[ui.h("span", { class: "field-label" }, "How much"),
+          choice(ctx, { id: "moveAll", label: "How much", presets: [{ value: "amount", label: "An amount" }, { value: "all", label: "All of it" }], value: moveAll ? "all" : "amount", onPick: (x) => { moveAll = x === "all"; drawAll(); } }),
+          held !== null ? ui.h("small", { class: "help" }, `${capFirst(name)} holds ${money(held)} today; all it holds in that year moves.`) : null].filter(Boolean));
+        // (hidden, and display none too: the kit's own .field rule shows a hidden label in a browser)
+        if (lab) { lab.hidden = moveAll; lab.style.display = moveAll ? "none" : ""; }
+        if (moveAll && box) box.value = "";
+      };
+      drawAll();
+      fromBox?.addEventListener?.("change", () => { if (moveAll) drawAll(); });
+      const at = lab ?? form.querySelector?.(".form-actions");
+      if (at?.before) at.before(yearField, allField); else form.append(yearField, allField);
+    }
     return form;
   };
   // the line as it will read once saved (a home's net is worked out on the next drawing: said without it here)
-  const sayAfter = (rec) => lineWords(rec, { people, money });
+  const sayAfter = (rec) => lineWords(rec, { people, money, accounts });
   const chipEls = [];
-  const kinds = Object.keys(HAP_CHIPS).filter((k) => (k !== "home" || (!!facts && !items.some((h) => h.kind === "home"))) && (k !== "less" || working.length > 0));
+  const kinds = Object.keys(HAP_CHIPS).filter((k) => (k !== "home" || (!!facts && !items.some((h) => h.kind === "home"))) && (k !== "less" || working.length > 0) && (k !== "move" || !!pair.fromId));
   for (const k of kinds) {
     const b = ui.h("button", { type: "button", class: "chip", "aria-expanded": "false", dataset: { add: k }, onClick: () => {
       if (openKind === k) { closeForm(); return; }
@@ -603,12 +670,18 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
   const row = (h) => {
     const it = fx?.items.find((x) => x.h.id === h.id) ?? null;
     const li = ui.h("li", { dataset: { key: h.id } });
-    const notes = it && !it.skipped ? noteWords(it, { strategy: fx.strategy, people, money, retireYear: unknownYet ? null : retireYear }) : [];
+    const notes = it && !it.skipped ? noteWords(it, { strategy: fx.strategy, people, money, retireYear: unknownYet ? null : retireYear, accounts, taxMode }) : [];
+    // a move's effect ends with why, where the figure alone would mislead (moveTail: M2, P6); and a way to the brackets where
+    // the plan's one simple tax rate leaves a tax out (P1, P2)
+    const tail = it && !it.skipped ? moveTail(it, { taxMode }) : "";
+    const toBrackets = it && !it.skipped && openSettingsAt && wantsBrackets(it, { taxMode })
+      ? ui.h("div", { class: "rec-sub" }, ui.button("Choose tax brackets in Retirement settings ↓", (e) => openSettingsAt("taxMode", e), { class: "btn secondary small" })) : null;
     li.append(...[
       ui.h("div", { class: "rec-title" }, sayOf(h)),
       it?.skipped ? ui.h("div", { class: "rec-sub" }, ui.h("span", { class: "pill warn" }, "not counted"), ` ${it.skipped.words}`)
-        : it && !unknownYet ? ui.h("div", { class: "rec-sub" }, `${capFirst(effectSay(it.with, it.without, money))}.`) : null,
+        : it && !unknownYet ? ui.h("div", { class: "rec-sub" }, `${capFirst(effectSay(it.with, it.without, money))}${tail ? `, ${tail}` : ""}.`) : null,
       notes.length ? ui.h("div", { class: "rec-sub" }, notes.join(" ")) : null,
+      toBrackets,
       ui.h("div", { class: "rec-foot" },
         ui.button("Edit", () => {
           dropNotice();
@@ -646,7 +719,7 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
     goalsBox,
   ];
   const how = fx && (items.length || counted) ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, "Things that will happen")),
-    ui.h("div", { class: "rec-sub" }, [...fx.items.filter((x) => !x.skipped).map((x) => `${sayOf(x.h)}.`), ...howWords(fx, { money })].join(" "))) : null;
+    ui.h("div", { class: "rec-sub" }, [...fx.items.filter((x) => !x.skipped).map((x) => `${sayOf(x.h)}.`), ...howWords(fx, { money, taxMode })].join(" "))) : null;
   return {
     how, notice,
     part: { id: "happenings", kind: "own", title: "Things that will happen", open: wasOpen, fix: skippedN, set: items.length - skippedN > 0 ? items.length - skippedN : 0,
@@ -654,6 +727,18 @@ function happeningsPart(ctx, d, { money, unknownYet, nowAnswer, retireYear = nul
   };
 }
 
+/** Retirement settings opened at one of its boxes (a move's "Choose tax brackets in Retirement settings ↓": the box "How tax is
+ * worked out", under More settings), scrolled to and focused; the plan does not change until that form is saved. */
+function openSettingsAt(root, name, e = null) {
+  const s = root?.querySelector?.("details.pj-settings");
+  if (!s) return;
+  holdTaps(e);
+  s.open = true;
+  const box = s.querySelector(`[name="${name}"]`), more = box?.closest?.("details.pj-more");
+  if (more) more.open = true;
+  (box ?? s).scrollIntoView?.({ behavior: "smooth", block: "center" });
+  box?.focus?.({ preventScroll: true });
+}
 /** Retirement settings opened at the spending box, scrolled to and focused (the not-ready hero's "Type what you'll spend ↓"). */
 function typeInto(settings) {
   settings.open = true;
