@@ -22,7 +22,7 @@
   "estate/estate-tax": {"plan":{"fsWords":180,"fsFigs":10}},
   "estate/gifting": {"empty":{"noStart":1}},
   "estate/inheritance": {"empty":{"noStart":1}},
-  "goals/education": {"plan":{"fsWords":140,"fsFigs":12}},
+  "goals/education": {"plan":{"fsWords":120,"fsFigs":12}},
   "goals/house": {"plan":{"fsWords":150,"fsFigs":16,"actCut":1},"empty":{"fsFigs":10,"actCut":1,"noStart":1}},
   "goals/prioritizer": {"plan":{"fsWords":140,"fsFigs":15}},
   "household/calendar": {"plan":{"moreFilled":2},"empty":{"noStart":1}},

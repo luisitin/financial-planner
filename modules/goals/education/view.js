@@ -175,6 +175,8 @@ export function render(page, ctx) {
   if (said?.text) { const n = ui.notice("ok", said.text); root.append(n); setTimeout(() => n.remove(), 4000); }
   // a save inside one of the rows of "Good to know" is said inside that row, where the Save was tapped, naming the new answer (R7)
   const savedHere = (id, text) => { if (said?.part !== id || said.text) return null; const n = ui.notice("ok", text ? `Saved. ${text}` : "Saved."); setTimeout(() => n.remove(), 4000); return n; };
+  // a row's own Save is outlined: two rows open at once would otherwise show two filled buttons on one screen (critic q4 P4)
+  const outlined = (f) => { f?.querySelector?.('[type="submit"]')?.classList?.add("secondary"); return f; };
   const rises = `College prices have risen faster than prices in general; the plan assumes ${(d.growth * 100).toFixed(1)}% a year.`;
 
   root.append(ui.h("section", { class: d.children.length ? "card" : "card accent hero" },
@@ -273,21 +275,22 @@ export function render(page, ctx) {
   // Your state's tax break (gap list, next 60, item 3): a row only while a child is still to start college; the deduction is
   // the person's own figure (no state's figure is claimed), the rate the State tax page's unless typed here
   const tb = d.children.length ? stateBreak(plan, { today: fmt.today(), d }) : null;
-  const stateRow = tb && part(ctx, { id: "state", kind: "item", title: "Your state's tax break", set: [w.stateDeduction, w.stateRate].filter(given).length, open: said?.part === "state", holds: ["stateDeduction", "stateRate"], body: () => [
+  const stateSet = [w.stateDeduction, w.stateRate].filter(given).length;
+  const stateRow = tb && part(ctx, { id: "state", kind: "item", title: "Your state's tax break", says: stateStatus(tb), missing: tb.case === "ask" && !stateSet, set: stateSet, open: said?.part === "state", holds: ["stateDeduction", "stateRate"], body: () => [
     savedHere("state", stateSaved(tb, money)),
     ui.h("p", {}, stateSentence(tb, money)),
     stateCounted(tb, money) ? ui.h("p", { class: "ed2-d" }, stateCounted(tb, money)) : null,
     ui.h("p", { class: "ed2-d" }, STATE_CHECK),
-    ui.form([
+    outlined(ui.form([
       { key: "stateDeduction", label: "Taken off your income a year", type: "money", min: 0, help: `For example ${money(STATE_EXAMPLE)}. Your state's 529 plan says how much; some states give a credit instead, some nothing.` },
       { key: "stateRate", label: "Your state's tax rate", type: "percent", min: 0, max: 20, placeholder: "", help: stateRateHelp(tb) },
     ], { stateDeduction: w.stateDeduction ?? null, stateRate: w.stateRate ?? null }, (v) => {
       pending = { part: "state" };
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), stateDeduction: v.stateDeduction ?? null, stateRate: v.stateRate ?? null }; });
-    }, { submitLabel: "Save" })] });
+    }, { submitLabel: "Save" }))] });
   // Save or borrow (gap list, next 60, item 4): each child still to start, the page's college cost paid two ways; information
   const sb = d.children.length ? saveOrBorrow(plan, { today: fmt.today(), d }) : null;
-  const borrowRow = sb && part(ctx, { id: "borrow", kind: "item", title: "Save or borrow", set: given(w.loanRate), open: said?.part === "borrow", holds: ["loanRate"], body: () => [
+  const borrowRow = sb && part(ctx, { id: "borrow", kind: "item", title: "Save or borrow", says: borrowStatus(sb), set: given(w.loanRate), open: said?.part === "borrow", holds: ["loanRate"], body: () => [
     // the green line names the new answer in a few words: the payment after college (the sentences are right under it)
     savedHere("borrow", borrowSaved(sb, money)),
     ...sb.children.flatMap((k) => [
@@ -301,15 +304,16 @@ export function render(page, ctx) {
     ui.h("p", { class: "ed2-d" }, borrowCounted(sb)),
     ui.h("p", { class: "ed2-d" }, RETIREMENT_FIRST),
     ui.h("p", { class: "muted small" }, "This compares two ways to pay; it is not advice."),
-    ui.form([{ key: "loanRate", label: "Loan rate a year", type: "percent", min: 0, max: 20, placeholder: "", help: `Left empty, we count ${rateText(LOAN.example)} a year, an example: type the rate of the loan you would take.` }],
+    outlined(ui.form([{ key: "loanRate", label: "Loan rate a year", type: "percent", min: 0, max: 20, placeholder: "", help: `Left empty, we count ${rateText(LOAN.example)} a year, an example: type the rate of the loan you would take.` }],
       { loanRate: w.loanRate ?? null }, (v) => {
         pending = { part: "borrow" };
         store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), loanRate: v.loanRate ?? null }; });
-      }, { submitLabel: "Save" })] });
+      }, { submitLabel: "Save" }))] });
   // School before college (gap list, next 60, item 4): while a child has a school year left before college; one amount a
   // year for each child, picked with a chip (saved at once, never per keystroke) or typed
   const sf = d.children.length ? schoolFirst(plan, { today: fmt.today(), d }) : null;
-  const schoolRow = sf && part(ctx, { id: "school", kind: "item", title: "School before college", set: given(w.schoolYearly), open: said?.part === "school", holds: ["schoolYearly"], body: () => [
+  const schoolPicked = given(w.schoolYearly) && sf;
+  const schoolRow = sf && part(ctx, { id: "school", kind: "item", title: "School before college", says: schoolPicked ? (sf.yearly ? money(sf.yearly) : "none") : "", set: given(w.schoolYearly), open: said?.part === "school", holds: ["schoolYearly"], body: () => [
     savedHere("school", schoolSaved(sf, money)),
     ui.h("p", { class: "ed2-d" }, schoolLine(money)),
     ui.h("p", {}, "How much a year from the 529 for school:"),
@@ -324,6 +328,11 @@ export function render(page, ctx) {
     ui.h("p", {}, schoolSentence(sf, money)),
     ...(sf.case === "several" ? [ui.h("ul", {}, sf.children.map((k) => ui.h("li", {}, schoolChild(k, money))))] : []),
     sf.capped ? ui.h("p", { class: "ed2-d" }, `The most that counts is ${money(SCHOOL.limit)} a year: this counts that.`) : null] });
+  // the three what-ifs sit in one quiet card of rows of their own, right under the children's cards: near the answer they
+  // change, and ahead of "Good to know" so its list stays below the first screen (its first bullet got shorter: the
+  // browser check counts the first 844 px, and the list's $35,000 line would have risen into it)
+  const whatIfs = [borrowRow, stateRow, schoolRow].filter(Boolean);
+  if (whatIfs.length) root.append(ui.h("section", { class: "card", dataset: { whatIfs: "" } }, ui.h("div", { class: "folds" }, ...whatIfs)));
   if (d.children.length) root.append(ui.card("Good to know", ui.h("ul", {},
     // the state clause lives in its row when there is one (moved, never deleted)
     ui.h("li", {}, tb ? "A 529 plan grows tax-free when spent on college." : "A 529 plan grows tax-free when spent on college, and many states take contributions off state income tax: check your state's plan first."),
@@ -335,7 +344,7 @@ export function render(page, ctx) {
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
     // how fast prices rise: its box, with what the rate does to the first child's first year, one quiet row (its title as
     // before; an item part with its own name: the page's one row about all the children, beside one row per child)
-    ui.h("div", { class: "folds" }, borrowRow || null, stateRow || null, schoolRow || null, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
+    ui.h("div", { class: "folds" }, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
       ui.h("p", { class: "ed2-d" }, growthExample(d, money)),
       ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, placeholder: "", help: `Left empty, we count ${(DEFAULT_GROWTH * 100).toFixed(0)}% a year.` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = { text: "Saved.", part: "growth" };

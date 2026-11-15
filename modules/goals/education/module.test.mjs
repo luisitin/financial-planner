@@ -538,7 +538,8 @@ test("state break, the page S11: one quiet row, nothing new in the first view; t
   const row = partOf(a.root, "state");
   assert.ok(row && !row.hasAttribute("open"), "a shut row");
   assert.equal(a.textOf(row.querySelector(".fold-title")), "Your state's tax break");
-  assert.equal(row.querySelector(".fold-status") ?? null, null, "no status until something is typed");
+  assert.equal(a.textOf(row.querySelector(".fold-status")), "not set yet", "shut, it says nothing is typed yet (critic q4 P1)");
+  assert.ok(row.querySelector('[type="submit"]').className.includes("secondary"), "its Save is outlined (critic q4 P4)");
   // the long bullet is short now; its clause is inside the row (moved, not deleted)
   assert.ok(a.root.querySelectorAll("li").some((li) => a.textOf(li) === "A 529 plan grows tax-free when spent on college."));
   assert.ok(a.textOf(row.querySelector(".fold-body")).includes(STATE_CHECK));
@@ -558,6 +559,9 @@ test("state break, the page S11: one quiet row, nothing new in the first view; t
   assert.equal(b.textOf(said), "Saved. About $130 a year less state tax.");
   assert.ok(b.textOf(partOf(b.root, "state")).includes("About $130 a year less state tax on the $3,000 a year you put in now, $1,580 in all by the time Cy starts college in 2038."));
   assert.ok(b.textOf(partOf(b.root, "state").querySelector("summary")).includes("1 set by you"));
+  // the family in Texas: the shut row says so
+  const tx = await drawEdu(familyPlan(T13));
+  assert.equal(tx.textOf(partOf(tx.root, "state").querySelector(".fold-status")), "Texas: none");
   // children all in college: no row, and the bullet keeps its clause
   const c = await drawEdu(inCollege());
   assert.equal(partOf(c.root, "state"), undefined);
@@ -689,7 +693,8 @@ test("save or borrow, the page S11: one quiet row; Retirement first moved into i
   const row = partOf(a.root, "borrow");
   assert.ok(row && !row.hasAttribute("open"));
   assert.equal(a.textOf(row.querySelector(".fold-title")), "Save or borrow");
-  assert.equal(row.querySelector(".fold-status") ?? null, null);
+  assert.equal(a.textOf(row.querySelector(".fold-status")), "about even", "shut, it says what it holds (critic q4 P1)");
+  assert.ok(row.querySelector('[type="submit"]').className.includes("secondary"), "its Save is outlined (critic q4 P4)");
   assert.ok(!a.root.querySelectorAll("li").some((li) => a.textOf(li) === RETIREMENT_FIRST), "no longer a bullet");
   const body = a.textOf(row.querySelector(".fold-body"));
   for (const s of [RETIREMENT_FIRST, "This compares two ways to pay; it is not advice.", "Save each month from now", "$104,710 paid in all by August 2038", "for 10 years, with $250 a month until then: $206,260 paid in all", "Left empty, we count 6% a year, an example",
@@ -830,7 +835,7 @@ test("school before college, the page S11: a chip saves at once, keeps the row o
   assert.equal(body.split("leaves about $161,420 less for college in 2038").length, 2, "the answer once");
   assert.ok(body.includes(SCHOOL_HINT));
   assert.equal(partOf(b.root, "school").querySelectorAll("button").find((x) => b.textOf(x) === "$10,000").getAttribute("aria-pressed"), "true");
-  assert.ok(b.textOf(partOf(b.root, "school").querySelector("summary")).includes("set by you"));
+  assert.equal(b.textOf(partOf(b.root, "school").querySelector(".fold-status")), "set by you · $10,000", "shut, it says what was picked (critic q4 P1)");
   // "Type my own": the box says it saves when it is left (critic q4 P5), and leaving it saves
   const own = partOf(b.root, "school").querySelectorAll("button").find((x) => b.textOf(x) === "Type my own");
   own.dispatch("click");
@@ -865,4 +870,23 @@ test("invariance: the three rows' fields change nothing compute() or educationTa
     if (sf) assert.equal(sf.case, "ask");
   }
   assert.ok(kids >= 20 && rows >= 10, `${kids} children, ${rows} plans with the rows`);
+});
+
+test("the three rows sit in one quiet card of their own, right under the children's cards and before Good to know", async () => {
+  const { fullSelectors } = await import("../../../qa/fixtures/fake-dom.mjs");
+  fullSelectors();
+  await drawEdu(familyPlan(T13));
+  const { root, textOf } = await drawEdu(familyPlan(T13));
+  const cards = root.querySelectorAll("section").filter((x) => /\bcard\b/.test(x.className ?? ""));
+  const at = (pred) => cards.findIndex(pred);
+  const rowsCard = at((c) => c.dataset.whatIfs !== undefined);
+  const known = at((c) => textOf(c).startsWith("Good to know"));
+  const cy = at((c) => textOf(c).startsWith("Cy: college from 2038"));
+  assert.ok(cy >= 0 && rowsCard === cy + 1 && known === rowsCard + 1, `${cy} ${rowsCard} ${known}`);
+  assert.deepEqual(cards[rowsCard].querySelectorAll("details").map((d) => d.dataset.part), ["borrow", "state", "school"]);
+  assert.deepEqual(cards[known].querySelectorAll("details").map((d) => d.dataset.part), ["growth"]);
+  assert.equal(cards[rowsCard].querySelectorAll("h2, h3").length, 0, "no heading: three quiet rows");
+  // no child still to start: no card at all
+  const c = await drawEdu(inCollege());
+  assert.equal(c.root.querySelectorAll("section").filter((x) => x.dataset.whatIfs !== undefined).length, 0);
 });

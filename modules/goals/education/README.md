@@ -133,8 +133,10 @@ hand-written `<details>` remain. Kept as it was on purpose: the top card's growt
 list up into the first screen, which the browser check counts) and the row's two-line title (a one-line title did the same). The College Board figures were read from reports citing them (see Data), so the gray figure carries that caveat.
 
 ## Your state's tax break (gap list, next 60, item 3; map U4; 2026-11-15)
-One quiet row in "Good to know", **"Your state's tax break"** (kind `item`, like "How fast prices rise" beside it), shown
-while a child is still to start college. Shut, it says nothing until something is typed ("1 set by you"). The first view
+One quiet row, **"Your state's tax break"** (kind `item`, like "How fast prices rise"), in the card of rows right under the
+children's cards (see "The three rows together"), shown while a child is still to start college. Shut, its status says
+what it holds (critic q4 P1): "Texas: none" in a state with no income tax on pay (`stateStatus`), "not set yet" while
+nothing is typed, "1 set by you" once something is. The first view
 gains its four title words and loses fifteen: the bullet "A 529 plan grows tax-free when spent on college, and many states
 take contributions off state income tax: check your state's plan first." is now "A 529 plan grows tax-free when spent on
 college.", and its clause is inside the row ("Many states take money put into a 529 off state income tax: check your
@@ -187,8 +189,10 @@ about 2% more); the total is said as "about", and a deduction is a whole year's 
 Tests: module.test.mjs "state break", "critic q4 M5", "critic q4 P1, P2".
 
 ## Save or borrow (gap list, next 60, item 4, first half; map U5; 2026-11-15)
-One quiet row in "Good to know", **"Save or borrow"** (kind `item`), first of its rows, shown while a child is still to
-start college. Shut, it says nothing until a loan rate is typed ("set by you"). The bullet "Retirement first: there are
+One quiet row, **"Save or borrow"** (kind `item`), the first in the card of rows under the children's cards, shown while
+a child is still to start college. Shut, its status gives the answer valued today when every child's is the same
+(critic q4 P1, `borrowStatus`): "about even", "borrowing costs more", "borrowing costs less" or "nothing to borrow"; once a
+loan rate is typed, "set by you". The bullet "Retirement first: there are
 loans for college, not for retirement." moved into it (it stays a bullet when there is no row): the family's first view is
 173 words now (entry 180), figures 14.
 
@@ -255,8 +259,8 @@ are several; "Saved. Nothing to borrow." when nothing is), with the sentences un
 "save or borrow, the page S11"). Tests: module.test.mjs "save or borrow", "critic q4 M1".
 
 ## School before college (gap list, next 60, item 4, second half; map U6; 2026-11-15)
-One quiet row in "Good to know", **"School before college"** (kind `item`), shown while a child still to start college has a
-school year left before it. Its first line is the brief's "one line": "529 money can also pay up to $20,000 a year of a
+One quiet row, **"School before college"** (kind `item`), the last in the card of rows under the children's cards, shown
+while a child still to start college has a school year left before it. Its first line is the brief's "one line": "529 money can also pay up to $20,000 a year of a
 child's school before college, kindergarten to 12th grade: tuition, books and tutoring at a public, private or religious
 school (from 2026; $10,000 before). That is the federal rule: your state may tax this money differently." (The second
 sentence, critic q4 M2: secondary sources read 2026-11-15 say many states do not follow the federal K-12 limit for their own
@@ -268,7 +272,9 @@ tuition). Pick an amount for private school or tutoring.", `SCHOOL_HINT`, critic
 claimed), saved at once on a tap (`whatIfs.college.schoolYearly`, one amount a year for each child), and the answer. "Type
 my own" opens one box labelled "A year for school, saved when you leave the box" (critic q4 P5: `choice()` commits on the
 box's change, and there is no Save to tap).
-Shut, it says nothing until an amount is picked ("set by you").
+Shut, it says nothing until an amount is picked, then what was picked ("set by you · $10,000", "set by you · none";
+critic q4 P1). The other two rows' statuses use the first view's last four words (180 of its entry's 180, first screen
+120 of 120): this row has none before a pick, its title says what it holds.
 Once picked it cannot go back to "not picked" (critic q4 M6, left): "None" gives the same answer, and the status says
 "set by you", which is true.
 
@@ -317,16 +323,29 @@ with the full sentence under the chips, once (R7, R17, critic q4 P2; test "schoo
 module.test.mjs "school before college", "critic q4 M4", "critic q4 P6".
 
 ## The three rows together (gap list, next 60, items 3 and 4)
-- Order in "Good to know": Save or borrow, Your state's tax break, School before college, How fast prices rise. All are
-  kind `item` like the row that was there, so they are not counted against R12's five parts (the first-view check's S2
-  leaves items out); with one child the page has five rows in all, each further child adds its own row in its own card.
+- Where: one card of three quiet rows, no heading, right under the children's cards and before "Good to know" (Save or
+  borrow, Your state's tax break, School before college); "How fast prices rise" stays in "Good to know". They were first
+  built as rows of "Good to know"; the browser check (qa/first-view.mjs) then found the first screen at 143 words and 13
+  figures against its entry of 140 and 12 (the base measured 138 and 12): the shortened first bullet pulled the list,
+  with its "$35,000" line, up into the first 844 px. In their own card above it the first screen is 116 words and 12
+  figures (entry lowered to 120), and the what-ifs sit next to the answer they change. All are kind `item` like the row
+  that was there, so they are not counted against R12's five parts (the first-view check's S2 leaves items out); with one
+  child the page has five rows in all, each further child adds its own row in its own card.
 - Each saves only its own fields and keeps only itself open after a save (R17); its green line is inside it, where the
   Save or the chip was tapped, and names the new answer in a few words, the full sentence staying under it (R7; critic q4
   P2: the green line had repeated the whole answer, nine lines for two children, right above the same words). The other
   saves on the page (a child's college, the growth row) still say theirs at the top, as before.
+- Shut, each says what it holds where it can (critic q4 P1): "Save or borrow · about even", "Your state's tax break ·
+  Texas: none" for the family. Those four words are all the first view had left (Node 180 of its entry's 180; the first
+  phone screen 120 of 120), so School before college says nothing until an amount is picked.
+- Their Saves are outlined (critic q4 P4): two rows open at once had two filled Saves on one screen. The page's older rows
+  (a child's "Type of college and share to cover", "How fast prices rise") keep their filled Save, as before this work.
 - Invariance: `compute()` and `educationTarget()` give the same bytes with the four new fields set or absent, over the
   fixtures, the round-8 household in college and every `qa/households` archetype, at two dates (module test
   "invariance"); and the same bytes as at 81a5288, the commit this work started from (a one-off comparison of 54 plans
   and dates, in the builder's log).
-- First view: 190 words before (the counts file's entry), 176 after (entry 180), figures 14 before and after; no box,
-  tile or filled button added.
+- First view: 190 words before (the counts file's entry), 180 after (entry 180; 176 before the two statuses), figures 14
+  before and after; no box, tile or filled button added. In a browser at 390 x 844 (family): the first screen 138 words and 12 figures at 81a5288,
+  120 and 12 now (116 before the two statuses); every row taps open and shut with 0 px moved, 44 px tall, the tallest open
+  row 713 px (Save or borrow),
+  nothing stored changes, nothing wider than 320 px.
