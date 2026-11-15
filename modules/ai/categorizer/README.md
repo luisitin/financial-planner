@@ -66,8 +66,10 @@ No money math. The rules the page follows:
   (see Filing), or null.
 - **Filing** (`applyChoices`): every transaction of the group gets the category (transfers skipped). The bank's text is
   kept in `rawPayee`; the payee is renamed only while it is still the app's text (empty, the bank's text, its tidy
-  `prettyPayee` form, or the importer's "(no description)"), so a name the person typed stays. The new name is a
-  same-text rule's name if there is one, else `prettyPayee` (for a PayPal-style payee, with the shop's name kept). A
+  `prettyPayee` form, or the importer's "(no description)"), so a name the person typed stays. The new name is the name
+  a rule that only renames gives the line (a merge of payee names on the Rules page, `renamedTo`: filing never undoes a
+  merge), else a same-text rule's name if there is one, else `prettyPayee` (for a PayPal-style payee, with the shop's
+  name kept). A
   rule (`ruleFor`: the first three words of the clean text, any account, any direction) files future imports.
   Same-text rules are found with their text normalised ("Netflix" = "netflix"), only those for any account and any
   direction, and only rules that file: a rule that only renames or tags (no `category`, such as a merge of payee names

@@ -136,3 +136,65 @@ households, the phone households and the empty plan, each given `qa/fixtures/ban
 fits matrix, every CSV imported through the rules, Categorize's compute() and the AI categorizer's filing equals the one
 written from 461df76 (`invariance.json`; `PRINT=1 node --test modules/transactions/rules/module.test.mjs` writes it
 again after a deliberate change); and the new fields at their defaults change nothing.
+
+## Merging payee names (gap next-60 #42, 2026-11-15, claude-b)
+**What a person sees.** When the lines show two spellings of one shop, a card "Payee names that look alike" follows the
+rules: "The same shop can come spelled more than one way. Merge them to see one name; amounts and dates stay as they
+are.", then one record per shop ("Coffee and SQ *COFFEE 1234 · 8 lines") with two outlined 44 px buttons, "Merge as
+“Coffee”" and "Choose the name". The first three shops show, the rest wait behind "N more shops" (`rest()`). Nothing is
+saved until a tap. "Choose the name" opens, under its record, "Show them all as" (the suggested name) and a check box per
+spelling, all on, with "Merge" (refused with "Check a name that is not already Coffee." when nothing would change). A merge
+says "Merged: 3 lines now show as Coffee. A rule keeps new ones that way." with an Undo ("Undone: the lines have their old
+names again and your rules are as they were."; `ui.undoneWords` adds the line for a change made since). The card shows only
+while there is something to merge; on the invented households (no bank lines) the page is as before.
+
+**Which names look alike** (`shopKey`, `lookAlike`; the app's own definitions, no outside figure):
+- `shopKey(text)`: stars to spaces; a web address first stands alone ("NETFLIX.COM LOS GATOS CA" -> "netflix"); else cut
+  at the first word with a digit or # (store numbers, codes); `normalizePayee`'s noise words dropped; a card service's
+  first word (sq, tst, sp, square, paypal) dropped; a trailing state code dropped, then a company ending (inc,
+  incorporated, llc, ltd, corp, corporation, company, plc, llp: "NETFLIX INC" is Netflix); an apostrophe joins its word
+  ("TRADER JOE'S" and "Trader Joes #123" are one shop: critic F3, 2026-11-15, where the card listed two Netflix spellings
+  of three and Merge left NETFLIX INC behind); a first word that only says what kind
+  of line it is (transfer, zelle, payroll, check, ...: `GENERIC_FIRST`) gives no key, so lines to and from people and
+  accounts are never offered; under 3 letters, none.
+- Two names are one shop when their keys are equal, or when a line under one comes from a bank text whose key is the
+  other's and the name is the app's own for that text (the bank's text, `prettyPayee`, or Categorize's `ruleName`):
+  "Kroger Dayton", the tidy form of "KROGER #0421 DAYTON OH", is Kroger. A name the person typed is joined by its own
+  words only ("Weekly food shop" over a Kroger line stays theirs). Transfers (linked, filed as "transfer", or a transfer
+  kind of category) are left out.
+- A name that only starts like another ("Coffee" and "Coffee House Annex", "Delta Air" and "Delta Dental") is another
+  shop: never suggested. The builder's choice: a suggestion should be right; Amazon's product lines ("Amazon Mktpl",
+  "Amazon Prime") are therefore not offered; a rule typed on this page ("starts with amazon", shown as Amazon, no
+  category) names the new ones that way.
+- The name suggested (`into`): among the tidy names (small letters, no digit, #, * or @), the one with the fewest words in
+  its key, then the most lines, then the shorter, then A to Z; with none, `ruleName` of the most used spelling, its
+  apostrophes dropped ("SQ *BLUE BOTTLE 1234" -> "Blue Bottle", "TRADER JOE'S" -> "Trader Joes").
+
+**What a merge does** (`mergePayees(draft, { names, into, id, today })`): every line (transfers left out) whose name is
+one of the checked spellings and not already `into` gets `payee = into`; `rawPayee` keeps the bank's text; amount, date,
+category, tags and account are never touched (tested field by field). Then one rule that only renames goes to the top of
+the rules: `{ contains, anyOf?, match: "exact", payee: into, direction: "any", hits, createdAt }` with no category, whose
+texts are `payeeWords` of each renamed spelling and of those lines' bank texts, so it fits them whatever name a later
+import gives. A rename-only exact rule that already gives `into` (and has no account, direction or amount) gains the new
+texts instead of a second rule. With no letters to match on, the lines are renamed and no rule is made ("Merged: 3 lines
+now show as Coffee."). At the top and filing nothing, it names next month's "SQ *COFFEE 5678" "Coffee", and the rule
+under it still files the line (the walk above). Undo is the kit's `ui.undoable`: it puts back exactly what the merge
+changed (the rule or its texts, each line's name) and leaves anything changed since.
+
+**Elsewhere.** Categorize keeps a merged name when it files the payee (`renamedTo(rules, tx)`, the name the first fitting
+rename-only rule gives: a two-line change in `modules/transactions/categorize/view.js`), so filing never undoes a merge.
+The AI categorizer does the same: a line it files shows the merged name (`renamedTo` first, on its review row and on the
+line), and a rule that only renames is never its "same-text rule", so it never gives a merge's rule a category (critic F1,
+2026-11-15: it did, which turned the merge into a filing rule for the exact texts only); it adds its own filing rule,
+which the walk reaches under the merge.
+
+**Not yet.** "These are two shops" to hide a wrong suggestion for good (it needs a place in the plan; today the card
+simply keeps offering it, and nothing is saved without a tap); merging two shops whose names share no key.
+
+**Tests**: shopKey cases; lookAlike (equal keys, the bank text's key, a typed name kept apart, a name that only starts like
+another, transfers and people left out, the suggested name with and without a tidy one); mergePayees (only names change,
+the rule at the top, next month's line named and still filed, a second merge into the same name, several spellings into a
+new name, nothing to merge); Undo with `core/ui/undo.js` (exactly as before, and a later change kept); every sentence;
+the page (the card, Merge saved only on the tap, its green line with Undo, Undo through a live store, Choose the name and
+its refusal); Categorize keeping the merged name; the critics' cases (three Netflix spellings and Trader Joe's in one
+record each; the AI categorizer keeping a merged name and leaving the merge's rule rename-only).

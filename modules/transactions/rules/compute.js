@@ -9,7 +9,7 @@
 //   match?: "starts" | "exact" (absent: contains), amount?: { is: "exactly"|"atLeast"|"atMost"|"between", value, to? },
 //   anyOf?: [text] (more texts, matched the same way), tags?: [tag] (more tags after `tag`), and no `category` at all for a
 //   rule that only renames or tags (a merge of payee names): the rules under it are still tried for the category.
-import { categoryLabel } from "../categories/compute.js";
+import { categoryLabel, categoriesOf } from "../categories/compute.js";
 import { cleanTags, splitsOf } from "../splits.js";
 import { money as fmtMoney } from "../../../core/format.js";
 
@@ -230,6 +230,120 @@ export function ruleName(rawPayee) {
 }
 export const ruleFor = (rawPayee, category, extra = {}) => ({ contains: ruleText(rawPayee), wholeWords: true, category, payee: ruleName(rawPayee), direction: "any", hits: 0, ...extra });
 
+// ---------------------------------------------------------------- payee names that look alike, and merging them (gap next-60 #42)
+/**
+ * The shop a name stands for, for telling spellings of one shop apart from two shops: stars to spaces; a web address first
+ * stands alone ("NETFLIX.COM LOS GATOS CA" -> "netflix"); else cut at the first word with a digit or # (store numbers,
+ * codes); statement noise dropped (normalizePayee); a card service's first word (sq, tst, sp, square, paypal) dropped; a
+ * trailing state code dropped, then a company ending (inc, llc, corp...: "NETFLIX INC" is Netflix); an apostrophe joins its
+ * word ("TRADER JOE'S" and "Trader Joes #123" are one shop). A first word that only says what kind of line it is (transfer,
+ * zelle, payroll...) gives no key: such lines are people and accounts, not shops. Fewer than 3 letters: none.
+ * "SQ *COFFEE 1234" -> "coffee", "Coffee" -> "coffee", "KROGER #0421 DAYTON OH" -> "kroger", "PAYPAL *NETFLIX" -> "netflix".
+ */
+const COMPANY_ENDINGS = new Set(["inc", "incorporated", "llc", "ltd", "corp", "corporation", "company", "plc", "llp"]);
+export function shopKey(text) {
+  const tokens = String(text ?? "").replace(/\*/g, " ").replace(/['\u2019]/g, "").trim().split(/\s+/).filter(Boolean);
+  const web = /\.(com|net|org|co|io)\b/i.test(tokens[0] ?? "");
+  const at = web ? 1 : tokens.findIndex((t) => /[\d#]/.test(t));
+  const w = normalizePayee((at === -1 ? tokens : tokens.slice(0, at)).join(" ")).split(" ").filter(Boolean);
+  while (w.length > 1 && PROCESSORS.has(w[0])) w.shift();
+  if (w.length > 1 && STATE_CODES.has(w[w.length - 1])) w.pop();
+  while (w.length > 1 && COMPANY_ENDINGS.has(w[w.length - 1])) w.pop();
+  if (!w.length || GENERIC_FIRST.has(w[0])) return "";
+  return w.join("").length >= 3 ? w.join(" ") : "";
+}
+const nameOf = (t) => String(t?.payee ?? "").trim() || String(t?.rawPayee ?? "").trim();
+/** The name shown is the app's own for the line (the bank's text, its tidy form, or the name a rule from Categorize gives),
+ * not one the person typed: only then does the bank's text say which shop the name is. */
+const appName = (t) => { const raw = String(t?.rawPayee ?? "").trim(), n = nameOf(t); return !raw || n === raw || n === prettyPayee(raw) || n === ruleName(raw); };
+/** Lines that move money between your own accounts (linked, filed as "transfer", or under a category of that kind). */
+const transferTest = (plan) => { const ids = new Set(categoriesOf(plan, { all: true }).filter((c) => c.kind === "transfer").map((c) => c.id)); return (t) => !!t.transferId || t.category === "transfer" || ids.has(t.category); };
+/** A name a person would keep: it has small letters and no digit, #, * or @. */
+const tidy = (n) => /[a-z]/.test(n) && !/[\d#*@]/.test(n);
+/**
+ * lookAlike(plan) -> [{ key, names: [{ name, count }], lines, into }]: the names the lines show (transfers left out) that are
+ * spellings of one shop. Two names are one shop when their shopKey is the same, or when a line under one of them comes from
+ * a bank text whose shopKey is the other's ("Kroger Dayton", the tidy form of "KROGER #0421 DAYTON OH", is Kroger); a name
+ * the person typed is joined by its own words only. Groups of two names or more, most lines first. `into`, the name
+ * suggested: among the tidy names, the one with the fewest words in its key (the shop's own name), then the most lines, then
+ * the shorter, then A to Z; with no tidy name, ruleName of the most used (its apostrophes dropped). A name that only starts like another ("Coffee"
+ * and "Coffee House Annex") is another shop: never suggested.
+ */
+export function lookAlike(plan) {
+  const byName = new Map(), moved = transferTest(plan ?? {});
+  const up = new Map();
+  const root = (k) => { if (!up.has(k)) up.set(k, k); while (up.get(k) !== k) k = up.get(k); return k; };
+  const join = (a, b) => { const x = root(a), y = root(b); if (x !== y) up.set(x.length <= y.length ? y : x, x.length <= y.length ? x : y); };
+  for (const t of plan?.transactions ?? []) {
+    if (!t || moved(t)) continue;
+    const name = nameOf(t);
+    if (!name || name === "(no description)") continue;
+    const key = shopKey(name);
+    if (!key) continue;
+    const e = byName.get(name) ?? { name, count: 0, key };
+    e.count++;
+    byName.set(name, e);
+    root(key);
+    const bank = appName(t) ? shopKey(t.rawPayee) : "";
+    if (bank) join(key, bank);
+  }
+  const groups = new Map();
+  for (const e of byName.values()) { const r = root(e.key); groups.set(r, [...(groups.get(r) ?? []), e]); }
+  const out = [];
+  for (const list of groups.values()) {
+    if (list.length < 2) continue;
+    const words = (e) => e.key.split(" ").length;
+    const names = list.slice().sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    const kept = list.filter((e) => tidy(e.name)).sort((a, b) => words(a) - words(b) || b.count - a.count || a.name.length - b.name.length || a.name.localeCompare(b.name))[0];
+    const into = kept ? kept.name : ruleName(names[0].name.replace(/['\u2019]/g, "")) || names[0].name;   // "TRADER JOE'S" -> "Trader Joes"
+    out.push({ key: list.map((e) => e.key).sort((a, b) => a.length - b.length || a.localeCompare(b))[0], names: names.map(({ name, count }) => ({ name, count })), lines: list.reduce((n, e) => n + e.count, 0), into });
+  }
+  return out.sort((a, b) => b.lines - a.lines || a.key.localeCompare(b.key));
+}
+/**
+ * Merge spellings into one name (changes `draft`): every line (transfers left out) whose name is one of `names` and not
+ * already `into` shows `into` from now on (rawPayee keeps the bank's text); its amount, date, category and tags are not
+ * touched. Then one rule that only renames, at the top of the rules, keeps new lines that way: { contains, anyOf?, match:
+ * "exact", payee: into } with the payeeWords of each renamed spelling and of those lines' bank texts (none when no letters
+ * are left). A rename-only rule
+ * that already gives `into` this way gains the new texts instead. -> { rule, renamed }.
+ */
+export function mergePayees(draft, { names = [], into = "", id = null, today = null } = {}) {
+  const target = String(into ?? "").trim();
+  const from = new Set(names.map((n) => String(n ?? "").trim()).filter((n) => n && n !== target));
+  if (!target || !from.size) return { rule: null, renamed: 0 };
+  let renamed = 0;
+  const moved = transferTest(draft), raws = [];
+  for (const t of draft.transactions ?? []) {
+    if (!t || moved(t) || !from.has(nameOf(t))) continue;
+    t.rawPayee = t.rawPayee ?? t.payee;
+    t.payee = target;
+    raws.push(t.rawPayee);
+    renamed++;
+  }
+  // the rule's texts: each spelling renamed, then the bank texts of those lines (so it fits them whatever name an import gives)
+  const texts = [...new Set([...from, ...raws].map((n) => payeeWords(n)).filter(Boolean))];
+  if (!texts.length) return { rule: null, renamed };
+  draft.rules = draft.rules ?? [];
+  const same = draft.rules.find((r) => r && !ruleFiles(r) && r.match === "exact" && r.payee === target && !r.accountId && (r.direction ?? "any") === "any" && (r.amount === undefined || r.amount === null));
+  if (same) {
+    const had = new Set([same.contains, ...alsoTexts(same)].map((x) => payeeWords(x)));
+    const add = texts.filter((x) => !had.has(x));
+    if (add.length) same.anyOf = [...alsoTexts(same), ...add];
+    same.hits = (same.hits ?? 0) + renamed;
+    return { rule: same, renamed };
+  }
+  const rule = { id, contains: texts[0], ...(texts.length > 1 ? { anyOf: texts.slice(1) } : {}), match: "exact", payee: target, direction: "any", hits: renamed, createdAt: today };
+  draft.rules.unshift(rule);
+  return { rule, renamed };
+}
+/** The name the rules that only rename give a line (the first that fits), or null: what Categorize keeps when it files a
+ * merged payee, so filing never undoes a merge. */
+export function renamedTo(rules, tx) {
+  const r = (rules ?? []).find((x) => !!x && !ruleFiles(x) && x.payee && fitsRule(x, tx));
+  return r ? r.payee : null;
+}
+
 // ---------------------------------------------------------------- the words the page says (gap next-60 #42; one per case, each tested)
 /** A rule's dollar figure: cents only when it has them ("$15.49", "$100"). */
 export const ruleMoney = (n) => fmtMoney(Math.abs(Number(n)), "USD", "en-US", Math.round(Math.abs(Number(n)) * 100) % 100 ? 2 : 0);
@@ -280,6 +394,15 @@ export function movedWords(by, at, n) {
 }
 /** The plain line over two rules or more; the second sentence only while a rule that only renames is on file. */
 export const orderWords = (renames) => `Rules are tried from the top. The first one that fits a line files it.${renames ? " A rule that only renames, like a merge, lets the rules under it file the line." : ""}`;
+
+/** The green line after a merge (with Undo); `ruled`: a rule now keeps new lines that way. */
+export const mergedWords = (n, into, ruled = true) => `Merged: ${n} line${n === 1 ? " now shows" : "s now show"} as ${into}.${ruled ? " A rule keeps new ones that way." : ""}`;
+/** The green line after its Undo (ui.undoneWords adds a line when something was changed again since). */
+export const MERGE_UNDONE = "Undone: the lines have their old names again and your rules are as they were.";
+/** The red line when the checked names are all already the name typed. */
+export const chooseRefused = (into) => `Check a name that is not already ${into}.`;
+/** The sentence under "Payee names that look alike". */
+export const ALIKE_WORDS = "The same shop can come spelled more than one way. Merge them to see one name; amounts and dates stay as they are.";
 
 /** compute(plan) -> { rules: [{ ...rule, categoryLabel, matches (over current transactions) }], count, uncategorised, wouldFix } */
 export function compute(plan) {

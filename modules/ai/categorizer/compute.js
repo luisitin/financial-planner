@@ -4,7 +4,7 @@
 // (categories on the transactions plus a rule per payee for future imports). The prompt is the Categorise page's, fed
 // with the payee text cleaned first (no word with a digit in it, no codes, no odd punctuation), so the AI sees only
 // payee names and the category list, never amounts, dates, card or reference numbers, or accounts.
-import { normalizePayee, prettyPayee, ruleFor, matchRule, ruleFiles } from "../../transactions/rules/compute.js";
+import { normalizePayee, prettyPayee, ruleFor, matchRule, ruleFiles, renamedTo } from "../../transactions/rules/compute.js";
 import { categoriesOf, categoryById, categoryLabel } from "../../transactions/categories/compute.js";
 import { buildPrompt } from "../../transactions/categorize/compute.js";
 import { isTransfer } from "../../transactions/ledger/compute.js";
@@ -42,6 +42,8 @@ export const keyOf = (t) => normalizePayee(keepMerchant(t.rawPayee ?? t.payee)) 
  * given a category here, so it never starts filing (critic F1, 2026-11-15); the AI's choice gets a rule of its own. */
 const sameText = (rules, text) => (text ? (rules ?? []).find((r) => ruleFiles(r) && normalizePayee(r.contains) === text && !r.accountId && (r.direction ?? "any") === "any") ?? null : null);
 const nameFor = (rules, raw) => {
+  const merged = renamedTo(rules, { payee: raw, rawPayee: raw });   // a merge's name first (gap #42): filing never undoes a merge
+  if (merged) return merged;
   if (lostWord(raw)) return prettyPayee(keepMerchant(raw));
   const short = ruleFor(raw, "");
   const full = normalizePayee(raw);
@@ -281,7 +283,8 @@ export function applyChoices(draft, choices, { uid, today, keepRules = false, on
     const name = split ? prettyPayee(keepMerchant(raw)) : (target?.payee || short.payee);
     for (const t of todo) {
       const tRaw = t.rawPayee ?? t.payee;
-      if (name && autoName(t.payee, tRaw)) t.payee = name;
+      const nm = renamedTo(rules, t) || name;   // a merge's name, as the next import gives it (gap #42)
+      if (nm && autoName(t.payee, tRaw)) t.payee = nm;
       t.rawPayee = tRaw;
       if (t.category !== ch.category) { if (t.category) out.overwritten++; t.category = ch.category; out.transactions++; }
     }

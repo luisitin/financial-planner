@@ -547,6 +547,155 @@ test("gap #42 S11: after a save only the saved part changes: a move opens nothin
   assert.deepEqual(after.notices(), ["Moved down. It is now rule 4 of 9."]);
 });
 
+// ---------------------------------------------------------------- gap #42: payee names that look alike, and merging them
+const line = (id, payee, amount, more = {}) => ({ id, date: more.date ?? "2026-10-01", amount, payee, rawPayee: more.rawPayee ?? payee.toUpperCase(), accountId: "chk", category: more.category ?? "", tags: more.tags ?? [], note: "", ...more });
+const coffeePlan = () => withRules([{ id: "f", contains: "coffee", category: "dining", direction: "any", hits: 0 }], [
+  line("c1", "SQ *COFFEE 1234", -4.5, { rawPayee: "SQ *COFFEE 1234", date: "2026-10-02" }),
+  line("c2", "SQ *COFFEE 1234", -5.25, { rawPayee: "SQ *COFFEE 1234", date: "2026-10-09", category: "dining" }),
+  line("c3", "SQ *COFFEE 1234", -3.75, { rawPayee: "SQ *COFFEE 1234", date: "2026-10-16", tags: ["treat"] }),
+  ...[1, 2, 3, 4, 5].map((k) => line(`k${k}`, "Coffee", -4 - k, { rawPayee: `COFFEE ${k}`, date: `2026-10-2${k}`, category: "dining" })),
+  line("t1", "Coffee House Annex", -9, { rawPayee: "COFFEE HOUSE ANNEX 77" }),
+  line("x1", "Zelle Rivera", -50, { rawPayee: "ZELLE TO RIVERA" }), line("x2", "Zelle Rivera Bo", -60, { rawPayee: "ZELLE TO RIVERA BO" }),
+  line("tr", "Coffee", -100, { transferId: "x", category: "transfer" }),
+]);
+test("gap #42 shopKey: the shop a name stands for, without store numbers, card services, states, or the kind of line", async () => {
+  const { shopKey } = await import("./compute.js");
+  const cases = { "SQ *COFFEE 1234": "coffee", "Coffee": "coffee", "KROGER #0421 DAYTON OH": "kroger", "Kroger Dayton": "kroger dayton", "PAYPAL *NETFLIX": "netflix",
+    "NETFLIX.COM 866-579-7172 CA": "netflix", "TST* PINE STREET DINER": "pine street diner", "AMAZON MKTPL*2K3AB1 AMZN.COM/BILL WA": "amazon mktpl", "POS DEBIT STARBUCKS": "starbucks",
+    "Zelle Rivera": "", "Online Transfer to SAV": "", "Card Payment": "", "PAYPAL": "", "#1234": "", "AB 12": "", "": "",
+    // critic F3 (2026-11-15): a company ending and an apostrophe never make another shop
+    "NETFLIX INC": "netflix", "ACME CORP": "acme", "Acme Widgets LLC": "acme widgets", "TRADER JOE'S": "trader joes", "Trader Joe’s": "trader joes", "Trader Joes #123": "trader joes" };
+  for (const [x, want] of Object.entries(cases)) assert.equal(shopKey(x), want, x);
+});
+test("gap #42 lookAlike: spellings of one shop, grouped; the shop's own tidy name suggested; transfers and people's names left out", async () => {
+  const { lookAlike } = await import("./compute.js");
+  const g = lookAlike(coffeePlan());
+  assert.deepEqual(g, [{ key: "coffee", names: [{ name: "Coffee", count: 5 }, { name: "SQ *COFFEE 1234", count: 3 }], lines: 8, into: "Coffee" }],
+    "Coffee House Annex is another shop; the transfer named Coffee is not counted; Zelle lines are people, not shops");
+  // a name the app made from a bank text is that text's shop: "Kroger Dayton" (from "KROGER #0421 DAYTON OH") is Kroger; a name
+  // that only starts like another is another shop, and a name the person typed is joined by its own words only
+  const p = withRules([], [line("a", "Kroger Dayton", -10, { rawPayee: "KROGER #0421 DAYTON OH" }), line("b", "Kroger", -20, { rawPayee: "KROGER #0388" }), line("c", "Kroger", -30, { rawPayee: "KROGER #0388" }),
+    line("d", "KROGER FUEL #12", -40, { rawPayee: "KROGER FUEL #12" }), line("e", "Weekly food shop", -80, { rawPayee: "KROGER #0388" }),
+    line("f", "Netflix Los Gatos", -15.49, { rawPayee: "NETFLIX.COM LOS GATOS CA" }), line("g", "Netflix", -15.49, { rawPayee: "NETFLIX.COM 866-579-7172 CA" }),
+    line("h", "Delta Air", -300, { rawPayee: "DELTA AIR 0062" }), line("i", "Delta", -90, { rawPayee: "DELTA" }), line("j", "Delta Dental", -90, { rawPayee: "DELTA DENTAL" })]);
+  const k = lookAlike(p);
+  assert.deepEqual(k.map((x) => [x.into, x.names.map((n) => n.name)]), [["Kroger", ["Kroger", "Kroger Dayton"]], ["Netflix", ["Netflix", "Netflix Los Gatos"]]],
+    "Kroger Fuel, Delta Air and Delta Dental are other names; the person's own 'Weekly food shop' stays theirs");
+  // no tidy name: the rule's name for the most used spelling
+  assert.deepEqual(lookAlike(withRules([], [line("a", "SQ *BLUE BOTTLE 1234", -5), line("b", "SQ *BLUE BOTTLE 1234", -5), line("c", "BLUE BOTTLE #9", -6)])).map((x) => x.into), ["Blue Bottle"]);
+  assert.deepEqual(lookAlike(withRules([], [line("a", "Coffee", -5), line("b", "Coffee", -6)])), [], "one spelling: nothing to merge");
+  assert.deepEqual(lookAlike(emptyPlan()), []);
+});
+test("gap #42 mergePayees: the lines show one name, amounts dates categories and tags untouched, and a rule at the top keeps new lines that way", async () => {
+  const { mergePayees, lookAlike } = await import("./compute.js");
+  const before = coffeePlan(), p = structuredClone(before);
+  const res = mergePayees(p, { names: ["Coffee", "SQ *COFFEE 1234"], into: "Coffee", id: "m1", today: "2026-11-15" });
+  assert.equal(res.renamed, 3);
+  assert.deepEqual(p.rules[0], { id: "m1", contains: "sq coffee", match: "exact", payee: "Coffee", direction: "any", hits: 3, createdAt: "2026-11-15" });
+  assert.deepEqual(p.rules.slice(1), before.rules, "the other rules as they were, under it");
+  p.transactions.forEach((t, i) => {
+    const b = before.transactions[i];
+    assert.deepEqual([t.id, t.date, t.amount, t.category, t.tags, t.accountId, t.rawPayee], [b.id, b.date, b.amount, b.category, b.tags, b.accountId, b.rawPayee], t.id);
+    assert.equal(t.payee, ["c1", "c2", "c3"].includes(t.id) ? "Coffee" : b.payee, t.id);
+  });
+  assert.deepEqual(lookAlike(p), [], "nothing left to merge");
+  // next month's line: the merge names it, and the rule under it still files it
+  const next = applyRules(p.rules, [{ id: "n", payee: "SQ *COFFEE 5678", rawPayee: "SQ *COFFEE 5678", amount: -4.5, category: "", accountId: "chk" }]);
+  assert.deepEqual([next.txs[0].payee, next.txs[0].category], ["Coffee", "dining"]); assert.deepEqual(next.hits, { f: 1, m1: 1 });
+  // a second merge into the same name adds its spelling to that rule
+  p.transactions.push(line("z", "COFFEE BAR", -3, { rawPayee: "COFFEE BAR" }));
+  const again = mergePayees(p, { names: ["COFFEE BAR"], into: "Coffee", id: "m2" });
+  assert.equal(again.rule.id, "m1"); assert.deepEqual(p.rules[0].anyOf, ["coffee bar"]); assert.equal(p.rules[0].hits, 4); assert.equal(p.rules.length, 2);
+  // several spellings into a new name: one rule, its other texts in anyOf; nothing to merge: nothing changed
+  const q = structuredClone(before);
+  mergePayees(q, { names: ["Coffee", "SQ *COFFEE 1234"], into: "Corner Coffee", id: "m3" });
+  assert.deepEqual([q.rules[0].contains, q.rules[0].anyOf, q.transactions.filter((t) => t.payee === "Corner Coffee").length], ["coffee", ["sq coffee"], 8]);
+  assert.equal(q.transactions.find((t) => t.id === "tr").payee, "Coffee", "a transfer keeps its name");
+  const r = structuredClone(before);
+  assert.deepEqual(mergePayees(r, { names: ["Coffee"], into: "Coffee", id: "m4" }), { rule: null, renamed: 0 }); assert.deepEqual(r, before);
+  assert.deepEqual(mergePayees(r, { names: ["#1234"], into: "Coffee", id: "m5" }), { rule: null, renamed: 0 }, "no line by that name, no letters for a rule");
+});
+test("gap #42 merge Undo: takes back exactly what the merge did (rule and names), and leaves a change made since", async () => {
+  const { mergePayees } = await import("./compute.js");
+  const { changesOf, takeBack } = await import("../../../core/ui/undo.js");
+  const before = coffeePlan(), p = structuredClone(before);
+  mergePayees(p, { names: ["Coffee", "SQ *COFFEE 1234"], into: "Coffee", id: "m1", today: "2026-11-15" });
+  const changes = changesOf(before, p);
+  const undone = structuredClone(p);
+  assert.deepEqual(takeBack(undone, changes), { done: changes.length, kept: 0 });
+  assert.deepEqual(undone, before, "the plan exactly as before the merge");
+  // the person renamed one line again in between: that line keeps its new name, the rest goes back
+  const later = structuredClone(p);
+  later.transactions.find((t) => t.id === "c1").payee = "My cafe";
+  const r = takeBack(later, changes);
+  assert.equal(r.kept, 1); assert.equal(later.transactions.find((t) => t.id === "c1").payee, "My cafe");
+  assert.equal(later.transactions.find((t) => t.id === "c2").payee, "SQ *COFFEE 1234"); assert.equal(later.rules[0].id, "f");
+});
+test("gap #42 words: the merge's lines, its Undo, the refusal and the card's sentence", async () => {
+  const { mergedWords, MERGE_UNDONE, chooseRefused, ALIKE_WORDS } = await import("./compute.js");
+  assert.equal(mergedWords(3, "Coffee"), "Merged: 3 lines now show as Coffee. A rule keeps new ones that way.");
+  assert.equal(mergedWords(1, "Coffee"), "Merged: 1 line now shows as Coffee. A rule keeps new ones that way.");
+  assert.equal(mergedWords(3, "Coffee", false), "Merged: 3 lines now show as Coffee.");
+  assert.equal(MERGE_UNDONE, "Undone: the lines have their old names again and your rules are as they were.");
+  assert.equal(chooseRefused("Coffee"), "Check a name that is not already Coffee.");
+  assert.equal(ALIKE_WORDS, "The same shop can come spelled more than one way. Merge them to see one name; amounts and dates stay as they are.");
+});
+test("gap #42 on the page: 'Payee names that look alike', Merge saved only on the tap, with Undo; Choose the name", async () => {
+  const r = await rulesPage(coffeePlan());
+  assert.match(r.text(), /Payee names that look alike The same shop can come spelled more than one way\. Merge them to see one name; amounts and dates stay as they are\. Coffee and SQ \*COFFEE 1234 8 lines Merge as “Coffee” Choose the name/);
+  assert.equal(r.saved.length, 0, "drawing it saves nothing");
+  r.button("Merge as “Coffee”").click();
+  assert.equal(r.saved.length, 1);
+  const p = r.saved[0];
+  assert.deepEqual(p.transactions.filter((t) => t.payee === "Coffee").length, 9); assert.equal(p.rules[0].payee, "Coffee"); assert.equal("category" in p.rules[0], false);
+  const after = await rulesPage(p);
+  assert.deepEqual(after.notices(), ["Merged: 3 lines now show as Coffee. A rule keeps new ones that way. Undo"], "with its Undo under the words");
+  assert.doesNotMatch(after.text(), /Payee names that look alike/, "nothing left to merge: the card goes, the green line stays");
+  assert.match(after.text(), /A rule that only renames, like a merge, lets the rules under it file the line\. 1 exactly "sq coffee" → shown as Coffee/);
+  // Undo, with a store that keeps what was saved (as the app's does), the page drawn again after each save
+  const live = await liveRules(coffeePlan());
+  live.button(live.draw(), "Merge as “Coffee”").click();
+  const drawn = live.draw();
+  assert.equal(live.plan.transactions.filter((t) => t.payee === "Coffee").length, 9);
+  live.button(drawn, "Undo").click();
+  assert.deepEqual(live.plan.transactions, coffeePlan().transactions); assert.deepEqual(live.plan.rules, coffeePlan().rules, "the plan exactly as before the merge");
+  assert.deepEqual(live.notices(live.draw()), ["Undone: the lines have their old names again and your rules are as they were."]);
+  assert.match(live.textOf(live.draw()), /Payee names that look alike/, "the names to merge are back");
+  // Choose the name: a name box and a tick per spelling, all on; Merge saves
+  const c = await rulesPage(coffeePlan());
+  assert.equal(c.root.querySelectorAll("form").length, 0, "the add form is folded (a rule is on file) and no choose form yet");
+  c.button("Choose the name").click();
+  const f = c.root.querySelectorAll("form").find((x) => x.querySelector('[name="into"]'));
+  assert.equal(f.querySelector('[name="into"]').value, "Coffee"); assert.deepEqual([f.querySelector('[name="n0"]').checked, f.querySelector('[name="n1"]').checked], [true, true]);
+  assert.match(c.textOf(f), /Show them all as .*Coffee \(5 lines\) .*SQ \*COFFEE 1234 \(3 lines\)/);
+  f.querySelector('[name="n1"]').checked = false;
+  f.dispatch("submit");
+  assert.equal(c.saved.length, 0, "only Coffee ticked, already Coffee: refused");
+  f.querySelector('[name="n1"]').checked = true; f.querySelector('[name="into"]').value = "Corner Coffee";
+  f.dispatch("submit");
+  assert.equal(c.saved[0].transactions.filter((t) => t.payee === "Corner Coffee").length, 8);
+  assert.deepEqual((await rulesPage(c.saved[0])).notices(), ["Merged: 8 lines now show as Corner Coffee. A rule keeps new ones that way. Undo"]);
+});
+test("gap #42 Categorize keeps a merged name when it files the payee (filing never undoes a merge)", async () => {
+  const { renamedTo, mergePayees } = await import("./compute.js");
+  const p = withRules([], [line("a", "Kroger Dayton", -50, { rawPayee: "KROGER #0421 DAYTON OH" }), line("b", "Kroger", -20, { rawPayee: "KROGER #0388" })]);
+  mergePayees(p, { names: ["Kroger Dayton", "Kroger"], into: "Kroger Store", id: "m" });
+  assert.equal(renamedTo(p.rules, p.transactions[0]), "Kroger Store"); assert.equal(renamedTo([], p.transactions[0]), null);
+  // the Categorize page as the shell draws it (its AI helper answering nothing), a category picked on the merged payee's row
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js"), { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("../categorize/view.js");
+  const plan = migrate(structuredClone(p)), saved = [], root = new FakeElement("main");
+  render(root, { ui, fmt: { ...fmt, today: () => "2026-11-15" }, plan, route: { rest: [], query: {} }, view: { build: false }, live: { ai: false },
+    ai: { settings: async () => ({ provider: "none" }), status: async () => "off" }, store: { get: () => plan, update: (fn) => { const d = structuredClone(plan); fn(d); saved.push(d); } } });
+  await new Promise((r) => setTimeout(r, 0));
+  const sel = root.querySelectorAll("select").find((s) => /Kroger Store/.test(s.getAttribute("aria-label") ?? ""));
+  assert.ok(sel, textOf(root));
+  sel.value = "groceries"; sel.dispatch("change");
+  const filed = saved[0].transactions.filter((t) => t.category === "groceries");
+  assert.ok(filed.length >= 1); for (const t of filed) assert.equal(t.payee, "Kroger Store");
+});
+
 // ---------------------------------------------------------------- gap #42 critics' findings (2026-11-15)
 test("critic F1 (person): Move up / Move down keeps what was typed in the rule's form (not saved) and its More details as it was", async () => {
   const rules = [{ id: "a", contains: "power", category: "utilities", direction: "out", hits: 0 }, { id: "b", contains: "corner", category: "dining", payee: "Corner Coffee", direction: "any", hits: 0 }];
@@ -616,4 +765,38 @@ test("critic F1 (money): the AI categorizer never gives a rule that only renames
   // the next import: the rename rule names the line, the AI's rule files it
   const next = applyRules(p.rules, [{ id: "n", payee: "KROGER 1234", rawPayee: "KROGER 1234", amount: -5, accountId: "chk", category: "" }]);
   assert.deepEqual([next.txs[0].payee, next.txs[0].category], ["Kroger Store", "groceries"]);
+});
+test("critic F3 (person): every spelling of one shop in one record: NETFLIX INC with Netflix and NETFLIX.COM; TRADER JOE'S with Trader Joes #123", async () => {
+  const { lookAlike, mergePayees } = await import("./compute.js");
+  const p = withRules([], [line("a", "NETFLIX.COM 8871", -15.49, { rawPayee: "NETFLIX.COM 8871" }), line("b", "Netflix", -15.49, { rawPayee: "Netflix" }), line("c", "NETFLIX INC", -15.49, { rawPayee: "NETFLIX INC" }),
+    line("d", "Trader Joes #123", -42.1, { rawPayee: "Trader Joes #123" }), line("e", "TRADER JOE'S", -55.2, { rawPayee: "TRADER JOE'S" }), line("f", "Corner Coffee", -4.5, { rawPayee: "Corner Coffee" }),
+    line("g", "Power Co", -120, { rawPayee: "Power Co" }), line("h", "Payroll Acme", 2500, { rawPayee: "Payroll Acme" })]);
+  const g = lookAlike(p);
+  assert.deepEqual(g.map((x) => [x.into, x.names.map((n) => n.name)]), [["Netflix", ["Netflix", "NETFLIX INC", "NETFLIX.COM 8871"]], ["Trader Joes", ["TRADER JOE'S", "Trader Joes #123"]]]);
+  // one tap merges all three: nothing is left over that the person would think was done
+  const q = structuredClone(p);
+  mergePayees(q, { names: g[0].names.map((n) => n.name), into: "Netflix", id: "m" });
+  assert.deepEqual(q.transactions.filter((t) => /netflix/i.test(t.rawPayee)).map((t) => t.payee), ["Netflix", "Netflix", "Netflix"]);
+  assert.deepEqual(lookAlike(q).map((x) => x.into), ["Trader Joes"]);
+  assert.deepEqual([q.rules[0].contains, q.rules[0].anyOf], ["netflix inc", ["netflix"]]);
+});
+test("critic F1 (money): after a merge, the AI categorizer keeps the merged name and adds its own filing rule under the merge", async () => {
+  const { mergePayees } = await import("./compute.js");
+  const ai = await import("../../ai/categorizer/compute.js");
+  const filed = { category: "groceries" };
+  const p = withRules([], [line("1", "Kroger", -4, { rawPayee: "Kroger", ...filed }), line("2", "Kroger Dayton", -5, { rawPayee: "KROGER #0421 DAYTON OH", ...filed }), line("3", "Kroger Dayton", -7, { rawPayee: "KROGER #0421 DAYTON OH", ...filed })]);
+  mergePayees(p, { names: ["Kroger", "Kroger Dayton"], into: "Kroger Store", id: "m" });
+  const merge = structuredClone(p.rules[0]);
+  p.transactions.push(line("9", "KROGER 0999", -9, { rawPayee: "KROGER 0999" }));
+  // the AI page's row says what the name will be
+  const row = ai.review(p, ai.groupsFor(p, "open"), { kroger: { category: "groceries", confidence: 0.9 } }).rows.find((r) => r.ids.includes("9"));
+  assert.equal(row.rename, "Kroger Store");
+  const res = ai.applyChoices(p, [{ key: "k", ids: ["9"], rawPayee: "KROGER 0999", category: "groceries" }], { uid: () => "new", today: "2026-11-15" });
+  assert.deepEqual(p.rules[0], merge, "the merge's rule only renames, as it did");
+  assert.deepEqual([res.rulesChanged, res.rulesAdded, p.rules.length, p.rules[1].category], [[], 1, 2, "groceries"]);
+  assert.deepEqual([p.transactions[3].payee, p.transactions[3].category], ["Kroger Store", "groceries"]);
+  // the merged lines themselves are never renamed by the AI's choice either
+  const all = ai.applyChoices(p, [{ key: "k2", ids: ["1", "2"], rawPayee: "KROGER #0421 DAYTON OH", category: "dining" }], { uid: () => "new2", today: "2026-11-15" });
+  assert.deepEqual(p.transactions.slice(0, 2).map((t) => [t.payee, t.category]), [["Kroger Store", "dining"], ["Kroger Store", "dining"]]);
+  assert.deepEqual(all.rulesChanged.filter((c) => c.contains === merge.contains), []);
 });

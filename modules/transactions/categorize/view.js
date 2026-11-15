@@ -5,7 +5,7 @@
 import { compute, buildPrompt, parseSuggestions, flaggedSays, unflagSaid, flaggedHref } from "./compute.js";
 import { part } from "../../../core/ui/more.js";
 import { categoriesOf, categoryLabel } from "../categories/compute.js";
-import { ruleFor, normalizePayee } from "../rules/compute.js";
+import { ruleFor, normalizePayee, renamedTo } from "../rules/compute.js";   // renamedTo: a merged name is kept when filing (gap #42)
 import { aiHealth } from "../../ai/health.js";
 
 let aiSuggestions = {};   // normalized payee -> { category, confidence }; kept across re-renders in this session
@@ -66,7 +66,7 @@ export function render(root, ctx) {
     store.update((p) => {
       const ids = new Set(g.ids);
       const pretty = ruleFor(g.rawPayee, category);
-      for (const t of p.transactions ?? []) if (ids.has(t.id)) { t.category = category; t.rawPayee = t.rawPayee ?? t.payee; if (pretty.payee) t.payee = pretty.payee; }
+      for (const t of p.transactions ?? []) if (ids.has(t.id)) { t.category = category; t.rawPayee = t.rawPayee ?? t.payee; const kept = renamedTo(p.rules, t); if (kept || pretty.payee) t.payee = kept || pretty.payee; }
       if (makeRule && pretty.contains) {
         p.rules = p.rules ?? [];
         const dup = p.rules.find((r) => r.contains === pretty.contains && r.category === category);
@@ -86,7 +86,7 @@ export function render(root, ctx) {
       for (const g of ready) {
         const category = g.suggestion?.category ?? aiSuggestions[g.key].category;
         const ids = new Set(g.ids), pretty = ruleFor(g.rawPayee, category);
-        for (const t of p.transactions ?? []) if (ids.has(t.id)) { t.category = category; t.rawPayee = t.rawPayee ?? t.payee; if (pretty.payee) t.payee = pretty.payee; }
+        for (const t of p.transactions ?? []) if (ids.has(t.id)) { t.category = category; t.rawPayee = t.rawPayee ?? t.payee; const kept = renamedTo(p.rules, t); if (kept || pretty.payee) t.payee = kept || pretty.payee; }
         if (pretty.contains && !p.rules.some((r) => r.contains === pretty.contains && r.category === category)) p.rules.push({ id: ui.uid(), ...pretty, hits: g.count, createdAt: fmt.today() });
       }
     });

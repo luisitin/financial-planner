@@ -2,7 +2,10 @@
 // that runs them over what is still uncategorised. Gap next-60 #42 (2026-11-15): the form opens with three boxes; the
 // rest (how the words match, the amount, money in or out, the account, tags) waits under "More details (optional)";
 // a rule may only rename or tag; a rule's edit area moves it up or down (first match wins, said in one plain line).
-import { compute, fileOpen, ruleFiles, ruleTags, alsoTexts, whenWords, amountWords, savedWords, REFUSED, movedWords, orderWords, moveRule } from "./compute.js";
+// "Payee names that look alike" lists spellings of one shop; a merge renames those lines and saves a rule that only
+// renames, on a tap, with Undo.
+import { compute, fileOpen, ruleFiles, ruleTags, alsoTexts, whenWords, amountWords, savedWords, REFUSED, movedWords, orderWords, moveRule,
+  lookAlike, mergePayees, mergedWords, MERGE_UNDONE, chooseRefused, ALIKE_WORDS, andList } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
 import { cleanTags } from "../splits.js";
 import { rest } from "../../../core/ui/more.js";
@@ -36,7 +39,7 @@ const valuesOf = (r) => (r ? { ...r, category: r.category ?? "", match: r.match 
   : { direction: "any", accountId: "", category: "", match: "contains", amountIs: "" });
 const OPTIONAL = ["category", "match", "anyOf", "amount", "tag", "tags"];
 
-let pending = null;   // { text, edit?, typed?, foldOpen? } kept across the shell re-render: the green line, the rule whose form stays open, what was typed in it
+let pending = null;   // { text, edit?, typed?, foldOpen?, undo?, merge? } kept across the shell re-render: the green line, the rule whose form stays open, what was typed in it, a merge's Undo
 /** The amount's boxes follow its choice: none under "Any amount", "Amount" for one figure, and "And up to" too for "Between". */
 function amountBoxes(f) {
   const q = (name) => f.querySelector(`[name="${name}"]`);
@@ -137,8 +140,13 @@ export function render(root, ctx) {
   };
   drawForm();
 
+  // the green line: where the tap was (a merge's in its card while names are left to merge), Undo kept until used
+  const groups = lookAlike(plan);
+  const okLine = said?.text ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (r) => { pending = { text: ui.undoneWords(r, MERGE_UNDONE), merge: true }; } } : {}) : null;
+  if (okLine && !said.undo) setTimeout(() => okLine.remove(), 4000);
+  const inAlike = !!okLine && !!said.merge && groups.length > 0;
   const out = ui.h("div");
-  if (said?.text) { const n = ui.notice("ok", said.text); out.append(n); setTimeout(() => n.remove(), 4000); }
+  if (okLine && !inAlike) out.append(okLine);
   if (d.count) {
     const acct = (id) => (plan.accounts ?? []).find((a) => a.id === id)?.name;
     const numbered = d.count > 1, renames = d.rules.some((r) => !ruleFiles(r));
@@ -160,4 +168,40 @@ export function render(root, ctx) {
       out, formHost,
     ));
   } else { formCard.append(out, formHost); root.append(formCard); }
+
+  // ---------------------------------------------------------------- payee names that look alike (gap #42)
+  if (!groups.length) return;
+  const merge = (names, into) => {
+    const dry = mergePayees(structuredClone(plan), { names, into, id: "dry" });
+    if (!dry.renamed && !dry.rule) return;
+    const undo = ui.undoable(store, (dr) => { mergePayees(dr, { names, into, id: ui.uid(), today: ctx.fmt.today() }); });
+    pending = { text: mergedWords(dry.renamed, into, !!dry.rule), undo, merge: true };
+  };
+  const row = (g) => {
+    const holder = ui.h("div");
+    let open = false;
+    const choose = ui.button("Choose the name", () => {
+      open = !open;
+      choose.setAttribute("aria-expanded", open ? "true" : "false");
+      holder.innerHTML = "";
+      if (!open) return;
+      let f = null;
+      const fields = [{ key: "into", label: "Show them all as", type: "text", required: true },
+        ...g.names.map((x, k) => ({ key: `n${k}`, label: `${x.name} (${x.count} line${x.count === 1 ? "" : "s"})`, type: "checkbox" }))];
+      f = ui.form(fields, { into: g.into, ...Object.fromEntries(g.names.map((x, k) => [`n${k}`, true])) }, (v) => {
+        const into = String(v.into ?? "").trim(), names = g.names.filter((x, k) => v[`n${k}`]).map((x) => x.name);
+        if (!into) return false;
+        if (!names.some((n) => n !== into)) return ui.fieldError(f?.querySelector?.('[name="into"]'), chooseRefused(into));
+        merge(names, into);
+      }, { submitLabel: "Merge", onCancel: () => { open = false; choose.setAttribute("aria-expanded", "false"); holder.innerHTML = ""; } });
+      holder.append(f);
+    }, { class: "secondary small", "aria-expanded": "false" });
+    return ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, andList(g.names.map((x) => x.name))), ui.h("span", { class: "rec-value" }, `${g.lines} line${g.lines === 1 ? "" : "s"}`)),
+      ui.h("div", { class: "rec-foot", style: { justifyContent: "flex-start" } },
+        ui.button(`Merge as “${g.into}”`, () => merge(g.names.map((x) => x.name), g.into), { class: "secondary small" }), choose),
+      holder);
+  };
+  root.append(ui.card("Payee names that look alike", inAlike ? okLine : null, ui.h("p", { class: "muted small" }, ALIKE_WORDS),
+    ...rest(ctx, { id: "alike", items: groups, row, first: 3, noun: "shops", one: "shop", list: "records" })));
 }
