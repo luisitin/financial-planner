@@ -173,7 +173,8 @@ test("names that are everyday words never rewrite the app's own words: Will, Max
   const p = plan(); p.household.people[0].name = "Will"; p.household.people[1].name = "Max";
   const docs = page(p, "estate/documents").lines.join("\n");
   assert.ok(docs.includes("kind will; label Will;") && docs.includes("Named in the will: who raises the children"), docs.slice(0, 300));
-  assert.ok(page(p, "goals/house").lines.includes("max price: 636883.96"));
+  // the figure follows our guesses since smart guesses C9 (an empty home price is the state's typical one): the words are the point
+  assert.ok(page(p, "goals/house").lines.some((l) => /^max price: \d+(\.\d+)?$/.test(l)), "max price kept its words");
   assert.ok(page(p, "debt/ratios").lines.includes("grades › dti › max: 0.36"));
   const ira = plan(); ira.household.people[1].name = "Ira";
   assert.ok(page(ira, "balance/liquidity").lines.some((l) => l.includes("type label Roth IRA / 401(k)")));
