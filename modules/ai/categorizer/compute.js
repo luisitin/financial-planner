@@ -4,7 +4,7 @@
 // (categories on the transactions plus a rule per payee for future imports). The prompt is the Categorise page's, fed
 // with the payee text cleaned first (no word with a digit in it, no codes, no odd punctuation), so the AI sees only
 // payee names and the category list, never amounts, dates, card or reference numbers, or accounts.
-import { normalizePayee, prettyPayee, ruleFor, matchRule } from "../../transactions/rules/compute.js";
+import { normalizePayee, prettyPayee, ruleFor, matchRule, ruleFiles } from "../../transactions/rules/compute.js";
 import { categoriesOf, categoryById, categoryLabel } from "../../transactions/categories/compute.js";
 import { buildPrompt } from "../../transactions/categorize/compute.js";
 import { isTransfer } from "../../transactions/ledger/compute.js";
@@ -37,8 +37,10 @@ export const lostWord = (raw) => {
 /** One payee: the bank's text without card codes, dates and noise words, keeping the shop's name after "*". */
 export const keyOf = (t) => normalizePayee(keepMerchant(t.rawPayee ?? t.payee)) || String(t.payee ?? "").trim().toLowerCase();
 
-/** The name a filed payee gets: a same-text rule's name, else the tidy bank text (the shop's name kept for PayPal-style payees). */
-const sameText = (rules, text) => (text ? (rules ?? []).find((r) => normalizePayee(r.contains) === text && !r.accountId && (r.direction ?? "any") === "any") ?? null : null);
+/** The name a filed payee gets: a same-text rule's name, else the tidy bank text (the shop's name kept for PayPal-style payees).
+ * Only a rule that files counts as the same-text rule: one that only renames or tags (a merge of payee names, gap #42) is never
+ * given a category here, so it never starts filing (critic F1, 2026-11-15); the AI's choice gets a rule of its own. */
+const sameText = (rules, text) => (text ? (rules ?? []).find((r) => ruleFiles(r) && normalizePayee(r.contains) === text && !r.accountId && (r.direction ?? "any") === "any") ?? null : null);
 const nameFor = (rules, raw) => {
   if (lostWord(raw)) return prettyPayee(keepMerchant(raw));
   const short = ruleFor(raw, "");

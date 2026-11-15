@@ -70,7 +70,9 @@ No money math. The rules the page follows:
   same-text rule's name if there is one, else `prettyPayee` (for a PayPal-style payee, with the shop's name kept). A
   rule (`ruleFor`: the first three words of the clean text, any account, any direction) files future imports.
   Same-text rules are found with their text normalised ("Netflix" = "netflix"), only those for any account and any
-  direction:
+  direction, and only rules that file: a rule that only renames or tags (no `category`, such as a merge of payee names
+  on the Rules page) is never given a category here, so the AI's choice gets a rule of its own under it (critic F1,
+  2026-11-15):
   - a payee paid through a service like PayPal or Square (`lostWord`: the shop's name is the part `normalizePayee`
     drops) gets no rule, since it could only say "paypal" (`rulesSkipped`);
   - a same-text rule with the same category gains hits;
