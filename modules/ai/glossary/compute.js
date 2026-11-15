@@ -3,6 +3,7 @@
 // topics to browse by; behind the words met on the most pages, a two-minute lesson.
 import { TERMS, TOPICS } from "./data/terms.js";
 import { LESSONS } from "./data/lessons.js";
+import { amortization } from "../../../core/math/finance.js";
 
 /** Lower case, accents, apostrophes and punctuation off (but "401(k)" and "50/30/20" keep their marks), single spaces. */
 export const norm = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9%()/]+/g, " ").trim();
@@ -134,6 +135,36 @@ export function lessonOf(word, lessons = LESSONS) {
 export const lessonWords = (l) => [...(l?.what ?? []), ...(l?.why ?? []), ...(l?.example ?? [])].join(" ").trim().split(/\s+/).filter(Boolean).length;
 /** How many pages a word is met on: the pages of its entry's "Where you meet it in the app" list that are built (`isBuilt(key)`). */
 export const metOn = (t, isBuilt = () => true) => (t?.pages ?? []).filter((k) => isBuilt(k)).length;
+
+/**
+ * Velocity banking's worked example (gap list item 59): the figures its lesson quotes, worked out here so a test can hold
+ * the words to them. Invented round inputs; information, not advice. A simple model, said in the lesson: the money left
+ * over each month lowers the debt by that much either way (the mortgage's own schedule, `amortization`: interest =
+ * balance x rate / 12); the chunk sits on the line, paid down by the leftover, so the line's balance runs chunk, chunk -
+ * leftover, ... (its average is `onLine`) and costs the gap between the two rates on that average; the everyday spending
+ * is spent evenly through the month, so half of it sits on the line on average (`sitting`) and saves the line's rate on
+ * it. `low` is the same with the mortgage at `lowRate`.
+ */
+export const VELOCITY = Object.freeze({ loan: 200000, years: 30, mortgageRate: 0.06, lineRate: 0.09, spending: 5000, leftOver: 1000, chunk: 10000, lowRate: 0.04 });
+export function velocity(x = VELOCITY) {
+  const plain = amortization({ principal: x.loan, annualRate: x.mortgageRate, years: x.years });
+  const extra = amortization({ principal: x.loan, annualRate: x.mortgageRate, years: x.years, extraPayment: x.leftOver });
+  const balances = [];
+  for (let b = x.chunk; b > 0.005 && x.leftOver > 0 && balances.length < 1200; b -= x.leftOver) balances.push(b);
+  const months = balances.length;
+  const onLine = months ? balances.reduce((s, b) => s + b, 0) / months : 0;
+  const sitting = x.spending / 2;
+  const saved = sitting * x.lineRate * months / 12;
+  const cost = (rate) => onLine * (x.lineRate - rate) * months / 12;
+  const net = saved - cost(x.mortgageRate), netLow = saved - cost(x.lowRate);
+  return {
+    payment: plain.payment, years: plain.periods / 12, yearsWithExtra: extra.periods / 12, monthsWithExtra: extra.periods,
+    interestSaved: plain.totalInterest - extra.totalInterest,
+    months, onLine, sitting, rateGap: x.lineRate - x.mortgageRate,
+    rateCost: cost(x.mortgageRate), floatSaved: saved, net, perMonth: months ? net / months : 0,
+    low: { rateGap: x.lineRate - x.lowRate, rateCost: cost(x.lowRate), net: netLow },
+  };
+}
 
 /**
  * compute(plan, { today }) -> { count, topics: [{ key, label, count }], mine: [entries for this household] }

@@ -285,7 +285,7 @@ function pageAsBefore(root) {
   let text = line(wordsOf(root));
   for (const e of entryEls(root).filter((x) => NEW_WORDS.has(x.getAttribute("id").slice(3)))) text = text.replace(line(wordsOf(e)), " ");
   for (const l of lessonEls(root)) text = text.replace(line(wordsOf(l)), " ");
-  const n = TERMS.length, was = n - NEW_WORDS.size;
+  const n = TERMS.length, was = n - TERMS.filter((t) => NEW_WORDS.has(t.id)).length;
   return line(text.replace(`${n} money words the app uses`, `${was} money words the app uses`).replace(`${n} words, A to Z.`, `${was} words, A to Z.`));
 }
 async function measureNow() {
@@ -548,4 +548,111 @@ test("S11: there is nothing to save here, so drawing the page and opening every 
   assert.equal(saved.length, 0);
   assert.equal(JSON.stringify(plan), before);
   assert.ok(root.all().filter((e) => e.tagName === "DETAILS" && e.hasAttribute("open")).length > TERMS.length, "every word and every lesson opened");
+});
+
+// ---------------------------------------------------------------- Velocity banking (gap list item 59, 2026-11-15)
+const { velocity, VELOCITY } = await import("./compute.js");
+const { pmt } = await import("../../../core/math/finance.js");
+
+test("Velocity banking: a word of its own, with no page claiming it, the line of credit's source, and a lesson linked to the Mortgage page", () => {
+  const t = find("Velocity banking");
+  assert.ok(t); assert.equal(t.id, "velocity-banking"); assert.equal(t.topic, "borrowing");
+  assert.deepEqual(t.pages, [], "no page of the app uses the word");
+  assert.equal(t.sourceUrl, find("HELOC").sourceUrl, "the same source as the home-equity line's entry");
+  assert.equal(find("chunking"), t); assert.equal(search("velocity")[0], t);
+  assert.equal(search("heloc")[0], find("HELOC"), "the line of credit itself stays first");
+  assert.ok(!/\$\s?\d/.test(t.plain));
+  const l = lessonOf(t);
+  assert.equal(l.page, "debt/mortgage"); assert.equal(PAGES.get("debt/mortgage").title, "Mortgage");
+  assert.ok(BY_DESIGN.has(t.id));
+  assert.match(lessonText(l), /This is information, not advice\./);
+  assert.match(lessonText(l), /its rate usually changes, and not repaying it can cost you the home/, "what the HELOC entry already says");
+  assert.match(find("HELOC").plain, /The rate usually changes, and not repaying can cost you the home\./);
+  assert.ok(!forPlan(familyPlan(INV_TODAY), { today: INV_TODAY }).includes(t), "never pushed as a word for a household with a mortgage");
+});
+
+test("Velocity banking: the example's arithmetic (velocity()), each step", () => {
+  const v = velocity();
+  assert.deepEqual(VELOCITY, { loan: 200000, years: 30, mortgageRate: 0.06, lineRate: 0.09, spending: 5000, leftOver: 1000, chunk: 10000, lowRate: 0.04 });
+  // the mortgage with and without the leftover as an extra payment (core/math/finance.js amortization)
+  assert.equal(v.payment, 1199.10);
+  assert.equal(v.years, 30); assert.equal(v.monthsWithExtra, 122); assert.equal(Math.round(v.yearsWithExtra), 10);
+  assert.ok(Math.abs(v.interestSaved - 164268.14) < 0.01, String(v.interestSaved));
+  // the chunk on the line: 10,000, 9,000 ... 1,000, cleared in 10 months; its average; the rate gap on it
+  assert.equal(v.months, 10); assert.equal(v.onLine, 5500); assert.equal(v.onLine, (10000 + 1000) / 2);
+  assert.ok(Math.abs(v.rateGap - 0.03) < 1e-12);
+  assert.ok(Math.abs(v.rateCost - 5500 * 0.03 * 10 / 12) < 1e-9); assert.ok(Math.abs(v.rateCost - 137.5) < 1e-9);
+  // pay sitting on the line: half the everyday spending, at the line's rate
+  assert.equal(v.sitting, 2500); assert.ok(Math.abs(v.floatSaved - 2500 * 0.09 * 10 / 12) < 1e-9); assert.ok(Math.abs(v.floatSaved - 187.5) < 1e-9);
+  assert.ok(Math.abs(v.net - 50) < 1e-9); assert.ok(Math.abs(v.perMonth - 5) < 1e-9);
+  // the mortgage at 4%: 5 points on the same average
+  assert.ok(Math.abs(v.low.rateCost - 5500 * 0.05 * 10 / 12) < 1e-9); assert.ok(Math.abs(v.low.net - (187.5 - 229.1666666666667)) < 1e-9);
+  // a chunk the leftover does not divide; nothing left over
+  const odd = velocity({ ...VELOCITY, chunk: 2500 });
+  assert.equal(odd.months, 3); assert.equal(odd.onLine, (2500 + 1500 + 500) / 3);
+  const none = velocity({ ...VELOCITY, leftOver: 0 });
+  assert.equal(none.months, 0); assert.equal(none.net, 0); assert.equal(none.perMonth, 0); assert.equal(none.interestSaved, 0);
+});
+
+/** Day by day, 30-day months: pay lands on the line on day 0 (the mortgage payment in and straight out), the everyday
+ * spending leaves a 30th a day, the line charges its rate on the month's average daily balance; the leftover lowers the
+ * line at the month's end, or (leftoverOnLine) sits on it from day 0. The plain way sends the payment and the leftover to
+ * the mortgage. Returns how much less velocity banking owes after `months` (below 0: it owes more). */
+function dayByDay({ loan = 200000, mortgageRate = 0.06, lineRate = 0.09, spending = 5000, leftOver = 1000, chunk = 10000, leftoverOnLine = false, months = 10 } = {}) {
+  const P = pmt(mortgageRate / 12, 360, loan);
+  let m1 = loan, m2 = loan - chunk, h = chunk;
+  for (let k = 0; k < months; k++) {
+    m1 = m1 + m1 * mortgageRate / 12 - P - leftOver;
+    m2 = m2 + m2 * mortgageRate / 12 - P;
+    let bal = h - (spending + (leftoverOnLine ? leftOver : 0)), sum = 0;
+    for (let d = 0; d < 30; d++) { sum += bal; bal += spending / 30; }
+    h = bal + (sum / 30) * lineRate / 12 - (leftoverOnLine ? 0 : leftOver);
+  }
+  return m1 - (m2 + h);
+}
+
+test("Velocity banking: counted day by day the answer moves a little and stays a few dollars a month, as the lesson says", () => {
+  const v = velocity();
+  assert.ok(Math.abs(dayByDay() - v.net) < 5, `${dayByDay()} against ${v.net}`);                               // 52.31 against 50
+  assert.ok(Math.abs(dayByDay({ mortgageRate: 0.04 }) - v.low.net) < 5, `${dayByDay({ mortgageRate: 0.04 })}`);   // -44.03 against -41.67
+  for (const leftoverOnLine of [false, true]) for (const mortgageRate of [0.06, 0.04]) {
+    const n = dayByDay({ leftoverOnLine, mortgageRate });
+    assert.ok(Math.abs(n / 10) < 15, `${leftoverOnLine}, ${mortgageRate}: ${n} in 10 months`);
+  }
+  // next to what the leftover saves either way
+  assert.ok(v.interestSaved / Math.abs(dayByDay({ leftoverOnLine: true })) > 1000);
+});
+
+test("Velocity banking: the lesson quotes velocity()'s figures, rounded as said", () => {
+  const v = velocity(), text = lessonText(lessonOf("velocity-banking"));
+  const said = [
+    $(VELOCITY.loan), "30 years at 6%", "at 9%", `${$(VELOCITY.spending)} of everyday spending`, `${$(VELOCITY.leftOver)} left over`,
+    `in about ${Math.round(v.yearsWithExtra)} years instead of ${v.years}`, `about ${$(v.interestSaved, 1000)} of interest`,
+    `you borrow ${$(VELOCITY.chunk)} from the line at once`, `clears the line in ${v.months} months`,
+    `you owe ${$(v.onLine)} on the line on average, at ${Math.round(VELOCITY.lineRate * 100)}% instead of the mortgage's ${Math.round(VELOCITY.mortgageRate * 100)}%`,
+    `about ${$(v.rateCost)} of extra interest`, `you owe about ${$(v.sitting)} less on average`, `that saves about ${$(v.floatSaved)}.`,
+    `So after ${v.months} months you are about ${$(v.net)} better off than sending the ${$(VELOCITY.leftOver)} straight to the mortgage, about ${$(v.perMonth)} a month`,
+    `With the mortgage at ${Math.round(VELOCITY.lowRate * 100)}%, you would be about ${$(-v.low.net)} worse off.`,
+    `Either way, it is tiny next to the ${$(v.interestSaved, 1000)}.`,
+  ];
+  for (const s of said) assert.ok(text.includes(s), `"${s}" is in the lesson`);
+  assert.ok(v.net > 0 && v.low.net < 0, "better off at 6%, worse off at 4%, as written");
+  // the answer first, then the figures; "better off" says than what (a look on a phone, 2026-11-16: "about $50 ahead"
+  // did not say ahead of what)
+  const ex = lessonOf("velocity-banking").example;
+  assert.ok(ex[0].startsWith("In short, the line itself changes the result by a few dollars a month. Take a "), ex[0]);
+  assert.ok(Math.abs(v.perMonth) < 10 && Math.abs(v.low.net / v.months) < 10, "a few dollars a month, both ways");
+  assert.doesNotMatch(text, /\bahead\b|\bbehind\b|comes out/, "never ahead or behind of nothing named");
+  // money words a reader may not know, said plainly: the home-equity line as a line borrowed against the home, a sum
+  // borrowed "at once" rather than a "lump sum"
+  assert.match(text, /a line of credit, often one borrowed against your home,/);
+  assert.doesNotMatch(text, /lump sum|home-equity/);
+  // plain words (a look on a phone, 2026-11-15): the rates said as rates, "chunk" said once and explained, no sentence
+  // that has lost its verb
+  assert.equal(Math.round(v.rateGap * 100), Math.round(VELOCITY.lineRate * 100) - Math.round(VELOCITY.mortgageRate * 100), "9% instead of 6% is the 3-point gap velocity() costs");
+  assert.doesNotMatch(text, /points more|percentage point/, "the two rates, not the gap between them");
+  assert.deepEqual(text.match(/\bchunks?\b/gi), ["chunk"], "said once");
+  assert.match(text, /a large amount from the line at once, often called a chunk,/);
+  assert.doesNotMatch(text, /pay sitting on it until it is spent/);
+  assert.equal(lessonWords(lessonOf("velocity-banking")) <= 350, true);
 });

@@ -1,7 +1,7 @@
 // modules/ai/glossary/data/lessons.js -- "A two-minute lesson" behind the 20 words people meet on the most pages (gap
-// list item 13, 2026-11-15). Each lesson: about 250 to 350 plain words in three
-// parts (what it is, why it matters to you, an example with an invented household's round figures), one page of the app
-// to try it on, and the public sources of its rules. Written in the app's own words; no text copied. No yearly dollar
+// list item 13, 2026-11-15), and behind Velocity banking (item 59; its sums are velocity() in compute.js). Each lesson:
+// about 250 to 350 plain words in three parts (what it is, why it matters to you, an example with an invented
+// household's round figures), one page of the app to try it on, and the public sources of its rules. Written in the app's own words; no text copied. No yearly dollar
 // limit (they change every year and live on the pages that use them): only rates fixed in law, figures labelled as an
 // example, and the app's own assumptions (system/assumptions README). Which source backs which sentence, with the read
 // dates, is in the README ("Lessons"); module.test.mjs checks every sum in an example and the word counts.
@@ -33,6 +33,7 @@ const S = {
   rate: { name: "CFPB: What is the difference between a mortgage interest rate and an APR?", url: "https://www.consumerfinance.gov/ask-cfpb/what-is-the-difference-between-a-mortgage-interest-rate-and-an-apr-en-135/" },
   cushion: { name: "CFPB: An essential guide to building an emergency fund", url: "https://www.consumerfinance.gov/an-essential-guide-to-building-an-emergency-fund/" },
   grossNet: { name: "CFPB financial terms glossary", url: "https://www.consumerfinance.gov/consumer-tools/educator-tool/youth-financial-education/glossary/" },
+  heloc: { name: "CFPB: What is a home equity line of credit (HELOC)?", url: "https://www.consumerfinance.gov/ask-cfpb/what-is-a-home-equity-line-of-credit-heloc-en-107/" },
 };
 
 export const LESSONS = [
@@ -376,5 +377,24 @@ export const LESSONS = [
       "Either way, the money grows without a yearly tax bill while it stays in the account. Which is better depends mostly on whether Riley's tax rate is higher now or later.",
     ],
     sources: [S.tradIra, S.rothIra, S.early],
+  },
+  {
+    id: "velocity-banking", page: "debt/mortgage",
+    what: [
+      "It runs in a loop. Your whole paycheck goes into a line of credit, often one borrowed against your home, and your bills are paid from that line.",
+      "Every so often you borrow a large amount from the line at once, often called a chunk, and pay it onto the mortgage. Your pay then brings the line back down, and the loop starts again. This is information, not advice.",
+    ],
+    why: [
+      "Only money left over after your spending pays any debt down. Moving debt onto the line does not lower it; it only moves it, usually to a higher rate. An extra payment on the mortgage, made with the same leftover money, pays it off about as soon.",
+      "The line also brings risks the mortgage does not have: its rate usually changes, and not repaying it can cost you the home.",
+    ],
+    example: [
+      "In short, the line itself changes the result by a few dollars a month. Take a $200,000 mortgage over 30 years at 6%, a line of credit at 9%, $5,000 of everyday spending a month and $1,000 left over.",
+      "Sent to the mortgage as an extra payment, the $1,000 a month ends it in about 10 years instead of 30 and saves about $164,000 of interest, with or without the line.",
+      "With velocity banking, you borrow $10,000 from the line at once and pay it onto the mortgage; the $1,000 left over clears the line in 10 months. Meanwhile you owe $5,500 on the line on average, at 9% instead of the mortgage's 6%: about $138 of extra interest.",
+      "Your pay also sits on the line until you spend it, so you owe about $2,500 less on average. If the line charges interest on each day's balance, that saves about $188.",
+      "So after 10 months you are about $50 better off than sending the $1,000 straight to the mortgage, about $5 a month, before any fee for the line. With the mortgage at 4%, you would be about $42 worse off. Either way, it is tiny next to the $164,000.",
+    ],
+    sources: [S.heloc],
   },
 ];

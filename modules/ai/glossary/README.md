@@ -1,8 +1,10 @@
 # Glossary  (`ai/glossary`)
 
-**Status:** usable (phase 10; built by claude-b from codex's idle lane; two-minute lessons 2026-11-15, gap list item 13)
+**Status:** usable (phase 10; built by claude-b from codex's idle lane; two-minute lessons and Velocity banking
+2026-11-15, gap list items 13 and 59)
 **Purpose:** Explains every money word used in the app in plain words, with an example and the pages that use it, and
-lets you search for any of them. Behind the 20 words met on the most pages, one quiet row more: "A two-minute lesson".
+lets you search for any of them. Behind the 20 words met on the most pages, and behind Velocity banking, one quiet row
+more: "A two-minute lesson".
 
 ## Inputs
 Plan sections read (`needs`): `accounts` (types), `income` (a business), `equity` (grants), `household` (children,
@@ -69,7 +71,8 @@ income, Treasury bills and bonds, money-market and high-yield savings accounts, 
 Equity compensation, donor-advised fund, qualified charitable distribution, backdoor Roth, sole proprietor), each new
 source opened and read on 2026-10-31: 219 entries. COBRA continuation coverage was added the same day for the life
 events page (20 or more employees, 18 or 36 months, up to 102% of the plan's cost, 60 days to choose: the Department of
-Labor's "FAQs on COBRA Continuation Health Coverage for Workers", read 2026-10-31): 220 entries. Every entry cites one public source it was checked against: irs.gov
+Labor's "FAQs on COBRA Continuation Health Coverage for Workers", read 2026-10-31): 220 entries. Velocity banking was
+added 2026-11-15 (see "Velocity banking" below): 222 entries. Every entry cites one public source it was checked against: irs.gov
 (with the Taxpayer Advocate), ssa.gov, medicare.gov, healthcare.gov, investor.gov, sec.gov, finra.org,
 consumerfinance.gov, studentaid.gov, fdic.gov, bls.gov, dol.gov, treasurydirect.gov, usa.gov or law.cornell.edu (the US
 Code, the CFR and Wex). Four entries rest one sentence on a second official page, because an entry holds one source:
@@ -192,6 +195,55 @@ weeks, Bo $5,200 a month, $18,000 in a brokerage account, the balances behind th
 month, 6 months) and Ruth and Sam (retired-couple-plan); Jordan, the teacher of the adjusted gross income example, is
 invented for it. The test reads those fixtures, so a lesson's "real" figures follow them.
 
+## Velocity banking (gap list item 59, 2026-11-15)
+**The word.** `velocity-banking` (topic borrowing; other names "chunking", "mortgage chunking", "HELOC payoff method"):
+"A method sold as a way to pay off a mortgage years sooner: your pay goes into a line of credit, your bills are paid
+from it, and large sums from the line go onto the mortgage." For example: "With $1,000 left over each month, sending
+that $1,000 straight to the mortgage as an extra payment pays it off about as soon, with no second loan." `pages` is
+empty: no page of the app uses the word (the lesson's one link is the Mortgage page, whose "Extra each month" box is the
+extra payment; the Mortgage page has no part for it to land on, so the link opens the page). Its source is the CFPB's
+HELOC page, already the source of the glossary's HELOC entry (read by the glossary's writers 2026-10-30/31; not re-read
+this session: consumerfinance.gov is refused by this session's network). The word states only what the HELOC entry
+already states (a home-equity line's rate usually changes; not repaying it can cost you the home); everything else is
+the app's own arithmetic below. It is never one of the "Words for your plan" (a mortgage does not suggest it). The
+lesson says "This is information, not advice."
+
+**The arithmetic** (`velocity(x = VELOCITY)` in compute.js; invented round inputs: a $200,000 mortgage over 30 years at
+6%, a line of credit at 9%, $5,000 of everyday spending a month on top of the mortgage payment, $1,000 left over, a
+$10,000 chunk; the low case with the mortgage at 4%):
+- The extra payment (`core/math/finance.js` `amortization`, interest = balance × rate ÷ 12): the payment is $1,199.10;
+  with $1,000 more each month the loan ends in 122 months (about 10 years) instead of 360 and pays $164,268.14 less
+  interest ("about $164,000"). Either way the money left over lowers what is owed by $1,000 a month: that is where the
+  years come from, with or without the line.
+- The chunk on the line: its balance runs 10,000, 9,000 ... 1,000 (`months` = 10), averaging (10,000 + 1,000) ÷ 2 =
+  $5,500 (`onLine`); at 9% instead of 6% that costs 5,500 × 3% × 10 ÷ 12 = $137.50 ("about $138").
+- Pay sitting on the line until it is spent: the everyday spending leaves evenly through the month, so half of it,
+  $2,500 (`sitting`), sits on the line on average; on a line charging interest on each day's balance that saves
+  2,500 × 9% × 10 ÷ 12 = $187.50 ("about $188").
+- Net: $187.50 − $137.50 = $50 in 10 months, $5 a month, before any fee for the line; with the mortgage at 4%,
+  5,500 × 5% × 10 ÷ 12 = $229.17 against the same $187.50: $41.67 behind ("about $42").
+- Checked day by day (in the test: 30-day months, pay on the line on day 0, spending a 30th a day, the line's interest on
+  the average daily balance): $52.31 ahead and $44.03 behind, within $5 of the simple sums; counting the leftover as
+  sitting on the line from payday too (the plain way leaving it idle in checking until the month's end) gives $129.89
+  and $33.55 ahead. Every variant stays under $15 a month, which is what the lesson's first line, "In short, the line
+  itself changes the result by a few dollars a month", and its last, "Either way, it is tiny next to the $164,000", say.
+
+**The lesson's words** (after a look on a phone, 2026-11-15, and a second, 2026-11-16). "What it is" starts with how
+the loop runs, not with the meaning again; the home-equity line is "a line of credit, often one borrowed against your
+home"; the chunk is "a large amount from the line at once, often called a chunk", the one place the word appears (no
+"lump sum"); the rates are said as rates ("at 9% instead of the mortgage's 6%", not "3 points more"); the money sitting
+on the line is "Your pay also sits on the line until you spend it, so you owe about $2,500 less on average". "An
+example" gives the answer first ("In short, the line itself changes the result by a few dollars a month."), and the
+result says than what: "about $50 better off than sending the $1,000 straight to the mortgage", "about $42 worse off"
+at 4% (not "ahead" or "behind" of nothing named). The day-by-day sentence was dropped for the first line, which says
+the same for every variant. The test quotes each.
+
+**A correction to the brief.** The brief said the same extra payment on the mortgage "does at least as well when the
+line of credit's rate is higher". The arithmetic says otherwise in one respect: pay sitting on a daily-interest line can
+beat a small rate gap by a few dollars a month (the $50 above). The lesson says what the sums say: the big savings come
+from the money left over, which an extra payment gets on its own; the line's own effect is a few dollars a month, ahead
+or behind with the rates, the timing and its fees; and it adds a changing rate and a debt the home stands behind.
+
 ## Edge cases
 - Nothing matches: says so; with the AI helper on, a button asks it (answer labelled not checked); off, a hint to try
   another spelling and that Settings turns the AI on.
@@ -231,6 +283,11 @@ off, `?show=lesson-<id>` opening it, and S11 (drawing and opening every row writ
 (`invariance.json`, digests written from the code at 3c0b8a1 before the change): `compute()` over the fixtures, the 14
 households, the phone-built plans and the empty plan; every entry byte for byte; every search of every old name; the
 page's words for four households and a typed search, with the lesson rows taken out.
+Velocity banking: the word (no page claims it, the HELOC entry's source, found by "chunking" and "velocity", HELOC still
+first for "heloc", never a word for a household's plan); every step of `velocity()` (the payment, 122 months, the
+interest saved, the chunk's months and average, the rate gap's cost, the money sitting on the line, the net, the 4% case,
+a chunk the leftover does not divide, nothing left over); the day-by-day check (within $5 of the sums, every variant
+under $15 a month); the lesson quoting `velocity()`'s figures as rounded in its words.
 
 ## Ideas / not yet
 - A small "?" beside a word on other pages that opens its entry here (needs a shell change in `core/`).
