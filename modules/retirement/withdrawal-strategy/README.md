@@ -615,3 +615,35 @@ clear free licence is found and the engine models earnings.
   so spending can only fall further when income falls. Built as the source, said as "the dollars it took".
 - First view: the "2 more ways" row is the one addition (3 words and one row: 307 words before, 310 after for the retired couple,
   inside the page's entry of 310); every other word in sight is unchanged.
+
+## "How this is worked out" under a screen and a half (fix round r2, claude-b, 2026-11-15; tests `module.test.mjs` "r2")
+An earlier critic measured the part at about 2,016 px open on a 390 px phone, over the 1,300 px the rules allow
+(docs/OPTIONAL.md R15). Reproduced in a phone browser (scratch `gap/gr/r2/s/howh.mjs`): 1,972 px for the invented family and
+the demo household (630 words in sight), 1,894 for the retired couple, 1,855 for the renter and Sam; qa/first-view.mjs's
+browser pass counted it as "open parts over 1,300 px: 1", with a tap that moved the page and four memory round trips gone
+wrong on the same part.
+- **Each way is a row of its own inside the part**, shut until tapped: the helper's rows that open (`part`, kind `item`,
+  id `how-<way>`, titled with the way's name; R11's exception "a part may hold a list whose rows open", which the structure
+  check S1 allows). Each row holds exactly the lines it held before, in the same order: the rule (one line per sentence),
+  this year in full, "With your assumptions: ...", "From 1960, the worst stretch: ...", why a way is not offered, and
+  "Where it comes from: ...". The two named rules not in use keep their rule and source (their runs are in their rows under
+  "2 more ways", as before). One line more under the method: "Tap a way to see its rule, this year in full and where it
+  comes from."
+- **Measured after** (390 px, the same households): the part opens to 533 px (111 words in sight, the six titles among
+  them); one row open adds 192 to 369 px, so the part with any one row open is at most about 900 px. qa/first-view.mjs on the
+  page: partTall, tapMoved and memory all 0 for the four households (they were 1, 1 and 4 for the family).
+- **Read in blocks** (a person critic of this fix, P6: an opened way was eight or nine muted lines with no space between):
+  inside a row the lines come in three short blocks, the rule, this year in full, and the two runs (with why a way is not
+  offered), each in the page's normal small text with 10 px after it (inline on the row's own elements: no new CSS); the
+  source, "Where it comes from: ...", is the one muted line, last. A named rule's row is its rule as one block and its source.
+  The words and their order are as before.
+- **Nothing dropped**: a module test opens each row and finds every sentence of its rule, its source, both runs; the closing
+  lines (the flat tax, the lowest you set, the rule this year, the starting share) stay in the part itself.
+- **The test that measures it**: a Node check cannot read pixels, so it counts the words in sight, which the browser measure
+  ties to height (about 3.1 px a word on this part): at most 200 with the rows shut (630 before), at most 340 with any one
+  row open, for the family, the retired couple, the renter and the widow.
+- First view unchanged: the part's row is the same and the rows inside it are never drawn open (a reason, a landing or the
+  "Show how answers are worked out" switch opens the part, never a kind `item` row). Not remembered across visits (R27: kinds
+  `more` and `how` only).
+- Not changed here, measured on ab3bdde too: the family's first screen holds 191 words in the browser check, one over the
+  page's entry of 190 in `qa/first-view.known.json`.

@@ -392,7 +392,8 @@ test("S11: Use this one saves and says so; How this is worked out (the helper's 
     store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); saved.push(d); p = d; draw(); } }, redraw: draw }); };
   draw();
   // (a form's own "More details (optional)" line is wave 1's, not a fold by hand)
-  const states = () => root.all().filter((e) => e.tagName === "DETAILS" && !/form-more/.test(e.className)).map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
+  // (each way's own row inside How this is worked out, kind "item", is the helper's too: fix round r2, checked below)
+  const states = () => root.all().filter((e) => e.tagName === "DETAILS" && !/form-more/.test(e.className) && e.dataset.kind !== "item").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
   const before = states();
   assert.deepEqual(before, [["ways", "more", false], ["own", "own", false], ["how", "how", false]], "three parts: the two named rules in the ways' card, the person's own numbers and the working (Settings' switch opens it), all shut; no fold by hand");
   const how = root.all().find((e) => e.dataset.part === "how");
@@ -498,7 +499,7 @@ test("own numbers: one quiet row, shut, 'none set'; the form asks one box and th
   assert.equal(own.querySelector(".fold-status"), null, "no line beside the title until something is set");
   // rows of one card, in the helper's order: the person's numbers, then how it is worked out (the two named rules' "2 more ways"
   // sits in the ways' own card, above: gap list, next 60, item 21)
-  assert.deepEqual(s.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => e.dataset.part), ["ways", "own", "how"]);
+  assert.deepEqual(s.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part && e.dataset.kind !== "item").map((e) => e.dataset.part), ["ways", "own", "how"]);
   assert.equal(own.parentNode.parentNode.dataset.parts, "");
   const form = own.querySelector("form");
   const more = form.all().find((e) => e.tagName === "DETAILS" && /form-more/.test(e.className));
@@ -1223,8 +1224,8 @@ test("named rules page: '2 more ways' in the ways' card, each one plain line and
   assert.equal(rowsIn.length, 2);
   for (const li of rowsIn) assert.equal(li.all().filter((e) => /\brec-sub\b/.test(e.className)).length, 3, "one plain line and two runs");
   const how = s.text(s.part("how"));
-  assert.match(how, /A share of a three-year average ?Take 4% of the average of your savings at the start of this year and the two years before \(years in retirement only, in today's dollars\), and spend it on top of your income\. ?One bad year moves it only a third as much at first; the next two years catch up\. ?Where it comes from: The endowment rule, the way most college endowments spend \(a share of a few years' average\)\./);
-  assert.match(how, /A share, never under 95% of last year ?Take 4% of your savings each year, but never fewer dollars than 95% of what it took the year before, and spend it on top of your income\. ?After a bad year it takes at most 5% fewer dollars; prices still rise, and a long slump can run savings out\. ?Where it comes from: The "95% rule" in Bob Clyatt's book Work Less, Live More \(2005\)\./);
+  assert.match(how, /A share of a three-year average[ ›]*Take 4% of the average of your savings at the start of this year and the two years before \(years in retirement only, in today's dollars\), and spend it on top of your income\. ?One bad year moves it only a third as much at first; the next two years catch up\. ?Where it comes from: The endowment rule, the way most college endowments spend \(a share of a few years' average\)\./);
+  assert.match(how, /A share, never under 95% of last year[ ›]*Take 4% of your savings each year, but never fewer dollars than 95% of what it took the year before, and spend it on top of your income\. ?After a bad year it takes at most 5% fewer dollars; prices still rise, and a long slump can run savings out\. ?Where it comes from: The "95% rule" in Bob Clyatt's book Work Less, Live More \(2005\)\./);
   const seg = how.slice(how.indexOf("A share of a three-year average"), how.indexOf("A share, never under 95%"));
   assert.ok(seg.length > 0 && !seg.includes("With your assumptions"), "their runs are not repeated there");
   // Use this one, inside the part: saved, the green line, the way back named, the part stays open (R17), the rule now "yours"
@@ -1238,7 +1239,7 @@ test("named rules page: '2 more ways' in the ways' card, each one plain line and
   assert.equal(s.part("how").hasAttribute("open"), false, "no other part opened");
   // the hero now speaks of the plan's own way, and How this is worked out has it in full (its runs too); the other one's rule
   assert.match(s.text(), /This way spends about \$5,406 a month this year/);
-  assert.match(s.text(s.part("how")), /A share of a three-year average ?Take 4% of the average of your savings[^]*?With your assumptions/);
+  assert.match(s.text(s.part("how")), /A share of a three-year average[ ›]*Take 4% of the average of your savings[^]*?With your assumptions/);
   assert.match(s.text(s.part("how")), /never fewer dollars than 95%/);
   // the rule in use, among the ways in sight, says no source in its row
   const inSight = s.root.all().find((e) => e.tagName === "UL" && e.all().some((x) => x.textContent === "yours"));
@@ -1250,4 +1251,104 @@ test("named rules page: '2 more ways' in the ways' card, each one plain line and
   s.root.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Put it back: A share of a three-year average").click();
   assert.equal(s.p.retirement.strategy, "endowment");
   assert.ok(s.text().includes('Back to "A share of a three-year average", as before.'));
+});
+
+// ---- fix round r2: "How this is worked out" under a screen and a half (docs/OPTIONAL.md R15: 1,300 px at 390) --------------
+// Measured at 390 px in a phone browser (scratch gap/gr/r2/s/howh.mjs, the build log): the part was 1,972 px open for the invented
+// family (630 words in sight), 1,855 to 1,894 for the others. Each way is now a row of its own inside it (kind "item"), shut:
+// open, the part is 533 px (111 words in sight, the six titles among them), and a row opened adds 192 to 369 px. A Node check
+// cannot measure pixels: it counts the words in sight, which the browser measure ties to height (about 3.1 px a word here).
+async function livePage(plan0, today = TODAY8) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  let p = migrate(structuredClone(plan0));
+  const s = { root: null };
+  s.draw = () => { s.root = new FakeElement("main"); render(s.root, { ui, fmt: { ...fmt, today: () => today }, plan: p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" },
+    store: { get: () => p, update: (fn) => { const d = structuredClone(p); fn(d); p = d; s.draw(); } }, redraw: () => s.draw() }); return s; };
+  s.part = (id) => s.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.part === id);
+  s.text = (el) => textOf(el).replace(/\s+/g, " ");
+  // the words a person sees in an element: inside a shut <details> only its summary
+  s.seen = (el) => { const walk = (x) => (x.data !== undefined ? x.data : x.hidden ? "" : x.tagName === "DETAILS" && x !== el && !x.hasAttribute("open") ? walk(x.childNodes.find((c) => c.tagName === "SUMMARY") ?? { data: "" }) : x.childNodes.map(walk).join(" ")); return walk(el).replace(/\s+/g, " ").trim(); };
+  s.plan = () => p;
+  return s.draw();
+}
+const wordsIn = (t) => t.split(" ").filter((w) => /[A-Za-z0-9]/.test(w)).length;
+const r2Plans = async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  return [["family", familyPlan(TODAY8)], ["retired couple", retiredCouplePlan(TODAY8)], ["renter", renterDebtPlan()], ["widow", widowPlan()]];
+};
+
+test("r2: How this is worked out opens to the method and one row per way, each shut; in sight it stays far under a screen and a half", async () => {
+  for (const [name, plan] of await r2Plans()) {
+    const s = await livePage(plan);
+    const how = s.part("how");
+    how.setAttribute("open", "");
+    const rows = how.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part);
+    assert.deepEqual(rows.map((e) => e.dataset.kind), Array(rows.length).fill("item"), `${name}: rows that open, the helper's own kind`);
+    assert.ok(rows.length >= 6, `${name}: ${rows.length} rows: the four ways and the two named rules`);
+    assert.ok(rows.every((e) => !e.hasAttribute("open")), `${name}: every row shut until tapped`);
+    // in sight with the part open: at most 200 words (it was 582 to 630; 111 now), and with any one row open at most 340
+    const shut = wordsIn(s.seen(how));
+    assert.ok(shut <= 200, `${name}: ${shut} words in sight`);
+    for (const r of rows) {
+      r.setAttribute("open", "");
+      const one = wordsIn(s.seen(how));
+      assert.ok(one <= 340, `${name}, "${r.querySelector(".fold-title").textContent}" open: ${one} words in sight`);
+      r.removeAttribute("open");
+    }
+    // nothing above the part moved: its title, and the first view, are as they were
+    assert.equal(how.querySelector(".fold-title").textContent, "How this is worked out");
+  }
+});
+
+test("r2: no rule and no source dropped: each way's row holds its rule, this year in full, both runs and where it comes from", async () => {
+  const { NAMED } = await import("./compute.js");
+  for (const [name, plan] of await r2Plans()) {
+    const d = compute(migrate(structuredClone(plan)), { today: TODAY8 });
+    const s = await livePage(plan);
+    const how = s.part("how");
+    for (const r of d.rows) {
+      const row = s.part(`how-${r.key}`);
+      assert.ok(row && how.all().includes(row), `${name}: ${r.key} is a row inside the part`);
+      assert.equal(row.querySelector(".fold-title").textContent, r.name);
+      const t = s.text(row.querySelector(".fold-body"));
+      for (const line of String(r.how).split(/(?<=\.) (?=[A-Z])/)) assert.ok(t.includes(line), `${name} ${r.key}: rule "${line}"`);
+      assert.ok(t.includes(`Where it comes from: ${r.from}`), `${name} ${r.key}: source`);
+      assert.ok(t.includes("With your assumptions:"), `${name} ${r.key}: the run with your assumptions`);
+      if (r.worst) assert.ok(t.includes(`From ${d.worstStartYear}, the worst stretch:`), `${name} ${r.key}: the worst stretch`);
+      // read in blocks with space between, not one run of muted lines (a person critic's P6): the rule, this year, the two
+      // runs; only the source is muted, and it comes last
+      const blocks = row.all().filter((e) => e.dataset?.wayBlock !== undefined);
+      assert.equal(blocks.length, 3, `${name} ${r.key}: the rule, this year, the runs`);
+      for (const b of blocks) { assert.equal(b.style.margin, "0 0 10px"); assert.ok(!/\bmuted\b/.test(b.className), b.className); }
+      assert.match(s.text(blocks[0]), /^\S/); assert.ok(s.text(blocks[2]).startsWith("With your assumptions:"));
+      const muted = row.querySelector(".fold-body").all().filter((e) => /\bmuted\b/.test(e.className ?? ""));
+      assert.equal(muted.length, 1); assert.equal(s.text(muted[0]), `Where it comes from: ${r.from}`);
+    }
+    for (const key of Object.keys(NAMED)) {
+      const row = s.part(`how-${key}`);
+      assert.ok(row, `${name}: ${key} has its row`);
+      const t = s.text(row.querySelector(".fold-body"));
+      assert.ok(t.includes(`Where it comes from: ${NAMED[key].from}`), `${name} ${key}: source`);
+      assert.match(t, /^Take /, `${name} ${key}: the rule first`);
+    }
+    // the closing lines stay in the part itself, in sight once it is open
+    how.setAttribute("open", "");
+    assert.match(s.seen(how), /start from \d+(\.\d)?% of savings \(set on the Will the money last\? page, under Retirement settings\)\./);
+  }
+});
+
+test("r2: a row opened stays a reading of the page: nothing saved, no other part opened, and a redraw shuts it (a row is kept for the visit by the shell only)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const s = await livePage(familyPlan(TODAY8));
+  const before = JSON.stringify(s.plan());
+  s.part("how-guardrails").setAttribute("open", "");
+  assert.equal(JSON.stringify(s.plan()), before);
+  assert.deepEqual(["ways", "own", "how"].map((id) => s.part(id).hasAttribute("open")), [false, false, false]);
+  s.draw();
+  assert.equal(s.part("how-guardrails").hasAttribute("open"), false);
 });

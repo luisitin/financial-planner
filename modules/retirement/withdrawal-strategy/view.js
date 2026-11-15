@@ -352,6 +352,13 @@ export function render(root, ctx) {
   // a stored figure the sums refuse (put in the plan by hand): shown as the usual one, and said (F5)
   const replacedLine = own.replaced?.length ? ui.h("p", { class: "small", dataset: { replaced: "" } }, `${own.replaced.length === 1 ? "A figure" : "Some figures"} stored in your plan ${own.replaced.length === 1 ? "is" : "are"} outside what the sums can use, so the usual ${own.replaced.length === 1 ? "one is" : "ones are"} used and shown here. Save my numbers keeps what you see.`) : null;
   const floorLine = own.floor > 0 ? ui.h("p", { class: "small" }, `${MOVING} never spend under ${money(own.floor)} a month while savings last: the lowest you set. A year savings cannot pay it counts as running out.${overPlan ? ` "${DESCRIPTIONS.guardrails.name}" still never spends more than your plan.` : ""}`) : null;
+  // one way's row inside "How this is worked out", shut until tapped: its rule, this year in full, the two runs, each a short
+  // block with a little space after it (a person critic of r2, P6: eight or nine muted lines ran together), one line per
+  // sentence or clause; then where it comes from, the one muted line
+  const wayHow = (r, groups) => part(ctx, { id: `how-${r.key}`, kind: "item", title: r.name, body: () => ui.h("div", { dataset: { wayHow: r.key } },
+    ...groups.map((g) => g.filter(Boolean)).filter((g) => g.length).map((g) => ui.h("div", { class: "small", dataset: { wayBlock: "" }, style: { margin: "0 0 10px" } },
+      ...g.map((t) => ui.h("div", {}, t)))),
+    ui.h("p", { class: "small muted", style: { margin: "0" } }, `Where it comes from: ${r.from}`)) });
   const wasOwnOpen = !!ownNotice;
   root.append(parts(ctx,
     { id: "own", kind: "own", open: wasOwnOpen, set: own.set, holds: ["floor", "trim", "upperBy", "lowerBy", "spendingFloor", "guard"], body: [
@@ -362,22 +369,20 @@ export function render(root, ctx) {
       ownForm,
     ] },
     { id: "how", kind: "how", body: [
-    ui.h("p", { class: "small" }, `Each way runs on your plan with the returns you assume, and through the worst stretch of history for a plan like yours. Yearly amounts, in today's dollars.`),
-    // the ways in sight in full: the four, and a named rule the plan uses; then the other named rules' rule and source
-    ui.h("ul", { class: "records" }, [...d.rows, ...(mineNamed ? [mineNamed] : [])].map((r) => ui.h("li", {},
-      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
-      // one short line per sentence or clause: no block over three lines on a phone
-      ...sentences(r.how).map((t) => ui.h("div", { class: "rec-sub" }, t)),
-      ...(firstWords(r) ? firstWords(r).split("; ").map((t, i, a) => ui.h("div", { class: "rec-sub" }, `${cap(t)}${i < a.length - 1 ? "." : ""}`)) : []),
-      ui.h("div", { class: "rec-sub" }, `With your assumptions: ${range(r.expected)}; ${end(r.expected)}.`),
-      r.worst ? ui.h("div", { class: "rec-sub" }, `From ${d.worstStartYear}, the worst stretch: ${range(r.worst)}; ${end(r.worst)}.`) : null,
-      heldWords(r) ? ui.h("div", { class: "rec-sub" }, heldWords(r)) : null,
-      ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`))),
-      // the named rules under "2 more ways": the rule in full and where it comes from (their runs are in their rows there)
-      ...named.map((r) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name)),
-        ...sentences(r.how).map((t) => ui.h("div", { class: "rec-sub" }, t)),
-        ui.h("div", { class: "rec-sub muted" }, `Where it comes from: ${r.from}`)))),
+    ui.h("p", { class: "small" }, `Each way runs on your plan with the returns you assume, and through the worst stretch of history for a plan like yours. Yearly amounts, in today's dollars. Tap a way to see its rule, this year in full and where it comes from.`),
+    // each way is a row of its own that opens (kind "item": docs/OPTIONAL.md R11's rows that open; fix round r2: all of it at
+    // once was 1,972 px at 390 for the family, over R15's 1,300). The ways in sight in full: the four, and a named rule the
+    // plan uses; then the other named rules' rule and source (their runs are in their rows under "2 more ways")
+    ui.h("div", { class: "folds", dataset: { ways: "" } },
+      ...[...d.rows, ...(mineNamed ? [mineNamed] : [])].map((r) => wayHow(r, [
+        // one short line per sentence or clause: no block over three lines on a phone
+        sentences(r.how),
+        firstWords(r) ? firstWords(r).split("; ").map((t, i, a) => `${cap(t)}${i < a.length - 1 ? "." : ""}`) : [],
+        [`With your assumptions: ${range(r.expected)}; ${end(r.expected)}.`,
+          r.worst ? `From ${d.worstStartYear}, the worst stretch: ${range(r.worst)}; ${end(r.worst)}.` : null,
+          heldWords(r)],
+      ])),
+      ...named.map((r) => wayHow(r, [sentences(r.how)]))),
     ...(flatTax ?? []).map((t) => ui.h("p", { class: "small" }, t)),
     floorLine,
     d.guardNow ? ui.h("p", { class: "small", dataset: { guardNow: "" } }, guardHowWords(d.guardNow, d.guardNow.year)) : null,
