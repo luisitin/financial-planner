@@ -496,3 +496,234 @@ test("L3: the match check: own money in, no match on file, never asked: 'No matc
   assert.doesNotMatch((await l3Page(jamie())).text(), /Is that right\?/);
   assert.doesNotMatch((await l3Page(robin())).text(), /Is that right\?/);
 });
+
+// ---- C11 (the smart guesses' last step, 2026-11-15): a new row's empty match box. Into a plan at work, once what goes in is
+// typed, it shows our usual match in gray, and left empty it is saved as our guess, worked out again from the row's own amount.
+const C11 = "2026-11-15";
+const { rowMatch, atWork, estimators: CT_EST, MATCH_TABLE, ROW_MATCH_ON } = await import("./compute.js");
+const { usualMatchAt } = await import("../levers.js");
+const est11 = await import("../../../core/estimate/index.js");
+const { TABLES: GUESS_TABLES } = await import("../../overview/guesses/compute.js");
+const { familyPlan: fam11 } = await import("../../../qa/fixtures/family-plan.mjs");
+const { migrate: migrate11 } = await import("../../../core/schema/migrate.js");
+const ui11 = await import("../../../core/ui/dom.js");
+const fmt11 = await import("../../../core/format.js");
+const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+const KEY11 = "retirement/contributions:match";
+const guess11 = (p, k, o = {}) => est11.estimate(p, k, { estimators: CT_EST, tables: GUESS_TABLES, today: C11, ...o });
+/** Ana and Bo (invented) with a 401(k) of Bo's at a new job and nothing going in yet. */
+const withBo401 = () => { const p = migrate11(fam11(C11)); p.accounts.push({ id: "a-bo401", type: "401k", name: "Bo's 401(k)", ownerId: "p-bo", balance: 0, history: [] }); return p; };
+const addRow = (p, row) => { p.retirement.contributions.push({ id: "r-new", accountId: "a-bo401", personId: "p-bo", amount: 300, period: "monthly", employerMatch: 0, ...row }); return p; };
+
+test("C11 rowMatch: the usual match at what the person puts in at work, as levers usualMatchAt works it", () => {
+  for (const [amount, period] of [[300, "monthly"], [500, "monthly"], [120, "biweekly"], [50, "monthly"], [2500, "monthly"]]) {
+    const p = addRow(withBo401(), { amount, period });
+    const r = rowMatch(p, "r-new", C11);
+    const yearly = (period === "biweekly" ? 26 : 12) * amount;
+    assert.equal(r.value, usualMatchAt(p, "p-bo", C11, yearly), `${amount} ${period}`);
+    assert.equal(r.why, "most work plans add about 4% of pay when you put in 6%");
+  }
+  // Bo's $62,400: 300 a month is 5.77% of pay, short of the 6% the whole match needs: 4% x 5.77/6 x 62,400 = 2,400 ($200 a month)
+  assert.equal(rowMatch(addRow(withBo401(), {}), "r-new", C11).value, 2400);
+  // a formula typed on Work benefits: that formula (100% of the first 3%: 3% of 62,400 = 1,872 -> $160 a month)
+  const t = addRow(withBo401(), {}); t.whatIfs = { ...(t.whatIfs ?? {}), benefits: { "p-bo": { matchTiers: [{ rate: 1, upTo: 0.03 }] } } };
+  assert.deepEqual(rowMatch(t, "r-new", C11), { value: 1920, why: "the match formula you typed on Work benefits", tiers: true });
+});
+
+test("C11 rowMatch: no guess while another row at the job holds the match, after 'no match', into an IRA, with no pay", () => {
+  const p = addRow(withBo401(), {});
+  // Ana's own second row: her first row already has the employer's 3,050
+  p.retirement.contributions.push({ id: "r-ana2", accountId: "a-401", personId: "p-ana", amount: 100, period: "monthly", employerMatch: 0 });
+  assert.deepEqual(rowMatch(p, "r-ana2", C11), { value: 0, why: "the employer's match is on your other row at this job" });
+  const no = addRow(withBo401(), {}); no.retirement.workPlans = { "p-bo": { match: false } };
+  assert.deepEqual(rowMatch(no, "r-new", C11), { value: 0, why: "you said there is no match at this job" });
+  const none = addRow(withBo401(), {}); none.whatIfs = { ...(none.whatIfs ?? {}), benefits: { "p-bo": { matchTiers: [] } } };
+  assert.equal(rowMatch(none, "r-new", C11).value, 0);
+  const ira = addRow(withBo401(), { accountId: "a-roth" });
+  assert.equal(rowMatch(ira, "r-new", C11).value, 0, "a Roth IRA is not a plan at work");
+  assert.equal(atWork(ira.accounts.find((a) => a.id === "a-roth")), false);
+  const old = addRow(withBo401(), { accountId: "a-bk401" });
+  assert.equal(rowMatch(old, "r-new", C11).value, 0, "an old job's 401(k)");
+  const jobless = addRow(withBo401(), {}); jobless.income = jobless.income.filter((x) => x.personId !== "p-bo");
+  assert.deepEqual(rowMatch(jobless, "r-new", C11), { value: 0, why: "no pay from a job now, so the employer adds nothing" });
+  assert.equal(rowMatch(p, "no-such-row", C11), null);
+  // before it is ours, a $0 is no guess at all (no gray figure); once ours, it goes to $0
+  const path = "retirement.contributions[r-new].employerMatch";
+  assert.equal(guess11(no, KEY11, { path }), null);
+  est11.markGuess(no, path, { key: KEY11, value: 2400, unit: "year", dataAsOf: "2026-11-02" }, C11);
+  assert.equal(guess11(no, KEY11, { path }).value, 0);
+});
+
+test("C11 the estimator: the Vanguard table, or the plan's own formula; settle follows the row's own amount", () => {
+  const p = addRow(withBo401(), {});
+  const path = "retirement.contributions[r-new].employerMatch";
+  const e = guess11(p, KEY11, { path });
+  assert.deepEqual([e.value, e.unit, e.weight, e.basis, e.tables], [2400, "year", "big", "population", [MATCH_TABLE]]);
+  assert.equal(e.dataAsOf, GUESS_TABLES[MATCH_TABLE].readOn);
+  const t = addRow(withBo401(), {}); t.whatIfs = { ...(t.whatIfs ?? {}), benefits: { "p-bo": { matchTiers: [{ rate: 1, upTo: 0.03 }] } } };
+  const et = guess11(t, KEY11, { path });
+  assert.deepEqual([et.basis, et.tables, et.dataAsOf], ["yours", [], ROW_MATCH_ON]);
+  assert.deepEqual(est11.checkEstimators(CT_EST), []);
+  // the guess written, then Bo puts in $500 a month: settle works it out from this row (the contrib.match guess, read from Get
+  // started's row or the usual deferral, would not: a second $100 row of Ana's went to $4,080 under it)
+  p.retirement.contributions.find((c) => c.id === "r-new").employerMatch = 2400;
+  est11.markGuess(p, path, e, C11);
+  assert.deepEqual(est11.settle(p, { estimators: CT_EST, tables: GUESS_TABLES, today: C11 }), { changed: [], dropped: [] });
+  p.retirement.contributions.find((c) => c.id === "r-new").amount = 500;
+  const s = est11.settle(p, { estimators: CT_EST, tables: GUESS_TABLES, today: C11 });
+  assert.deepEqual(s.changed, [{ path, k: KEY11, from: 2400, to: usualMatchAt(p, "p-bo", C11, 6000) }]);
+  // a match the person types ends the guess
+  p.retirement.contributions.find((c) => c.id === "r-new").employerMatch = 1800;
+  assert.deepEqual(est11.settle(p, { estimators: CT_EST, tables: GUESS_TABLES, today: C11 }).dropped, [{ path, k: KEY11, why: "typed" }]);
+});
+
+/** The page drawn with the real form kit (FakeElement) and the shell's ctx.guess; store.update keeps each draft. */
+async function draw11(plan) {
+  const { render } = await import("./view.js");
+  const saved = [];
+  const root = new FakeElement("main");
+  const ctx = { ui: ui11, fmt: { ...fmt11, today: () => C11 }, plan, route: { rest: [], query: {} }, store: { get: () => plan, update: (fn) => { const d = structuredClone(plan); fn(d); saved.push(d); } },
+    computeOf: () => null, computeRemote: async () => null, guess: (k, o = {}) => { const { plan: on, ...rest } = o; return guess11(on ?? plan, k, rest); } };
+  render(root, ctx);
+  await new Promise((r) => setTimeout(r, 0));
+  return { root, saved };
+}
+// (the add form empties itself after a save, `resetAfter`: the stand-in form has no reset of its own)
+const openAdd = (root) => { const b = root.all().find((x) => x.tagName === "BUTTON" && /^\+ Add another contribution/.test(textOf(x))); b.dispatch("click"); const f = root.all().filter((x) => x.tagName === "FORM").at(-1); f.reset = () => {}; return f; };
+const boxOf = (form, name) => form.querySelector(`[name="${name}"]`);
+const helpOf = (form, name) => textOf(boxOf(form, name).closest("label").querySelector(".help"));
+
+test("C11 the add form: the gray match follows what goes in; left empty it is saved as our guess, said in green", async () => {
+  const p = withBo401();
+  const r = await draw11(p);
+  const form = openAdd(r.root);
+  boxOf(form, "accountId").value = "a-bo401"; boxOf(form, "accountId").dispatch("change");
+  boxOf(form, "personId").value = "p-bo"; boxOf(form, "personId").dispatch("change");
+  // nothing typed yet: no gray figure, and the help says an empty box is our guess
+  assert.equal(boxOf(form, "employerMatch").getAttribute("placeholder") ?? "", "");
+  assert.equal(helpOf(form, "employerMatch"), "the match or profit sharing, per year; blank uses our guess");
+  boxOf(form, "amount").value = "300"; boxOf(form, "amount").dispatch("change");
+  assert.equal(boxOf(form, "employerMatch").getAttribute("placeholder"), "2,400");
+  assert.equal(helpOf(form, "employerMatch"), "Our guess: most work plans add about 4% of pay when you put in 6%. Type 0 if you have none.");
+  assert.equal(boxOf(form, "employerMatch").dataset?.guess, undefined, "a placeholder, as the page's other rows of ours");
+  // "6%" of Bo's pay: $312 a month, the whole match: 4% of 62,400 = 2,496 -> $210 a month
+  boxOf(form, "amount").value = "6%"; boxOf(form, "amount").dispatch("change");
+  assert.equal(boxOf(form, "employerMatch").getAttribute("placeholder"), "2,520");
+  boxOf(form, "amount").value = "300"; boxOf(form, "amount").dispatch("change");
+  form.dispatch("submit");
+  const d = r.saved.at(-1);
+  const row = d.retirement.contributions.at(-1);
+  assert.deepEqual([row.accountId, row.personId, row.amount, row.period, row.employerMatch], ["a-bo401", "p-bo", 300, "monthly", 2400]);
+  const entry = d.guesses[`retirement.contributions[${row.id}].employerMatch`];
+  assert.deepEqual([entry.k, entry.v, entry.u], [KEY11, 2400, "year"]);
+  const again = await draw11(d);
+  // the green line names the guess, then the new answer (R7)
+  assert.ok(again.root.querySelectorAll(".notice").some((n) => textOf(n).startsWith("Contribution added. The employer's $2,400 a year is our guess until you type the real figure. Your retirement answer: ")));
+  assert.match(textOf(again.root), /employer adds \$2,400 a year \(our guess\)/);
+});
+
+test("C11 the add form: a typed match is the person's; an IRA or a job whose match is on another row gets no gray figure", async () => {
+  // typed: saved as typed, no entry (0 included)
+  for (const typed of ["1800", "0"]) {
+    const r = await draw11(withBo401());
+    const form = openAdd(r.root);
+    boxOf(form, "accountId").value = "a-bo401"; boxOf(form, "personId").value = "p-bo";
+    boxOf(form, "amount").value = "300"; boxOf(form, "amount").dispatch("change");
+    boxOf(form, "employerMatch").value = typed;
+    form.dispatch("submit");
+    const d = r.saved.at(-1);
+    assert.equal(d.retirement.contributions.at(-1).employerMatch, Number(typed));
+    assert.equal(d.guesses, undefined, typed);
+  }
+  // into Bo's Roth IRA: the help is the old one and nothing gray; saved empty, no match
+  const r2 = await draw11(withBo401());
+  const f2 = openAdd(r2.root);
+  boxOf(f2, "accountId").value = "a-roth"; boxOf(f2, "accountId").dispatch("change");
+  boxOf(f2, "personId").value = "p-bo"; boxOf(f2, "amount").value = "300"; boxOf(f2, "amount").dispatch("change");
+  assert.equal(boxOf(f2, "employerMatch").getAttribute("placeholder") ?? "", "");
+  assert.equal(helpOf(f2, "employerMatch"), "the match or profit sharing, per year; leave blank for none");
+  f2.dispatch("submit");
+  assert.equal(r2.saved.at(-1).retirement.contributions.at(-1).employerMatch, 0);
+  assert.equal(r2.saved.at(-1).guesses, undefined);
+  // a second row of Ana's into her 401(k), whose first row has the match: no gray, saved empty is no match
+  const r3 = await draw11(withBo401());
+  const f3 = openAdd(r3.root);
+  boxOf(f3, "accountId").value = "a-401"; boxOf(f3, "personId").value = "p-ana"; boxOf(f3, "amount").value = "100"; boxOf(f3, "amount").dispatch("change");
+  assert.equal(boxOf(f3, "employerMatch").getAttribute("placeholder") ?? "", "");
+  f3.dispatch("submit");
+  assert.equal(r3.saved.at(-1).retirement.contributions.at(-1).employerMatch, 0);
+  assert.equal(r3.saved.at(-1).guesses, undefined);
+});
+
+test("C11 the add form's help says as many words as before, so the empty list's first view is as long", async () => {
+  const { FRESH_HELP } = await import("./view.js");
+  const words = (t) => t.split(/\s+/).filter(Boolean).length;
+  assert.equal(words(FRESH_HELP), words("the match or profit sharing, per year; leave blank for none"));
+});
+
+test("C11 r1 F1: a new row's match guess that went to $0 comes back when the reason ends (one date for every result)", () => {
+  const path = "retirement.contributions[r-new].employerMatch";
+  const settle = (p) => est11.settle(p, { estimators: CT_EST, tables: GUESS_TABLES, today: C11 });
+  const matchOf = (p) => p.retirement.contributions.find((c) => c.id === "r-new").employerMatch;
+  // the usual match, the $0 and the typed formula carry the table's own date, so settle's "never put older figures back" holds none back
+  assert.equal(ROW_MATCH_ON, GUESS_TABLES[MATCH_TABLE].readOn);
+  const start = () => { const p = addRow(withBo401(), {}); const e = guess11(p, KEY11, { path }); p.retirement.contributions.find((c) => c.id === "r-new").employerMatch = e.value; est11.markGuess(p, path, e, C11); return p; };
+  // another row of Bo's at the same job with a typed match: ours goes to $0; that row's match taken off: ours comes back
+  const p = start();
+  assert.equal(matchOf(p), 2400);
+  p.retirement.contributions.push({ id: "r-bo2", accountId: "a-bo401", personId: "p-bo", amount: 100, period: "monthly", employerMatch: 1000 });
+  assert.deepEqual(settle(p).changed.map((c) => c.to), [0]);
+  assert.equal(matchOf(p), 0);
+  p.retirement.contributions.find((c) => c.id === "r-bo2").employerMatch = 0;
+  const back = settle(p);
+  assert.deepEqual(back.changed.map((c) => [c.from, c.to]), [[0, rowMatch(p, "r-new", C11).value]]);
+  assert.ok(matchOf(p) > 0 && est11.isGuess(p, path), "the usual match again, still our guess");
+  // "no match at this job" said, then taken back
+  const q = start();
+  q.retirement.workPlans = { ...(q.retirement.workPlans ?? {}), "p-bo": { match: false } };
+  assert.deepEqual(settle(q).changed.map((c) => c.to), [0]);
+  delete q.retirement.workPlans["p-bo"];
+  assert.deepEqual(settle(q).changed.map((c) => c.to), [2400]);
+  // a formula typed on Work benefits (100% of the first 3%: $1,920), then taken off: the usual $2,400 again
+  const t = start();
+  t.whatIfs = { ...(t.whatIfs ?? {}), benefits: { "p-bo": { matchTiers: [{ rate: 1, upTo: 0.03 }] } } };
+  assert.deepEqual(settle(t).changed.map((c) => c.to), [1920]);
+  delete t.whatIfs.benefits["p-bo"];
+  assert.deepEqual(settle(t).changed.map((c) => c.to), [2400]);
+});
+
+test("C11 r1 P1: 'blank uses our guess' only where a guess will come; else the old 'leave blank for none'", async () => {
+  const OLD = "the match or profit sharing, per year; leave blank for none";
+  const NEW = "the match or profit sharing, per year; blank uses our guess";
+  // a second row into Ana's 401(k), whose first row holds the match: no guess before or after the amount
+  const r = await draw11(withBo401());
+  const f = openAdd(r.root);
+  boxOf(f, "accountId").value = "a-401"; boxOf(f, "accountId").dispatch("change");
+  boxOf(f, "personId").value = "p-ana"; boxOf(f, "personId").dispatch("change");
+  assert.equal(helpOf(f, "employerMatch"), OLD);
+  boxOf(f, "amount").value = "300"; boxOf(f, "amount").dispatch("change");
+  assert.equal(boxOf(f, "employerMatch").getAttribute("placeholder") ?? "", "");
+  assert.equal(helpOf(f, "employerMatch"), OLD);
+  // Bo with no pay from a job: his new 401(k) gets no guess, so no promise of one
+  const jobless = withBo401(); jobless.income = jobless.income.filter((x) => x.personId !== "p-bo");
+  const r2 = await draw11(jobless);
+  const f2 = openAdd(r2.root);
+  boxOf(f2, "accountId").value = "a-bo401"; boxOf(f2, "accountId").dispatch("change");
+  boxOf(f2, "personId").value = "p-bo"; boxOf(f2, "personId").dispatch("change");
+  assert.equal(helpOf(f2, "employerMatch"), OLD);
+  boxOf(f2, "amount").value = "300"; boxOf(f2, "amount").dispatch("change");
+  assert.equal(helpOf(f2, "employerMatch"), OLD);
+  f2.dispatch("submit");
+  assert.equal(r2.saved.at(-1).retirement.contributions.at(-1).employerMatch, 0);
+  assert.equal(r2.saved.at(-1).guesses, undefined);
+  // Bo with pay: the promise before the amount, the gray figure after it, and with 0 going in an empty box is none
+  const r3 = await draw11(withBo401());
+  const f3 = openAdd(r3.root);
+  boxOf(f3, "accountId").value = "a-bo401"; boxOf(f3, "accountId").dispatch("change");
+  boxOf(f3, "personId").value = "p-bo"; boxOf(f3, "personId").dispatch("change");
+  assert.equal(helpOf(f3, "employerMatch"), NEW);
+  boxOf(f3, "amount").value = "0"; boxOf(f3, "amount").dispatch("change");
+  assert.equal(helpOf(f3, "employerMatch"), OLD);
+  boxOf(f3, "amount").value = ""; boxOf(f3, "amount").dispatch("change");
+  assert.equal(helpOf(f3, "employerMatch"), NEW);
+});

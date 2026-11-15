@@ -8,6 +8,11 @@ import { LIMITS } from "./data/limits.js";
 import { BENEFITS, ROTH_CATCHUP_FROM } from "../../career/benefits/data/benefits.js";
 // (a cycle with hsa-medicare.js, which reads hsaPicture from here: both only call each other at run time)
 import { hsaPictureMedicare } from "../../taxes/federal/hsa-medicare.js";
+// the usual match (smart guesses C11): the guesses' own figures, read only; nothing there reads this file back
+import { jobPayOf, matchTerms, compLimit, deferralLimit, ageInYear, typedTiers } from "../../overview/guesses/estimators/saving.js";
+import { isGuess } from "../../../core/estimate/index.js";
+// (the table the usual match comes from; saving.js above already loads it)
+import { T as GUESS_PAY } from "../../overview/guesses/data/pay.js";
 
 const LIMIT_KIND = { "401k": "401k", ira: "ira", roth: "ira", hsa: "hsa" };   // Roth and traditional IRA share one limit; Roth 401(k) counts with the 401(k)
 const TABLE_YEARS = Object.keys(LIMITS).map(Number).sort((a, b) => a - b);
@@ -419,3 +424,68 @@ export function catchUpRothWords(age, pay, year) {
 export const TAX_RULE_OF_THUMB = "If you expect a lower tax rate in retirement, later usually wins; higher, now wins. Not sure? Some of each is a sound choice.";
 /** A match typed by hand on a pay-the-tax-now row (spec D-C2). */
 export const ROTH_MATCH_WORDS = "Most plans add the employer's money as pay-the-tax-later.";
+
+// ---- a new row's employer match (smart guesses C11, 2026-11-15; docs/CONVENTIONS.md "Guesses") ----
+/** A plan at work: a 401(k), or a Roth account that counts against the 401(k) limit, not one from a job left (as retirement/levers.js). */
+export const atWork = (acct, match = 0) => atJob(acct) && (acct.type === "401k" || (acct.type === "roth" && limitKind("roth", acct.name, match) === "401k"));
+const tierMatch = (d, tiers) => { let prev = 0, m = 0; for (const t of [...tiers].sort((a, b) => a.upTo - b.upTo)) { m += Math.max(0, Math.min(d, t.upTo) - prev) * t.rate; prev = Math.max(prev, t.upTo); } return m; };
+const yearOfDay = (today) => Number(String(today ?? "").slice(0, 4)) || new Date().getFullYear();
+/** The Vanguard table the usual match comes from (modules/overview/guesses/data, How America Saves 2026). */
+export const MATCH_TABLE = "vanguard_has2026_headline";
+/**
+ * The date a formula typed on Work benefits, or a $0, is given (it cites no table): the usual match's own table date. Settle
+ * never puts a figure dated older than the entry's back, so all three must carry one date, or a guess that went to $0 (another
+ * row took the match) or to the typed formula could never come back to the usual match once the reason ended.
+ */
+export const ROW_MATCH_ON = GUESS_PAY[MATCH_TABLE].readOn;
+/**
+ * What the employer adds a year on contribution row `rowId`, as our guess: the usual match at what the person puts into all
+ * their rows at work (this one included), on this row only while no other row of theirs at work holds a match.
+ *   usual = 4.0% x min(1, put in / pay counted / 6.0%) x pay counted     (Vanguard, How America Saves 2026: the median promised
+ *   match and the median share needed for all of it; the `contrib.match` guess and levers.js usualMatchAt, the same formula)
+ *   pay counted = min(job pay, the 401(a)(17) limit); put in = the rows at work a year, at most the 401(k) limit for the age;
+ *   the formula typed on Work benefits instead, when there is one; whole $10 a month, twelve of them.
+ * -> { value, why, tiers } or { value: 0, why } (said "no match" or a formula with nothing in it, another row holds the match,
+ * the row is no longer at work, no pay from a job now) or null (not a row, no person, nothing to work from).
+ */
+export function rowMatch(plan, rowId, today) {
+  const rows = Array.isArray(plan?.retirement?.contributions) ? plan.retirement.contributions : [];
+  const row = rows.find((c) => c && c.id === rowId);
+  if (!row) return null;
+  const accts = Array.isArray(plan?.accounts) ? plan.accounts : [];
+  const acct = accts.find((a) => a?.id === row.accountId);
+  if (!atWork(acct, row.employerMatch)) return { value: 0, why: "this account is not a plan at work, so no employer adds to it" };
+  const pid = row.personId || acct.ownerId || "";
+  if (!pid) return null;
+  const said = plan?.retirement?.workPlans?.[pid] ?? {};
+  const tiers = typedTiers(plan, pid);
+  if (said.match === false || said.plan === false || (tiers && tiers.length === 0)) return { value: 0, why: "you said there is no match at this job" };
+  const mine = rows.map((c) => ({ c, a: accts.find((a) => a?.id === c?.accountId) })).filter(({ c, a }) => c && atWork(a, c.employerMatch) && (c.personId === pid || (!c.personId && a.ownerId === pid)));
+  if (mine.some(({ c }) => c.id !== row.id && Number(c.employerMatch) > 0)) return { value: 0, why: "the employer's match is on your other row at this job" };
+  const pay = jobPayOf(plan, pid, today);
+  if (!(pay > 0)) return { value: 0, why: "no pay from a job now, so the employer adds nothing" };
+  const year = yearOfDay(today), comp = Math.min(pay, compLimit(year));
+  const cap = deferralLimit(ageInYear(plan, pid, year), year);
+  const put = Math.min(mine.reduce((t, { c }) => t + perYear(Number(c.amount) || 0, c.period), 0), Number.isFinite(cap) ? cap : Infinity);
+  if (!(put > 0)) return { value: 0, why: "nothing goes in, so the employer adds nothing yet" };
+  const { value, needed } = matchTerms();
+  const yearly = tiers ? tierMatch(put / comp, tiers) * comp : value * Math.min(1, put / comp / needed) * comp;
+  return { value: Math.round(yearly / 12 / 10) * 10 * 12, why: tiers ? "the match formula you typed on Work benefits" : "most work plans add about 4% of pay when you put in 6%", tiers: !!tiers };
+}
+/**
+ * The guess behind a new row's empty match box (the add form on this page writes it, marked, when the box is left empty).
+ * Settle works it out again from the row's own amount; once one of the reasons for none holds it goes to $0 (a guess never
+ * stays at money the person said is not there), and before it is ours the page shows no gray figure for them.
+ */
+export const estimators = {
+  "retirement/contributions:match": {
+    tier: 4, order: 3, label: "What your employer adds a year", unit: "year", weight: "big", page: () => "#/retirement/contributions", reads: [],
+    fn(plan, { today, path }) {
+      const m = /^retirement\.contributions\[([^\]]+)\]\.employerMatch$/.exec(String(path ?? ""));
+      if (!m) return null;
+      const r = rowMatch(plan, m[1], today);
+      if (!r || (r.value === 0 && !isGuess(plan, path))) return null;
+      return { value: r.value, rounded: true, sigma: null, measured: false, why: r.why, uses: {}, sharperWith: [], ...(r.tiers || r.value === 0 ? { tables: [], basis: "yours", dataAsOf: ROW_MATCH_ON } : { tables: [MATCH_TABLE] }) };
+    },
+  },
+};

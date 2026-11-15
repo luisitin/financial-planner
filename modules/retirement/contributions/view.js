@@ -1,6 +1,6 @@
 // modules/retirement/contributions/view.js -- DOM only. What goes into each retirement account
 // a year, with the match and the limits, and one folded form to add or edit.
-import { compute, taxPairOf, applyTaxChoice, applyMatchAtWork, catchUpRothWords, rothAccountName, rothPartName, rothRenameOf, isLaterAccount, isNowAccount, TAX_RULE_OF_THUMB, ROTH_MATCH_WORDS } from "./compute.js";
+import { compute, atWork, taxPairOf, applyTaxChoice, applyMatchAtWork, catchUpRothWords, rothAccountName, rothPartName, rothRenameOf, isLaterAccount, isNowAccount, TAX_RULE_OF_THUMB, ROTH_MATCH_WORDS } from "./compute.js";
 // this year's federal tax with and without a split, and the money when retirement starts by when its tax is paid (spec L6)
 import { compute as federalOf } from "../../taxes/federal/compute.js";
 // the month's own federal and state income tax (the figures Next best action takes off the month): what paying the tax now
@@ -66,6 +66,11 @@ export function readAmountOrShare(text) {
 /** Above this much a year a contribution is taken for a typing slip and refused (R-A10). Far above the law's limits on retirement
  * accounts; a brokerage account has none, so it is generous. */
 export const CONTRIBUTION_YEARLY_CEILING = 500000;
+/** The id the add form gives the row it is drafting, to ask for our guess of its match before it is saved (never stored). */
+const FRESH_ID = "new-row";
+/** The match box's help on a new row into a plan at work: an empty box is our usual match (smart guesses C11). As many words as
+ * the help it replaces ("the match or profit sharing, per year; leave blank for none"), so the first view stays as long. */
+export const FRESH_HELP = "the match or profit sharing, per year; blank uses our guess";
 
 export function applyContributionEdit(p, id, clean) {
   const i = (p.retirement.contributions ?? []).findIndex((c) => c.id === id);
@@ -456,10 +461,36 @@ export function render(root, ctx) {
     const mg = land?.matchGuess > 0 && !(Number(start?.matchHint) > 0) ? land : null;
     const mgName = mg ? nameFor(mg.pid) : "";
     const guessHelp = "Our guess is gray: left blank it stays our guess, worked out again for the amount you save; type 0 for none.";
+    // a new row into a plan at work (smart guesses C11): once what goes in is typed, the empty match box shows our usual match in
+    // gray, and left empty it is saved as our guess (retirement/contributions:match, worked out from this row's own amount). None
+    // while another row of the person's job holds the match, after "no match at this job", or into an account not at work
+    const fresh = !editing && !mg;
+    const freshGuess = (vals) => {
+      if (!fresh || typeof ctx.guess !== "function") return null;
+      const acct = accounts.find((a) => a.id === vals.accountId);
+      if (!atWork(acct)) return null;
+      const r = readAmountOrShare(vals.amount);
+      if (!r || r.bad) return null;
+      const pid = vals.personId || acct.ownerId || "";
+      const period = vals.period || "monthly";
+      const each = r.pct !== undefined ? (pid ? r.pct * payOf(plan, pid, today) / perYear(1, period) : 0) : r.amount;
+      const draft = { ...plan, retirement: { ...(plan.retirement ?? {}), contributions: [...(plan.retirement?.contributions ?? []), { id: FRESH_ID, accountId: vals.accountId, personId: vals.personId || "", amount: each, period, employerMatch: 0 }] } };
+      let g = null;
+      try { g = ctx.guess("retirement/contributions:match", { plan: draft, path: `retirement.contributions[${FRESH_ID}].employerMatch` }); } catch { g = null; }
+      return g && g.value > 0 ? g : null;
+    };
+    // the help says "blank uses our guess" only where a guess will come once what goes in is typed (asked at $500 a month: any
+    // usual match or typed formula gives money there); else, as into an IRA, "leave blank for none": no pay from a job, another
+    // row of the job holds the match, or "no match at this job" (P1, r1)
+    const couldGuess = (vals) => !!freshGuess({ ...vals, amount: "500", period: "monthly" });
+    const OLD_HELP = FIELDS.find((f) => f.key === "employerMatch").help;
+    const startAcct = (prefill ?? {}).accountId ?? firstRetirement?.id;
+    const startPerson = (prefill ?? {}).personId ?? people.find((p) => p.role === "self")?.id ?? "";
     const fields0 = FIELDS.map((f) => (f.key === "amount" && start?.amountHint ? { ...f, required: false, placeholder: start.amountHint, help: `${f.help}. Our guess is gray: leave it blank to keep it.` }
       : f.key === "amount" && land?.fill ? { ...f, placeholder: String(land.tried.amount) }
       : f.key === "employerMatch" && mg ? { ...f, placeholder: String(mg.matchGuess), help: `Does ${nameOf(mgName)} job add money (a match)? Most that match add about ${money0(mg.matchGuess)} a year at this much. Type the real figure, or 0 if it adds nothing; left blank, the usual match stays in as our guess.` }
-      : f.key === "employerMatch" && start?.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. ${guessHelp}` } : f));
+      : f.key === "employerMatch" && start?.matchHint ? { ...f, placeholder: start.matchHint, help: `${f.help}. ${guessHelp}` }
+      : f.key === "employerMatch" && fresh && couldGuess({ accountId: startAcct, personId: startPerson }) ? { ...f, help: FRESH_HELP } : f));
     // the pay-the-tax-now part, a box of its own shown only for "Some of each"
     const fields = !pair ? fields0 : fields0.flatMap((f) => (f.key === "amount" ? [{ ...f, required: false }, { key: "nowAmount", label: "Pay the tax now: your own money", type: "text", help: "each time, into the Roth 401(k): dollars, like 100, or a share of your pay, like 2%" }] : [f]));
     const values0 = { ...(editing ? { ...start.values, amount: start.amountHint ? "" : shareOf(editing) ? `${Number((editing.pctOfPay * 100).toFixed(2))}%` : editing.amount } : { period: "monthly", personId: people.find((p) => p.role === "self")?.id ?? "", accountId: firstRetirement?.id, ...(prefill ?? {}) }),
@@ -503,13 +534,16 @@ export function render(root, ctx) {
         const blankMatch = v0.employerMatch === null || v0.employerMatch === undefined || v0.employerMatch === "";
         const gPid = v.personId || mg?.pid || "";
         let guessMatch = null;
-        if (blankMatch && (start?.matchHint || mg)) {
+        // a new row at work: our usual match at what goes in now, from this row's own amount (C11)
+        const freshG = blankMatch && fresh ? freshGuess({ accountId: v.accountId, personId: v.personId, amount: String(amount), period: v.period }) : null;
+        if (freshG) guessMatch = freshG.value;
+        else if (blankMatch && (start?.matchHint || mg)) {
           const was = editing ? perYear(Number(editing.amount) || 0, editing.period) : 0;
           const ownOther = gPid ? workRows(plan, gPid).filter(({ c }) => c.id !== editing?.id).reduce((t, { c }) => t + perYear(Number(c.amount) || 0, c.period), 0) : 0;
           guessMatch = start?.matchHint && Math.abs(yearly - was) < 0.5 ? Number(start.matchHint) : gPid && plan.retirement?.workPlans?.[gPid]?.match !== false ? usualMatchAt(plan, gPid, today, yearly + ownOther) : 0;
         }
         const clean = { accountId: v.accountId, personId: v.personId || "", amount, period: v.period, employerMatch: guessMatch !== null ? guessMatch : v.employerMatch ?? 0, ...(pctOfPay !== null ? { pctOfPay } : {}) };
-        const keepGuess = (p, id) => { if (guessMatch > 0) markGuess(p, `retirement.contributions[${id}].employerMatch`, { key: "contrib.match", value: guessMatch, unit: "year", dataAsOf: guessDate(plan, editing?.id) }, today); };
+        const keepGuess = (p, id) => { if (guessMatch > 0) markGuess(p, `retirement.contributions[${id}].employerMatch`, freshG ?? { key: "contrib.match", value: guessMatch, unit: "year", dataAsOf: guessDate(plan, editing?.id) }, today); };
         // a 0 typed for the match on a form that asked about it is the answer "no match at this job" (P8: Casey typed 0, as the
         // note told her to, and was asked at once "No match on file. Is that right?")
         const saidNoMatch = !!land?.matchAsked && !blankMatch && match === 0 && !!gPid && plan.retirement?.workPlans?.[gPid]?.match === undefined;
@@ -568,6 +602,21 @@ export function render(root, ctx) {
       if (g > 0) matchBox.setAttribute("placeholder", String(g));
     };
     amountBox?.addEventListener?.("change", greyMatch);
+    // a new row: the gray match follows the account, whose it is, what goes in and how often (a placeholder: nothing moves);
+    // its help says whether an empty box is our guess
+    const freshMatch = () => {
+      if (!fresh || !matchBox) return;
+      const val = (k) => form?.querySelector(`[name="${k}"]`)?.value ?? "";
+      const vals = { accountId: val("accountId"), personId: val("personId"), amount: val("amount"), period: val("period") };
+      const g = freshGuess(vals);
+      const help = matchBox.closest?.("label")?.querySelector?.(".help");
+      if (g) matchBox.setAttribute("placeholder", amountText(g.value)); else matchBox.removeAttribute("placeholder");
+      // with an amount typed and no gray figure, an empty box is no match; with none typed yet, a guess may still come
+      const typed = readAmountOrShare(vals.amount);
+      if (help) help.textContent = g ? ui.guessLine(g, { zeroOk: true }) : !(typed && !typed.bad) && couldGuess(vals) ? FRESH_HELP : OLD_HELP;
+    };
+    if (fresh) for (const k of ["amount", "period", "accountId", "personId"]) form?.querySelector(`[name="${k}"]`)?.addEventListener?.("change", freshMatch);
+    if (fresh) freshMatch();   // a form opened with what goes in already filled (a landing's prefill) shows the gray match at once
     // "Use the usual 6.6% ($396 a month)": the change the card tried, put in by the person's own tap (P2), so the chip and Save
     // give the answer the card showed (said = done)
     if (land?.tried && amountBox) {

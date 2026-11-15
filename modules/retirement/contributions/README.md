@@ -351,3 +351,37 @@ accounts by law.
   row, the match first: "Saved: Jamie's employer adds $2,040 a year (on the pay-the-tax-later row). Your retirement answer: now
   runs out at 75 (was 71)." (It said only "Saved: $250 a month goes into Roth 401(k) at work, paying the tax now; the match stays
   pay-the-tax-later.")
+
+## A new row's empty match (smart guesses C11, 2026-11-15)
+The add form's "Employer adds, a year" on a new row into a plan at work (a 401(k), or a Roth account that counts against the
+401(k) limit, not one from a job left: `atWork`) works like the rows of ours already did: once "Your own money" is typed,
+the empty box shows the usual match in gray, the help says "Our guess: most work plans add about 4% of pay when you put in
+6%. Type 0 if you have none." (or "...the match formula you typed on Work benefits."), and left empty Save writes it as our
+guess with the green line "Contribution added. The employer's $2,400 a year is our guess until you type the real figure."
+(Bo, invented: $62,400 of pay, $300 a month into a new 401(k)); the row says "(our guess)" after the match. Before anything
+is typed the help reads "the match or profit sharing, per year; blank uses our guess" (as many words as the help it replaces,
+so the empty list's first view is as long as before), but only where a guess will come once an amount is typed (the form asks
+the estimator at $500 a month). Into an IRA or an old job's 401(k), with no pay from a job, while another row of the job holds
+the match, after "no match at this job", or with an amount typed and no gray figure, the help and the save are as before
+("leave blank for none", no match).
+
+`rowMatch(plan, rowId, today)`, the estimator `retirement/contributions:match` behind it:
+
+    usual = 4.0% x min(1, put in / pay counted / 6.0%) x pay counted, whole $10 a month, twelve of them
+    pay counted = min(job pay, the 401(a)(17) limit); put in = what the person puts into all their rows at work a year,
+    at most the 401(k) limit for the age reached in the year
+
+Vanguard, How America Saves 2026 (the bundled table `vanguard_has2026_headline`: the median promised match, 4.0%, and the
+median share needed for all of it, 6.0%), as the `contrib.match` guess and retirement/levers.js `usualMatchAt` (a test keeps
+the two equal; this file cannot import levers.js, which imports it). The formula typed on Work benefits instead when there is
+one (cites no table: `basis: "yours"`). That formula and a $0 are dated the table's own date (`ROW_MATCH_ON` is
+`vanguard_has2026_headline`'s `readOn`): settle never puts back a figure dated older than its entry, so with a later date a
+guess that went to $0 or to the formula could never return to the usual match once the reason ended. No gray figure, and $0 once it is ours, when another row of the person's job holds a
+match (the match is counted there), after "no match at this job" (here or Get started) or a Work benefits formula with
+nothing in it, when the row is no longer into a plan at work, or with no pay from a job now. Settle works it out again from
+the row's own amount: the `contrib.match` estimator reads Get started's row or the usual deferral, so on any other row it
+would move the match to another amount (a second $100 row of Ana's went to $4,080 under it), hence a key of its own.
+Tests: module.test.mjs "C11" (rowMatch against usualMatchAt; each reason for none; the estimator's table and date; settle
+following the amount and a typed figure ending it; the add form's gray figure, help, save, entry, green line and row word; a
+typed match and a typed 0; an IRA; a second row of Ana's; the help's word count; "C11 r1": a guess at $0 or at the typed
+formula coming back to the usual match when the reason ends, and the help promising a guess only where one will come).
