@@ -38,7 +38,6 @@
   "investments/allocation": {"plan":{"fsWords":120,"moreFilled":2},"empty":{"fsWords":120,"moreFilled":2}},
   "investments/backtest": {"plan":{"fsWords":150,"fsFigs":13},"empty":{"fsWords":150,"fsFigs":13,"noStart":1}},
   "investments/crypto": {"empty":{"noStart":1}},
-  "investments/glide-path": {"plan":{"fsWords":140},"empty":{"fsWords":130}},
   "investments/limits": {"plan":{"fsWords":170,"fsFigs":15},"empty":{"fsWords":210,"noStart":1}},
   "investments/risk": {"plan":{"fsWords":170,"fsFigs":19},"empty":{"fsWords":160,"fsFigs":15,"noStart":1}},
   "overview/alerts": {"empty":{"noStart":1}},
