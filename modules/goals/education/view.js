@@ -1,7 +1,7 @@
 // modules/goals/education/view.js -- DOM only. Each child's college: what it would cost when they get
 // there, what is set aside, the monthly saving that covers the share you choose, and how much today's
 // saving covers; the kind of college and the share per child in a fold; a button to set the goal.
-import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount, previewsOf, stateBreak, STATE_EXAMPLE } from "./compute.js";
+import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount, previewsOf, stateBreak, STATE_EXAMPLE, saveOrBorrow, LOAN } from "./compute.js";
 import { previewText } from "../house/compute.js";
 import { part } from "../../../core/ui/more.js";
 
@@ -77,6 +77,47 @@ export function stateRateHelp(s) {
   const p = s.page;
   if (p.rate === null) return "Your state's rate on your top dollars, for example 5%.";
   return `Left empty, we count ${rateText(p.rate)}: ${rateWords({ ...s, rateFrom: p.method })}.`;
+}
+/** The line that moved from "Good to know" into "Save or borrow" (it stays in the list when there is no row). */
+export const RETIREMENT_FIRST = "Retirement first: there are loans for college, not for retirement.";
+/** Save or borrow's sentence for one child, one written out for each case (saveOrBorrow's `case`): dollars paid in all,
+ * whenever they are paid (critic q4 M1: "costs more" read as a verdict; borrowing pays later). Pure. */
+export function borrowSentence(k, money) {
+  switch (k.case) {
+    case "covered": return `What goes in now already covers ${k.name}'s college: there is nothing to borrow.`;
+    case "more": return `Borrowing what is missing means paying about ${money(k.diff)} more in all than saving it from now, but later.`;
+    case "less": return `Borrowing what is missing means paying about ${money(-k.diff)} less in all than saving it from now, at these rates.`;
+    case "same": return "Saving and borrowing come to about the same paid in all, at these rates.";
+    default: return "";
+  }
+}
+/** The same two ways valued today, one sentence for each `valued` case (none when covered or with no growth). Pure. */
+export function borrowValued(k, money, returnRate) {
+  const at = `Valued today, counting what saved money would earn meanwhile at ${(returnRate * 100).toFixed(1)}% a year`;
+  switch (k.valued) {
+    case "same": return `${at}, the two ways cost about the same.`;
+    case "more": return `${at}, borrowing still costs about ${money(k.pvDiff)} more.`;
+    case "less": return `${at}, borrowing costs about ${money(-k.pvDiff)} less.`;
+    default: return null;
+  }
+}
+/** What Save or borrow counted, in one short line under the children (critic q4 P3; the rest is in the README). Pure. */
+export function borrowCounted(sb) {
+  return `Counted: what is set aside grows ${(sb.returnRate * 100).toFixed(1)}% a year; a loan costs ${rateText(sb.loanRate)} a year${sb.example ? " (an example)" : ""} and is paid back over ${sb.termYears} years after college.`;
+}
+/** Save or borrow's status while shut (critic q4 P1): the answer valued today, when every child's is the same. Pure. */
+export const BORROW_STATUS = { same: "about even", more: "borrowing costs more", less: "borrowing costs less", covered: "nothing to borrow" };
+export function borrowStatus(sb) {
+  const all = [...new Set(sb.children.map((k) => k.valued ?? k.case))];
+  return all.length === 1 ? BORROW_STATUS[all[0]] ?? "" : "";
+}
+/** Save or borrow's green line after Save (R7, critic q4 P2): the new monthly payment after college. Pure. */
+export function borrowSaved(sb, money) {
+  const owing = sb.children.filter((k) => k.case !== "covered");
+  if (!owing.length) return "Nothing to borrow.";
+  const at = `At ${rateText(sb.loanRate)} a year`;
+  return owing.length === 1 ? `${at}: ${money(owing[0].payment)} a month for ${sb.termYears} years after college.`
+    : `${at}: ${owing.map((k) => `${k.name} ${money(k.payment)} a month`).join(", ")}, for ${sb.termYears} years after college.`;
 }
 /** The sentence that moved from "Good to know" into the state row (it stays in the list when there is no row). */
 export const STATE_CHECK = "Many states take money put into a 529 off state income tax: check your state's plan first, it says how much.";
@@ -207,17 +248,39 @@ export function render(page, ctx) {
       pending = { part: "state" };
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), stateDeduction: v.stateDeduction ?? null, stateRate: v.stateRate ?? null }; });
     }, { submitLabel: "Save" })] });
+  // Save or borrow (gap list, next 60, item 4): each child still to start, the page's college cost paid two ways; information
+  const sb = d.children.length ? saveOrBorrow(plan, { today: fmt.today(), d }) : null;
+  const borrowRow = sb && part(ctx, { id: "borrow", kind: "item", title: "Save or borrow", set: given(w.loanRate), open: said?.part === "borrow", holds: ["loanRate"], body: () => [
+    // the green line names the new answer in a few words: the payment after college (the sentences are right under it)
+    savedHere("borrow", borrowSaved(sb, money)),
+    ...sb.children.flatMap((k) => [
+      sb.children.length > 1 ? ui.h("h3", {}, `${k.name}, college from ${k.startYear}`) : null,
+      k.case === "covered" ? null : ui.row(
+        ui.stat("Save each month from now", money(k.saveMonthly), `${money(k.saveTotal)} paid in all by August ${k.startYear}`),
+        ui.stat("Or borrow: each month after college", money(k.payment), `for ${sb.termYears} years${k.putMonthly > 0 ? `, with ${money(k.putMonthly)} a month until then` : ""}: ${money(k.borrowTotal)} paid in all`)),
+      ui.h("p", {}, borrowSentence(k, money)),
+      borrowValued(k, money, sb.returnRate) ? ui.h("p", {}, borrowValued(k, money, sb.returnRate)) : null,
+    ]),
+    ui.h("p", { class: "ed2-d" }, borrowCounted(sb)),
+    ui.h("p", { class: "ed2-d" }, RETIREMENT_FIRST),
+    ui.h("p", { class: "muted small" }, "This compares two ways to pay; it is not advice."),
+    ui.form([{ key: "loanRate", label: "Loan rate a year", type: "percent", min: 0, max: 20, placeholder: "", help: `Left empty, we count ${rateText(LOAN.example)} a year, an example: type the rate of the loan you would take.` }],
+      { loanRate: w.loanRate ?? null }, (v) => {
+        pending = { part: "borrow" };
+        store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), loanRate: v.loanRate ?? null }; });
+      }, { submitLabel: "Save" })] });
   if (d.children.length) root.append(ui.card("Good to know", ui.h("ul", {},
     // the state clause lives in its row when there is one (moved, never deleted)
     ui.h("li", {}, tb ? "A 529 plan grows tax-free when spent on college." : "A 529 plan grows tax-free when spent on college, and many states take contributions off state income tax: check your state's plan first."),
     ui.h("li", {}, "Grandparents and others can give five years of gifts to a 529 at once (Gifting)."),
     ui.h("li", {}, "Up to $35,000 left in a 529 can move to the child's Roth IRA over the years, if the 529 is 15 years old."),
-    ui.h("li", {}, "Retirement first: there are loans for college, not for retirement."),
+    // moved into "Save or borrow" when there is that row (never deleted)
+    sb ? null : ui.h("li", {}, RETIREMENT_FIRST),
     // only under the credit's income limit, with a student in the first four years (round 8 item 18)
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
     // how fast prices rise: its box, with what the rate does to the first child's first year, one quiet row (its title as
     // before; an item part with its own name: the page's one row about all the children, beside one row per child)
-    ui.h("div", { class: "folds" }, stateRow || null, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
+    ui.h("div", { class: "folds" }, borrowRow || null, stateRow || null, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
       ui.h("p", { class: "ed2-d" }, growthExample(d, money)),
       ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, placeholder: "", help: `Left empty, we count ${(DEFAULT_GROWTH * 100).toFixed(0)}% a year.` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = { text: "Saved.", part: "growth" };

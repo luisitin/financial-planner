@@ -185,3 +185,71 @@ Left as is (critic q4 M3, severity 1): this calendar year counts a full year of 
 left, and the year college starts counts nothing (for the family on 2026-11-13: 144 months counted against 141 left,
 about 2% more); the total is said as "about", and a deduction is a whole year's figure.
 Tests: module.test.mjs "state break", "critic q4 M5", "critic q4 P1, P2".
+
+## Save or borrow (gap list, next 60, item 4, first half; map U5; 2026-11-15)
+One quiet row in "Good to know", **"Save or borrow"** (kind `item`), first of its rows, shown while a child is still to
+start college. Shut, it says nothing until a loan rate is typed ("set by you"). The bullet "Retirement first: there are
+loans for college, not for retirement." moved into it (it stays a bullet when there is no row): the family's first view is
+173 words now (entry 180), figures 14.
+
+Open, for each child still to start (a small heading per child when there are several): two tiles, "Save each month from
+now" (the monthly, and what that is in all by August of the first year) and "Or borrow: each month after college" (the
+payment, for 10 years, with what goes in now until then, and what that is in all); the sentence on the totals; the
+sentence valued today; one short line of what was counted ("Counted: what is set aside grows 6.1% a year; a loan costs 6% a
+year (an example) and is paid back over 10 years after college.", critic q4 P3: the bills and the interest dates are
+here in the README, not on screen; a "How this is worked out" inside the row would be a part inside a part, which R11
+refuses); the "Retirement first" line; "This compares two ways to pay; it is not advice."; and one box, "Loan rate a
+year", with Save.
+
+`saveOrBorrow(plan, { today, d?, loanRate? })` (pure; `compute()` is not changed). R = the page's own return (`planReturn`,
+"growing at 6.1% a year in a 529 plan"); L = the loan rate typed (`whatIfs.college.loanRate`), else **6% a year, an example**:
+the federal undergraduate rate for this school year is published at studentaid.gov, which this build's network refused on
+2026-11-15, so no rate is quoted; the help line says "Left empty, we count 6% a year, an example: type the rate of the loan
+you would take.", never a gray figure. 10 years: the brief's term (a person's loan may run longer).
+- Save: M = the page's monthly that covers the share by the first bill (`neededMonthly` = pmtToReach(R/12, months left,
+  at the first bill x share, set aside)); saveTotal = M x months left (what is already set aside is the same both ways).
+- Borrow: what goes in now (the goal's monthly) keeps going in; pot_0 = fv(R/12, months left, monthly, set aside) at the
+  first fall bill; each later school year pot_i = (pot_(i-1) - paid_(i-1)) x (1 + R) (the same yearly growth the page's
+  "at the first bill" figure discounts by); bill_i = the year's cost x share; paid_i = min(pot_i, bill_i); borrowed_i =
+  bill_i - paid_i. owed = sum of borrowed_i x (1 + L/12)^(12 x (years - i)): interest builds month by month from each fall
+  bill to August 15 after the last school year, when payments start (a loan's first payment usually comes a few months
+  after school; this is the builder's simple date). payment = pmt(L/12, 120, owed); borrowTotal = monthly x months left +
+  payment x 120.
+- diff = borrowTotal - saveTotal, in the dollars of the years they are paid (not discounted: what is paid in all).
+  Putting in exactly M leaves nothing to borrow (test), so the two sides use one model of the 529.
+- **Valued today** (critic q4 M1). The totals add dollars whenever they are paid, and borrowing pays years later: at a
+  loan rate equal to the plan's return, borrowing always "costs more" in all ($102,640 for the family), though both ways
+  are worth the same. So each way is also valued today, every payment discounted to now at the plan's return, month by
+  month (r = R/12): pvSave = M x a(r, months left); pvBorrow = monthly x a(r, months left) + payment x a(r, 120) x (1 +
+  r)^-(months left + 12 x years), where a(r, n) = (1 - (1 + r)^-n) / r (n when r = 0): payments at the end of each
+  month, the loan's first a month after the August after the last school year. pvDiff = pvBorrow - pvSave; `valued` =
+  "same" within 1% of the larger, else "more" or "less"; none when nothing is borrowed or R <= 0 (nothing earned
+  meanwhile: the totals already say it). Discounting at the plan's own return is the builder's choice: it is what money
+  set aside earns on this page. The family at 6%: $74,617 saving against $74,130 borrowing, about the same; at 3% borrowing
+  is about $9,140 less valued today though $71,370 more in all; at 8% about $6,060 more.
+
+One sentence per case (`borrowSentence`, view.js; each has a module test):
+| case | when | sentence |
+|---|---|---|
+| covered | nothing to borrow (what goes in now is at least M) | "What goes in now already covers Cy's college: there is nothing to borrow." (no tiles) |
+| more | more paid in all | "Borrowing what is missing means paying about $101,550 more in all than saving it from now, but later." |
+| less | less paid in all (money that shrinks while saved, a cheap loan) | "Borrowing what is missing means paying about $X less in all than saving it from now, at these rates." |
+| same | within 1% of the larger | "Saving and borrowing come to about the same paid in all, at these rates." (R = 0 and L = 0 give exactly the same) |
+
+Then one sentence valued today (`borrowValued`), when there is one:
+| valued | sentence (the family's 6.1%) |
+|---|---|
+| same | "Valued today, counting what saved money would earn meanwhile at 6.1% a year, the two ways cost about the same." |
+| more | "Valued today, counting what saved money would earn meanwhile at 6.1% a year, borrowing still costs about $6,060 more." |
+| less | "Valued today, counting what saved money would earn meanwhile at 6.1% a year, borrowing costs about $9,140 less." |
+
+By hand, the family on 2026-11-13 (Cy, college from 2038, $4,000 set aside, $250 a month, 141 months, R = 6.1%, L = 6%):
+saving $742.60 a month x 141 = $104,706.23 (shown $740 and $104,710). Borrowing: the 529 holds fv = $59,523.06 at August
+2038 and pays 2038-39 ($41,386.68) and $19,242.70 of 2039-40 (the $18,136.38 left, grown a year); borrowed $23,799.45 + $44,763.84 +
+$46,554.39 = $115,117.68, owed $128,362.10 by August 2042 with interest, $1,425.08 a month for 120 months; with $250 x 141 =
+$35,250 put in before, $206,259.90 in all, $101,553.67 more (shown $1,430, $206,260 and $101,550). Valued today: $742.60 x
+a(0.0050833, 141) = $74,616.54 saving; $250 x a(0.0050833, 141) + $1,425.08 x a(0.0050833, 120) / 1.0050833^189 = $74,129.90
+borrowing; $486.65 less, under 1%: about the same. Save keeps the row open and says, inside it, the new payment in a few
+words, "Saved. At 5% a year: $1,340 a month for 10 years after college." (`borrowSaved`; each child's payment when there
+are several; "Saved. Nothing to borrow." when nothing is), with the sentences under it, once (R7, R17, critic q4 P2; test
+"save or borrow, the page S11"). Tests: module.test.mjs "save or borrow", "critic q4 M1".

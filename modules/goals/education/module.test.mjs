@@ -402,13 +402,13 @@ test("C9 (critic e9 F6, F7) the cost box, its gray figure and its line show only
 test("C9 S11 (R17): saving a child's college with the cost left empty saves no figure, and only that part stays open", async () => {
   const a = await drawEdu(customBlank());
   const before = openParts(a.root);
-  assert.deepEqual(before, { "college-p-cy": false, state: false, growth: false });
+  assert.deepEqual(before, { "college-p-cy": false, borrow: false, state: false, growth: false });
   a.root.querySelector('[name="yearly"]').closest("form").dispatch("submit");
   assert.equal(a.saved.length, 1);
   assert.equal(a.saved[0].whatIfs.college["p-cy"].yearly, null, "our figure is never written");
   assert.equal(a.saved[0].guesses, undefined);
   const b = await drawEdu(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { "college-p-cy": true, state: false, growth: false }, "the part just saved stays open; no other moves");
+  assert.deepEqual(openParts(b.root), { "college-p-cy": true, borrow: false, state: false, growth: false }, "the part just saved stays open; no other moves");
   assert.match(b.textOf(b.root), /college saved\./);
   // the growth row: saving it opens only itself
   const c = await drawEdu(familyPlan(T13));
@@ -416,7 +416,7 @@ test("C9 S11 (R17): saving a child's college with the cost left empty saves no f
   c.root.querySelector('[name="growth"]').closest("form").dispatch("submit");
   assert.equal(c.saved[0].whatIfs.college.growth, 0.05);
   const e = await drawEdu(c.saved[0]);
-  assert.deepEqual(openParts(e.root), { "college-p-cy": false, state: false, growth: true });
+  assert.deepEqual(openParts(e.root), { "college-p-cy": false, borrow: false, state: false, growth: true });
   assert.match(e.textOf(e.root.querySelectorAll("details").find((x) => x.dataset.part === "growth")), /At 5\.0% a year, a public in-state year \(\$25,850 in 2025-26\) would cost about \$\d/);
 });
 
@@ -539,7 +539,7 @@ test("state break, the page S11: one quiet row, nothing new in the first view; t
   assert.equal(a.saved.length, 1);
   assert.deepEqual([a.saved[0].whatIfs.college.stateDeduction, a.saved[0].whatIfs.college.stateRate], [5000, null]);
   const b = await drawEdu(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { "college-p-cy": false, state: true, growth: false });
+  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: false, state: true, growth: false });
   // the green line names the new figure in a few words; the full sentence is right under it, once (critic q4 P2)
   const said = partOf(b.root, "state").querySelector(".notice");
   assert.equal(b.textOf(said), "Saved. About $130 a year less state tax.");
@@ -549,4 +549,153 @@ test("state break, the page S11: one quiet row, nothing new in the first view; t
   const c = await drawEdu(inCollege());
   assert.equal(partOf(c.root, "state"), undefined);
   assert.ok(c.root.querySelectorAll("li").some((li) => c.textOf(li).includes("many states take contributions off state income tax")));
+});
+
+// ---------------------------------------------------------------- gap list, next 60, item 4: save or borrow (map U5)
+import { saveOrBorrow, LOAN } from "./compute.js";
+import { borrowSentence, borrowCounted, RETIREMENT_FIRST, borrowValued, borrowStatus, borrowSaved } from "./view.js";
+/** Both ways valued today by hand, month by month at the plan's return: each payment discounted to now. */
+function valuedByHand(k, c, R) {
+  const r = R / 12, at = (m) => Math.pow(1 + r, -m);
+  let save = 0, borrow = 0;
+  for (let m = 1; m <= c.monthsLeft; m++) { save += k.saveMonthly * at(m); borrow += k.putMonthly * at(m); }
+  for (let m = 1; m <= 120; m++) borrow += k.payment * at(c.monthsLeft + 12 * c.years + m);
+  return { save, borrow, diff: borrow - save };
+}
+/** The borrowing side worked out by hand, year by year, for a child of compute(): bills at each fall bill, interest monthly. */
+function borrowByHand(c, R, L) {
+  let pot = c.saved * Math.pow(1 + R / 12, c.monthsLeft) + c.monthly * (Math.pow(1 + R / 12, c.monthsLeft) - 1) / (R / 12), owed = 0, borrowed = 0;
+  for (let i = 0; i < c.years; i++) {
+    if (i > 0) pot = pot * (1 + R);
+    const bill = c.costs[i].cost * c.share, paid = Math.min(pot, bill);
+    pot -= paid; borrowed += bill - paid;
+    owed += (bill - paid) * Math.pow(1 + L / 12, 12 * (c.years - i));
+  }
+  const l = L / 12, payment = owed * l / (1 - Math.pow(1 + l, -120));
+  return { borrowed, owed, payment, borrowTotal: c.monthly * c.monthsLeft + payment * 120 };
+}
+
+test("save or borrow by hand: Cy, $4,000 set aside, $250 a month, the plan's 6.1%, the 6% example loan over 10 years", () => {
+  const p = familyPlan(T13);
+  const c = compute(p, { today: T13 }).children[0];
+  const sb = saveOrBorrow(p, { today: T13 });
+  const k = sb.children[0];
+  assert.deepEqual([sb.loanRate, sb.example, sb.termYears, LOAN.example, LOAN.years], [0.06, true, 10, 0.06, 10]);
+  near(sb.returnRate, 0.061, 1e-12);
+  // saving: the page's own monthly, from now to August 15, 2038 (141 months)
+  assert.equal(k.monthsLeft, 141);
+  near(k.saveMonthly, c.neededMonthly); near(k.saveTotal, c.neededMonthly * 141);
+  near(k.saveTotal, 104706.23, 0.01);
+  // borrowing: the 529 pays the first year and part of the second, the rest is borrowed
+  const hand = borrowByHand(c, 0.061, 0.06);
+  near(k.borrowed, hand.borrowed, 1e-6); near(k.owed, hand.owed, 1e-6); near(k.payment, hand.payment, 1e-6); near(k.borrowTotal, hand.borrowTotal, 1e-6);
+  near(k.payment, 1425.08, 0.01); near(k.borrowTotal, 206259.90, 0.01); near(k.putTotal, 250 * 141);
+  near(k.diff, k.borrowTotal - k.saveTotal); assert.equal(k.case, "more");
+  assert.equal(borrowSentence(k, money10), "Borrowing what is missing means paying about $101,550 more in all than saving it from now, but later.");
+  // valued today at the plan's 6.1%: $74,617 saving against $74,130 borrowing, within 1%: about the same (critic q4 M1)
+  const v = valuedByHand(k, c, 0.061);
+  near(k.pvSave, v.save, 1e-6); near(k.pvBorrow, v.borrow, 1e-6); near(k.pvDiff, v.diff, 1e-6);
+  near(k.pvSave, 74616.54, 0.01); near(k.pvBorrow, 74129.90, 0.01);
+  assert.equal(k.valued, "same");
+  assert.equal(borrowValued(k, money10, sb.returnRate), "Valued today, counting what saved money would earn meanwhile at 6.1% a year, the two ways cost about the same.");
+  assert.equal(borrowStatus(sb), "about even");
+  assert.equal(borrowCounted(sb), "Counted: what is set aside grows 6.1% a year; a loan costs 6% a year (an example) and is paid back over 10 years after college.");
+  assert.equal(borrowSaved(sb, money10), "At 6% a year: $1,430 a month for 10 years after college.");
+  // a loan rate typed: used, and no longer called an example
+  const typed = familyPlan(T13); typed.whatIfs = { college: { loanRate: 0.04 } };
+  const t = saveOrBorrow(typed, { today: T13 });
+  assert.deepEqual([t.loanRate, t.example], [0.04, false]);
+  near(t.children[0].payment, borrowByHand(c, 0.061, 0.04).payment, 1e-6);
+  assert.doesNotMatch(borrowCounted(t), /example/);
+});
+test("critic q4 M1: dollars paid later are not the same as dollars now: at a loan rate equal to the plan's return the totals differ, valued today they do not", () => {
+  const p = familyPlan(T13);
+  const d = compute(p, { today: T13 }), c = d.children[0], R = d.returnRate;
+  const eq = saveOrBorrow(p, { today: T13, loanRate: R }).children[0];
+  // before: "Borrowing what is missing costs about $102,640 more in all", a verdict the money does not bear out
+  assert.equal(eq.case, "more"); assert.ok(eq.diff > 100000);
+  assert.equal(eq.valued, "same"); assert.ok(Math.abs(eq.pvDiff) < 0.01 * eq.pvSave, String(eq.pvDiff));
+  assert.doesNotMatch(borrowSentence(eq, money10), /costs/);
+  assert.match(borrowSentence(eq, money10), /paying about \$102,640 more in all than saving it from now, but later\.$/);
+  // a cheap loan: more dollars in all, and still less valued today
+  const cheap = saveOrBorrow(p, { today: T13, loanRate: 0.03 }), lo = cheap.children[0];
+  assert.deepEqual([lo.case, lo.valued], ["more", "less"]);
+  near(lo.pvDiff, valuedByHand(lo, c, R).diff, 1e-6);
+  assert.equal(borrowValued(lo, money10, cheap.returnRate), `Valued today, counting what saved money would earn meanwhile at 6.1% a year, borrowing costs about ${money10(-lo.pvDiff)} less.`);
+  assert.equal(borrowStatus(cheap), "borrowing costs less");
+  // a dear loan: more either way
+  const dear = saveOrBorrow(p, { today: T13, loanRate: 0.08 }), hi = dear.children[0];
+  assert.deepEqual([hi.case, hi.valued], ["more", "more"]);
+  near(hi.pvDiff, valuedByHand(hi, c, R).diff, 1e-6);
+  assert.equal(borrowValued(hi, money10, dear.returnRate), `Valued today, counting what saved money would earn meanwhile at 6.1% a year, borrowing still costs about ${money10(hi.pvDiff)} more.`);
+  assert.equal(borrowStatus(dear), "borrowing costs more");
+});
+test("save or borrow: putting in what covers it leaves nothing to borrow; with no growth and no interest both ways cost the same", () => {
+  const p = familyPlan(T13);
+  const need = compute(p, { today: T13 }).children[0].neededMonthly;
+  for (const m of [need, 800]) {
+    const q = familyPlan(T13); q.goals.find((g) => g.id === "g-col").monthly = m;
+    const k = saveOrBorrow(q, { today: T13 }).children[0];
+    assert.equal(k.case, "covered", String(m)); assert.ok(k.borrowed < 0.5); assert.equal(k.payment, 0);
+    assert.equal(borrowSentence(k, money10), "What goes in now already covers Cy's college: there is nothing to borrow.");
+    assert.equal(k.valued, null); assert.equal(borrowValued(k, money10, 0.061), null);
+    const sb = saveOrBorrow(q, { today: T13 });
+    assert.deepEqual([borrowStatus(sb), borrowSaved(sb, money10)], ["nothing to borrow", "Nothing to borrow."]);
+  }
+  // R = 0 and L = 0: saving pays the bills less what is set aside; so does borrowing (what goes in, then the rest)
+  const z = familyPlan(T13); z.assumptions = { ...z.assumptions, returnStocks: 0, returnBonds: 0 }; z.whatIfs = { college: { loanRate: 0 } };
+  const zc = compute(z, { today: T13 }).children[0];
+  const k = saveOrBorrow(z, { today: T13 }).children[0];
+  near(k.saveTotal, zc.costs.reduce((t, x) => t + x.cost, 0) - 4000, 1e-6); near(k.borrowTotal, k.saveTotal, 1e-6);
+  near(k.payment, k.owed / 120); near(k.owed, k.borrowed);
+  assert.equal(k.case, "same");
+  assert.equal(borrowSentence(k, money10), "Saving and borrowing come to about the same paid in all, at these rates.");
+  // nothing earned meanwhile: valued today is the totals, said once
+  assert.equal(k.valued, null); assert.equal(borrowValued(k, money10, 0), null); near(k.pvDiff, k.diff, 1e-6);
+  // money that shrinks while saved and a free loan: borrowing costs less
+  const neg = familyPlan(T13); neg.assumptions = { ...neg.assumptions, returnStocks: -0.03, returnBonds: -0.03 }; neg.whatIfs = { college: { loanRate: 0 } };
+  const n = saveOrBorrow(neg, { today: T13 }).children[0];
+  assert.equal(n.case, "less"); assert.ok(n.diff < 0);
+  assert.equal(borrowSentence(n, money10), `Borrowing what is missing means paying about ${money10(-n.diff)} less in all than saving it from now, at these rates.`);
+});
+test("save or borrow: no row without a child still to start; a child in college is left out; several children each get their own", () => {
+  assert.equal(saveOrBorrow(emptyPlan(), { today: T13 }), null);
+  assert.equal(saveOrBorrow(inCollege(), { today: T8 }), null);
+  const p = inCollege(); p.household.people.push({ id: "k3", name: "Child 3", role: "dependent", birthDate: "2018-05-01" });
+  assert.deepEqual(saveOrBorrow(p, { today: T8 }).children.map((k) => k.name), ["Child 3"]);
+  const two = familyPlan(T13); two.household.people.push({ id: "p-bo", name: "Bo", role: "dependent", birthDate: "2016-04-04" });
+  const sb2 = saveOrBorrow(two, { today: T13 });
+  assert.deepEqual(sb2.children.map((k) => [k.name, k.startYear]), [["Cy", 2038], ["Bo", 2034]]);
+  assert.equal(borrowSaved(sb2, money10), `At 6% a year: Cy ${money10(sb2.children[0].payment)} a month, Bo ${money10(sb2.children[1].payment)} a month, for 10 years after college.`);
+});
+test("save or borrow, the page S11: one quiet row; Retirement first moved into it; Save keeps it open and names the new answer", async () => {
+  const { fullSelectors } = await import("../../../qa/fixtures/fake-dom.mjs");
+  fullSelectors();
+  await drawEdu(familyPlan(T13));
+  const a = await drawEdu(familyPlan(T13));
+  const row = partOf(a.root, "borrow");
+  assert.ok(row && !row.hasAttribute("open"));
+  assert.equal(a.textOf(row.querySelector(".fold-title")), "Save or borrow");
+  assert.equal(row.querySelector(".fold-status") ?? null, null);
+  assert.ok(!a.root.querySelectorAll("li").some((li) => a.textOf(li) === RETIREMENT_FIRST), "no longer a bullet");
+  const body = a.textOf(row.querySelector(".fold-body"));
+  for (const s of [RETIREMENT_FIRST, "This compares two ways to pay; it is not advice.", "Save each month from now", "$104,710 paid in all by August 2038", "for 10 years, with $250 a month until then: $206,260 paid in all", "Left empty, we count 6% a year, an example",
+    "Valued today, counting what saved money would earn meanwhile at 6.1% a year, the two ways cost about the same."]) assert.ok(body.includes(s), s);
+  assert.doesNotMatch(body, /each bill|interest builds/, "the counted line is short (critic q4 P3)");
+  const box = a.root.querySelector('[name="loanRate"]');
+  assert.equal(box.getAttribute("placeholder") ?? "", "", "no gray rate: the example is said in words");
+  box.value = "5";
+  box.closest("form").dispatch("submit");
+  assert.equal(a.saved[0].whatIfs.college.loanRate, 0.05);
+  const b = await drawEdu(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: true, state: false, growth: false });
+  const k = saveOrBorrow(a.saved[0], { today: T13 }).children[0];
+  // the green line names the new payment in a few words; the sentences are under it, once (critic q4 P2)
+  assert.equal(b.textOf(partOf(b.root, "borrow").querySelector(".notice")), `Saved. At 5% a year: ${money10(k.payment)} a month for 10 years after college.`);
+  assert.ok(b.textOf(partOf(b.root, "borrow")).includes(`Borrowing what is missing means paying about ${money10(k.diff)} more in all than saving it from now, but later.`));
+  assert.ok(b.textOf(partOf(b.root, "borrow").querySelector("summary")).includes("set by you"));
+  // every child in college: no row, and the line is a bullet again
+  const c = await drawEdu(inCollege());
+  assert.equal(partOf(c.root, "borrow"), undefined);
+  assert.ok(c.root.querySelectorAll("li").some((li) => c.textOf(li) === RETIREMENT_FIRST));
 });

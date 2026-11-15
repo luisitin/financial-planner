@@ -2,7 +2,7 @@
 // years would cost when they get there (prices rising faster than inflation), what is already set aside
 // (the child's college goal, or 529 accounts), the monthly saving that covers the share you choose by the
 // first bill, and how much today's saving would cover.
-import { pmtToReach, fv } from "../../../core/math/finance.js";
+import { pmtToReach, fv, pmt } from "../../../core/math/finance.js";
 import { compute as computeGoals } from "../goals/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
@@ -252,4 +252,64 @@ export function stateBreak(plan, { today = null, d = null, stateTax } = {}) {
   let total = 0;
   for (let y = year; y < year + years; y++) total += countedIn(y) * rate;
   return { case: kase, ...base, counted: countedIn(year), yearly: countedIn(year) * rate, total };
+}
+
+/** Save or borrow: the loan rate counted when the box is empty, an example only (no rate is quoted: README "Save or borrow"). */
+export const LOAN = { example: 0.06, years: 10 };
+/** What 1 a month for n months, paid at each month's end, is worth a month before the first (n when the rate is 0). */
+const annuity = (r, n) => (n <= 0 ? 0 : r === 0 ? n : (1 - Math.pow(1 + r, -n)) / r);
+
+/**
+ * Save or borrow (map U5): for each child still to start college, the page's college cost (each school year's bill x the
+ * share), paid two ways. Information to compare, not advice.
+ *   Save: the monthly that covers it by the first bill (the page's own neededMonthly), from now: saveTotal = it x months left.
+ *   Borrow: what goes in now keeps going in (the goal's monthly), and what the 529 cannot pay at each fall bill is borrowed:
+ *     pot_0 = fv(R / 12, months left, monthly, set aside); pot_i = (pot_(i-1) - paid_(i-1)) x (1 + R) for each later school
+ *     year (as atStart discounts it); paid_i = min(pot_i, bill_i); borrowed_i = bill_i - paid_i
+ *     owed = sum of borrowed_i x (1 + L / 12)^(12 x (years - i)) (interest from each fall bill to the August after the last
+ *     school year, when payments start); payment = pmt(L / 12, 120, owed)
+ *     borrowTotal = monthly x months left + payment x 120
+ *   diff = borrowTotal - saveTotal; case "covered" (nothing to borrow), "same" (within 1% of the larger), "more" or "less".
+ *   Those totals add dollars as they are paid, and borrowing pays later (critic q4 M1: at a loan rate equal to the plan's
+ *   return, borrowing always "costs more" in all, though both ways are worth the same). So each is also valued today,
+ *   every payment discounted at the plan's return, month by month (r = R / 12), to now:
+ *     pvSave = saveMonthly x a(r, months left)
+ *     pvBorrow = putMonthly x a(r, months left) + payment x a(r, 120) / (1 + r)^(months left + 12 x years)
+ *     where a(r, n) = (1 - (1 + r)^-n) / r (n when r = 0): payments at the end of each month, the loan's first a month
+ *     after the August after the last school year; pvDiff = pvBorrow - pvSave
+ *   valued: null when covered or when R <= 0 (nothing earned meanwhile: the totals already say it), else "same" (within 1%
+ *   of the larger), "more" or "less".
+ * R = the plan's return (the page's returnRate); L = the loan rate typed (`whatIfs.college.loanRate`), else LOAN.example.
+ * -> null (no child still to start) | { loanRate, example, termYears, returnRate, children: [{ id, name, startYear, years,
+ *   monthsLeft, saved, saveMonthly, saveTotal, putMonthly, putTotal, borrowed, owed, payment, borrowTotal, diff, case,
+ *   pvSave, pvBorrow, pvDiff, valued }] }
+ */
+export function saveOrBorrow(plan, { today = null, d = null, loanRate } = {}) {
+  const dd = d ?? compute(plan, { today });
+  const kids = toStart(dd);
+  if (!kids.length) return null;
+  const t = typedOf(loanRate !== undefined ? loanRate : plan.whatIfs?.college?.loanRate);
+  const L = t === null ? LOAN.example : Math.max(0, t);
+  const R = dd.returnRate, r = R / 12, l = L / 12, n = LOAN.years * 12;
+  const children = kids.map((c) => {
+    const saveMonthly = Math.max(0, c.neededMonthly ?? 0);
+    const saveTotal = saveMonthly * c.monthsLeft;
+    const putMonthly = Math.max(0, Number(c.monthly) || 0);
+    let pot = fv(r, c.monthsLeft, putMonthly, c.saved), borrowed = 0, owed = 0;
+    c.costs.forEach((x, i) => {
+      if (i) pot *= 1 + R;
+      const bill = x.cost * c.share, paid = Math.max(0, Math.min(pot, bill));
+      pot -= paid; borrowed += bill - paid; owed += (bill - paid) * Math.pow(1 + l, 12 * (c.years - i));
+    });
+    const payment = owed > 0.005 ? pmt(l, n, owed) : 0;
+    const putTotal = putMonthly * c.monthsLeft, borrowTotal = putTotal + payment * n, diff = borrowTotal - saveTotal;
+    const kase = borrowed < 0.5 ? "covered" : Math.abs(diff) < 0.01 * Math.max(saveTotal, borrowTotal) ? "same" : diff > 0 ? "more" : "less";
+    // valued today, at the plan's own return (what money set aside would earn meanwhile)
+    const pvSave = annuity(r, c.monthsLeft) * saveMonthly;
+    const pvBorrow = annuity(r, c.monthsLeft) * putMonthly + annuity(r, n) * payment * Math.pow(1 + r, -(c.monthsLeft + 12 * c.years));
+    const pvDiff = pvBorrow - pvSave;
+    const valued = kase === "covered" || !(R > 0) ? null : Math.abs(pvDiff) < 0.01 * Math.max(pvSave, pvBorrow) ? "same" : pvDiff > 0 ? "more" : "less";
+    return { id: c.id, name: c.name, startYear: c.startYear, years: c.years, monthsLeft: c.monthsLeft, saved: c.saved, saveMonthly, saveTotal, putMonthly, putTotal, borrowed, owed, payment, borrowTotal, diff, case: kase, pvSave, pvBorrow, pvDiff, valued };
+  });
+  return { loanRate: L, example: t === null, termYears: LOAN.years, returnRate: R, children };
 }
