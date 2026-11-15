@@ -112,7 +112,7 @@ test("with the usual way of drawing, every figure is the one the code gave befor
   assert.ok(ran >= 25, `${ran} plans run`);
 });
 
-test("the usual way asked for by name, an unknown way, or a way kept in the plan: the same bytes (compute never reads the field)", { skip: !!process.env.PRINT }, () => {
+test("the usual way asked for by name, an unknown way, a way kept in the plan, or the odds of living asked for: the same bytes (compute never reads the field)", { skip: !!process.env.PRINT }, () => {
   const was = JSON.parse(fs.readFileSync(FILE, "utf8")).plans;
   for (const { name, plan } of ALL) {
     const kept = (way) => { const q = structuredClone(plan); q.assumptions = { ...(q.assumptions ?? {}), chanceDraw: way }; return q; };
@@ -121,6 +121,13 @@ test("the usual way asked for by name, an unknown way, or a way kept in the plan
     for (const [label, q, extra] of cases) {
       const d = chanceFigures("", q, extra);   // the careful figure once, below (thousands of runs)
       for (const k of ["page", "ends"]) assert.equal(digest(d[k]), was[name][k], `${name}, ${label}: ${k}`);
+    }
+    // money and the odds of living adds its key and moves nothing else (the page asks for it with its one run)
+    const withLiving = chanceFigures("", plan, { living: true });
+    for (const k of ["page", "ends"]) {
+      const v = withLiving[k];
+      if (v?.ready) { assert.ok("living" in v, `${name}: living asked for`); delete v.living; }
+      assert.equal(digest(v), was[name][k], `${name}, living: ${k}`);
     }
     // every figure, with a way kept in the plan: this page as the other pages ask for it, and every other page
     const d = figures(name, kept("history"));

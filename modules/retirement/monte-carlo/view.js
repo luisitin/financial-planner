@@ -4,14 +4,15 @@
 // Simple first (opt C14, 2026-11-13): the answer and one sentence; the rest in quiet rows (core/ui/more.js), one of them
 // "Set my own numbers": how careful the spending that lasts is, and my own lines for strong and fair (gap #17); another
 // "How the pretend futures end" (gap next-60 #36), with "Save all 2,000 pretend futures as a spreadsheet" at the foot of How this
-// is done (its status says "with a spreadsheet"). Gap next-60 #35 adds no row (the first view may not grow): "How the pretend
-// years are drawn" sits in Set my own numbers (try a way, keep it with Undo).
+// is done (its status says "with a spreadsheet"). Gap next-60 #35 and #37 add no row (the first view may not grow): "How the
+// pretend years are drawn" sits in Set my own numbers (try a way, keep it with Undo), "Money and the odds of living" in How the
+// pretend futures end.
 import { needButtons } from "../needs.js";
 import { rememberChance, chanceKey, whenCareful, monthlyOf, slot, busyWords, carefulChanceOf, badRunNote, inWords, linesOf, verdictOf, perHundred, CAREFUL_CHANCE, CAREFUL_CHOICES, GOOD_CHANCE, OK_CHANCE } from "../careful.js";
 import { buildInputs, healthAdded } from "../projection/compute.js";
 import { bandChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
-import { needsWords } from "../../../core/words.js";
+import { needsWords, nameIn, namesIn, nameOf, verbFor } from "../../../core/words.js";
 import { parts, choice } from "../../../core/ui/more.js";
 import { runsCsv, DRAWS, drawOf, HISTORY } from "./compute.js";
 
@@ -74,8 +75,9 @@ export function render(root, ctx) {
   // numbers" is opened (whenCareful, at the plan's own careful chance)
   const sentFor = chanceKey(ctx);   // the plan this run is for (Compare reads the figure by it)
   // endings: true adds how the runs end (the part below) to the same run; every other figure is the same (gap next-60 #36)
-  // draw asks for the way shown when it is not the usual one (gap next-60 #35)
-  ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false, endings: true, ...(way !== "usual" ? { draw: way } : {}) }).then((d) => {
+  // living: true adds money and the odds of living (gap next-60 #37); draw asks for the way shown when it is not the usual one
+  // (gap next-60 #35)
+  ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false, endings: true, living: true, ...(way !== "usual" ? { draw: way } : {}) }).then((d) => {
     answer.replaceChildren();
     if (!d || !d.ready) {
       // the same words as every page that cannot run yet (core/words.js needsWords; wording follow-up l001), never "...: see Will the money last?."
@@ -182,7 +184,74 @@ function endingsPart(ctx, d, money) {
     e.lasted > 0 ? ui.h("h3", {}, "Lasted, by what is left at the end") : null,
     e.lasted > 0 ? ui.h("ul", { class: "records" }, e.left.map((b) => rowOf(cap(bandWords(b, money)), b.n, "var(--ok)"))) : null,
     ui.h("p", { class: "muted small" }, `Each bar is out of all ${count(e.paths)} pretend futures. What is left is in today's dollars; an age is ${whose} age in the first year the money falls short.`),
+    ...livingBlock(ctx, d.living, e.paths),
   ] };
+}
+
+// ---------------------------------------------------------------- money and the odds of living (gap next-60 #37)
+/** The heading of the block at the foot of How the pretend futures end. */
+export const LIVING_TITLE = "Money and the odds of living";
+/** The three parts of each bar: alive with money left (green), alive with the money gone (red), no longer alive (grey). */
+const LIVING_TONES = ["var(--ok)", "var(--bad)", "var(--line-2)"];
+/**
+ * livingFor(L) -> { key, sentence }: the one sentence that reads the picture, written out for each case (R5), for one adult
+ * (whose life counts is theirs) or a couple (at least one of the two alive, on the first adult's ages): lasted (no pretend future
+ * ran out by the last age shown), gone (every one had run out by the first), few (at no age shown does alive with the money gone
+ * reach 1 in 100), some (the age with the most alive with the money gone, the earliest on a tie); each "...Both" for a couple,
+ * where the third count is "both have died" (q1 fix P5: "neither is alive" read blunt). `L` is compute's living (livingOdds).
+ */
+export function livingFor(L) {
+  const both = L.whose === "either", A = L.clock;
+  const who = both ? `at least one of ${namesIn(L.names)}` : nameIn(A);
+  const is = both ? "is" : verbFor(A, "is", "are");
+  const rows = L.ages, last = rows[rows.length - 1].age;
+  if (rows.every((r) => r.funded >= 1)) return { key: both ? "lastedBoth" : "lasted", sentence: `The money lasted to ${last} in every pretend future, so at these ages the only question is whether ${who} ${is} alive.` };
+  if (rows.every((r) => r.funded <= 0)) {
+    const r = rows[0], [, b, d] = r.per100;
+    return both ? { key: "goneBoth", sentence: `The money ran out by ${r.age} in every pretend future: when ${nameIn(A)} would be ${r.age}, ${who} is alive with the money gone in ${b} of 100 pretend futures, and both have died in ${d}.` }
+      : { key: "gone", sentence: `The money ran out by ${r.age} in every pretend future: at ${r.age}, ${who} ${is} alive with the money gone in ${b} of 100 pretend futures and no longer alive in ${d}.` };
+  }
+  let top = 0;
+  rows.forEach((r, i) => { if (r.broke > rows[top].broke) top = i; });
+  const r = rows[top], [a, b, d] = r.per100;
+  if (b === 0) return { key: both ? "fewBoth" : "few", sentence: `At these ages, fewer than 1 in 100 pretend futures have ${who} alive with the money gone.` };
+  return both ? { key: "someBoth", sentence: `When ${nameIn(A)} would be ${r.age}, ${who} is alive with money left in ${a} of 100 pretend futures, alive with the money gone in ${b}, and both have died in ${d}.` }
+    : { key: "some", sentence: `At ${r.age}, ${who} ${is} alive with money left in ${a} of 100 pretend futures, alive with the money gone in ${b}, and no longer alive in ${d}.` };
+}
+/** livingRowWords(L, row) -> the three counts under an age's bar, out of 100, in the bar's order. */
+export const livingRowWords = (L, r) => [`${r.per100[0]} alive, money left`, `${r.per100[1]} alive, money gone`, L.whose === "either" ? `${r.per100[2]} both have died` : `${r.per100[2]} no longer alive`];
+/** livingScale(L, paths) -> the small line right under the heading (q1 fix P4): these rows count out of 100, the bars above out of
+ * all the pretend futures, said where the eye moves from one to the other, not at the foot. */
+export function livingScale(L, paths) {
+  const above = Number.isFinite(paths) && paths > 0 ? ` (the bars above count all ${count(paths)})` : "";
+  return L.whose === "either" ? `Out of 100 pretend futures at each of ${nameOf(L.clock)} ages${above}.` : `Out of 100 pretend futures at each age${above}.`;
+}
+/** livingNote(L) -> the small line under the bars: whose life counts, where the odds of living come from (q1 fix P5: the page by
+ * its name, no "life tables"). */
+export function livingNote(L) {
+  const from = "The odds of living come from the How long to plan for page, with the sex and health chosen there.";
+  return L.whose === "either" ? `Alive means at least one of ${namesIn(L.names)} is. ${from}` : from;
+}
+/** livingKey(L) -> the three words the bars' colours stand for, said once over the rows. */
+export const livingKey = (L) => ["alive, money left", "alive, money gone", L.whose === "either" ? "both have died" : "no longer alive"];
+/** The block: its heading, the line saying the rows are out of 100 (livingScale), the sentence, what the three colours stand for,
+ * one row per age (the age and its three counts out of 100 in the colours' order, then a bar in three parts as wide as their
+ * shares), the note. A screen reader hears each row's counts in words (livingRowWords); the coloured figures and the bar are
+ * hidden from it. Nothing when there is no age to show (no birth date, or the plan ends first). `paths`: the pretend futures the
+ * bars above count. */
+function livingBlock(ctx, L, paths) {
+  const { ui } = ctx;
+  if (!L || !L.ages?.length) return [];
+  const dot = (k) => ui.h("span", { "aria-hidden": "true", style: { display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: LIVING_TONES[k], marginRight: "6px", verticalAlign: "-1px" } });
+  const unseen = (text) => ui.h("span", { style: { position: "absolute", width: "1px", height: "1px", overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap" } }, text);
+  const figure = (n, k) => ui.h("span", { style: { color: k === 2 ? "var(--muted)" : LIVING_TONES[k] } }, String(n));
+  const row = (r) => ui.h("li", {},
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `At ${r.age} (${r.year})`),
+      ui.h("span", { class: "rec-value" }, ui.h("span", { "aria-hidden": "true" }, figure(r.per100[0], 0), " · ", figure(r.per100[1], 1), " · ", figure(r.per100[2], 2)), unseen(livingRowWords(L, r).join(", ")))),
+    ui.h("div", { class: "progress", "aria-hidden": "true", style: { margin: "6px 0 0", display: "flex" } }, [r.rich, r.broke, r.dead].map((x, k) => ui.h("span", { style: { width: `${Math.round(1000 * x) / 10}%`, background: LIVING_TONES[k], borderRadius: "0", flex: "none" } }))));
+  return [ui.h("h3", {}, LIVING_TITLE), ui.h("p", { class: "muted small" }, livingScale(L, paths)), ui.h("p", {}, livingFor(L).sentence),
+    ui.h("div", { class: "muted small", "aria-hidden": "true", style: { display: "flex", flexWrap: "wrap", gap: "2px 14px" } }, livingKey(L).map((w, k) => ui.h("span", {}, dot(k), w))),
+    ui.h("ul", { class: "records" }, L.ages.map(row)), ui.h("p", { class: "muted small" }, livingNote(L))];
 }
 
 // ---------------------------------------------------------------- every run as a file (gap next-60 #36), in How this is done

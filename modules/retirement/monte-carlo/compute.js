@@ -7,6 +7,8 @@ import { buildInputs } from "../projection/compute.js";
 import { BAD_RUN_NOTE } from "../odds.js";
 import { toCsv } from "../../../core/csv.js";
 import { RETURNS } from "../historical/data/returns.js";
+// the plan's own odds of living, read only (gap next-60 #37): How long to plan for's chances, by its own function
+import { compute as longevityOf, survival } from "../longevity/compute.js";
 
 /** Yearly return sequences: lognormal draws with the given arithmetic mean and standard deviation, stocks and bonds drawn together with a mild correlation. */
 export function drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, corr = 0.1, seed = 1 }) {
@@ -262,6 +264,50 @@ export function drawFor(way, n, years, I, seed = 1) {
   return drawSequences(n, years, o);
 }
 
+// ---------------------------------------------------------------- money and the odds of living (gap next-60 #37)
+/** The ages the page shows: the first three of these above today's age and within the plan. */
+export const LIVING_AGES = Object.freeze([85, 90, 95, 100]);
+/** per100(shares) -> whole numbers out of 100 that add to 100 (shares that add to 1): each share x 100 rounded down, then the
+ * units left over go to the largest remainders, the earlier on a tie (Hamilton's method). */
+export function per100(shares) {
+  const raw = shares.map((x) => Math.max(0, Number(x) || 0) * 100);
+  const out = raw.map((x) => Math.floor(x));
+  let left = 100 - out.reduce((t, x) => t + x, 0);
+  const order = raw.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (let k = 0; left > 0 && order.length; k = (k + 1) % order.length, left--) out[order[k][1]]++;
+  return out;
+}
+/**
+ * livingOdds(plan, byAge, { today, inputs }) -> { whose: "one" | "either", names, clock, ages: [{ age, year, alive, funded,
+ * rich, broke, dead, per100 }] } | null: at the first three of LIVING_AGES above the first adult's age today and within the
+ * plan, the share of pretend futures alive with money left (rich), alive with the money gone (broke) and no longer alive
+ * (dead), which add to 1. alive: How long to plan for's own chance (retirement/longevity `survival`, with the sex and health
+ * chosen there), for one adult that adult's, for two or more the chance that at least one of the first adult and the next is
+ * alive, 1 - (1 - S_a)(1 - S_b) (that page's rule), years ahead on the first adult's clock (the projection's first person, whose
+ * age the page's figures use). funded: byAge's share still funded in the year that adult turns the age. rich = alive x funded,
+ * broke = alive x (1 - funded), dead = 1 - alive: living long and markets doing well taken as unrelated. null without today's
+ * date or an adult with a birth date.
+ */
+export function livingOdds(plan, byAge, { today, inputs } = {}) {
+  if (!today || !inputs?.people?.length || !byAge?.length) return null;
+  const known = longevityOf(plan, { today }).people.filter((p) => p.age !== null);
+  const first = known.find((p) => p.id === inputs.people[0].id);
+  if (!first) return null;
+  const pair = [first, ...known.filter((p) => p !== first)].slice(0, 2);
+  const endAge = byAge[byAge.length - 1].age;
+  const ages = LIVING_AGES.filter((m) => m > first.age && m <= endAge && byAge.some((r) => r.age === m)).slice(0, 3);
+  return {
+    whose: pair.length >= 2 ? "either" : "one", names: pair.map((p) => p.name), clock: first.name,
+    ages: ages.map((m) => {
+      const s = pair.map((p) => survival(p.age, p.age + (m - first.age), { sex: p.sex, health: p.health }));
+      const alive = s.length >= 2 ? 1 - (1 - s[0]) * (1 - s[1]) : s[0];
+      const row = byAge.find((r) => r.age === m);
+      const rich = alive * row.funded, broke = alive * (1 - row.funded), dead = 1 - alive;
+      return { age: m, year: row.year, alive, funded: row.funded, rich, broke, dead, per100: per100([rich, broke, dead]) };
+    }),
+  };
+}
+
 // ---------------------------------------------------------------- how the runs end, and every run as a file (gap next-60 #36)
 /** The ages that split the runs that ran out: before 80, 80 to 89, 90 or later. */
 export const FAIL_EDGES = Object.freeze([80, 90]);
@@ -330,7 +376,7 @@ export function runsCsv(d) {
 }
 
 /**
- * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance, endings, runs, draw }) -> {
+ * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance, endings, runs, draw, living }) -> {
  *   ready, paths, successRate, medianEndReal, failAges: { p10, p50 } (ages money ran out among failing paths),
  *   bands: [{ year, age, p10, p25, p50, p75, p90 }] real totals per year, byAge: [{ age, alive: share of paths still funded }],
  *   verdict: "strong" | "fair" | "weak" (verdictOf with the plan's lines, linesOf), inputsSummary,
@@ -345,6 +391,7 @@ export function runsCsv(d) {
  *   Without either, the result is what it always was, byte for byte (tests/n1-invariance.test.mjs).
  *   with draw: "history" or "prices" (gap next-60 #35), the pretend years are drawn that way (drawFor) and the result also holds
  *            draw: the way; any other draw is the usual way, byte for byte (tests/chance-draws-invariance.test.mjs);
+ *   with living: true (gap next-60 #37), also living: livingOdds(...) (money and the odds of living at 85, 90, 95), or null.
  * }
  */
 export function compute(plan, params = {}) {
@@ -396,5 +443,7 @@ export function compute(plan, params = {}) {
     out.endings = { paths, ranOut: failAges.length, lasted: successes, startAge, endAge, out: failGroups(failAges, startAge, endAge), step: left.step, left: left.bands, medianLeft: left.median, file: { rows: paths, years: withYears ? years : 0, bytes } };
   }
   if (wantRuns) { out.runs = runs; out.runsYears = withYears ? yearList : []; }
+  // money and the odds of living, only when asked (the page's "How the pretend futures end")
+  if (params.living === true) out.living = livingOdds(plan, out.byAge, { today: params.today, inputs: b.inputs });
   return out;
 }

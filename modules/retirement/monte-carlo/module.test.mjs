@@ -758,14 +758,15 @@ test("#36 the page: one more quiet row; opened, the sentence and a bar per group
   const g = view.groupWords(d.endings.out);
   const bands = d.endings.left.map((b) => view.bandWords(b, money));
   const cap = (t) => t.charAt(0).toUpperCase() + t.slice(1);
-  assert.equal(body, [view.endingsFor(d.endings, money).sentence, "Ran out, by age", ...d.endings.out.flatMap((x, i) => [cap(g[i].label), String(x.n)]),
+  // (then money and the odds of living, gap next-60 #37: its own test below)
+  assert.ok(body.startsWith([view.endingsFor(d.endings, money).sentence, "Ran out, by age", ...d.endings.out.flatMap((x, i) => [cap(g[i].label), String(x.n)]),
     "Lasted, by what is left at the end", ...d.endings.left.flatMap((b, i) => [cap(bands[i]), String(b.n)]),
-    "Each bar is out of all 200 pretend futures. What is left is in today's dollars; an age is Ana's age in the first year the money falls short."].join(" "));
+    "Each bar is out of all 200 pretend futures. What is left is in today's dollars; an age is Ana's age in the first year the money falls short. Money and the odds of living "].join(" ")), body);
   // a plan whose first person is "Me" reads "your age"
   const me = familyPlan(T17); me.household.people[0].name = "Me";
-  assert.match(seen(partOf((await page(me)).root, "endings").querySelector(".fold-body")), /an age is your age in the first year the money falls short\.$/);
-  // each bar is as wide as its share of all the runs, red for ran out and green for lasted
-  const bars = everything(p).filter((e) => e.className === "progress").map((e) => e.childNodes[0].style);
+  assert.match(seen(partOf((await page(me)).root, "endings").querySelector(".fold-body")), /an age is your age in the first year the money falls short\. Money and the odds of living /);
+  // each bar is as wide as its share of all the runs, red for ran out and green for lasted (the odds of living's bars after them)
+  const bars = everything(p).filter((e) => e.className === "progress").slice(0, d.endings.out.length + d.endings.left.length).map((e) => e.childNodes[0].style);
   assert.deepEqual(bars.map((b) => b.width), [...d.endings.out, ...d.endings.left].map((x) => `${Math.round((1000 * x.n) / 200) / 10}%`));
   assert.deepEqual(bars.map((b) => b.background), [...d.endings.out.map(() => "var(--bad)"), ...d.endings.left.map(() => "var(--ok)")]);
   // the file, at the foot of How this is done: outlined, made when tapped, the green line says what came down
@@ -1155,4 +1156,157 @@ test("q1 fix P1, P6: a way tried: the hero drops the advice, says a different an
       await s.settle();
     }
   }
+});
+
+// ---------------------------------------------------------------- money and the odds of living (gap next-60 #37)
+const LG = await import("../longevity/compute.js");
+
+test("#37 per100: whole numbers of 100 that add to 100, the units left over to the largest remainders (hand cases)", () => {
+  // 55.5, 3, 41.5: 55 + 3 + 41 = 99, one left; remainders 0.5, 0, 0.5: the earlier of the tie
+  assert.deepEqual(MC.per100([0.555, 0.03, 0.415]), [56, 3, 41]);
+  assert.deepEqual(MC.per100([1 / 3, 1 / 3, 1 / 3]), [34, 33, 33]);
+  // 0.4, 0.6, 99: the 0.6 rounds up
+  assert.deepEqual(MC.per100([0.004, 0.006, 0.99]), [0, 1, 99]);
+  assert.deepEqual(MC.per100([1, 0, 0]), [100, 0, 0]);
+  assert.deepEqual(MC.per100([0.5755697, 0.0296561, 0.3947742]), [58, 3, 39]);
+});
+
+test("#37 livingOdds: the three shares add to 1 at every age; alive is How long to plan for's own chance, money is this page's runs", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { widowPlan } = await import("../../../qa/fixtures/widow-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  let rows = 0;
+  for (const [name, p0, whose] of [["family", familyPlan(T35), "either"], ["widow", widowPlan(T35), "one"], ["retiredCouple", retiredCouplePlan(T35), "either"], ["renterDebt", renterDebtPlan(T35), "one"]]) {
+    const p = migrate(p0);
+    const d = compute(p, { today: T35, paths: 300, careful: false, living: true });
+    const L = d.living;
+    assert.equal(L.whose, whose, name);
+    const lg = LG.compute(p, { today: T35 });
+    const first = lg.people.find((x) => x.name === L.clock);
+    // the ages: the first three of 85, 90, 95, 100 above today's age and within the plan
+    assert.deepEqual(L.ages.map((r) => r.age), MC.LIVING_AGES.filter((m) => m > first.age && m <= d.bands.at(-1).age).slice(0, 3), name);
+    assert.ok(L.ages.length >= 2, name);
+    for (const r of L.ages) {
+      rows++;
+      assert.ok(Math.abs(r.rich + r.broke + r.dead - 1) < 1e-12, `${name} ${r.age}: the three add to 1`);
+      assert.equal(r.per100.reduce((t, x) => t + x, 0), 100, `${name} ${r.age}: and to 100 of 100`);
+      assert.deepEqual(r.per100, MC.per100([r.rich, r.broke, r.dead]));
+      // money: this page's own share still funded in the year the first adult turns that age
+      const b = d.byAge.find((x) => x.age === r.age);
+      assert.deepEqual([r.funded, r.year], [b.funded, b.year], name);
+      // alive: How long to plan for's own figure at that age (one adult: theirs; a couple: at least one of the two)
+      const want = whose === "either" ? lg.either.ages.find((a) => a.age === r.age).p : first.ages.find((a) => a.age === r.age).p;
+      assert.ok(Math.abs(r.alive - want) < 1e-12, `${name} ${r.age}: alive ${r.alive} against ${want}`);
+      assert.ok(Math.abs(r.rich - r.alive * r.funded) < 1e-15 && Math.abs(r.broke - r.alive * (1 - r.funded)) < 1e-15 && Math.abs(r.dead - (1 - r.alive)) < 1e-15);
+    }
+  }
+  assert.ok(rows >= 10);
+  // the family (Ana and Bo, at least one alive, Ana's ages): at 90 (2080), 31 alive with money left, 4 with the money gone, 65
+  // neither alive (2,000 pretend futures)
+  const fam = compute(migrate(familyPlan(T35)), { today: T35, paths: 2000, careful: false, living: true }).living;
+  assert.deepEqual(fam.ages.map((r) => [r.age, r.year, r.per100]), [[85, 2075, [58, 3, 39]], [90, 2080, [31, 4, 65]], [95, 2085, [10, 3, 87]]]);
+  // the sex and health chosen on How long to plan for move it
+  const q = migrate(familyPlan(T35)); q.retirement = { ...(q.retirement ?? {}), longevity: { "p-ana": { sex: "f", health: "better" }, "p-bo": { sex: "m", health: "better" } } };
+  const better = compute(q, { today: T35, paths: 300, careful: false, living: true }).living;
+  assert.ok(better.ages[1].alive > compute(migrate(familyPlan(T35)), { today: T35, paths: 300, careful: false, living: true }).living.ages[1].alive);
+  // not asked: no key; no date: null
+  assert.equal("living" in compute(migrate(familyPlan(T35)), { today: T35, paths: 100, careful: false }), false);
+  assert.equal(MC.livingOdds(migrate(familyPlan(T35)), [{ age: 90, year: 2080, funded: 1 }], { today: null, inputs: { people: [{ id: "p-ana" }] } }), null);
+});
+
+test("#37 livingOdds by hand: an adult aged 87 sees 90, 95 and 100; a plan that ends at 92 shows 85 and 90 only", () => {
+  const plan = (birthDate) => ({ household: { people: [{ id: "x", name: "Lou", role: "self", birthDate }] }, retirement: {} });
+  const byAge = (from, to, f) => Array.from({ length: to - from + 1 }, (_, i) => ({ age: from + i, year: 2026 + i, funded: f(from + i) }));
+  const old = MC.livingOdds(plan("1939-06-01"), byAge(87, 100, (a) => (a < 95 ? 1 : 0.5)), { today: T35, inputs: { people: [{ id: "x" }] } });
+  assert.deepEqual(old.ages.map((r) => r.age), [90, 95, 100]);
+  assert.equal(old.whose, "one");
+  const s90 = LG.survival(87, 90, { sex: "", health: "average" });
+  assert.ok(Math.abs(old.ages[0].alive - s90) < 1e-15);
+  assert.deepEqual([old.ages[0].rich, old.ages[0].broke], [s90, 0]);
+  const s95 = LG.survival(87, 95, { sex: "", health: "average" });
+  assert.ok(Math.abs(old.ages[1].broke - s95 * 0.5) < 1e-15);
+  const short = MC.livingOdds(plan("1966-06-01"), byAge(60, 92, () => 1), { today: T35, inputs: { people: [{ id: "x" }] } });
+  assert.deepEqual(short.ages.map((r) => r.age), [85, 90]);
+  // older than every age shown: no rows
+  assert.deepEqual(MC.livingOdds(plan("1925-01-01"), byAge(101, 105, () => 1), { today: T35, inputs: { people: [{ id: "x" }] } }).ages, []);
+});
+
+test("#37 the sentence that reads the picture: one written out per case, for one adult and for a couple, with you and with names", () => {
+  const row = (age, funded, alive) => { const rich = alive * funded, broke = alive * (1 - funded), dead = 1 - alive; return { age, year: 2000 + age, alive, funded, rich, broke, dead, per100: MC.per100([rich, broke, dead]) }; };
+  const one = (clock, ages) => ({ whose: "one", names: [clock], clock, ages });
+  const two = (clock, other, ages) => ({ whose: "either", names: [clock, other], clock, ages });
+  const lasted = [row(85, 1, 0.55), row(90, 1, 0.3), row(95, 1, 0.12)];
+  const gone = [row(85, 0, 0.41), row(90, 0, 0.23), row(95, 0, 0.09)];
+  const few = [row(85, 0.999, 0.55), row(90, 0.995, 0.3), row(95, 0.99, 0.12)];
+  const some = [row(85, 0.951, 0.605), row(90, 0.8825, 0.3526), row(95, 0.802, 0.1317)];
+  const cases = [
+    [one("Ruth", lasted), "lasted", "The money lasted to 95 in every pretend future, so at these ages the only question is whether Ruth is alive."],
+    [one("Me", lasted), "lasted", "The money lasted to 95 in every pretend future, so at these ages the only question is whether you are alive."],
+    [two("Ruth", "Sam", lasted), "lastedBoth", "The money lasted to 95 in every pretend future, so at these ages the only question is whether at least one of Ruth and Sam is alive."],
+    [one("Riley", gone), "gone", "The money ran out by 85 in every pretend future: at 85, Riley is alive with the money gone in 41 of 100 pretend futures and no longer alive in 59."],
+    [one("Me", gone), "gone", "The money ran out by 85 in every pretend future: at 85, you are alive with the money gone in 41 of 100 pretend futures and no longer alive in 59."],
+    [two("Ana", "Bo", gone), "goneBoth", "The money ran out by 85 in every pretend future: when Ana would be 85, at least one of Ana and Bo is alive with the money gone in 41 of 100 pretend futures, and both have died in 59."],
+    [one("Sam", few), "few", "At these ages, fewer than 1 in 100 pretend futures have Sam alive with the money gone."],
+    [two("Me", "Bo", few), "fewBoth", "At these ages, fewer than 1 in 100 pretend futures have at least one of you and Bo alive with the money gone."],
+    [one("Ana", some), "some", "At 90, Ana is alive with money left in 31 of 100 pretend futures, alive with the money gone in 4, and no longer alive in 65."],
+    [one("Me", some), "some", "At 90, you are alive with money left in 31 of 100 pretend futures, alive with the money gone in 4, and no longer alive in 65."],
+    [two("Ana", "Bo", some), "someBoth", "When Ana would be 90, at least one of Ana and Bo is alive with money left in 31 of 100 pretend futures, alive with the money gone in 4, and both have died in 65."],
+    [two("Me", "Bo", some), "someBoth", "When you would be 90, at least one of you and Bo is alive with money left in 31 of 100 pretend futures, alive with the money gone in 4, and both have died in 65."],
+  ];
+  for (const [L, key, sentence] of cases) assert.deepEqual(view.livingFor(L), { key, sentence }, `${key} ${L.clock}`);
+  // q1 fix P5: a couple's third count is "both have died", never "neither is alive"
+  for (const [L] of cases) assert.ok(!/neither/.test(view.livingFor(L).sentence + view.livingKey(L).join(" ") + view.livingNote(L)), view.livingFor(L).sentence);
+  // the counts under a bar, the line under the heading (q1 fix P4: out of 100, the bars above out of all), and the note: whose
+  // life counts and where the odds come from, by the page's name (q1 fix P5: no "How long to plan for's", no "life tables")
+  assert.deepEqual(view.livingRowWords(one("Ana", some), some[1]), ["31 alive, money left", "4 alive, money gone", "65 no longer alive"]);
+  assert.deepEqual(view.livingRowWords(two("Ana", "Bo", some), some[1]), ["31 alive, money left", "4 alive, money gone", "65 both have died"]);
+  assert.equal(view.livingScale(one("Ruth", lasted), 2000), "Out of 100 pretend futures at each age (the bars above count all 2,000).");
+  assert.equal(view.livingScale(two("Ana", "Bo", some), 10000), "Out of 100 pretend futures at each of Ana's ages (the bars above count all 10,000).");
+  assert.equal(view.livingScale(two("Me", "Bo", some), 1000), "Out of 100 pretend futures at each of your ages (the bars above count all 1,000).");
+  assert.equal(view.livingScale(one("Ruth", lasted)), "Out of 100 pretend futures at each age.");
+  assert.equal(view.livingNote(one("Ruth", lasted)), "The odds of living come from the How long to plan for page, with the sex and health chosen there.");
+  assert.equal(view.livingNote(two("Ana", "Bo", some)), "Alive means at least one of Ana and Bo is. The odds of living come from the How long to plan for page, with the sex and health chosen there.");
+  assert.equal(view.livingNote(two("Me", "Bo", some)), "Alive means at least one of you and Bo is. The odds of living come from the How long to plan for page, with the sex and health chosen there.");
+  // what the three colours stand for, said once over the rows
+  assert.deepEqual(view.livingKey(one("Ruth", lasted)), ["alive, money left", "alive, money gone", "no longer alive"]);
+  assert.deepEqual(view.livingKey(two("Ana", "Bo", some)), ["alive, money left", "alive, money gone", "both have died"]);
+  assert.equal(view.LIVING_TITLE, "Money and the odds of living");
+});
+
+test("#37 the page: in How the pretend futures end, the heading, the sentence, a bar in three parts per age with its counts, the note", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const s = await page(familyPlan(T35));
+  assert.equal(s.runs[0].params.living, true, "asked for with the page's one run");
+  const d = compute(migrate(familyPlan(T35)), { today: T17, paths: 200, careful: false, endings: true, living: true });
+  const L = d.living;
+  const p = partOf(s.root, "endings");
+  assert.equal(opened(p), false, "one tap away: the first view is as it was");
+  assert.equal(titleOf(p), "How the pretend futures end");
+  const body = seen(p.querySelector(".fold-body"));
+  // each row: the age, its three counts in the colours' order (a screen reader hears them in words), then the bar; out of 100 is
+  // said right under the heading, before any count (q1 fix P4), with the bars above counting all of the pretend futures (200 here)
+  assert.equal(view.livingScale(L, d.endings.paths), "Out of 100 pretend futures at each of Ana's ages (the bars above count all 200).");
+  const tail = ["Money and the odds of living", view.livingScale(L, d.endings.paths), view.livingFor(L).sentence, ...view.livingKey(L),
+    ...L.ages.flatMap((r) => [`At ${r.age} (${r.year})`, r.per100.join(" · "), view.livingRowWords(L, r).join(", ")]), view.livingNote(L)].join(" ");
+  assert.ok(body.endsWith(tail), body);
+  assert.equal(L.whose, "either");
+  assert.deepEqual(L.ages.map((r) => r.age), [85, 90, 95]);
+  // each age's bar: three parts as wide as their shares, green, red and grey, adding to the whole bar
+  const bars = everything(p).filter((e) => e.className === "progress").slice(-L.ages.length);
+  bars.forEach((b, i) => {
+    const r = L.ages[i];
+    assert.equal(b.style.display, "flex");
+    assert.deepEqual(b.childNodes.map((x) => x.style.width), [r.rich, r.broke, r.dead].map((x) => `${Math.round(1000 * x) / 10}%`));
+    assert.deepEqual(b.childNodes.map((x) => x.style.background), ["var(--ok)", "var(--bad)", "var(--line-2)"]);
+    assert.ok(Math.abs(b.childNodes.reduce((t, x) => t + parseFloat(x.style.width), 0) - 100) <= 0.15);
+  });
+  // a plan with nothing to show (the adult older than every age shown) has no block
+  const ninety = migrate(familyPlan(T35));
+  ninety.household.people = ninety.household.people.filter((x) => x.role !== "partner");
+  ninety.household.people[0].birthDate = "1924-01-01"; ninety.household.people[0].lifeExpectancy = 104;
+  const n = await page(ninety);
+  const nb = partOf(n.root, "endings");
+  if (nb) assert.ok(!seen(nb.querySelector(".fold-body")).includes("Money and the odds of living"));
+  assert.equal(s.saved.length, 0, "reading changes nothing in the plan");
 });

@@ -365,3 +365,80 @@ inflation in years picked from history comes from the same real year (prices and
 -26% stocks came with 12% prices); one real year at a time, with replacement (the plain reading of "years picked from history";
 blocks of years are an idea above); a confirm before Keep and Undo after it (the brief's); "Keep the usual way" removes the
 field rather than writing "usual".
+
+## Money and the odds of living, in one view (gap next-60 #37, 2026-11-15)
+**Where.** No new row (the first view may not grow: above): the block is the foot of **"How the pretend futures end"** (kind
+`more`), after the bars of how the runs end, since it is how a pretend future ends: with money, with the money gone, or with
+nobody left to need it. The brief asked for a quiet row of its own; see the first section's reason.
+
+**On screen.** The heading "Money and the odds of living", right under it a small line saying the rows count out of 100 and the
+bars above out of all of them ("Out of 100 pretend futures at each of Ana's ages (the bars above count all 2,000)."; one adult
+"... at each age ..."; q1 fix P4: it stood in the note at the foot, after the counts), one sentence, one line saying what the
+three colours stand for (a dot each: "alive, money left", "alive, money gone", "both have died" for a couple or "no longer alive"
+for one adult), one row per age, then a small note. Each row: "At 90 (2080)" with its three counts out of 100 on the right in
+the colours' order, "31 · 4 · 65" (green, red, grey; a screen reader hears "31 alive, money left, 4 alive, money gone, 65 both
+have died" instead, the figures and the bar being hidden from it), and under it a bar in three parts as wide as their shares (base.css `.progress` with
+three spans, the way the bars above are drawn). The ages: the first three of 85, 90, 95 and 100 above the first adult's age today
+and within the plan (the family and the widow: 85, 90, 95; someone aged 87 whose plan runs to 100: 90, 95, 100); none, no block.
+The rows were first built with the three counts in words under each bar; the part then opened to 1,348 px at 390 px (R15's limit
+is 1,300), so the counts went beside the age and the words into one line over the rows: 1,227 px now (1,311 at 320 px; the
+walk is in the build log).
+
+The note: one adult "The odds of living come from the How long to plan for page, with the sex and health chosen there." A
+couple: "Alive means at least one of Ana and Bo is. The odds of living come from the How long to plan for page, with the sex and
+health chosen there." ("each of your ages", "at least one of you and Bo" when the first adult is "Me".) q1 fix P5: it said "The
+odds of living are How long to plan for's (U.S. life tables, ...)", which read like a slip and used "life tables"; the tables
+are named here (Formulas), not on screen. That living long and markets doing well are taken as unrelated is said here too.
+
+**The sentence** (`livingFor`, one per case, each tested; "you are" for "Me"):
+- lasted (no pretend future had run out by the last age shown): "The money lasted to 95 in every pretend future, so at these ages
+  the only question is whether Ruth is alive." (a couple: "whether at least one of Ruth and Sam is alive.")
+- gone (every one had run out by the first age): "The money ran out by 85 in every pretend future: at 85, Riley is alive with the
+  money gone in 41 of 100 pretend futures and no longer alive in 59." (a couple: "when Ana would be 85, at least one of Ana and Bo
+  is alive with the money gone in ..., and both have died in ...")
+- few (at no age shown does alive with the money gone reach 1 in 100): "At these ages, fewer than 1 in 100 pretend futures have Sam
+  alive with the money gone."
+- some (the age with the most alive with the money gone, the earliest on a tie): the family "When Ana would be 90, at least one of
+  Ana and Bo is alive with money left in 31 of 100 pretend futures, alive with the money gone in 4, and both have died in 65."
+  One adult: "At 90, Ana is alive with money left in 31 of 100 pretend futures, alive with the money gone in 4, and no longer alive
+  in 65." (q1 fix P5: a couple's "neither is alive" became "both have died"; one adult keeps "no longer alive", which the
+  critic's own report kept: "you have died" does not read, and "Ana has died" breaks the sentence's "is alive ..." pattern.)
+
+**Formulas** (`livingOdds`, `per100`; compute's `living: true`):
+- alive(m): How long to plan for's own chance (`modules/retirement/longevity/compute.js` `survival`, read only: a Gompertz law
+  fitted to the Social Security Administration's period life tables, with the sex and health saved there, `retirement.longevity`),
+  from each adult's age today to their age when the first adult turns m (years ahead m - age today on the first adult's clock).
+  One adult: S(age, age + (m - age)). Two or more: at least one of the first adult and the next, 1 - (1 - S_a)(1 - S_b), the very
+  rule and clock that page uses for "at least one of you" (tested equal to its figures at every age shown). The first adult is
+  the projection's first person (the one whose age every figure on this page uses). A known approximation (q1 critic N1): alive
+  is read from the whole age today (birthday-aware, `ageOn`), as if the last birthday were today, while funded(m) is for the
+  calendar year in which the birth-year age is m; the part of a year already lived since the last birthday is not counted, so
+  alive is a little low: measured with `survival` (female, average health), at most 0.6 of 100 at 90 for someone 70 today, 2.3
+  of 100 for someone 80, and less for a couple. How long to plan for reads it the same way, so the two pages agree; left as it
+  is.
+- funded(m): this page's share of pretend futures still funded in the year the first adult turns m (`byAge`, the "Still funded
+  at..." figure), with the way of drawing shown.
+- rich = alive x funded; broke = alive x (1 - funded); dead = 1 - alive. They add to 1 (tested to 1e-12 at every age). Living
+  long and markets doing well are taken as unrelated (the product); the money side is the plan as it is, both incomes and the
+  spending going on whoever is alive (a couple's spending and Social Security after a death are not modelled here: Stress tests'
+  "losing a partner" does that).
+- per100 (the counts said): each share x 100 rounded down, then the units left over to the largest remainders, the earlier on a
+  tie (Hamilton's largest-remainder method), so the three add to 100 (tested).
+- The idea of showing money and life together: "Rich, Broke or Dead?" (Engaging Data's chart of a retirement's odds by age),
+  a reference only; no code or figure taken.
+
+**Family, 2,000 pretend futures** (Ana and Bo, Ana's ages; `module.test.mjs`): at 85 (2075) 58 / 3 / 39, at 90 (2080) 31 / 4 /
+65, at 95 (2085) 10 / 3 / 87. The money runs out in about 20 of 100 pretend futures, but alive with the money gone is at most 4 in 100
+at these ages.
+
+**Tests** (`module.test.mjs`, "#37 ..."): per100 by hand; on four fixture households the three shares add to 1 and the counts to
+100 at every age, alive equals How long to plan for's own figures (one adult and a couple), funded equals the page's own share, the
+ages rule; the sex and health chosen there move it; by hand for an adult of 87 (90, 95, 100) and a plan that ends at 92 (85,
+90); every sentence case for one adult and a couple, with "you" and with names; the page on the fake DOM (asked for with the
+page's one run, the part shut on the first view, the heading, sentence, rows and note, each bar's three widths and colours adding
+to the whole bar). `tests/chance-draws-invariance.test.mjs`: asking for it adds its key and moves nothing else.
+
+**Builder chose:** the block in How the pretend futures end, not a new row; 85, 90, 95 (100 for someone already past 85) as the
+brief's "a few ages"; the bar's third part grey (no longer alive is neither good nor bad news for the money); a couple counts as
+alive while either is, on the first adult's ages, as How long to plan for does; the sentence names the age where running out
+while alive is most likely, so the person reads the worst of the three first.
