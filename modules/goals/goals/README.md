@@ -93,8 +93,12 @@ Tests: module.test.mjs "round 8 review".
 - The link to a goal's costing page ("What it costs: Vehicle ›") is the row's last line, under the progress bar with 8 px above
   it: a tap in the middle of the row opens the goal (F4).
 - A new goal shows name, amount and date, then "More details (optional)" folded above "Add goal" (icon, importance, set aside,
-  account, monthly, growth, inflation); open when editing; a refused box inside opens it. Growth's help says 0 to 50 (F5). The
-  kit-wide option for folding optional boxes is wave 1's to decide; this is done in the page after `ui.form` builds the form.
+  account, monthly, growth, inflation); open when editing; a refused box inside opens it. Growth's help says 0 to 50 (F5).
+  Since 2026-11-15 (opt spec 6.1, its C15 row) the line is the form kit's own (`more: true` on those seven fields and
+  `moreOpen: editing ? true : undefined`), not a fold the page drew: the same markup, words and memory as every other form,
+  and "Show every box in forms" opens it. Builder's choice: "How important" lists its default first (Want, Must have, Nice
+  to have), because the kit opens the line by itself for a choice that is not its list's first, and a new goal's "Want"
+  was second.
 - The fold's summary is short enough for 320 px and the boxes inside keep the form's spacing (tester 2026-11-11).
 
 ## Our amount, or none (C5 follow-ups, 2026-11-13; hand-off rows N2, H6)

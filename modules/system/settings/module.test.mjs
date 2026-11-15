@@ -157,7 +157,7 @@ test("the forms tick's green line and Help say most, not every, while some forms
   const handForms = by(/("summary"[^\n]{0,120}"More details \(optional\)|title: "More details \(optional\)")/);
   assert.ok(handForms.length > 0, `no form draws its own "More details (optional)" any more: say "Forms on this phone now show every box" in show.js (and "every form" in Help)`);
   // what "most" stands for today (the comment in show.js names them)
-  for (const k of ["goals/goals", "overview/quick"]) assert.ok(handForms.includes(k), `${k}: ${handForms.join(", ")}`);
+  for (const k of ["overview/quick"]) assert.ok(handForms.includes(k), `${k}: ${handForms.join(", ")}`);   // (Goals' form uses the kit's since 2026-11-15)
   const { WORDS } = await import("./show.js");
   assert.match(WORDS.boxesOn, /^Done\. Most forms /);
   void path;

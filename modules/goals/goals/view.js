@@ -4,34 +4,24 @@ import { compute, PRIORITIES, GOAL_ICONS, plannerFor, plannerFigure, plannerDiff
 import { goalsBehind } from "../../overview/alerts/compute.js";
 import { isGuess } from "../../../core/estimate/index.js";
 
+// A new goal needs a name and an amount, and most have a date: the rest is `more: true`, under the kit's "More details
+// (optional)" just above the button (F5: ten boxes before "Add goal", 1.6 screens down; opt spec 6.1, its C15 row: the
+// hand-made fold became the kit's). The importance list starts with its default, "Want": the kit opens the line by itself
+// for a choice that is not the list's first, so a new goal's form would otherwise open long.
+const IMPORTANCE = [2, 1, 3].map((k) => ({ value: String(k), label: PRIORITIES[k] }));
 const FIELDS = (accounts) => [
   { key: "name", label: "What are you saving for", type: "text", required: true, placeholder: "e.g. Emergency fund" },
   { key: "target", label: "Amount needed", type: "money", required: true, min: 0, help: "in today's dollars" },
   { key: "targetDate", label: "By when", type: "date", help: "leave blank if there is no deadline" },
-  { key: "icon", label: "Icon", type: "select", options: GOAL_ICONS },
-  { key: "priority", label: "How important", type: "select", options: Object.entries(PRIORITIES).map(([value, label]) => ({ value, label })) },
-  { key: "saved", label: "Already set aside", type: "money", min: 0, help: "cash you have earmarked, if it is not in an account below" },
-  { key: "accountId", label: "Account it is saved in", type: "select", options: [{ value: "", label: "None / not tracked" }, ...accounts.map((x) => ({ value: x.id, label: x.name }))], help: "that account's balance counts toward the goal" },
-  { key: "monthly", label: "Putting in each month", type: "money", min: 0, help: "what you add now; the page tells you if it is enough" },
-  { key: "rate", label: "Growth per year", type: "percent", min: 0, max: 50, help: "between 0 and 50; leave blank to use the plan's figure for the time left" },
-  { key: "inflates", label: "Grow the amount with inflation until then", type: "checkbox" },
+  { key: "icon", label: "Icon", type: "select", options: GOAL_ICONS, more: true },
+  { key: "priority", label: "How important", type: "select", options: IMPORTANCE, more: true },
+  { key: "saved", label: "Already set aside", type: "money", min: 0, help: "cash you have earmarked, if it is not in an account below", more: true },
+  { key: "accountId", label: "Account it is saved in", type: "select", options: [{ value: "", label: "None / not tracked" }, ...accounts.map((x) => ({ value: x.id, label: x.name }))], help: "that account's balance counts toward the goal", more: true },
+  { key: "monthly", label: "Putting in each month", type: "money", min: 0, help: "what you add now; the page tells you if it is enough", more: true },
+  { key: "rate", label: "Growth per year", type: "percent", min: 0, max: 50, help: "between 0 and 50; leave blank to use the plan's figure for the time left", more: true },
+  { key: "inflates", label: "Grow the amount with inflation until then", type: "checkbox", more: true },
 ];
 
-// A new goal needs a name and an amount: the rest folds under "More details (optional)" just above the button (F5: ten boxes
-// before "Add goal", 1.6 screens down). Open when editing a goal, or when any of them holds something.
-const MORE = ["icon", "priority", "saved", "accountId", "monthly", "rate", "inflates"];
-function foldMore(ui, form, open) {
-  const labels = MORE.map((k) => form.querySelector(`[name="${k}"]`)?.closest("label")).filter(Boolean);
-  const actions = form.querySelector(".form-actions");
-  if (!labels.length || !actions) return;
-  const more = ui.h("details", { class: "fold", style: { margin: "4px 0 12px" }, ...(open ? { open: "" } : {}) },
-    // a short summary that fits 320 px; the boxes inside keep the form's own spacing
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "More details (optional)"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body", style: { display: "grid", gap: "14px", paddingTop: "8px" } }, ...labels));
-  form.insertBefore(more, actions);
-  // a box in it that the browser refuses (a growth of 80) opens the fold, so its message is not hidden
-  form.addEventListener("invalid", () => { more.open = true; }, true);
-}
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
 
@@ -105,8 +95,7 @@ export function render(root, ctx) {
           else p.goals.push({ id: ui.uid(), ...clean });
         });
         editing = null;
-      }, { submitLabel: editing ? "Save changes" : "Add goal", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null });
-    foldMore(ui, goalForm, !!editing);
+      }, { submitLabel: editing ? "Save changes" : "Add goal", resetAfter: !editing, moreOpen: editing ? true : undefined, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null });
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit ${editing.name}` : "Add a goal"),
       goalForm,

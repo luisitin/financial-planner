@@ -10,9 +10,9 @@
 // Short on purpose (simple first; review of opt C7, 2026-11-13): the title, the two ticks and one line, 24 words on
 // Settings' first view.
 // What a tick opens is said in green the moment it is ticked, and only what is true: every "How this is worked out" is
-// drawn by the helper (opt C6), so the first tick opens each one; two forms' "More details (optional)" (Goals, Quick
-// answers) are still drawn by hand and stay shut, hence "Most forms" (module.test.mjs finds them in the sources and fails
-// when the last one goes, so the words can lose "Most" then).
+// drawn by the helper (opt C6), so the first tick opens each one; a form's "More details (optional)" still drawn by hand
+// (Quick answers; Goals' became the kit's on 2026-11-15) stays shut, hence "Most forms" (module.test.mjs finds them in the
+// sources and fails when the last one goes, so the words can lose "Most" then).
 import { detail, kept, forgetAll, KEEP_DAYS } from "../../../core/ui/more.js";
 
 export const WORDS = Object.freeze({
