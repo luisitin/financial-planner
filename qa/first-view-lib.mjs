@@ -305,6 +305,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "After-tax money into Roth",     // investments/limits (gap list, next 60, item 28): the room for after-tax 401(k) money and two yes/no picks about the plan, no figure to type, so not "Set my own numbers"
   "Five questions about how much ups and downs suit you", // investments/glide-path (gap list, next 60, item 14): the brief's own title; five picks and a Save, no figure to type (its test), so not "Set my own numbers"
   "Which path to measure against", // investments/glide-path (opt spec 6.1, C17): the opt spec's own title; one pick of three (its test: no box), so not "Set my own numbers"
+  "Try a trade",                   // investments/rebalance (gap list, next 60, item 50): a sale and a buy tried and never saved, a name a person looks for; not our guess overridden, so not "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;
