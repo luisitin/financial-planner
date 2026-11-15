@@ -12,6 +12,18 @@
 ## Formulas
 Target-date glide used for a fund named with a year: 90% stocks 25+ years out, gliding to 50% at the year and 30% seven years after; stocks split 60/40 US/international. Bonds are the rest after rounding, so the parts add to 100% (the 2030 fund used to add to 101%, 2026-11-02). Unknown symbols stay "not classified" until the owner picks a class (a warning says so). Vanguard's Target Retirement funds (Investor shares, VTINX and VTWNX to VSVNX) are known by ticker alone: tickers and years from Vanguard's Target Retirement page (investor.vanguard.com/investment-products/mutual-funds/target-retirement-funds), checked 2026-11-02. That page gives no fee or yield, so both stay unknown until typed. The Income fund gets the glide's end mix (30% stocks), the app's own assumption, as for every dated fund.
 
+## The page (simple first: opt spec 6.1, done 2026-11-15 with gap list, next 60, item 8)
+- The add form asks five boxes: In which account, Symbol, Shares, Price a share, What you paid in all. Name, Kind of
+  investment, Expense ratio and Yield wait under "More details (optional)" (the form kit's fold, `more: true`): what Save
+  writes is the same with the fold open or shut (R22; the module test compares the record with 154a597's keys). A holding
+  with no kind yet ("pick a class") opens its form with the fold open, so the box it needs is in view.
+- "Import a positions file" is one quiet card drawn by `core/ui/more.js` (`part`, kind `own`, `card: true`, status "from
+  your brokerage"); its title is pinned in `qa/first-view-lib.mjs` PINNED_TITLES (the opt spec's own words). After an
+  import it stays open with its green line at its top, where the thumb is (R17); adding a holding with the form leaves it
+  shut (S11 in `module.test.mjs`).
+- The first view of the empty list went from 116 words and 9 boxes to 85 words and 5 boxes (the families' worst,
+  `node qa/first-view-node.mjs investments/holdings`), so its entry left `tests/first-view.known.json`.
+
 ## Edge cases
 Prices are whatever was typed or imported (no market data); the page shows when. A holding pointing at an account that is no longer an investment account is flagged. Import updates matching symbols in the chosen account and adds new ones; holdings the file does not list are left alone.
 

@@ -308,6 +308,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Try a trade",                   // investments/rebalance (gap list, next 60, item 50): a sale and a buy tried and never saved, a name a person looks for; not our guess overridden, so not "Set my own numbers"
   "Gains you could take tax-free", // taxes/projection (gap list, next 60, item 25): the years with room under the 0% federal rate for long-term gains, a named idea a person looks for; not "N more years" (it answers with the years with room, not the rest of the list) nor how the tax is worked out
   "Chance of reaching each goal",  // goals/goals (gap list, next 60, item 12): each goal's chance by its date, a name a person looks for; not the page's sum, so not "How this is worked out"
+  "Import a positions file",       // investments/holdings (opt spec 6.1, done with gap list, next 60, item 8): the brokerage file's importer, a tool a person looks for by name; one own part on its page, so no "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

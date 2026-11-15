@@ -1,10 +1,17 @@
 // modules/investments/holdings/view.js -- DOM only. What you hold and what it is worth first,
 // then the holdings by account (tap a row to edit), one folded form to add, and a folded
 // importer for a brokerage positions file (paste or choose the file).
+// Simple first (opt spec 6.1, done with gap next-60 #8): the form asks five boxes (account, symbol, shares, price, what
+// you paid); the rest wait under "More details (optional)"; the importer is one quiet card drawn by the helper.
 import { compute, parsePositions, mergePositions, CLASS_OPTIONS, ASSET_CLASSES } from "./compute.js";
 import { costFromLots } from "../tax-lots/compute.js";
+import { part } from "../../../core/ui/more.js";
+
+/** The importer's title (pinned in qa/first-view-lib.mjs PINNED_TITLES: the opt spec's own words for this page). */
+export const IMPORT_TITLE = "Import a positions file";
 
 let pending = null;
+let pendingAt = null;       // "import": the green line goes inside the importer, which stays open after its save (R17)
 let lastAccountId = null;   // the account the last holding went into: the next add starts there (a second fund landed on the first account)
 let editId = null;          // the holding open for editing: its form opens under its row, inside its account card
 let showId = null;          // the row to bring into view on the next render (a new holding, or the one just saved or closed)
@@ -28,13 +35,13 @@ export function render(root, ctx) {
   const FIELDS = [
     { key: "accountId", label: "In which account", type: "select", required: true, options: [...(pickFirst ? [{ value: "", label: "Pick the account" }] : []), ...accounts.map((a) => ({ value: a.id, label: a.name }))] },
     { key: "symbol", label: "Symbol", type: "text", required: true, placeholder: "e.g. VTI, FXAIX, AAPL" },
-    { key: "name", label: "Name", type: "text", placeholder: "filled in for common funds" },
+    { key: "name", label: "Name", type: "text", placeholder: "filled in for common funds", more: true },
     { key: "shares", label: "Shares", type: "number", required: true, min: 0, max: 1e9, step: "any" },
     { key: "price", label: "Price a share", type: "money", min: 0, help: "the latest you have; leave blank to use what you paid" },
     { key: "costBasis", label: "What you paid in all", type: "money", min: 0, help: "what you paid (the statement calls it \"cost basis\")" },
-    { key: "assetClass", label: "Kind of investment (US stocks, bonds ...)", type: "select", options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
-    { key: "expenseRatio", label: "Expense ratio", type: "percent", min: 0, max: 5, help: "yearly fund fee; leave blank to use the table for common funds" },
-    { key: "yield", label: "Yield", type: "percent", min: 0, max: 20, help: "dividends and interest a year; leave blank to use a typical figure" },
+    { key: "assetClass", label: "Kind of investment (US stocks, bonds ...)", type: "select", more: true, options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
+    { key: "expenseRatio", label: "Expense ratio", type: "percent", min: 0, max: 5, more: true, help: "yearly fund fee; leave blank to use the table for common funds" },
+    { key: "yield", label: "Yield", type: "percent", min: 0, max: 20, more: true, help: "dividends and interest a year; leave blank to use a typical figure" },
   ];
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${money(d.total)} invested` : "What you hold"),
@@ -46,7 +53,7 @@ export function render(root, ctx) {
     !accounts.length ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth?add=investment" }, "Add an investment account")) : null,
   ));
   const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
+  if (pending && pendingAt !== "import") { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 5000); pending = null; }
   root.append(out);
   for (const w of d.warnings) root.append(ui.notice("warn", w));
   if (d.hasData) root.append(ui.card(null, ui.row(
@@ -89,9 +96,12 @@ export function render(root, ctx) {
       pending = editing ? `${clean.symbol} saved.${more ? ` The other ${sharesWord(newShares - oldShares)} ${Math.abs(newShares - oldShares - 1) < 1e-12 ? "is" : "are"} in no purchase yet: on Tax lots, add when you bought them and what they cost, and "What you paid in all" goes up by that cost.` : ""}${follow ? ` Its purchase${oneLot.date ? ` on ${fmt.date(oneLot.date)}` : ""} now has ${sharesWord(fewer ? newShares : oldShares)}, cost ${fmt.money(costTo ?? (Number(oneLot.cost) || 0), cur)}.` : ""}${editing && !oneLot && newShares > (Number(editing.shares) || 0) + 1e-9 && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(editing.costBasis) || 0)) < 0.005 ? ` If you bought more, add what the new shares cost to "What you paid in all", so the gain stays right.` : ""}${editing && newShares < (Number(editing.shares) || 0) - 1e-9 && costTo === null && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(editing.costBasis) || 0)) < 0.005 ? ` If you sold some, lower "What you paid in all" by what those shares cost, so the gain stays right.` : ""}` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
       editId = null; showId = id;
       store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) { p.holdings[i] = { ...p.holdings[i], ...clean }; if (follow) { const old = Number(oneLot.shares) || 0; p.holdings[i].lots = (p.holdings[i].lots ?? []).map((l) => l.id === oneLot.id ? { ...l, shares: fewer ? newShares : l.shares, cost: costTo ?? l.cost } : l); } } } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
-    }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
+    }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing,
+      // a holding with no kind yet is tapped to pick one ("pick a class"): its box is in view, not folded away
+      moreOpen: editing && classify0(editing) === "unknown" ? true : undefined, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
     return f;
   };
+  function classify0(h) { return d.items.find((x) => x.id === h.id)?.cls ?? ""; }
   const removeButton = (editing) => ui.button("Remove this holding", () => {
     const lots = (editing.lots ?? []).length;
     if (!ui.confirm(`Remove ${editing.symbol}${lots ? ` and its ${lots} lot${lots === 1 ? "" : "s"}` : ""} from ${nameOfAccount(editing.accountId)}?`)) return;
@@ -176,6 +186,7 @@ function importFold(ctx, d) {
         lastAccountId = accountId;
         const r = mergePositions(plan.holdings, rows, accountId, { today: fmt.today(), uid: ui.uid });
         pending = `${r.added} added, ${r.updated} updated in ${accounts.find((a) => a.id === accountId)?.name ?? "the account"}. Holdings already on file that the file did not list were left alone.`;
+        pendingAt = "import";
         store.update((p) => { p.holdings = r.holdings; });
       })),
     );
@@ -188,13 +199,17 @@ function importFold(ctx, d) {
     reader.onload = () => { text = String(reader.result ?? ""); prepare(); };
     reader.readAsText(f);
   });
-  return ui.h("details", { class: "card fold fold-card" },
-    ui.h("summary", {}, ui.h("span", { class: "fold-title" }, "Import a positions file"), ui.h("span", { class: "fold-status" }, "Fidelity, Schwab, Vanguard..."), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("div", { class: "fold-body" },
-      ui.h("p", { class: "muted small" }, "Every brokerage's positions (holdings) page has a download or export button; the CSV it gives is read here. Nothing leaves this device. Matching symbols in the chosen account are updated, new ones added."),
-      ui.row(ui.button("Choose the file", () => file.click(), { class: "secondary" }), chosen), file,
-      ui.h("div", { class: "form", style: { marginTop: "12px" } }, ui.field("Or paste", paste)), ui.row(ui.button("Use the pasted text", () => { text = paste.value; prepare(); }, { class: "secondary" })),
-      host));
+  // one quiet card of its own (kind "own": it holds boxes and is never opened by a switch); a part's body sits in a grid
+  // with a 12 px gap, so the rows keep their own spacing
+  // after an import the importer stays open with its green line at its top, where the thumb is (R17)
+  const done = pendingAt === "import" && pending ? ui.notice("ok", pending) : null;
+  if (pendingAt === "import") { pending = null; pendingAt = null; }
+  return part(ctx, { id: "import", kind: "own", title: IMPORT_TITLE, card: true, says: "from your brokerage", open: done ? true : undefined, body: [
+    done,
+    ui.h("p", { class: "muted small" }, "Every brokerage's positions (holdings) page has a download or export button; the CSV it gives is read here, from Fidelity, Schwab, Vanguard and the like. Nothing leaves this device. Matching symbols in the chosen account are updated, new ones added."),
+    ui.row(ui.button("Choose the file", () => file.click(), { class: "secondary" }), chosen), file,
+    ui.h("div", { class: "form" }, ui.field("Or paste", paste)), ui.row(ui.button("Use the pasted text", () => { text = paste.value; prepare(); }, { class: "secondary" })),
+    host] });
 }
 
 // A crypto account's balance follows its coins, as on the Crypto page (a coin changed or removed here left the wallet at

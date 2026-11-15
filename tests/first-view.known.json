@@ -45,7 +45,6 @@
   "investments/backtest": {"plan":{"words":340,"figs":33},"empty":{"words":340,"figs":33}},
   "investments/crypto": {"plan":{"boxes":6},"empty":{"words":110,"boxes":6}},
   "investments/glide-path": {"empty":{"words":110,"figs":2}},
-  "investments/holdings": {"plan":{"boxes":9}},
   "investments/limits": {"plan":{"words":430,"figs":32},"empty":{"words":300,"figs":11}},
   "investments/risk": {"plan":{"words":450,"figs":61},"empty":{"words":430,"figs":45,"tiles":4}},
   "overview/alerts": {"plan":{"words":270},"empty":{"words":120}},
