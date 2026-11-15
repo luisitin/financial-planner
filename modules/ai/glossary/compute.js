@@ -4,6 +4,7 @@
 import { TERMS, TOPICS } from "./data/terms.js";
 import { LESSONS } from "./data/lessons.js";
 import { amortization } from "../../../core/math/finance.js";
+import { compute as mortgageCompute } from "../../debt/mortgage/compute.js";
 
 /** Lower case, accents, apostrophes and punctuation off (but "401(k)" and "50/30/20" keep their marks), single spaces. */
 export const norm = (s) => String(s ?? "").toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/['’]/g, "").replace(/[^a-z0-9%()/]+/g, " ").trim();
@@ -133,6 +134,32 @@ export function lessonOf(word, lessons = LESSONS) {
 }
 /** A lesson's length: the words of its three parts (what it is, why it matters to you, the example). */
 export const lessonWords = (l) => [...(l?.what ?? []), ...(l?.why ?? []), ...(l?.example ?? [])].join(" ").trim().split(/\s+/).filter(Boolean).length;
+/**
+ * The pages a lesson's button may have to find working (a lesson's `withData`): that page's own compute(), whose
+ * `hasData` says whether the page works out its answer for this plan, and `missing` what it asks for first ("account":
+ * there is none; anything else: figures of the one there is).
+ */
+const PAGE_DATA = { "debt/mortgage": (plan, today) => mortgageCompute(plan, { today }) };
+/**
+ * The one page a lesson sends you to, for this plan: { page, says } (`says`: the line above its button, the lesson's own
+ * `tryIt` or "Try it with your own numbers:"), { page: null, says } for a line with no button, or null for nothing.
+ * Most lessons always have their page. A lesson with `withData` (Velocity banking: the Mortgage page) has its button
+ * only when that page works out its answer for this plan (its compute's `hasData`, the very test the page itself makes:
+ * a mortgage with a rate and a payment, typed or guessed); when the page would first ask for figures of the account
+ * the plan holds, the button stays with the lesson's `notYet.figures` as its line; with no such account at all (or none
+ * owed), `notYet.none` alone, no button. Whether the page is built and turned on is the view's to check.
+ */
+export function tryItOf(l, plan, { today = null } = {}) {
+  if (!l?.page) return null;
+  const go = { page: l.page, says: l.tryIt ?? LESSON.tryIt };
+  if (!l.withData) return go;
+  let d = null;
+  try { d = plan && typeof plan === "object" ? PAGE_DATA[l.page]?.(plan, today) ?? null : null; } catch { d = null; }
+  if (!d || d.error) return null;    // a plan the page cannot read: no promise either way
+  if (d.hasData === true) return go;
+  if (d.missing === "account") return l.notYet?.none ? { page: null, says: l.notYet.none } : null;
+  return l.notYet?.figures ? { page: l.page, says: l.notYet.figures } : null;
+}
 /** How many pages a word is met on: the pages of its entry's "Where you meet it in the app" list that are built (`isBuilt(key)`). */
 export const metOn = (t, isBuilt = () => true) => (t?.pages ?? []).filter((k) => isBuilt(k)).length;
 

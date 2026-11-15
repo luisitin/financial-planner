@@ -19,8 +19,9 @@ Also exported: `search(query)` (entries, best first), `find(name)` (one entry by
 { today })`, `shortNames(entry)` (the abbreviations shown beside a word), `askMessages(word)` (the question sent to the
 AI helper), `sourceLabel(name)` (a source's name as shown), `norm`, `PLAN_WORDS`; for the lessons `lessonOf(entry or
 id)` (the lesson or null), `lessonWords(lesson)` (its length), `metOn(entry, isBuilt)` (pages it is met on, the count
-below) and `LESSON` (the words around a lesson: "A two-minute lesson", "What it is", "Why it matters to you", "An
-example", "Try it with your own numbers:", "Sources:"). `compute()` is unchanged.
+below), `LESSON` (the words around a lesson: "A two-minute lesson", "What it is", "Why it matters to you", "An
+example", "Try it with your own numbers:", "Sources:") and `tryItOf(lesson, plan, { today })` (the lesson's one page for
+this plan, `{ page, says }`; `{ page: null, says }` for a line with no button; or null). `compute()` is unchanged.
 
 `data/terms.js`: `TOPICS` (six: taxes, retirement, investing, borrowing and home, everyday money, insurance and
 estate) and `TERMS`, each `{ id, term, aka[], topic, plain, example, pages[], sourceName, sourceUrl }`.
@@ -90,9 +91,17 @@ $500,000 of home-sale profit (IRC 121(b)). Examples use round invented numbers.
 before; for 20 words a quiet row "A two-minute lesson" sits under the example, shut. Opened, it reads in three parts
 with a small heading each, "What it is", "Why it matters to you" and "An example" (an invented household's round
 figures with the sum written out), then "Try it with your own numbers:" and one outlined button to the page where the
-word is used (left out when that page is off or not built), then "Sources:" with a link per public source of its rules.
-Then, as before, "Where you meet it in the app:" and "Read more". 250 to 350 words each (259 to 274 today). Nothing is
-saved and nothing asks for a figure.
+word is used (left out when that page is off or not built; Velocity banking's says "Try an extra payment on your own
+mortgage:" and shows only when the Mortgage page works out the plan's mortgage: see below), then "Sources:" with a
+link per public source of its rules other than the word's own source, which is its "Read more" just below (said once,
+not twice; a lesson resting only on it has no "Sources:" line). Then, as before, "Where you meet it in the app:" and
+"Read more". While the lesson is open, "Where you meet it" leaves out the page the lesson's own button goes to (18 of
+the 21 lessons go to a page their word lists), so no page is offered twice in one row; shut, the list is whole, so the
+word's row always links that page once (found on a phone, 2026-11-16: "Net worth" twice under Net worth). The lesson's
+row title is in the text's own colour, so it reads as a row that opens, not a link. 250 to 350 words each (251 to 339
+today); open, they are 1,030 to 1,271 px tall at 390 px (docs/OPTIONAL.md R15: at most 1,300; the tallest is Velocity
+banking with its Mortgage button, measured 2026-11-16), 1,233 to 1,561 at 320. Nothing is saved and nothing asks for a
+figure.
 
 **The markup.** Each word's row and each lesson are parts of `core/ui/more.js`, kind `item` (a list row that opens:
 only a tap opens it, never remembered across visits, never opened by Settings' switches, not counted among a page's
@@ -201,7 +210,17 @@ invented for it. The test reads those fixtures, so a lesson's "real" figures fol
 from it, and large sums from the line go onto the mortgage." For example: "With $1,000 left over each month, sending
 that $1,000 straight to the mortgage as an extra payment pays it off about as soon, with no second loan." `pages` is
 empty: no page of the app uses the word (the lesson's one link is the Mortgage page, whose "Extra each month" box is the
-extra payment; the Mortgage page has no part for it to land on, so the link opens the page). Its source is the CFPB's
+extra payment; the Mortgage page has no part for it to land on, so the link opens the page). The link is the reader's
+own mortgage, so it says "Try an extra payment on your own mortgage:" (not "Try it with your own numbers:": that page
+does not do velocity banking) and shows only when the Mortgage page works out this plan's mortgage: `tryItOf` runs that
+page's own `compute()` (the lesson's `withData: true`) and reads its `hasData`, the very test the page makes before it
+shows a schedule and its "Extra each month" box (a mortgage owed, with a rate and a payment, typed or guessed). A
+mortgage with only its balance (no rate or payment yet) keeps the button, under "First add your mortgage's rate and
+payment:", since that is what the Mortgage page asks for first (its "Add the rate and payment"); with
+no mortgage owed (none, one at $0, or only a line of credit) there is no button and the lesson ends "No mortgage is owed
+in your plan, so there is nothing to try here." A plan the Mortgage page itself cannot read promises nothing. (Found on
+a phone, 2026-11-15; the first rule, a mortgage account with a balance, still sent a balance-only mortgage to a page that
+could only ask for its rate: critic, 2026-11-16.) Its source is the CFPB's
 HELOC page, already the source of the glossary's HELOC entry (read by the glossary's writers 2026-10-30/31; not re-read
 this session: consumerfinance.gov is refused by this session's network). The word states only what the HELOC entry
 already states (a home-equity line's rate usually changes; not repaying it can cost you the home); everything else is
@@ -257,6 +276,9 @@ or behind with the rates, the timing and its fees; and it adds a changing rate a
   page exists; links to pages not built yet stay in the data, so their buttons appear once the pages are built).
 - Typing filters the list only; nothing is saved and the plan never changes.
 - A lesson's page turned off or not built: its "Try it with your own numbers" button is left out; the lesson stays.
+- Velocity banking with no mortgage owed in the plan (none, one at $0, or only a line of credit): no Mortgage button,
+  and the line "No mortgage is owed in your plan, so there is nothing to try here."; a mortgage without its rate and
+  payment: the button under "First add your mortgage's rate and payment:".
 - A word without a lesson: its row reads exactly as before (no lesson row).
 
 ## Tests
@@ -278,8 +300,11 @@ abbreviated with "e.g." and the like, the wording rules ("today's dollars", noth
 last?"), every abbreviation in a lesson a glossary word (the same scan as the pages'); every source on a public site; no
 yearly dollar limit in what a lesson explains; **every sum in every example** (each figure written, against its
 arithmetic and the fixtures' own numbers); the page: no lesson words on the first view, each lesson a shut `item` row
-inside its word's row, the three parts in order, the outlined link and the sources, the link left out when the page is
-off, `?show=lesson-<id>` opening it, and S11 (drawing and opening every row writes nothing). **Invariance**
+inside its word's row, the three parts in order, the outlined link and the sources other than the word's own, the
+link left out when the page is off, `?show=lesson-<id>` opening it, no page linked twice in a word's row with its lesson
+open or shut (the whole list again once shut), the lesson's title not coloured as a link, Velocity banking's button
+against the Mortgage page's own `hasData` over every plan the test knows and odd balances (negative, text, huge), and
+S11 (drawing and opening every row writes nothing). **Invariance**
 (`invariance.json`, digests written from the code at 3c0b8a1 before the change): `compute()` over the fixtures, the 14
 households, the phone-built plans and the empty plan; every entry byte for byte; every search of every old name; the
 page's words for four households and a typed search, with the lesson rows taken out.

@@ -515,13 +515,23 @@ test("the page: a lesson holds its three parts in order, one page to try it on a
   assert.equal(d.hasAttribute("open"), false, "its lesson waits for a tap");
   const l = lessonOf("tax-bracket"), body = d.all().find((x) => x.getAttribute("class") === "gl-lesson");
   const partsIn = body.children.map((c) => c.dataset?.lesson);
-  assert.deepEqual(partsIn, ["what", "why", "example", "page", "sources"]);
+  assert.deepEqual(partsIn, ["what", "why", "example", "page"], "its one source is the word's own: said once, in \"Read more\" below");
+  assert.deepEqual(l.sources.map((x) => x.url), [find("Tax bracket").sourceUrl]);
   const said = line(wordsOf(body));
-  assert.ok(said.startsWith(`What it is ${l.what.join(" ")} Why it matters to you ${l.why.join(" ")} An example ${l.example.join(" ")} Try it with your own numbers: Bracket explorer Sources:`), said.slice(0, 200));
+  assert.equal(said, `What it is ${l.what.join(" ")} Why it matters to you ${l.why.join(" ")} An example ${l.example.join(" ")} Try it with your own numbers: Bracket explorer`);
   const a = body.all().filter((x) => x.tagName === "A");
-  assert.equal(a[0].getAttribute("href"), "#/taxes/brackets"); assert.match(a[0].getAttribute("class"), /btn secondary/);
-  assert.deepEqual(a.slice(1).map((x) => x.getAttribute("href")), l.sources.map((s) => s.url));
-  assert.ok(a.slice(1).every((x) => x.getAttribute("target") === "_blank" && x.getAttribute("rel") === "noopener"));
+  assert.equal(a.length, 1); assert.equal(a[0].getAttribute("href"), "#/taxes/brackets"); assert.match(a[0].getAttribute("class"), /btn secondary/);
+  // a lesson resting on more sources than the word's own lists the others under "Sources:"
+  const { root: r2 } = drawGlossary(emptyPlan(), { rest: ["federal-income-tax"] });
+  const b2 = lessonRow(r2, "federal-income-tax").all().find((x) => x.getAttribute("class") === "gl-lesson");
+  assert.deepEqual(b2.children.map((c) => c.dataset?.lesson), ["what", "why", "example", "page", "sources"]);
+  const own = find("Federal income tax").sourceUrl, others = lessonOf("federal-income-tax").sources.filter((x) => x.url !== own);
+  assert.equal(others.length, 3);
+  const links = b2.children.find((c) => c.dataset?.lesson === "sources").all().filter((x) => x.tagName === "A");
+  assert.deepEqual(links.map((x) => x.getAttribute("href")), others.map((x) => x.url));
+  assert.deepEqual(links.map((x) => line(wordsOf(x))), others.map((x) => sourceLabel(x.name)));
+  assert.ok(links.every((x) => x.getAttribute("target") === "_blank" && x.getAttribute("rel") === "noopener"));
+  assert.ok(line(wordsOf(b2)).includes("Try it with your own numbers: Federal estimate Sources: IRS – Definition of adjusted gross income"));
   // the lesson sits between the example and "Where you meet it in the app"
   const order = line(wordsOf(e));
   assert.ok(order.indexOf("For example:") < order.indexOf("A two-minute lesson") && order.indexOf("A two-minute lesson") < order.indexOf("Where you meet it in the app:"));
@@ -536,9 +546,97 @@ test("the page: the lesson's page is left out when it is turned off, and ?show=l
   renderGlossary(root, { ui: vUi, fmt: { ...vFmt, today: () => INV_TODAY }, plan: emptyPlan(), modules: off, isReady: (m) => m.status !== "planned", features: { enabled: () => true }, shown: () => true,
     route: { group: "ai", id: "glossary", rest: ["tax-bracket"], query: {} }, module: { group: "ai", id: "glossary" }, view: { build: true }, live: {}, ai: { status: async () => "off" }, store: { get: () => null, update() { } } });
   const body = lessonRow(root, "tax-bracket").all().find((x) => x.getAttribute("class") === "gl-lesson");
-  assert.deepEqual(body.children.map((c) => c.dataset?.lesson), ["what", "why", "example", "sources"], "no page to try it on");
+  assert.deepEqual(body.children.map((c) => c.dataset?.lesson), ["what", "why", "example"], "no page to try it on");
   const { root: r2 } = drawGlossary(emptyPlan(), { rest: ["tax-bracket"], query: { show: "lesson-tax-bracket" } });
   assert.ok(lessonRow(r2, "tax-bracket").hasAttribute("open"), "a link can land on the lesson");
+});
+
+const { tryItOf } = await import("./compute.js");
+const { compute: mortgageCompute } = await import("../../debt/mortgage/compute.js");
+test("the page: Velocity banking's button is the reader's own mortgage, shown only when the Mortgage page works it out (a look on a phone, 2026-11-15 and 2026-11-16)", async () => {
+  const l = lessonOf("velocity-banking"), YES = "Try an extra payment on your own mortgage:";
+  const withLoans = (accounts, debts = []) => ({ ...emptyPlan(), accounts, debts });
+  const homeLoan = { id: "a-home-loan", type: "mortgage", name: "Home loan", balance: 200000 };
+  // the family: a mortgage with its rate and payment, so the Mortgage page works out its schedule and its extra payment
+  assert.deepEqual(tryItOf(l, familyPlan(INV_TODAY), { today: INV_TODAY }), { page: "debt/mortgage", says: YES });
+  assert.equal(mortgageCompute(familyPlan(INV_TODAY), { today: INV_TODAY }).hasData, true);
+  assert.match(fs.readFileSync(path.join(MODULES, "debt/mortgage/view.js"), "utf8"), /label: "Extra each month"/);
+  // a mortgage with only what is owed (critic, 2026-11-16): the page first asks for the rate and payment, and the line says so
+  const bare = withLoans([homeLoan]);
+  assert.equal(mortgageCompute(bare, { today: INV_TODAY }).hasData, false);
+  assert.deepEqual(tryItOf(l, bare, { today: INV_TODAY }), { page: "debt/mortgage", says: l.notYet.figures });
+  assert.equal(l.notYet.figures, "First add your mortgage's rate and payment:", "the words of the Mortgage page's own button, \"Add the rate and payment\"");
+  assert.match(fs.readFileSync(path.join(MODULES, "debt/mortgage/view.js"), "utf8"), /"Add the rate and payment"/);
+  assert.match(fs.readFileSync(path.join(MODULES, "debt/mortgage/view.js"), "utf8"), /needs its interest rate and required payment before this page can work out the schedule/);
+  // with the rate and payment typed on the Debts page, the button promises the extra payment again
+  const typed = withLoans([homeLoan], [{ id: "d-home-loan", accountId: "a-home-loan", name: "Home loan", rate: 0.06, minPayment: 1200 }]);
+  assert.equal(mortgageCompute(typed, { today: INV_TODAY }).hasData, true);
+  assert.deepEqual(tryItOf(l, typed, { today: INV_TODAY }), { page: "debt/mortgage", says: YES });
+  // no mortgage owed: no button, a line saying why
+  const NONE = { page: null, says: "No mortgage is owed in your plan, so there is nothing to try here." };
+  assert.deepEqual(tryItOf(l, emptyPlan()), NONE);
+  assert.deepEqual(tryItOf(l, withLoans([{ ...homeLoan, balance: 0 }])), NONE, "a mortgage paid off");
+  assert.deepEqual(tryItOf(l, withLoans([{ id: "h", type: "heloc", name: "Line", balance: 9000 }])), NONE, "a line of credit is not a mortgage");
+  assert.equal(tryItOf(l, null), null); assert.equal(tryItOf(null, emptyPlan()), null);
+  // the rule, over every plan the tests know and the critic's odd balances: the button promises the extra payment
+  // exactly when the Mortgage page works the mortgage out, names the Mortgage page exactly when that page has a mortgage
+  // to ask about, and is never worked out from a plan the Mortgage page itself cannot read
+  const odd = [-200000, "200000", "abc", 1e12, 0.004].map((b) => ({ name: `balance ${b}`, plan: withLoans([{ ...homeLoan, balance: b }]) }));
+  const crash = withLoans([null, { id: "m", type: "mortgage", balance: 5 }]);
+  for (const { name, plan } of [...await invariancePlans(), ...odd, { name: "empty", plan: emptyPlan() }]) {
+    let page = null; try { page = mortgageCompute(plan, { today: INV_TODAY }); } catch { page = null; }
+    const go = tryItOf(l, plan, { today: INV_TODAY });
+    if (!page) { assert.equal(go, null, name); continue; }
+    assert.equal(go?.says === YES, page.hasData === true, `${name}: "${go?.says}" against the Mortgage page's hasData ${page.hasData}`);
+    assert.equal(go?.page === "debt/mortgage", page.hasData === true || page.missing !== "account", `${name}: the button against the page's mortgage`);
+  }
+  assert.throws(() => mortgageCompute(crash, { today: INV_TODAY })); assert.equal(tryItOf(l, crash, { today: INV_TODAY }), null, "a plan the page cannot read: nothing promised");
+  // every other lesson as before
+  assert.deepEqual(tryItOf(lessonOf("tax-bracket"), emptyPlan()), { page: "taxes/brackets", says: LESSON.tryIt });
+  assert.deepEqual(LESSONS.filter((x) => x.tryIt || x.withData || x.notYet).map((x) => x.id), ["velocity-banking"]);
+  // on the page
+  const bodyOf = (plan) => lessonRow(drawGlossary(plan, { rest: ["velocity-banking"] }).root, "velocity-banking").all().find((x) => x.getAttribute("class") === "gl-lesson");
+  const none = bodyOf(emptyPlan());
+  assert.deepEqual(none.children.map((c) => c.dataset?.lesson), ["what", "why", "example", "none"], "no mortgage: a line, nothing to tap");
+  assert.ok(line(wordsOf(none)).endsWith(NONE.says)); assert.equal(none.all().filter((x) => x.tagName === "A").length, 0);
+  const half = bodyOf(bare);
+  assert.ok(line(wordsOf(half)).endsWith(`${l.notYet.figures} Mortgage`), line(wordsOf(half)).slice(-90));
+  const fam = bodyOf(familyPlan(INV_TODAY));
+  assert.ok(line(wordsOf(fam)).endsWith(`${YES} Mortgage`), line(wordsOf(fam)).slice(-80));
+  for (const b of [half, fam]) assert.deepEqual(b.all().filter((x) => x.tagName === "A").map((x) => x.getAttribute("href")), ["#/debt/mortgage"]);
+});
+
+/** The page links a person can see in a word's row: hidden nodes and the bodies of shut rows left out. */
+const seenLinks = (n) => (!(n instanceof FakeElement) || n.hidden ? [] : n.tagName === "A" ? [n.getAttribute("href")]
+  : (n.tagName === "DETAILS" && !n.hasAttribute("open") ? n.children.filter((c) => c.tagName === "SUMMARY") : n.childNodes).flatMap(seenLinks)).filter((h) => String(h).startsWith("#/"));
+test("the page: no page is offered twice in a word's row: while its lesson is open, \"Where you meet it\" leaves out the lesson's own page (a look on a phone, 2026-11-16)", () => {
+  const { root } = drawGlossary(familyPlan(INV_TODAY));
+  let twins = 0;
+  for (const l of LESSONS) {
+    const e = entryRow(root, l.id), d = lessonRow(root, l.id);
+    e.setAttribute("open", ""); e.dispatch("toggle");
+    const shut = seenLinks(e), where = (TERMS.find((t) => t.id === l.id).pages ?? []).filter((k) => built(k)).slice(0, 3).map((k) => `#/${k}`);
+    assert.deepEqual(shut, where, `${l.id}: lesson shut, the whole list as before`);
+    d.setAttribute("open", ""); d.dispatch("toggle");
+    const open = seenLinks(e);
+    assert.equal(new Set(open).size, open.length, `${l.id}: ${open.join(", ")}`);
+    if (where.includes(`#/${l.page}`)) { twins++; assert.deepEqual(open, [`#/${l.page}`, ...where.filter((h) => h !== `#/${l.page}`)], `${l.id}: the lesson's button, then the other places`); }
+    d.removeAttribute("open"); d.dispatch("toggle");
+    assert.deepEqual(seenLinks(e), where, `${l.id}: shut again, the whole list again`);
+  }
+  assert.equal(twins, 18, "18 lessons go to a page their word's list also has");
+  // a word whose only place is the lesson's page: the heading goes too while the lesson is open
+  const one = new Map([...PAGES].map(([k, m]) => [k, k === "balance/net-worth" ? m : { ...m, status: "planned" }]));
+  const r1 = new FakeElement("main");
+  renderGlossary(r1, { ui: vUi, fmt: { ...vFmt, today: () => INV_TODAY }, plan: emptyPlan(), modules: one, isReady: (m) => m.status !== "planned", features: { enabled: () => true }, shown: () => true,
+    route: { group: "ai", id: "glossary", rest: ["net-worth"], query: {} }, module: { group: "ai", id: "glossary" }, view: { build: true }, live: {}, ai: { status: async () => "off" }, store: { get: () => null, update() { } } });
+  const e1 = entryRow(r1, "net-worth"), d1 = lessonRow(r1, "net-worth");
+  assert.ok(line(wordsOf(e1)).includes("Where you meet it in the app: Net worth"));
+  d1.setAttribute("open", ""); d1.dispatch("toggle");
+  assert.ok(!line(wordsOf(e1)).includes("Where you meet it"), "nothing left to list"); assert.deepEqual(seenLinks(e1), ["#/balance/net-worth"]);
+  // the lesson's row reads as a row, not a link: the word's own text colour (a look on a phone, 2026-11-16)
+  const css = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8").match(/details\[data-part\^="lesson-"\] > summary \.fold-title \{[^}]*\}/)[0];
+  assert.doesNotMatch(css, /color/);
 });
 
 test("S11: there is nothing to save here, so drawing the page and opening every word and every lesson writes nothing to the plan", () => {

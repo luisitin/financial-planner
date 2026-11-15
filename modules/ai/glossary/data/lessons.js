@@ -6,7 +6,10 @@
 // example, and the app's own assumptions (system/assumptions README). Which source backs which sentence, with the read
 // dates, is in the README ("Lessons"); module.test.mjs checks every sum in an example and the word counts.
 // Fields: id (the word's id in data/terms.js), page ("group/id", the one page linked), what, why, example (paragraphs),
-// sources ([{ name, url }], shown under the lesson).
+// sources ([{ name, url }], shown under the lesson); optional: tryIt (the line above the page's button, when "Try it with
+// your own numbers:" would promise too much), withData (the button only when that page works out its answer for the
+// plan: compute.js tryItOf) and notYet ({ figures: the line above the button when the page first asks for figures of
+// the account the plan holds, none: the line alone when the plan holds no such account}).
 const IRS = (name, path) => ({ name: `IRS: ${name}`, url: `https://www.irs.gov/${path}` });
 const S = {
   taxable: IRS("Taxable income", "filing/taxable-income"),
@@ -379,7 +382,8 @@ export const LESSONS = [
     sources: [S.tradIra, S.rothIra, S.early],
   },
   {
-    id: "velocity-banking", page: "debt/mortgage",
+    id: "velocity-banking", page: "debt/mortgage", tryIt: "Try an extra payment on your own mortgage:", withData: true,
+    notYet: { figures: "First add your mortgage's rate and payment:", none: "No mortgage is owed in your plan, so there is nothing to try here." },
     what: [
       "It runs in a loop. Your whole paycheck goes into a line of credit, often one borrowed against your home, and your bills are paid from that line.",
       "Every so often you borrow a large amount from the line at once, often called a chunk, and pay it onto the mortgage. Your pay then brings the line back down, and the loop starts again. This is information, not advice.",

@@ -4,7 +4,7 @@
 // two-minute lesson". When nothing matches and the AI helper is on, it can be asked; its answer is labelled as not
 // checked. Typing filters the list without touching the plan. `#/ai/glossary/<id>` opens one word. Every row that opens
 // is a part of core/ui/more.js (kind "item": opened only by a tap, never remembered, never opened by the switches).
-import { compute, search, shortNames, norm, find, askMessages, sourceLabel, lessonOf, LESSON } from "./compute.js";
+import { compute, search, shortNames, norm, find, askMessages, sourceLabel, lessonOf, tryItOf, LESSON } from "./compute.js";
 import { TERMS } from "./data/terms.js";
 import { part } from "../../../core/ui/more.js";
 
@@ -30,10 +30,11 @@ const STYLE = `
 .gl-root .gl-letter { margin: 14px 0 2px; font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .gl-root .gl-search, .gl-root .fold, .gl-root .gl-letter { scroll-margin-top: calc(var(--topbar) + 12px); }
 .gl-root details[data-part^="lesson-"] { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.gl-root details[data-part^="lesson-"] > summary .fold-title { font-weight: 500; color: var(--accent); }
+.gl-root details[data-part^="lesson-"] > summary .fold-title { font-weight: 500; }
+.gl-root .gl-pages > [hidden] { display: none; }
 .gl-root .gl-lesson h4 { margin: 0 0 4px; font-size: var(--fs); }
 .gl-root .gl-lesson p { margin: 0 0 8px; }
-.gl-root .gl-lesson .gl-src div + div { margin-top: -8px; }
+.gl-root .gl-lesson .gl-src p { margin: 0; }
 `;
 
 export function render(page, ctx) {
@@ -73,28 +74,49 @@ export function render(page, ctx) {
     ui.h("p", { class: "muted small" }, `${d.count} money words the app uses, each explained in a sentence or two of plain English, most with an example. Tap a word to open it.`),
     box, browse, count, list));
 
-  // the lesson behind a word: three short parts, one page to try it on (left out when that page is off or not built),
-  // the public sources of its rules; a row of its own inside the word's row, shut until tapped
+  // the lesson behind a word: three short parts, one page to try it on (left out when that page is off or not built;
+  // Velocity banking's Mortgage page only when it works out this plan's mortgage, else a line saying what comes first:
+  // compute.js tryItOf), the public sources of its rules (the word's own source is its "Read more" just below, so it is
+  // not said twice); a row of its own inside the word's row, shut until tapped
+  const goes = new Map();   // the lesson's page for this plan, worked out once per drawing
+  const goOf = (l) => {
+    if (!goes.has(l.id)) { const go = tryItOf(l, plan, { today: fmt.today() }); goes.set(l.id, go ? { ...go, title: go.page ? titleOf(go.page) : null } : null); }
+    return goes.get(l.id);
+  };
   const lessonPart = (t, l) => {
-    const title = titleOf(l.page);
+    const go = goOf(l);
+    const sources = l.sources.filter((x) => x.url !== t.sourceUrl);
     return part(ctx, { id: `lesson-${t.id}`, kind: "item", title: LESSON.title, body: () => ui.h("div", { class: "gl-lesson" },
       ...[["what", l.what], ["why", l.why], ["example", l.example]].map(([k, ps]) => ui.h("div", { dataset: { lesson: k } }, ui.h("h4", {}, LESSON[k]), ...ps.map((x) => ui.h("p", {}, x)))),
-      title ? ui.h("div", { dataset: { lesson: "page" } }, ui.h("p", { class: "muted small gl-where" }, LESSON.tryIt),
-        ui.h("div", { class: "gl-pages" }, ui.h("a", { class: "btn secondary small", href: `#/${l.page}` }, title))) : null,
-      ui.h("div", { class: "gl-src", dataset: { lesson: "sources" } }, ui.h("div", {}, LESSON.sources),
-        ...l.sources.map((x) => ui.h("div", {}, ui.h("a", { href: x.url, target: "_blank", rel: "noopener" }, sourceLabel(x.name)))))) });
+      go?.title ? ui.h("div", { dataset: { lesson: "page" } }, ui.h("p", { class: "muted small gl-where" }, go.says),
+        ui.h("div", { class: "gl-pages" }, ui.h("a", { class: "btn secondary small", href: `#/${go.page}` }, go.title)))
+        : go && !go.page ? ui.h("div", { dataset: { lesson: "none" } }, ui.h("p", { class: "muted small gl-where" }, go.says)) : null,
+      sources.length ? ui.h("div", { class: "gl-src", dataset: { lesson: "sources" } }, ui.h("p", {}, LESSON.sources),
+        ...sources.map((x) => ui.h("div", {}, ui.h("a", { href: x.url, target: "_blank", rel: "noopener" }, sourceLabel(x.name))))) : null) });
   };
+  const isOpen = (el) => (typeof el?.open === "boolean" ? el.open : !!el?.hasAttribute?.("open"));
   const entry = (t, open) => {
     const pages = (t.pages ?? []).map((k) => ({ k, title: titleOf(k) })).filter((x) => x.title).slice(0, 3);
     const lesson = lessonOf(t);
-    const el = part(ctx, { id: t.id, kind: "item", title: t.term, says: shortNames(t).join(", "), open: open || undefined, body: () => [
-      ui.h("p", { class: "gl-plain" }, t.plain),
-      t.example ? ui.h("p", { class: "gl-ex" }, ui.h("b", {}, "For example: "), t.example) : null,
-      lesson ? lessonPart(t, lesson) : null,
-      pages.length ? ui.h("div", {}, ui.h("p", { class: "muted small gl-where" }, "Where you meet it in the app:"),
-        ui.h("div", { class: "gl-pages" }, ...pages.map((x) => ui.h("a", { class: "btn secondary small", href: `#/${x.k}` }, x.title)))) : null,
-      ui.h("div", { class: "gl-src" }, ui.h("a", { href: t.sourceUrl, target: "_blank", rel: "noopener" }, `Read more: ${sourceLabel(t.sourceName)}`)),
-    ] });
+    const el = part(ctx, { id: t.id, kind: "item", title: t.term, says: shortNames(t).join(", "), open: open || undefined, body: () => {
+      const lessonEl = lesson ? lessonPart(t, lesson) : null;
+      const btns = pages.map((x) => ui.h("a", { class: "btn secondary small", href: `#/${x.k}` }, x.title));
+      const where = pages.length ? ui.h("div", {}, ui.h("p", { class: "muted small gl-where" }, "Where you meet it in the app:"), ui.h("div", { class: "gl-pages" }, ...btns)) : null;
+      // the lesson's own button goes to one of these pages: while the lesson is open, "Where you meet it" leaves that
+      // page out, so no page is offered twice in a row; shut, the list is whole (a look on a phone, 2026-11-16)
+      const go = lesson ? goOf(lesson) : null, twin = go?.title ? pages.findIndex((x) => x.k === go.page) : -1;
+      if (lessonEl && twin >= 0) {
+        const sync = () => { const on = isOpen(lessonEl); btns[twin].hidden = on; where.hidden = on && pages.length === 1; };
+        sync();
+        lessonEl.addEventListener?.("toggle", sync);
+      }
+      return [
+        ui.h("p", { class: "gl-plain" }, t.plain),
+        t.example ? ui.h("p", { class: "gl-ex" }, ui.h("b", {}, "For example: "), t.example) : null,
+        lessonEl, where,
+        ui.h("div", { class: "gl-src" }, ui.h("a", { href: t.sourceUrl, target: "_blank", rel: "noopener" }, `Read more: ${sourceLabel(t.sourceName)}`)),
+      ];
+    } });
     el.setAttribute?.("id", `gl-${t.id}`);   // the search scrolls to the word and puts the focus on its row
     return el;
   };
