@@ -321,3 +321,31 @@ view (S11: one shut row, the answer before the list, date order, no box, nothing
 "More on this" as before); invariance over every fixture plan, the 14 households and the phone households (with or without the
 row, every other key byte for byte).
 
+
+## Room past the plan's own gain (fix round r2, claude-b, 2026-11-15)
+An earlier critic found that when the gain the plan holds is smaller than a year's room, each year's record listed the
+whole room, and what taking all of it costs, as if more could be taken than there is. Reproduced on the invented family
+(`qa/fixtures/family-plan.mjs`, Ana and Bo): 2055's room is $64,117 and the plan's gain $19,645, and the record said "$1,076
+more tax: the 3.8% tax on investment income", which is the cost of all $64,117 (taking the $19,645 adds under $1); then
+2066 to 2069 listed $41,977 to $43,921 of room each with $2,394 to $2,765 of tax, for gain the plan no longer has. The
+retired couple: 2027 to 2030 listed $56,994 to $68,642 after 2026 used their $60,000.
+- **compute**: each entry of `gains.taken` also carries what taking that amount adds, `extraTax`, `ssMore`, `seniorLost`,
+  `niitMore`, and `state` (a state with rules) and `medicareOver` (a year whose income sets a Medicare premium), the figures
+  `gainsRoom` already worked out for `extra`, `state` and `medicare` and then dropped. No other output moves.
+- **Each record, beside its room** (`gainsUseLine(y, taken, money, state)`, one case each, in `module.test.mjs`): the room
+  stays the record's value; the line under it says what the plan's own gain does that year:
+  - all of the room used (the gain is at least the room): the line as before, what taking all of it adds;
+  - part of it: "taking all your profit would use $19,645 of it" (or, when an earlier year already takes part of the gain,
+    "the rest of your profit would use $29,025 of it"), then what taking that much adds, in the same words as before ("$437
+    more tax on Social Security", "$3,646 North Carolina tax", "marketplace help stops past $34,769", "Medicare premiums go up
+    past $79,928"), each said only when what is taken reaches it; amounts under $50 left out as before;
+  - none of it (the gain is used up in an earlier year): "you would already have taken all your profit by then", and no
+    cost line.
+  Said as what would happen (a person critic of the fix, P4: "your profit uses $60,000 of it" beside the year by year table's
+  $2,400 of gains and dividends for 2026 read as a contradiction, and "your profit is used up by then" was vague). Which year
+  is "the rest" is the view's (`rest`: an earlier year is the first in `taken`); the compute is unchanged by it.
+  The years listed are the same (the next five with room, in date order): the room is still what a year could take at 0%.
+- **Invariance**: without `gains: true` nothing is computed (the test of before); with it, every key is what it was but the
+  new figures on each year taken, which keep `year` and `amount` (module test "r2 invariance"; a scratch run against
+  ab3bdde's own code over every fixture plan, the 14 households and the phone households, in the builder's log). The sums
+  `extra.tax`, `state.total` and `medicare.over` are, and were, these figures added up (module test "r2: each year taken").

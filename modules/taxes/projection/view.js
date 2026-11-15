@@ -5,7 +5,7 @@
 // that go deeper.
 import { needItem } from "../../../core/words.js";
 import { parts, rest, links } from "../../../core/ui/more.js";
-import { compute, stateLine, stateNames, stateNameOf, GAINS_TITLE, gainsStatus, gainsWords, gainsYearLine } from "./compute.js";
+import { compute, stateLine, stateNames, stateNameOf, GAINS_TITLE, gainsStatus, gainsWords, gainsUseLine } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 import { statusLabel } from "../../../core/math/tax.js";
 
@@ -119,15 +119,17 @@ export function howBody(ui, d, plan) {
 /**
  * The words inside "Gains you could take tax-free" (gap list, next 60, item 25): the line, the profit the plan counts and the years
  * whose room would cover it, the next years with room (five at most, in date order, as records: the page's list is already the
- * year list above), the years at or past the line, what taking it buys, what to watch when taking that profit, that nothing is
+ * year list above; each says what the plan's own profit uses of its room, fix round r2), the years at or past the line, what taking it buys, what to watch when taking that profit, that nothing is
  * saved, and the next step (critic P8, 2026-11-15: the Capital gains page, last in the part). Information only: no box, no button.
  */
 export function gainsBody(ui, d, money) {
   const g = d.gains, w = gainsWords(g, money);
   const stateName = g.state && g.state.counted !== false ? g.state.name : null;
   const who = d.people.length > 1 ? "ages" : "age";
+  // each year's line says what the plan's own gain does there: all of the room, part of it, or none (fix round r2)
+  const used = new Map(g.taken.map((t) => [t.year, t]));
   const rec = (y) => {
-    const sub = gainsYearLine(y, money, stateName);
+    const sub = gainsUseLine(y, used.get(y.year), money, stateName, { rest: g.taken.length > 0 && g.taken[0].year !== y.year });
     return ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${y.year} · ${who} ${y.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, money(y.room))),
       sub ? ui.h("div", { class: "rec-sub" }, sub) : null);

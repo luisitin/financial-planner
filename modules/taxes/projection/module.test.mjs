@@ -1,7 +1,7 @@
 // The full checks for this page are in tests/tax-pages.test.mjs (fixture qa/fixtures/tax-plan.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, stateLine, zeroTop, zeroRoom, agiRoom, gainsWords, gainsYearLine, gainsStatus, GAINS_TITLE, GAINS_SMALL } from "./compute.js";
+import { compute, stateLine, zeroTop, zeroRoom, agiRoom, gainsWords, gainsYearLine, gainsUseLine, gainsStatus, GAINS_TITLE, GAINS_SMALL } from "./compute.js";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -557,4 +557,88 @@ test("next-60 #25 invariance: with or without the row, every existing figure of 
     assert.equal(JSON.stringify(rest), JSON.stringify(before), `${name}${real ? "" : " (each year's dollars)"}`);
   }
   assert.ok(withRow >= 10, `${withRow} draws with the row`);
+});
+
+// ---------------------------------------------------------------- fix round r2: room past the plan's own gain
+// The invented family (qa/fixtures/family-plan.mjs): 2055's room is $64,117 and the plan's gain $19,645, taken there in full;
+// 2066 to 2069 had $41,977 to $43,921 of room each, listed with $2,394 to $2,765 of tax for taking all of it, after the gain
+// was used up. Each record now says what the plan's own gain does that year.
+test("r2: each year taken carries what taking that amount adds; their sums are the part's own totals", () => {
+  const plans = [retiredCouplePlan(NOV), familyNow(NOV), ...ARCHETYPES.map((a) => a.build())];
+  let partial = 0;
+  for (const plan of plans) for (const real of [true, false]) {
+    const g = gainsOf(plan, { real }).gains;
+    if (!g || !g.roomYears) continue;
+    for (const t of g.taken) for (const k of ["extraTax", "ssMore", "seniorLost", "niitMore"]) assert.ok(Number.isFinite(t[k]), `${t.year} ${k}`);
+    // extra: the years where it adds a dollar or more, and their sum; the state's total; Medicare's years past its line
+    const ex = g.taken.filter((t) => t.extraTax >= 1);
+    if (g.extra) { assert.deepEqual(g.extra.years, ex.map((t) => t.year)); near(g.extra.tax, ex.reduce((a, t) => a + t.extraTax, 0), 1e-6); } else assert.equal(ex.length, 0);
+    if (g.state?.total) near(g.state.total, g.taken.reduce((a, t) => a + (t.state ?? 0), 0), 1e-6);
+    if (g.medicare) assert.deepEqual(g.medicare.over, g.taken.filter((t) => t.medicareOver).map((t) => t.year));
+    // a year whose whole room is taken costs what its own figures say for all of it; part of it costs no more than all
+    for (const t of g.taken) {
+      const y = g.next.find((v) => v.year === t.year);
+      if (t.amount >= y.room - 1e-9) { near(t.extraTax, y.extraTax, 1e-6); if (y.state !== undefined) near(t.state, y.state, 1e-6); }
+      else { partial++; assert.ok(t.extraTax <= y.extraTax + 1e-6, `${t.year}: part of the room costs no more than all of it`); }
+    }
+  }
+  assert.ok(partial >= 5, `${partial} years where the gain uses part of the room`);
+});
+
+test("r2: a year's line beside its room, one case each: all of it used, part of it used, none of it left", () => {
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const y = { room: 64117, extraTax: 1076, ssMore: 0, seniorLost: 0, niitMore: 1076, cliffRoom: undefined };
+  // all of its room used: as before
+  assert.equal(gainsUseLine(y, { amount: 64117 }, money), gainsYearLine(y, money));
+  assert.equal(gainsUseLine(y, { amount: 64116.8 }, money), "$1,076 more tax: the 3.8% tax on investment income");
+  // part of it: what the plan's gain uses, then what taking that much adds (nothing worth a line here)
+  assert.equal(gainsUseLine(y, { amount: 19645.4, extraTax: 0, ssMore: 0, seniorLost: 0, niitMore: 0 }, money), "taking all your profit would use $19,645 of it");
+  assert.equal(gainsUseLine({ room: 80580, extraTax: 437, ssMore: 2000 }, { amount: 60000, extraTax: 437, ssMore: 2000, seniorLost: 0, niitMore: 0 }, money), "taking all your profit would use $60,000 of it · $437 more tax on Social Security");
+  assert.equal(gainsUseLine({ room: 120832, state: 4458 }, { amount: 100477, extraTax: 0, ssMore: 0, seniorLost: 0, niitMore: 0, state: 3646 }, money, "North Carolina"), "taking all your profit would use $100,477 of it · $3,646 North Carolina tax");
+  // the marketplace's line and Medicare's are said only when what is taken passes them
+  const mk = { room: 102045, cliffRoom: 34769, medicare: { over: true, room: 79928 } };
+  assert.equal(gainsUseLine(mk, { amount: 30000, extraTax: 0, ssMore: 0, seniorLost: 0, niitMore: 0, medicareOver: false }, money), "taking all your profit would use $30,000 of it");
+  assert.equal(gainsUseLine(mk, { amount: 90000, extraTax: 0, ssMore: 0, seniorLost: 0, niitMore: 0, medicareOver: true }, money), "taking all your profit would use $90,000 of it · marketplace help stops past $34,769 · Medicare premiums go up past $79,928");
+  // none of it: the gain is used up before this year
+  assert.equal(gainsUseLine(y, undefined, money), "you would already have taken all your profit by then");
+  // after an earlier year took part of it: what is left (a person critic's P4: "your profit uses" read as already taken)
+  assert.equal(gainsUseLine(y, { amount: 19645.4, extraTax: 0, ssMore: 0, seniorLost: 0, niitMore: 0 }, money, null, { rest: true }), "the rest of your profit would use $19,645 of it");
+  for (const t of [gainsUseLine(y, undefined, money), gainsUseLine(y, { amount: 1, extraTax: 0 }, money)]) assert.ok(!/used up|profit uses/.test(t), t);
+});
+
+test("r2 the page: the family's records say what their $19,645 of gain uses, and no year lists tax for room their gain cannot reach", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const draw = (plan) => { const root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => NOV }, plan, route: { group: "taxes", id: "projection", rest: [], query: {} }, module: { group: "taxes", id: "projection" }, store: { get: () => plan, update() {} }, redraw() {} }); return root; };
+  const recsOf = (root) => root.all().find((e) => e.dataset.part === "gains").all().filter((e) => e.tagName === "LI" && /\brecords\b/.test(e.parentNode?.className ?? "")).map((e) => textOf(e).replace(/\s+/g, " ").trim());
+  assert.deepEqual(recsOf(draw(migrate(familyNow(NOV)))), [
+    "2055 · ages 65 / 67 $64,117 taking all your profit would use $19,645 of it",
+    "2066 · ages 76 / 78 $43,921 you would already have taken all your profit by then",
+    "2067 · ages 77 / 79 $43,367 you would already have taken all your profit by then",
+    "2068 · ages 78 / 80 $42,651 you would already have taken all your profit by then",
+    "2069 · ages 79 / 81 $41,977 you would already have taken all your profit by then"]);
+  // the retired couple: $60,000 of 2026's $80,580, and what taking it adds ($437, all of Social Security that can be taxed)
+  const rc = recsOf(draw(migrate(retiredCouplePlan(NOV))));
+  assert.equal(rc[0], "2026 · ages 72 / 69 $80,580 taking all your profit would use $60,000 of it · $437 more tax on Social Security");
+  assert.ok(rc.slice(1).every((t) => t.endsWith("you would already have taken all your profit by then")), rc.join(" | "));
+  // a gain bigger than a year's room: the whole room used, the line as before (the surviving spouse's 2031 and 2032)
+  const qs = recsOf(draw(migrate(ARCH["14-unusual-structures"].build())));
+  assert.equal(qs[0], "2031 · age 64 $102,045 marketplace help stops past $34,769 · Medicare premiums go up past $79,928");
+  assert.equal(qs[2], "2033 · age 66 $99,568 the rest of your profit would use $29,025 of it");
+});
+
+test("r2 invariance: with the gains asked, each year taken keeps its year and amount and only gains its costs; without, nothing moves", async () => {
+  const all = await everyPlan();
+  let some = 0;
+  const NEW = ["extraTax", "ssMore", "seniorLost", "niitMore", "state", "medicareOver"];
+  for (const { name, plan } of all) for (const real of [true, false]) {
+    const p = migrate(structuredClone(plan));
+    const g = compute(structuredClone(p), { today: NOV, real, gains: true }).gains;
+    if (!g) continue;
+    some++;
+    for (const t of g.taken) assert.deepEqual(Object.keys(t).filter((k) => !NEW.includes(k)), ["year", "amount"], name);
+  }
+  assert.ok(some >= 10, `${some} draws with the row`);
 });

@@ -138,8 +138,10 @@ const causes = (list) => {
  *   first (the first year listed)
  *   held: { year, amount, share }       the gain the plan counts in taxable accounts as the first listed year starts
  *                                       (`retirement.gainShare` of what they hold, as the engine taxes a sale)
- *   taken: [{ year, amount }]           that gain taken in date order, each year up to its room (all the room when it never
- *                                       adds up to the gain): what the costs below are worked on, never more than the plan holds
+ *   taken: [{ year, amount, extraTax, ssMore, seniorLost, niitMore, state?, medicareOver? }]
+ *                                       that gain taken in date order, each year up to its room (all the room when it never
+ *                                       adds up to the gain): what the costs below are worked on, never more than the plan holds;
+ *                                       each with what taking that amount adds, as a year's own figures say it for all its room
  *   coverYear                           the last year of taken when it holds the whole gain (null: all the room is less than it)
  *   extra: { years, tax, why: ["ss" | "senior" | "niit"] } | null   taken years where it adds federal tax, the tax over them, and why
  *   marketplace: { years, cliff (today's dollars, the first year's) | null } | null   taken years with marketplace cover
@@ -248,7 +250,10 @@ function gainsRoom(plan, { run, inputs, tax, real, code, withState, today }) {
     years: listed,
     next: withRoom.map((y) => byYear.get(y.year)),
     total, roomYears: withRoom.length, overYears: over.length, over: over.map((y) => y.year), first: first.year,
-    held, taken: taken.map((t) => ({ year: t.year, amount: t.amount })), coverYear,
+    // each year taken also carries what taking that amount adds (fix round r2: a year's line said what all its room would cost,
+    // also when the plan's gain used only part of it); the same figures `extra`, `state` and `medicare` sum below
+    held, taken: taken.map((t) => ({ year: t.year, amount: t.amount, extraTax: t.extraTax, ssMore: t.ssMore, seniorLost: t.seniorLost, niitMore: t.niitMore,
+      ...(t.state !== undefined ? { state: t.state } : {}), ...(t.medicareOver !== undefined ? { medicareOver: t.medicareOver } : {}) })), coverYear,
     extra: extraYears.length ? { years: extraYears.map((t) => t.year), tax: extraYears.reduce((s, t) => s + t.extraTax, 0), why: causes(extraYears) } : null,
     marketplace: mkYears.length ? { years: mkYears.map((t) => t.year), cliff: noCliff ? null : cliffs.get(mkYears[0].year) } : null,
     medicare: mcYears.length ? { years: mcYears.map((t) => t.year), line: mLine, over: mcYears.filter((t) => t.medicareOver).map((t) => t.year) } : null,
@@ -314,6 +319,26 @@ export function gainsYearLine(y, money, stateName = null) {
   if (Number.isFinite(y.cliffRoom) && y.cliffRoom < y.room) out.push(`marketplace help stops past ${money(y.cliffRoom)}`);
   if (y.medicare?.over) out.push(`Medicare premiums go up past ${money(y.medicare.room)}`);
   return out.join(" · ");
+}
+
+/**
+ * One listed year's line beside its room, by what the plan's own gain does that year (fix round r2: with less gain than room,
+ * each year listed the whole room and what taking all of it costs, which read as if more could be taken than there is).
+ * y: a year of `next`; taken: its entry of `taken`, or undefined when the gain is used up before it; rest: an earlier year
+ * already takes part of the gain (what is left of it is taken here). Said as what would happen if the profit were taken this
+ * way (a person critic of r2, P4: "your profit uses $60,000 of it" beside a year by year table showing $2,400 of gains read as
+ * a contradiction, and "used up by then" was vague):
+ *   all its room used  -> gainsYearLine(y), as before
+ *   part of it used    -> "taking all your profit would use $19,645 of it" ("the rest of your profit would use $29,025 of it"
+ *                         after an earlier year), then what taking that much adds (the same fragments, on what is taken)
+ *   none of it used    -> "you would already have taken all your profit by then"
+ */
+export function gainsUseLine(y, taken, money, stateName = null, { rest = false } = {}) {
+  if (!taken) return "you would already have taken all your profit by then";
+  if (taken.amount >= y.room - 0.5) return gainsYearLine(y, money, stateName);
+  const part = { room: taken.amount, extraTax: taken.extraTax, ssMore: taken.ssMore, seniorLost: taken.seniorLost, niitMore: taken.niitMore, state: taken.state, cliffRoom: y.cliffRoom,
+    medicare: taken.medicareOver === undefined ? undefined : { over: taken.medicareOver, room: y.medicare?.room } };
+  return [`${rest ? "the rest of your profit" : "taking all your profit"} would use ${money(taken.amount)} of it`, gainsYearLine(part, money, stateName)].filter(Boolean).join(" \u00b7 ");
 }
 
 /** The newest year of the federal table: the 0% line the page quotes ("the 2026 line, rising with prices"); later years are it
