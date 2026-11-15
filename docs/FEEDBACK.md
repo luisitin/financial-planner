@@ -371,6 +371,23 @@ the fixer changes the status line in place and adds a CHANGELOG line):
 - suggestion: in `core/ui/base.css`, `@media print { #topbar, #sidebar, #scrim, .chips, button { display: none } #content { max-width: none; padding: 0 } .card { box-shadow: none; break-inside: avoid } }`, light colours forced (`color-scheme: light`).
 - status: open
 
+### F-036  Our guesses: check that every gray figure is what saving the empty box counts (filed by the builder)
+- when: 2026-11-15 00:01   page: balance/liabilities, balance/net-worth, overview/setup, goals/house, property/rent-vs-buy, goals/education, career/benefits, property/purchase, property/renovation, property/vehicles   severity: idea
+- for: tester
+- what happened: smart guesses C6, C8 and C9 landed. On Debts and Net worth an empty box shows a gray figure and saving it empty counts that figure and marks it as ours; on the calculators (House down payment, Rent vs buy, Education's "A cost I enter", Work benefits, Big purchase, the home project, Vehicles) an empty box with a gray figure saves nothing (the plan's field stays empty, no entry under our guesses) while the answer counts the gray figure and says "(our guess)".
+- expected: the gray figure always equals what is counted; nothing is saved on a calculator until a figure is typed; no gray figure in a plan kept in another currency.
+- steps: 1) Debts: a card with rate and payment empty, Save, reload: both boxes gray again, the payoff uses them. 2) Net worth's add form for each Type: the gray balance equals what Save adds. 3) Every Get started screen: Continue with blanks saves the gray figures. 4) Each calculator above: an empty box changes the answer, the plan file does not change.
+- suggestion: extend `qa/smoke-all.mjs`: no input on a usable page has a placeholder starting "e.g." or "For example" or a bare example figure (about 75 remain, listed in the C6 build log), and a box with `data-guess` shows the figure saving it empty writes. A labelled backtest on the qa households (blank each typed field, guess it, report the median log error) is information, not a gate: the households are invented.
+- status: open
+
+### F-037  Folded parts say "4 our guesses": should they say what is guessed? (filed by the builder)
+- when: 2026-11-15 00:01   page: all pages with folded parts (core/ui/more.js)   severity: confusing
+- for: designer
+- what happened: a fold that holds boxes showing our gray guesses reads "4 our guesses" in its status line (docs/OPTIONAL.md R26 sets "our guess" / "N our guesses" for every page; qa/first-view-lib.mjs checks it). On the calculators a critic found "4 our guesses" unclear to a layperson.
+- expected: a status a person reads at a glance.
+- suggestion: A) "4 boxes use our guess"; B) keep R26 as it is. A change is one line in core/ui/more.js, R26 in docs/OPTIONAL.md and the STATE_OK check in qa/first-view-lib.mjs.
+- status: open
+
 ## Closed
 
 (nothing yet)
