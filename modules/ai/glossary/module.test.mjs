@@ -77,6 +77,7 @@ test("every money abbreviation in page titles, purposes, view text and compute l
   const NOT_MONEY = new Set(["PC", "US", "USA", "AI", "KB", "MB", "GB", "CSV", "PDF", "PDFs", "JSON", "URL", "ZIP", "OK", "IRS", "SSA", "BLS", "SEC", "FDIC", "FINRA", "CFPB", "KFF", "NYU", "NFDA", "CMS", "DOL", "HHS", "IBIT", "FBTC", "ETHA", "AM", "PM", "TV", "ID", "IDs", "QR", "PIN", "FAQ", "API", "LAN", "IP", "OFX", "QFX", "QIF", "TSV", "XLSX", "UTC", "DA", "ES", "NEC", "INT", "DIV", "ACA", "COVID", "SECURE", "CARES", "TCJA", "OBBBA", "NO", "YES", "ALL", "AND", "OR", "THE",
     "USD", "EUR", "GBP", "CAD", "MXN", "MDY", "DMY", "VTI", "FXAIX", "AAPL", "ACME", "ARB", "BTC",
     "DD",     // a form number: "Military discharge papers (DD 214)" (household/documents)
+    "II",     // a form's part, a Roman numeral: "long-term sales on Part II" of Form 8949 (investments/tax-lots)
     "DIME",   // insurance/life-needs spells the rule out where it shows it: "Debts, Income, Mortgage, Education"
     "YNAB",   // a budgeting app's own name, like Monarch and Mint: "Moving from YNAB, Monarch or Mint?" (transactions/import)
   ]);
