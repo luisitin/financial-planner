@@ -307,6 +307,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Which path to measure against", // investments/glide-path (opt spec 6.1, C17): the opt spec's own title; one pick of three (its test: no box), so not "Set my own numbers"
   "Try a trade",                   // investments/rebalance (gap list, next 60, item 50): a sale and a buy tried and never saved, a name a person looks for; not our guess overridden, so not "Set my own numbers"
   "Gains you could take tax-free", // taxes/projection (gap list, next 60, item 25): the years with room under the 0% federal rate for long-term gains, a named idea a person looks for; not "N more years" (it answers with the years with room, not the rest of the list) nor how the tax is worked out
+  "Chance of reaching each goal",  // goals/goals (gap list, next 60, item 12): each goal's chance by its date, a name a person looks for; not the page's sum, so not "How this is worked out"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

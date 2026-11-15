@@ -167,6 +167,62 @@ No current figure is used: the growth, swing and inflation figures are the plan'
 sources are in `modules/system/assumptions/README.md`); the 3-year rule is this page's own; 0.1 is Chance the money lasts's.
 The 1,000 runs, the seed, 9 in 10, 10 years and the $10 rounding are the builder's choices (below). Nothing was fetched.
 
+### On the page (`view.js`)
+- **First view:** as before, plus one quiet row under "Your goals": "Chance of reaching each goal · All 4 may be late ›" (a
+  `more` part drawn by `core/ui/more.js`, the page's only part, in its own parts card; its title is pinned in
+  `qa/first-view-lib.mjs`). Its status says the answer while it is shut (`chanceStatus`): one goal, its own short answer
+  ("7 in 10", "On pace"); several, how many may miss their date ("2 of 4 may be late", "All 4 may be late": under 9 in
+  10, a date passed, or due this month with money still needed; a goal paid from savings is not), "None look late", or
+  the count when none has a chance to say ("2 goals"). The sentence "\"Needs\" is what to put in each month from now on,
+  assuming the money grows at the plan's rate for that time frame." moved into it (it explains an assumption); "Tap a goal
+  to change it." stays. For Ana and Bo the first view went from 171 words to 158, 21 money figures as before, and one row
+  more (none before).
+- **One tap away:** one record per goal, in the list's order: the goal's name and a short answer on one scale ("On pace",
+  "Not at this pace", "7 in 10", "Under 1 in 10", "Reached", "No date"...), the case's sentence, and the 9 in 10 line when
+  there is one; a goal whose amount is our guess adds "Its amount is our guess for now: tap the goal above to type yours."
+  (the guess mark itself stays on the goal's row). Then how it is worked out in short lines, with the plan's own cash,
+  bond, swing and inflation figures (a figure that is not a number is left out, never "NaN%"): the pretend futures, cash
+  under 3 years, bonds further off, a goal's own growth figure (only when one has it), prices (only when a goal grows with
+  them), and what "Needs" assumes; then "Change these growth figures on Assumptions ›". About 200 words for Ana and Bo
+  (350 before a review asked for shorter lines and the cash note once).
+- **After a save:** the green line names the goal's new chance (opt spec R7): "Changes saved. Japan trip: it reaches $8,000
+  by October 2027 at this pace."; "New roof added. It falls short of $12,000 in today's dollars by November 2028."; a goal
+  with no chance to say (no date, no amount, a passed date, from savings) keeps "Changes saved.".
+- Nothing to type or save: opening it never changes the plan; it is a reading part, so a person's own tap is kept on this
+  phone (`planner.more`: it is open again after Back, a reload or a save) and "Show how answers are worked out" opens it.
+  No row when there is no goal (the page asks for the first one). The open row is 863 px tall for Ana and Bo's four
+  goals at 390 px, 1,042 px at 320 (996 and 1,165 before the shorter lines). With "All 4 may be late" beside it the title
+  wraps to two lines at 390 (57 px) and three at 320 (80 px), under the 102 px the opt spec warns of.
+
+| case (`kind`, chance) | short answer | sentence |
+|---|---|---|
+| reached | Reached | The money set aside already covers its {amount}. |
+| no amount | No amount | Add an amount to see its chance. |
+| no date | No date | Add a date to see its chance of being on time. |
+| date passed | Date passed | Its date has passed: set a new date to see its chance. |
+| paid from savings (Next best action) | From savings | It is paid from savings when it is due, so there is no chance to work out. |
+| due now | Due now | It is due this month, and {remaining} is still needed. |
+| too far (over 80 years) | Too far off | Its date is more than 80 years away: too far off to say. |
+| steady, gets there | On pace | It reaches {amount} by {month year} at this pace. |
+| steady, gets there with nothing going in | On pace | It reaches {amount} by {month year} with nothing more put in. |
+| steady, short | Not at this pace | It falls short of {amount} by {month year}. |
+| every pretend future | 10 in 10 | It reaches {amount} by {month year} in all 1,000 pretend futures we tried. |
+| every pretend future, nothing going in | 10 in 10 | It reaches {amount} by {month year} with nothing more put in, in all 1,000 pretend futures we tried. |
+| 9 in 10 or more | 9 in 10 | At least 9 in 10 that it reaches {amount} by {month year}. |
+| 9 in 10 or more, nothing going in | 9 in 10 | At least 9 in 10 that it reaches {amount} by {month year} with nothing more put in. |
+| 1 to 8 in 10 | N in 10 | About N in 10 that it reaches {amount} by {month year}. |
+| under 1 in 10 | Under 1 in 10 | Unlikely at this pace: fewer than 1 in 10 that it reaches {amount} by {month year}. |
+| none | Under 1 in 10 | Very unlikely at this pace to reach {amount} by {month year}. |
+
+{amount} is the amount as typed, with " in today's dollars" for a goal that grows with prices. The second line, under 9 in
+10 with a date ahead: "It would be 9 in 10 with about $1,050 a month, or with the date moved to March 2030." (or without
+the date when none within 10 years gets there); steady: "It would get there with $452 a month, or with the date moved to
+August 2028.", "..., or be 9 in 10 with the date moved to February 2034." when that later date is 3 or more years away
+(bonds), or "It would get there with $452 a month."; none when the monthly figure is not a number. Every case has its test
+in `module.test.mjs`. "Its money is counted as cash, with no ups and downs." no longer follows every cash goal: the line
+on cash in how it is worked out says it once. The same pretend futures are used on every visit (seed 1), so the answer
+moves only when the plan does (said here, not on the page).
+
 ### Builder's choices (claude-b, 2026-11-15)
 - A goal's chance is the chance at today's pace, with nothing assumed about later raises; a goal waiting its turn on Next
   best action ("starts later", nothing going in yet) is worked out at $0 a month, and its second line says the monthly
@@ -183,3 +239,10 @@ The 1,000 runs, the seed, 9 in 10, 10 years and the $10 rounding are the builder
   agree (a 529 invested in stocks with no growth figure on its goal is counted as the page counts it).
 - 1,000 runs: a share good to about 1.6 points (the standard error of a share near 1 in 2 over 1,000 runs), enough for
   tenths, and about 5 ms for four goals once the page has run once.
+- One row for all the goals, not a line on each goal's row: each row already holds three or four lines and its costing
+  link, and a chance on every row would put 4 to 8 more lines and a new kind of figure on the first view; one quiet row
+  keeps the list as it was and the chances one tap away, with how many may be late in its status (a review: "the answer
+  is behind a tap"). "May be late" is said for any goal under 9 in 10: the status has 20 characters, and "may" covers
+  both a goal at 7 in 10 and one that will miss at today's pace (its record says which).
+- The title "Chance of reaching each goal" wraps beside its status (57 px tall at 390, 80 px at 320 with "All 4 may be
+  late", under the 102 px the opt spec warns of); kept because a shorter one ("Chances") would not say what it holds.

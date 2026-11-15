@@ -534,3 +534,170 @@ test("chance invariance: over every fixture plan, household and variant, compute
   }
   assert.ok(all.length > 900 && goals > 1000 && ran > 500, `${all.length} plans, ${goals} goals, ${ran} worked out`);
 });
+
+// ---- the page: one quiet row for all the goals (docs/OPTIONAL.md), drawn with qa/fixtures/fake-dom.mjs -------------------------
+const V_TODAY = "2026-11-15";
+async function drawGoals(plan0, { onSave } = {}) {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  FakeElement.prototype.reset ??= function () {};
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const s = { plan: migrate(structuredClone(plan0)), saved: [], root: null };
+  s.go = () => { s.root = new FakeElement("main"); render(s.root, { ui, fmt: { ...fmt, today: () => V_TODAY }, plan: s.plan, route: { group: "goals", id: "goals", rest: [], query: {} }, module: { group: "goals", id: "goals" },
+    store: { get: () => s.plan, update: (fn) => { const d = structuredClone(s.plan); fn(d); s.saved.push(d); s.plan = d; onSave?.(d); s.go(); } }, redraw: () => s.go() }); };
+  s.go();
+  s.partsOf = () => s.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part !== undefined);
+  s.part = () => s.partsOf().find((e) => e.dataset.part === "chances") ?? null;
+  return s;
+}
+
+test("chance row: the first view keeps one quiet row, shut, saying how many goals may be late; open, a record per goal in the list's order with its own sentence", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { chances, chanceWords } = await import("./compute.js");
+  const { CHANCE_TITLE } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const p = familyPlan(V_TODAY), s = await drawGoals(p);
+  assert.deepEqual(s.partsOf().map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]), [["chances", "more", false]], "one part, shut");
+  const det = s.part();
+  assert.equal(CHANCE_TITLE, "Chance of reaching each goal");
+  assert.equal(textOf(det.querySelector(".fold-title")), CHANCE_TITLE);
+  // the answer shows while the row is shut (critic P1): all four of Ana and Bo's goals are under 9 in 10 at today's pace
+  assert.equal(textOf(det.querySelector(".fold-status")), "All 4 may be late");
+  assert.ok(det.closest("section")?.dataset.parts !== undefined, "a row of the page's one parts card");
+  // the first view: everything outside the shut row
+  const body = det.children.find((k) => /fold-body/.test(k.className));
+  body.hidden = true; const first = textOf(s.root); body.hidden = false;
+  assert.match(first, /Tap a goal to change it\. /);
+  assert.doesNotMatch(first, /pretend futures|\bin 10\b|"Needs" is what/, "the chances and the working are one tap away");
+  // inside: one record per goal in the list's order, with the words chanceWords writes
+  const rows = compute(s.plan, { today: V_TODAY }).goals;
+  const listed = s.root.all().filter((e) => e.tagName === "LI" && e.getAttribute("role") === "button").map((li) => li.all().find((x) => x.className === "t").childNodes[0].textContent);
+  const recs = body.all().filter((e) => e.tagName === "LI");
+  assert.deepEqual(recs.map((li) => textOf(li.querySelector(".rec-title"))), listed, "the list's order");
+  const ch = chances(s.plan, { today: V_TODAY, rows });
+  for (const li of recs) {
+    const g = rows.find((r) => r.name === textOf(li.querySelector(".rec-title")));
+    const w = chanceWords(ch.goals.find((x) => x.id === g.id), { money: (n) => fmt.money(n, "USD") });
+    assert.equal(textOf(li.querySelector(".rec-value")), w.value);
+    assert.equal(textOf(li), [g.name, w.value, w.says, w.aim].filter(Boolean).join(" "));
+  }
+  // calm words for a goal twelve years off (critic P5), and one scale for the short answers (P2)
+  assert.match(textOf(body), /Cy's college Under 1 in 10 Very unlikely at this pace to reach \$90,000 in today's dollars by August 2038\. It would be 9 in 10 with about \$\d{3},?\d* a month\./);
+  assert.match(textOf(body), /Emergency fund Not at this pace It falls short of \$20,000 by June 2027\. It would get there with \$1,189 a month/);
+  assert.deepEqual(recs.map((li) => textOf(li.querySelector(".rec-value"))), ["Not at this pace", "Not at this pace", "Under 1 in 10", "Not at this pace"]);
+  // how it is worked out: short lines in plain words, the cash note said once (critic P3)
+  const how = body.all().filter((e) => e.tagName === "P").map(textOf);
+  assert.deepEqual(how, [
+    "How this is worked out: each goal is played forward 1,000 times, month by month, each time with its own good and bad years (a pretend future). The chance is how often it has its amount by its date.",
+    "Under 3 years away, its money counts as cash: 2% a year, the same every year.",
+    "Further off, it counts as bonds: 4% a year on average, about 5% up or down in a typical year.",
+    "A goal with its own growth figure goes up and down like a mix that grows that fast.",
+    "Prices rise 3% a year for a goal that grows with them.",
+    "\"Needs\" on each goal assumes exactly that growth every year, so 9 in 10 can take more.",
+  ]);
+  assert.ok(how.every((t) => t.split(/\s+/).length <= 40), "each line short");
+  assert.ok(textOf(body).split(/\s+/).length < 260, `the open row: ${textOf(body).split(/\s+/).length} words`);
+  assert.equal((textOf(body).match(/counts as cash|counted as cash/g) ?? []).length, 1, "the cash note once");
+  assert.doesNotMatch(textOf(body), /give or take|no ups and downs\. |Sure|Short\b|Every time|0 in 10/);
+  assert.ok(body.all().some((e) => e.tagName === "A" && e.getAttribute("href") === "#/system/assumptions"));
+});
+
+test("chance row: none on a plan with no goals; one goal's row says its own answer; a goal whose amount is our guess says so inside too", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  assert.equal((await drawGoals(emptyPlan())).part(), null, "no goals: the page asks for the first one, nothing more");
+  const p = emptyPlan();
+  p.goals.push({ id: "setup-goal-home", name: "House down payment", icon: "🏡", target: 43000, targetDate: "2029-11-15", priority: 2, saved: 0, fundedBy: [], monthly: 0, rate: null, inflates: true });
+  p.guesses = { "goals[setup-goal-home].target": { k: "goal.home.target", v: 43000, u: "total", s: null, at: V_TODAY, d: V_TODAY } };
+  const s = await drawGoals(p);
+  assert.equal(textOf(s.part().querySelector(".fold-status")), "Under 1 in 10", "nothing going in yet: very unlikely by its date");
+  assert.match(textOf(s.part()), /Its amount is our guess for now: tap the goal above to type yours\./);
+  // the guess mark itself stays on the first view, in the goal's row
+  assert.match(textOf(s.root.all().find((e) => e.tagName === "LI" && e.getAttribute("role") === "button")), /Our guess for now/);
+});
+
+test("S11: adding a goal saves it and says its chance; the chance row stays as it was and counts the new goal; opening it saves nothing", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const s = await drawGoals(familyPlan(V_TODAY));
+  const state = () => s.partsOf().map((e) => [e.dataset.part, e.hasAttribute("open")]);
+  const before = state();
+  // R16: opening and shutting changes nothing in the plan
+  const det = s.part();
+  det.open = true; det.dispatch("toggle"); det.open = false; det.dispatch("toggle");
+  assert.equal(s.saved.length, 0, "opening the row saved nothing");
+  s.root.all().find((e) => e.tagName === "BUTTON" && textOf(e) === "+ Add another goal").click();
+  const form = s.root.all().find((e) => e.tagName === "FORM");
+  form.querySelector('[name="name"]').value = "New roof";
+  form.querySelector('[name="target"]').value = "12000";
+  form.querySelector('[name="targetDate"]').value = "2028-11-15";
+  form.dispatch("submit");
+  assert.equal(s.saved.length, 1);
+  assert.equal(s.plan.goals.at(-1).name, "New roof");
+  // the green line names the new goal's answer (R7)
+  assert.equal(textOf(s.root.all().find((e) => /\bok\b/.test(e.className ?? "") && /notice/.test(e.className ?? ""))), "New roof added. It falls short of $12,000 in today's dollars by November 2028.");
+  assert.deepEqual(state(), before, "no part opened or shut by the save");
+  assert.equal(textOf(s.part().querySelector(".fold-status")), "All 5 may be late");
+  assert.match(textOf(s.part()), /New roof Not at this pace It falls short of \$12,000 in today's dollars by November 2028\./);
+});
+
+test("R7: saving a goal's changes names its new chance in the green line (critic P4)", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const s = await drawGoals(familyPlan(V_TODAY));
+  const ok = () => textOf(s.root.all().find((e) => /\bnotice\b/.test(e.className ?? "") && /\bok\b/.test(e.className ?? "")) ?? { textContent: "" });
+  const editGoal = (name, box, value) => {
+    s.root.all().find((e) => e.tagName === "LI" && e.getAttribute("role") === "button" && e.all().find((x) => x.className === "t").childNodes[0].textContent === name).click();
+    const form = s.root.all().find((e) => e.tagName === "FORM");
+    form.querySelector(`[name="${box}"]`).value = value;
+    form.dispatch("submit");
+  };
+  editGoal("Japan trip", "monthly", "900");
+  assert.equal(s.saved.length, 1); assert.equal(s.plan.goals.find((g) => g.name === "Japan trip").monthly, 900);
+  assert.equal(ok(), "Changes saved. Japan trip: it reaches $8,000 by October 2027 at this pace.");
+  assert.match(textOf(s.part()), /Japan trip On pace It reaches \$8,000 by October 2027 at this pace\./);
+  assert.equal(textOf(s.part().querySelector(".fold-status")), "3 of 4 may be late");
+  // a goal with ups and downs: its tenths; a goal now reached: says so
+  editGoal("Cy's college", "monthly", "900");
+  assert.match(ok(), /^Changes saved\. Cy's college: (at least 9|about \d) in 10 that it reaches \$90,000 in today's dollars by August 2038\.$/);
+  editGoal("Emergency fund", "saved", "20000");
+  assert.equal(ok(), "Changes saved. Emergency fund: the money set aside already covers its $20,000.");
+  // no chance to say (no date): the plain line, as before
+  editGoal("Replace Bo's car", "targetDate", "");
+  assert.equal(ok(), "Changes saved.");
+});
+
+test("chance row: a growth figure stored as text never shows NaN in how it is worked out (critic M2)", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = familyPlan(V_TODAY); p.assumptions.returnBonds = "x";
+  const s = await drawGoals(p);
+  const t = textOf(s.part());
+  assert.match(t, /Further off, it counts as bonds, about 5% up or down in a typical year\./);
+  assert.doesNotMatch(t, /NaN| - a month|undefined/);
+});
+
+test("the add form: three boxes first, the other seven under the kit's More details (optional); shut for a new goal, open when editing", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const boxes = (form) => form.all().filter((e) => ["INPUT", "SELECT", "TEXTAREA"].includes(e.tagName));
+  const s = await drawGoals(emptyPlan());
+  const form = s.root.all().find((e) => e.tagName === "FORM");
+  const fold = form.all().find((e) => e.tagName === "DETAILS");
+  assert.match(fold.className, /\bform-more\b/, "the kit's own line");
+  assert.equal(textOf(fold.querySelector(".fold-title")), "More details (optional)");
+  assert.equal(fold.hasAttribute("open"), false, "a new goal's form opens short");
+  assert.deepEqual(boxes(form).filter((b) => !b.closest("details")).map((b) => b.getAttribute("name")), ["name", "target", "targetDate"]);
+  assert.deepEqual(boxes(fold).map((b) => b.getAttribute("name")), ["icon", "priority", "saved", "accountId", "monthly", "rate", "inflates"]);
+  assert.deepEqual(fold.all().filter((e) => e.tagName === "OPTION" && e.parentNode.getAttribute("name") === "priority").map((o) => [o.getAttribute("value"), textOf(o)]),
+    [["2", "Want"], ["1", "Must have"], ["3", "Nice to have"]], "the default first, so the line stays shut");
+  // a new goal with nothing typed below the line saves as before: Want, the target icon, growing with prices
+  form.querySelector('[name="name"]').value = "Boat"; form.querySelector('[name="target"]').value = "9000";
+  form.dispatch("submit");
+  assert.deepEqual((({ name, icon, target, priority, inflates, monthly, saved }) => ({ name, icon, target, priority, inflates, monthly, saved }))(s.plan.goals[0]), { name: "Boat", icon: "🎯", target: 9000, priority: 2, inflates: true, monthly: 0, saved: 0 });
+  // editing opens the line with every box
+  s.root.all().find((e) => e.tagName === "LI" && e.getAttribute("role") === "button").click();
+  const edit = s.root.all().find((e) => e.tagName === "FORM");
+  assert.equal(edit.all().find((e) => e.tagName === "DETAILS").hasAttribute("open"), true);
+});

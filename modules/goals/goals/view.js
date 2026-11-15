@@ -1,8 +1,13 @@
 // modules/goals/goals/view.js -- DOM only. Totals, a tappable list of goals with progress
 // bars, one form to add or edit.
-import { compute, PRIORITIES, GOAL_ICONS, plannerFor, plannerFigure, plannerDiffers } from "./compute.js";
+import { compute, PRIORITIES, GOAL_ICONS, plannerFor, plannerFigure, plannerDiffers, chances, chanceWords, chanceStatus, CHANCE } from "./compute.js";
 import { goalsBehind } from "../../overview/alerts/compute.js";
 import { isGuess } from "../../../core/estimate/index.js";
+import { parts } from "../../../core/ui/more.js";
+
+/** The one quiet row under the goals (gap list, next 60, item 12): its title is pinned in qa/first-view-lib.mjs. */
+export const CHANCE_TITLE = "Chance of reaching each goal";
+const pct = (x) => (Number.isFinite(Number(x)) && x !== null && x !== "" ? `${Number((Number(x) * 100).toFixed(1))}%` : "");
 
 // A new goal needs a name and an amount, and most have a date: the rest is `more: true`, under the kit's "More details
 // (optional)" just above the button (F5: ten boxes before "Add goal", 1.6 screens down; opt spec 6.1, its C15 row: the
@@ -22,7 +27,8 @@ const FIELDS = (accounts) => [
   { key: "inflates", label: "Grow the amount with inflation until then", type: "checkbox", more: true },
 ];
 
-// The shell re-renders after store.update, so a confirmation waits here for the next render.
+// The shell re-renders after store.update, so a confirmation waits here for the next render: { text, id?, name?, added? }.
+// With the goal's id, the green line names its new chance (opt spec R7): "Changes saved. Japan trip: it reaches ...".
 let pending = null;
 
 
@@ -34,7 +40,6 @@ export function render(root, ctx) {
   const accounts = plan.accounts ?? [];
   let editing = null;
   const out = ui.h("div");
-  if (pending) { const n = ui.notice("ok", pending); out.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   // A goal whose account is gone: the warning names the goal as a tap that opens its form.
   const broken = new Set((plan.goals ?? []).filter((g) => (g.fundedBy ?? []).some((id) => !accounts.some((a) => a.id === id))).map((g) => g.id));
   // what the goal's own page works out, when it works it out for this goal: { amount (today's dollars, as the goal's
@@ -49,6 +54,21 @@ export function render(root, ctx) {
   const nbaNow = d.count ? of("overview/next-best-action") : null;
   const fromCash = new Map(((nbaNow?.ready ? nbaNow.steps.find((x) => x.id === "goals")?.fromCash : null) ?? []).map((x) => [x.id, x]));
   const cashMonthly = d.goals.filter((g) => fromCash.has(g.id)).reduce((t, g) => t + (Number(g.neededMonthly) || 0), 0);
+  // the chance of reaching each goal by its date (README "The chance of reaching each goal"): read-only, for the row below
+  // and the green line after a save
+  const money = (n) => fmt.money(n, cur);
+  let ch = null;
+  if (d.count) try { ch = chances(plan, { today: fmt.today(), rows: d.goals }); } catch { ch = null; }
+  const chanceOf = (id) => ch?.goals.find((x) => x.id === id) ?? null;
+  if (pending) {
+    let text = pending.text;
+    const x = pending.id ? chanceOf(pending.id) : null;
+    if (x && (x.kind === "run" || x.kind === "reached") && !fromCash.has(x.id)) {
+      const says = chanceWords(x, { money }).says;
+      text = pending.added ? `${text} ${says}` : `${text} ${pending.name}: ${says.charAt(0).toLowerCase()}${says.slice(1)}`;
+    }
+    const n = ui.notice("ok", text); out.append(n); setTimeout(() => n.remove(), 4000); pending = null;
+  }
   // a passed date the goal's own page has a figure for (Education's next bill for a child in college; round 8 verify, UX 4's
   // rest): that figure, on the row's link, is what is due, so the goal's whole amount ("$103,000 is due now") is not said
   const lateFigure = (g) => { if (g.status !== "past due") return null; const f = figureOf((plan.goals ?? []).find((y) => y.id === g.id) ?? g, g); return f && f.amount > 0 ? f : null; };
@@ -88,11 +108,12 @@ export function render(root, ctx) {
     const goalForm = ui.form(FIELDS(accounts), values, (v) => {
         const clean = { name: v.name.trim(), icon: v.icon || "🎯", target: v.target ?? 0, targetDate: v.targetDate || "", priority: Number(v.priority) || 2, saved: v.saved ?? 0, fundedBy: v.accountId ? [v.accountId] : [], monthly: v.monthly ?? 0, rate: v.rate ?? null, inflates: !!v.inflates };
         if (!clean.name) return;
-        pending = editing ? "Changes saved." : `${clean.name} added.`;
+        const id = editing ? editing.id : ui.uid();
+        pending = editing ? { text: "Changes saved.", id, name: clean.name } : { text: `${clean.name} added.`, id, added: true };
         store.update((p) => {
           p.goals = p.goals ?? [];
           if (editing) { const i = p.goals.findIndex((x) => x.id === editing.id); if (i >= 0) p.goals[i] = { ...p.goals[i], ...clean }; }
-          else p.goals.push({ id: ui.uid(), ...clean });
+          else p.goals.push({ id, ...clean });
         });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add goal", resetAfter: !editing, moreOpen: editing ? true : undefined, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null });
@@ -120,7 +141,7 @@ export function render(root, ctx) {
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button(`Remove ${editing.name}`, () => {
         if (!ui.confirm(`Remove the goal ${editing.name}?`)) return;
         const id = editing.id; const name = editing.name; editing = null;
-        pending = `${name} removed.`;
+        pending = { text: `${name} removed.` };
         store.update((p) => { p.goals = (p.goals ?? []).filter((x) => x.id !== id); });
       }, { class: "danger" })) : null,
     ));
@@ -168,9 +189,44 @@ export function render(root, ctx) {
             return ui.h("a", { class: "small", href: `#/${pl.page}`, style: { display: "inline-flex", alignItems: "center", marginTop: "8px", minHeight: "44px" }, onClick: (e) => e.stopPropagation() }, say); })()),
         ui.h("span", { class: "st muted" }, "Edit ›"),
       ); })),
-      ui.h("p", { class: "muted small" }, "Tap a goal to change it. \"Needs\" is what to put in each month from now on, assuming the money grows at the plan's rate for that time frame."),
+      ui.h("p", { class: "muted small" }, "Tap a goal to change it."),
       out, formHost,
     ));
+    // The chance of reaching each goal by its date (README "The chance of reaching each goal"): one reading part for all the
+    // goals, in the list's order, one record each; nothing to type or save, so opening it never changes the plan. Its status
+    // says the answer while it is shut ("2 of 4 may be late"). The sentence on what "Needs" means moved in here with the rest
+    // of how the page counts growth, in short lines.
+    if (ch) {
+      const a = plan.assumptions ?? {};
+      const grows = ch.goals.some((x) => x.grows), own = ch.goals.some((x) => x.mixKind === "own");
+      const record = (g) => {
+        const x = chanceOf(g.id);
+        if (!x) return null;
+        const w = chanceWords(x, { money, fromSavings: fromCash.has(g.id) });
+        return ui.h("li", {},
+          ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, g.name), ui.h("span", { class: "rec-value" }, w.value)),
+          ui.h("div", { class: "rec-sub" }, w.says),
+          w.aim ? ui.h("div", { class: "rec-sub" }, w.aim) : null,
+          ours(g) && x.kind !== "no amount" ? ui.h("div", { class: "rec-sub" }, "Its amount is our guess for now: tap the goal above to type yours.") : null);
+      };
+      const cash = pct(a.returnCash ?? 0.02), bonds = pct(a.returnBonds ?? 0.04), bumpy = pct(a.stdevBonds ?? 0.05), infl = pct(a.inflation ?? 0.03);
+      const how = [
+        `How this is worked out: each goal is played forward ${CHANCE.runs.toLocaleString("en-US")} times, month by month, each time with its own good and bad years (a pretend future). The chance is how often it has its amount by its date.`,
+        `Under 3 years away, its money counts as cash${cash ? `: ${cash} a year` : ""}, the same every year.`,
+        `Further off, it counts as bonds${bonds ? `: ${bonds} a year on average` : ""}${bumpy ? `, about ${bumpy} up or down in a typical year` : ""}.`,
+        own ? "A goal with its own growth figure goes up and down like a mix that grows that fast." : null,
+        grows && infl ? `Prices rise ${infl} a year for a goal that grows with them.` : null,
+        `"Needs" on each goal assumes exactly that growth every year, so 9 in 10 can take more.`,
+      ].filter(Boolean);
+      root.append(parts(ctx, {
+        id: "chances", kind: "more", title: CHANCE_TITLE, says: chanceStatus(rows.map((g) => chanceOf(g.id)).filter(Boolean), { fromSavings: (id) => fromCash.has(id), money }),
+        body: () => [
+          ui.h("ul", { class: "records" }, rows.map(record)),
+          ui.h("div", { class: "muted small" }, how.map((t, i) => ui.h("p", { style: { margin: i === how.length - 1 ? 0 : "0 0 6px" } }, t))),
+          ui.h("a", { href: "#/system/assumptions", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px", justifySelf: "start" } }, "Change these growth figures on Assumptions ›"),
+        ],
+      }));
+    }
   } else {
     formCard.append(out, formHost);
     root.append(formCard);
