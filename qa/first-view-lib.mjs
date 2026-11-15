@@ -310,6 +310,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Chance of reaching each goal",  // goals/goals (gap list, next 60, item 12): each goal's chance by its date, a name a person looks for; not the page's sum, so not "How this is worked out"
   "Import a positions file",       // investments/holdings (opt spec 6.1, done with gap list, next 60, item 8): the brokerage file's importer, a tool a person looks for by name; one own part on its page, so no "Set my own numbers"
   "Month by month",                // investments/dividends (gap list, next 60, item 8): the brief's own title; the next twelve months' dividends as bars, what came in and the two yields, a calendar a person looks for by name, not "N more months"
+  "Add or take out money each year", // investments/backtest (gap list, next 60, item 52): the brief's own title; an amount put in or taken out every year, tried and never saved, a question a person asks by name; not our guess overridden, so not "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

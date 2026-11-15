@@ -7,6 +7,8 @@ import { RETURNS } from "../../retirement/historical/data/returns.js";
 import { mixReturns, growth, maxDrawdown, seriesStats, cagr } from "../../../core/math/returns.js";
 import { targetMix } from "../allocation/compute.js";
 import { compute as computeHoldings, ASSET_CLASSES } from "../holdings/compute.js";
+import { compute as computeContributions } from "../../retirement/contributions/compute.js";
+import { buildInputs } from "../../retirement/projection/compute.js";
 
 /** Every year with returns, 1871 to the last Damodaran year. */
 export const HISTORY = [...EARLY, ...RETURNS];
@@ -50,9 +52,85 @@ export function runMix(weights, { from = 1871, to = Infinity, start = 10000, rea
   };
 }
 
+// ---------------------------------------------------------------- money in or out each year (gap list, next 60, item 52)
+/** The stretch lengths offered, in years, and the one shown first (a working life's saving or a retirement's spending). */
+export const FLOW_YEARS = [10, 20, 30];
+export const FLOW_YEARS_FIRST = 30;
+
+/** The median of a list of numbers: the middle one, or the mean of the two middle ones when the count is even. */
+export function median(xs) {
+  const s = [...xs].sort((a, b) => a - b), n = s.length;
+  if (!n) return null;
+  return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+}
+
 /**
- * compute(plan, { today, mixA, mixB, from, real }) -> { a: runMix, b: runMix, mixA: { stocks, bonds, bills, label }, mixB, from, real, firstYear, lastYear, presets, startYears, notes }
+ * withFlows(weights, { from, to, start, yearly, dir, years, history }) -> the mix run over every stretch of `years`
+ * consecutive years in history from `from`, with `yearly` (today's dollars) put in ("in") or taken out ("out") at the
+ * start of each year and raised with that year's prices. Worked in today's dollars: a year's return is the mix's
+ * return over that year's inflation, (1 + R) / (1 + i) - 1, so the amount stays the same figure every year.
+ *   in:  V <- (V + F) (1 + r)
+ *   out: V >= F: V <- (V - F) (1 + r); else the money ran out that year (paid in full for `lasted` years), V = 0 after.
+ * Returns { dir, yearly, start, years, from, last, history (years of history from `from`), n, starts: [{ start (year),
+ * end (today's dollars), ranOut (year or null), lasted (years paid in full) }], ranOut (count), worst, middle (the
+ * median end), best, minLasted, maxLasted (over the starts that ran out; null when none did) }. n = 0 when the history
+ * from `from` is shorter than `years`. Worst: when some ran out, the one that ran out soonest (then the lower end);
+ * otherwise the lowest end. Best: the highest end. A way other than "in" or "out" is no run at all (null); an amount
+ * or a start that is not a finite number counts as 0 (critic M3: "sideways" ran as money in, 1e308 a year as Infinity).
+ */
+export function withFlows(weights, { from = 1928, to = Infinity, start = 0, yearly = 0, dir = "in", years = FLOW_YEARS_FIRST, history = HISTORY } = {}) {
+  if (dir !== "in" && dir !== "out") return null;
+  const rows = history.filter((y) => y.year >= from && y.year <= to);
+  const real = mixReturns(rows, weights).map((r, i) => (1 + r) / (1 + rows[i].inflation) - 1);
+  const amount = (x) => { const v = Number(x); return Number.isFinite(v) && v > 0 ? v : 0; };
+  const F = amount(yearly), S = amount(start), k = Math.max(1, Math.round(Number(years) || FLOW_YEARS_FIRST));
+  const out = dir === "out";
+  const starts = [];
+  for (let s = 0; s + k <= rows.length; s++) {
+    let v = S, ranOut = null, lasted = k;
+    for (let t = 0; t < k; t++) {
+      if (out) {
+        if (v < F) { ranOut = rows[s + t].year; lasted = t; v = 0; break; }
+        v = (v - F) * (1 + real[s + t]);
+      } else v = (v + F) * (1 + real[s + t]);
+    }
+    starts.push({ start: rows[s].year, end: v, ranOut, lasted });
+  }
+  const n = starts.length, gone = starts.filter((x) => x.ranOut !== null);
+  const low = (a, b) => (a.end < b.end ? a : b);
+  const worst = !n ? null : gone.length ? gone.reduce((a, b) => (b.lasted < a.lasted || (b.lasted === a.lasted && b.end < a.end) ? b : a)) : starts.reduce(low);
+  const best = n ? starts.reduce((a, b) => (b.end > a.end ? b : a)) : null;
+  return {
+    dir: out ? "out" : "in", yearly: F, start: S, years: k, from: rows[0]?.year ?? from, last: rows[rows.length - 1]?.year ?? null, history: rows.length,
+    n, starts, ranOut: gone.length, worst, middle: median(starts.map((x) => x.end)), best,
+    minLasted: gone.length ? Math.min(...gone.map((x) => x.lasted)) : null, maxLasted: gone.length ? Math.max(...gone.map((x) => x.lasted)) : null,
+  };
+}
+
+/** What the plan holds and plans, for the chips of "Add or take out money each year": { saving (a year into retirement
+ * and investment accounts, the employer's match too; the Contributions page's total), spending (a year in retirement,
+ * today's dollars, the figure Will the money last? spends before its health line), healthOnTop (true when Will the
+ * money last? adds a health line on top of that spending: the figure here leaves it out, and the row says so; critic M1),
+ * invested (the Risk page's rule: the holdings' value, else the investment accounts' balances) }; null where the plan
+ * has none. */
+export function flowChoices(plan, params = {}) {
+  const today = params.today ?? null;
+  const saving = computeContributions(plan, { today }).totalYearly;
+  const b = buildInputs(plan, { today });
+  const spending = b.inputs && b.spendingYearly > 0 ? b.spendingYearly : Number(b.figureMonthly) > 0 ? Number(b.figureMonthly) * 12 : null;
+  const healthOnTop = !!b.inputs && b.health?.included === false && Number(b.health?.total) > 0;
+  const h = computeHoldings(plan, params);
+  const invested = h.total > 0 ? h.total : (plan.accounts ?? []).filter((a) => INVESTED_TYPES.includes(a.type)).reduce((s, a) => s + (Number(a.balance) || 0), 0);
+  return { saving: saving > 0 ? saving : null, spending: spending > 0 ? spending : null, healthOnTop: spending > 0 && healthOnTop, invested: invested > 0 ? invested : null };
+}
+/** The account types the Risk page counts as invested money when there are no holdings. */
+export const INVESTED_TYPES = ["brokerage", "401k", "ira", "roth", "hsa", "529", "crypto"];
+
+/**
+ * compute(plan, { today, mixA, mixB, from, real, flow }) -> { a: runMix, b: runMix, mixA: { stocks, bonds, bills, label }, mixB, from, real, firstYear, lastYear, presets, startYears, notes, flow? }
  * mixA defaults to the target chosen on Allocation, else to what is held (defaultA says which), mixB to 60/40; either may be a preset key or { stocks, bonds, bills }.
+ * flow ({ dir: "in" | "out", yearly, start, years }, optional): adds `flow: { a, b }`, both mixes run by withFlows from
+ * `from`; without it, or with another way, the output is what it was before (no key added).
  */
 export function compute(plan, params = {}) {
   const { mix: t, source } = targetMix(plan);
@@ -70,5 +148,11 @@ export function compute(plan, params = {}) {
   const notes = [];
   if (from < 1928) notes.push("Before 1928 the figures come from Shiller's S&P and long-bond series; cash is the January long-bond yield standing in for short rates, so treat the cash part of those years as approximate.");
   notes.push("Stocks are the S&P 500 (large US companies); international stocks, real estate funds (REITs) and gold in your mix are treated as US stocks here, because their records do not go back as far. One rebalance a year, no fees, no taxes.");
-  return { a, b, mixA, mixB, own, held, ownSource: source, defaultA, from, real, firstYear: HISTORY[0].year, lastYear: HISTORY[HISTORY.length - 1].year, presets: PRESETS, startYears: START_YEARS, notes };
+  const out = { a, b, mixA, mixB, own, held, ownSource: source, defaultA, from, real, firstYear: HISTORY[0].year, lastYear: HISTORY[HISTORY.length - 1].year, presets: PRESETS, startYears: START_YEARS, notes };
+  const f = params.flow;
+  if (f && typeof f === "object" && (f.dir === "in" || f.dir === "out")) {
+    const ask = { from, start: f.start, yearly: f.yearly, dir: f.dir, years: FLOW_YEARS.includes(Number(f.years)) ? Number(f.years) : FLOW_YEARS_FIRST };
+    out.flow = { a: withFlows(mixA, ask), b: withFlows(mixB, ask) };
+  }
+  return out;
 }
