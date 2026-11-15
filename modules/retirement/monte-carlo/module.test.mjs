@@ -806,3 +806,353 @@ test("#36 the page: one more quiet row; opened, the sentence and a bar per group
   assert.equal(bad[0].textContent, "The file could not be made: the computer did not answer. Reload the page and try again.");
   assert.equal(fb.disabled, false);
 });
+
+// ---------------------------------------------------------------- how the pretend years are drawn (gap next-60 #35)
+const MCM = await import("../../../core/math/montecarlo.js");
+const { RETURNS } = await import("../historical/data/returns.js");
+const T35 = "2026-11-15";
+const mean = (xs) => xs.reduce((t, x) => t + x, 0) / xs.length;
+
+test("#35 the bundled history's own figures: 1928 to 2025, every class the plan uses, inflation's swing and how it carries on", () => {
+  const H = MC.HISTORY;
+  assert.deepEqual([H.from, H.to, H.years], [1928, 2025, 98]);
+  assert.equal(RETURNS.length, 98);
+  RETURNS.forEach((r, i) => { assert.equal(r.year, 1928 + i); for (const k of ["stocks", "bonds", "bills", "inflation"]) assert.ok(Number.isFinite(r[k]), `${r.year} ${k}`); });
+  // by hand from the file, to four places (README)
+  assert.deepEqual([H.mean.stocks, H.mean.bonds, H.mean.cash, H.mean.inflation].map((x) => x.toFixed(4)), ["0.1185", "0.0482", "0.0341", "0.0311"]);
+  assert.equal(H.mean.cash, mean(RETURNS.map((r) => r.bills)), "cash is the 3-month bills");
+  const i = RETURNS.map((r) => r.inflation), m = mean(i);
+  assert.ok(Math.abs(H.inflationSd - Math.sqrt(i.reduce((t, x) => t + (x - m) ** 2, 0) / 97)) < 1e-15);
+  assert.equal(H.inflationSd.toFixed(4), "0.0390");
+  assert.equal(H.inflationLag1.toFixed(2), "0.61");
+});
+
+test("#35 lag1, pickIndices and ar1Paths (core/math/montecarlo.js): hand figures, the same seed the same draw", () => {
+  // [1, 2, 3, 4]: deviations -1.5 -0.5 0.5 1.5; (0.75 - 0.25 + 0.75) / (2.25 + 0.25 + 0.25 + 2.25) = 1.25 / 5
+  assert.equal(MCM.lag1([1, 2, 3, 4]), 0.25);
+  assert.equal(MCM.lag1([5]), 0);
+  assert.equal(MCM.lag1([2, 2, 2]), 0);
+  // the picks: floor(u x count) of mulberry32(seed), path by path, year by year
+  const r = MCM.mulberry32(3);
+  assert.deepEqual(MCM.pickIndices(2, 3, 98, 3), [[0, 1, 2], [3, 4, 5]].map((p) => p.map(() => Math.floor(r() * 98))));
+  const picks = MCM.pickIndices(500, 40, 98, 1);
+  assert.deepEqual(picks, MCM.pickIndices(500, 40, 98, 1));
+  assert.notDeepEqual(picks, MCM.pickIndices(500, 40, 98, 2));
+  const flat = picks.flat();
+  assert.ok(flat.every((k) => Number.isInteger(k) && k >= 0 && k <= 97));
+  const counts = new Array(98).fill(0); for (const k of flat) counts[k]++;
+  // 20,000 picks: about 204 each; every real year picked, none more than twice as often as another
+  assert.ok(Math.min(...counts) > 140 && Math.max(...counts) < 280, `${Math.min(...counts)} to ${Math.max(...counts)}`);
+  // ar1Paths: x0 = 0, then x_t = phi x_(t-1) + sd sqrt(1 - phi^2) z_t, by hand on the same stream
+  const g = MCM.mulberry32(9), e = 0.04 * Math.sqrt(1 - 0.5 ** 2);
+  let x = 0; const hand = [0.03];
+  for (let t = 1; t < 5; t++) { x = 0.5 * x + e * MCM.normal(g); hand.push(0.03 + x); }
+  assert.deepEqual(MCM.ar1Paths(1, 5, { mean: 0.03, phi: 0.5, sd: 0.04, seed: 9 }), [hand]);
+  assert.deepEqual(MCM.ar1Paths(3, 4, { mean: 0.02, phi: 0, sd: 0, seed: 1 }), [[0.02, 0.02, 0.02, 0.02], [0.02, 0.02, 0.02, 0.02], [0.02, 0.02, 0.02, 0.02]]);
+});
+
+test("#35 years picked from history: only real years, all classes from the same year, set to the plan's averages", () => {
+  const o = { stocks: 0.07, bonds: 0.04, cash: 0.02, inflation: 0.03, seed: 1 };
+  const a = MC.historySequences(400, 30, o);
+  assert.deepEqual(a, MC.historySequences(400, 30, o), "the same seed, the same years");
+  assert.notDeepEqual(a.seqs, MC.historySequences(400, 30, { ...o, seed: 2 }).seqs);
+  const M = MC.HISTORY.mean;
+  const k = { stocks: 1.07 / (1 + M.stocks), bonds: 1.04 / (1 + M.bonds), cash: 1.02 / (1 + M.cash), inflation: 1.03 / (1 + M.inflation) };
+  const back = (v, c) => (1 + v) / k[c] - 1;
+  a.seqs.forEach((path, p) => path.forEach((y, t) => {
+    const real = RETURNS[a.picks[p][t]];
+    assert.ok(real, "a real year");
+    // every class from that one year (stocks, bonds and cash move together as they did)
+    for (const [c, f] of [["stocks", "stocks"], ["bonds", "bonds"], ["cash", "bills"], ["inflation", "inflation"]]) assert.ok(Math.abs(back(y[c], c) - real[f]) < 1e-12, `${real.year} ${c}`);
+  }));
+  // and the year can be read back from the stock return alone: one of the 98, never a made-up figure
+  const stocks = new Set(RETURNS.map((r) => r.stocks.toFixed(9)));
+  assert.ok(a.seqs.flat().every((y) => stocks.has(back(y.stocks, "stocks").toFixed(9))));
+  // over the 98 years each class averages exactly the plan's own figure
+  const all = MC.historySequences(1, 98, o);   // (any picks) -> check the transformation of every real year instead
+  void all;
+  for (const [c, f] of [["stocks", "stocks"], ["bonds", "bonds"], ["cash", "bills"], ["inflation", "inflation"]]) {
+    assert.ok(Math.abs(mean(RETURNS.map((r) => (1 + r[f]) * k[c] - 1)) - o[c]) < 1e-12, c);
+  }
+  // and the drawn years, 12,000 of them, average it within 4 standard errors (stocks swing 18.6%: 4 x 0.186 / sqrt(12,000) = 0.0068)
+  const drawn = a.seqs.flat();
+  assert.ok(Math.abs(mean(drawn.map((y) => y.stocks)) - 0.07) < 0.0068);
+  assert.ok(Math.abs(mean(drawn.map((y) => y.inflation)) - 0.03) < 4 * 0.039 / Math.sqrt(12000));
+});
+
+test("#35 prices that rise unevenly: the usual returns, inflation drawn around the plan's figure with history's swing", () => {
+  const o = { stocks: 0.07, bonds: 0.04, stdevStocks: 0.15, stdevBonds: 0.05, inflation: 0.03, seed: 1 };
+  const a = MC.pricesSequences(2000, 40, o);
+  assert.deepEqual(a, MC.pricesSequences(2000, 40, o), "the same seed, the same prices");
+  // the returns are the usual draw's, year for year: only prices differ
+  const usual = MC.drawSequences(2000, 40, o);
+  a.forEach((path, p) => path.forEach((y, t) => { assert.equal(y.stocks, usual[p][t].stocks); assert.equal(y.bonds, usual[p][t].bonds); }));
+  assert.ok(a.every((path) => path[0].inflation === 0.03), "this year rises by the plan's figure");
+  // 80,000 drawn years average the plan's figure within 0.002 (a year's draw swings by 3.9% and carries on, so the standard
+  // error of the mean is about 0.039 x sqrt(1.61 / 0.39) / sqrt(80,000) = 0.0003; 0.002 is over six of them)
+  const infl = a.flatMap((path) => path.map((y) => y.inflation));
+  assert.ok(Math.abs(mean(infl) - 0.03) < 0.002, `${mean(infl)}`);
+  // settled (from year 10), the swing is history's 3.9% and a year carries on into the next by history's 0.61
+  const dev = a.map((path) => path.map((y) => y.inflation - 0.03).slice(10));
+  const sd = Math.sqrt(mean(dev.flat().map((x) => x * x)));
+  assert.ok(Math.abs(sd - MC.HISTORY.inflationSd) < 0.002, `swing ${sd}`);
+  let num = 0, den = 0;
+  for (const d of dev) for (let t = 0; t + 1 < d.length; t++) { num += d[t] * d[t + 1]; den += d[t] * d[t]; }
+  assert.ok(Math.abs(num / den - MC.HISTORY.inflationLag1) < 0.02, `carries on ${num / den}`);
+  // a second stream: another seed draws other prices
+  assert.notDeepEqual(MC.pricesSequences(50, 10, { ...o, seed: 2 }).map((p) => p.map((y) => y.inflation)), a.slice(0, 50).map((p) => p.slice(0, 10).map((y) => y.inflation)));
+});
+
+test("#35 compute: each way says so and moves the chance; the usual way, an unknown way or none is the old answer, byte for byte", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = migrate(familyPlan(T35));
+  const o = { today: T35, paths: 2000, careful: false };
+  const u = compute(p, o);
+  assert.equal("draw" in u, false);
+  for (const w of ["usual", "lottery", undefined, null]) assert.equal(JSON.stringify(compute(p, { ...o, draw: w })), JSON.stringify(u), String(w));
+  const h = compute(p, { ...o, draw: "history" }), pr = compute(p, { ...o, draw: "prices" });
+  assert.equal(h.draw, "history"); assert.equal(pr.draw, "prices");
+  // the family (Ana and Bo, the money to 2085): 80 of 100 the usual way, 69 with years picked from history, 72 with prices
+  // that rise unevenly (history's swings are wider than the plan's 15% and 5%; uneven prices raise the spending in bad stretches)
+  assert.deepEqual([u, h, pr].map((d) => perHundredOf(d.successRate)), [80, 69, 72]);
+  // the same seed, the same answer
+  assert.equal(JSON.stringify(compute(p, { ...o, draw: "history" })), JSON.stringify(h));
+  // how the runs end and every run as a file follow the way
+  const e = compute(p, { ...o, paths: 300, draw: "history", endings: true, runs: true });
+  assert.equal(e.endings.ranOut + e.endings.lasted, 300);
+  assert.equal(e.runs.length, 300);
+  assert.equal(e.endings.lasted / 300, e.successRate);
+  // the draw is the one drawFor gives (every class, every year) and the projection is run on it as it is
+  const I = (await import("../projection/compute.js")).buildInputs(p, { today: T35 }).inputs;
+  const seqs = MC.drawFor("history", 300, I.endYear - I.startYear + 1, I, 1);
+  const { project } = await import("../../../core/math/retirement.js");
+  assert.equal(seqs.filter((q) => project(I, { sequence: q }).success).length / 300, e.successRate);
+  assert.deepEqual(MC.drawFor("usual", 30, 5, I, 1), MC.drawSequences(30, 5, { stocks: I.returns.stocks, bonds: I.returns.bonds, stdevStocks: I.stdev.stocks, stdevBonds: I.stdev.bonds, seed: 1 }));
+  assert.deepEqual([MC.asDraw("history"), MC.asDraw("prices"), MC.asDraw("usual"), MC.asDraw("History"), MC.asDraw(3)], ["history", "prices", "usual", "usual", "usual"]);
+  assert.deepEqual([MC.drawOf({}), MC.drawOf({ assumptions: { chanceDraw: "prices" } }), MC.drawOf({ assumptions: { chanceDraw: "x" } })], ["usual", "prices", "usual"]);
+});
+const perHundredOf = (s) => Math.floor(s * 100 + 1e-9);
+
+test("#35 the careful figure is always the usual way's, whatever way the page draws (one figure on every page)", () => {
+  const p = migrate(retirementPlan());
+  const o = { today: T17, paths: 300 };
+  const c = compute(p, o).careful;
+  assert.ok(c && c.yearly > 0);
+  assert.deepEqual(compute(p, { ...o, draw: "history" }).careful, c);
+  assert.deepEqual(compute(p, { ...o, draw: "prices" }).careful, c);
+});
+
+test("#35 the words: one sentence per way and per case, the chips with their chance, the hero's line, Keep, its question and its lines", () => {
+  assert.deepEqual(view.DRAWS ?? MC.DRAWS, ["usual", "history", "prices"]);
+  // the chance never breaks across lines in a chip (no-break spaces)
+  assert.deepEqual(["usual", "history", "prices"].map((w) => view.chipWords(w, 0.802)), ["The usual way: 80\u00a0of\u00a0100", "Years picked from history: 80\u00a0of\u00a0100", "Prices that rise unevenly: 80\u00a0of\u00a0100"]);
+  assert.equal(view.chipWords("prices", 0.004), "Prices that rise unevenly: under\u00a01\u00a0of\u00a0100");
+  assert.equal(view.chipWords("history", undefined), "Years picked from history");
+  assert.deepEqual([1, 0.995, 0.004, 0].map(view.chanceValue), ["100 of 100", "99 of 100", "under 1 of 100", "0 of 100"]);
+  // q1 fix P2, P3: a heading of its own, apart from how careful; the figure on a chip counted like the answer at the top; what a
+  // tap does, said before any tap
+  assert.equal(view.DRAW_TITLE, "How the pretend years are drawn");
+  assert.equal(view.DRAW_ASK, "Each way tests the same plan with its own pretend years. The figure on each is how many of 100 pretend futures the money lasts in, like the answer at the top. Tap one to try it and see what it means; nothing is saved unless you keep it.");
+  assert.deepEqual(view.WAY_WORDS, {
+    usual: "Each year's returns are drawn at random around your own averages and swings, and prices rise steadily by your figure.",
+    history: "Each pretend year is a real year from 1928 to 2025, picked at random: its stocks, bonds, cash and prices move together as they did that year, set to average your own figures.",
+    prices: "Returns as the usual way, but prices rise unevenly around your figure, with swings like those since 1928: a year of high prices tends to be followed by another.",
+  });
+  // the hero's line: nothing the usual way; kept; tried
+  assert.deepEqual([["usual", "usual"], ["history", "history"], ["prices", "prices"], ["history", "usual"], ["prices", "history"], ["usual", "prices"]].map(([w, k]) => view.wayNote(w, k)), [
+    null, "Drawn with years picked from history, as you chose.", "Drawn with prices that rise unevenly, as you chose.",
+    "Trying years picked from history: this page only, nothing saved.", "Trying prices that rise unevenly: this page only, nothing saved.", "Trying the usual way: this page only, nothing saved."]);
+  assert.deepEqual(["usual", "history", "prices"].map(view.keepWords), ["Keep the usual way", "Keep years picked from history", "Keep prices that rise unevenly"]);
+  assert.deepEqual(["usual", "history", "prices"].map(view.confirmWords), [
+    "Keep the usual way? This page will draw its pretend years the usual way again. No other page changes.",
+    "Keep years picked from history? This page will draw its pretend years this way from now on. No other page changes.",
+    "Keep prices that rise unevenly? This page will draw its pretend years this way from now on. No other page changes."]);
+  assert.deepEqual(["usual", "history", "prices"].map((w) => view.keptWords(w, 0.698)), [
+    "Saved. This page is back to the usual way: the money lasts in 69 of 100 pretend futures.",
+    "Saved. This page now draws years picked from history: the money lasts in 69 of 100 pretend futures.",
+    "Saved. This page now has prices that rise unevenly: the money lasts in 69 of 100 pretend futures."]);
+  assert.equal(view.keptWords("history", undefined), "Saved. This page now draws years picked from history.");
+  assert.deepEqual([view.backWords("usual", 0.802), view.backWords("history", 0.698), view.backWords("prices", undefined)], [
+    "Back to the usual way: the money lasts in 80 of 100 pretend futures.", "Back to years picked from history: the money lasts in 69 of 100 pretend futures.", "Back to prices that rise unevenly."]);
+  assert.equal(view.TRY_WORDS, "You are trying this on this page only; your plan is not changed.");
+  // q1 fix P1, P6: while a way is tried, the hero says a different answer is normal and has the way back
+  assert.equal(view.TRY_NORMAL, "Neither way is the right one: they are two ways to test the same plan, so a different answer is normal.");
+  assert.deepEqual(["usual", "history", "prices"].map(view.backToWords), ["Back to the usual way", "Back to years picked from history", "Back to prices that rise unevenly"]);
+  assert.equal(view.SAME_FIGURE, "The spending that lasts, above, is always worked out the usual way, so every page shows the same figure.");
+  assert.equal(view.DRAW_BUSY, "Working out the chance with each way...");
+  assert.equal(view.DRAW_FAILED, "The chance with each way could not be worked out. Reload the page to try again.");
+  // How this is done: the usual way's sentence is the one the page always had; one for each other way
+  const A = { returnStocks: 0.07, returnBonds: 0.04, returnCash: 0.02, stdevStocks: 0.15, stdevBonds: 0.05, inflation: 0.03 };
+  const pct = fmt.pct;
+  assert.equal(view.methodWords("usual", A, pct), "Each pretend future picks a random return for stocks and bonds every year, averaging 7.0% and 4.0%, with typical swings of 15% and 5%, and inflation steady at 3.0%. The random picks are the same each time, so the answer does not change when you reopen the page.");
+  assert.equal(view.methodWords("history", A, pct), "Each pretend future picks, for every year, one real year from 1928 to 2025 at random and takes its stock, bond and cash returns and its rise in prices together, set to average your own 7.0%, 4.0%, 2.0% and 3.0%; the swings are history's own. The random picks are the same each time, so the answer does not change when you reopen the page.");
+  assert.equal(view.methodWords("prices", A, pct), "Each pretend future picks a random return for stocks and bonds every year, averaging 7.0% and 4.0%, with typical swings of 15% and 5%, and prices that rise by 3.0% a year on average but unevenly, by about 3.9% more or less in a typical year as from 1928 to 2025; a year of high prices tends to be followed by another. The random picks are the same each time, so the answer does not change when you reopen the page.");
+});
+
+test("#35 the page: try a way (nothing saved), keep it (asked first, one field, the green line with Undo), Undo puts it back", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { knownChance } = await import("../careful.js");
+  // the family with cash earning 2.1%: a plan no other test here draws, so each way's chance is not known yet on this visit
+  const base = () => { const q = familyPlan(T35); q.assumptions.returnCash = 0.021; return q; };
+  const s = await page(base(), { query: { show: "careful" } });
+  const part = () => partOf(s.root, "careful");
+  const body = () => seen(part().querySelector(".fold-body"));
+  // (the other ways are asked for once the spending that lasts is worked out: thousands of runs here, a few seconds)
+  const wait = async (re) => { for (let i = 0; i < 3000 && re.test(body()); i++) await new Promise((r) => setTimeout(r, 10)); };
+  const at = (w) => compute(migrate(base()), { today: T17, paths: 200, careful: false, ...(w === "usual" ? {} : { draw: w }) }).successRate;
+  const R = { usual: at("usual"), history: at("history"), prices: at("prices") };
+  const asked = [], had = globalThis.window.confirm;
+  try {
+    assert.ok(opened(part()));
+    // the spending that lasts first (as soon as it always came), then the other ways' chances
+    assert.equal(s.runs.filter((r) => r.params.draw).length, 0, "no other way asked for before the spending that lasts");
+    assert.match(body(), /Working out the chance with each way\.\.\./);
+    await wait(/Working out the chance with each way/);
+    assert.match(body(), /the money can pay for about \$[\d,]+ a year/);
+    // the three ways, each with its chance; the other two were asked for, one after the other, with the same pretend futures
+    const chips = ["usual", "history", "prices"].map((w) => view.chipWords(w, R[w]));
+    assert.match(body(), new RegExp(`${view.DRAW_TITLE} ${view.DRAW_ASK.replace(/[.()]/g, "\\$&")} ${chips.join(" ").replace(/\u00a0/g, " ").replace(/[()]/g, "\\$&")} ${view.WAY_WORDS.usual.replace(/[.()]/g, "\\$&")}`));
+    assert.deepEqual(s.runs.filter((r) => r.params.draw).map((r) => [r.params.draw, r.params.paths, r.params.careful]), [["history", 2000, false], ["prices", 2000, false]]);
+    assert.equal(chipOf(s.root, chips[0]).getAttribute("aria-pressed"), "true");
+    assert.ok(!/Keep /.test(body()), "nothing to keep while the way shown is the one kept");
+    assert.equal(knownChance({ store: { get: () => s.plan() }, fmt: { today: () => T17 } }), R.usual, "Compare's figure: the usual way's");
+    // try years picked from history: the page runs again that way, nothing is written, the part stays open
+    chipOf(s.root, chips[1]).dispatch("click");
+    await s.settle();
+    assert.equal(s.saved.length, 0, "trying writes nothing");
+    assert.equal(s.runs.at(-1).params.draw, "history");
+    assert.ok(opened(part()), "Set my own numbers stays open");
+    assert.deepEqual(rowsOf(s.root).map((r) => r[4]), [false, false, true, false]);
+    const hero = seen(s.root).split(" 8 more numbers")[0];
+    assert.ok(hero.includes(`${view.answerFor({ successRate: R.history, endYear: 2085 }).value} pretend futures where the money lasts to 2085`), hero);
+    assert.ok(hero.endsWith(`Trying years picked from history: this page only, nothing saved. ${view.TRY_NORMAL} Back to the usual way`), hero);
+    assert.equal(chipOf(s.root, view.chipWords("history", R.history)).getAttribute("aria-pressed"), "true");
+    assert.match(body(), /Each pretend year is a real year from 1928 to 2025, picked at random: .* You are trying this on this page only; your plan is not changed\. Keep years picked from history The spending that lasts, above, is always worked out the usual way, so every page shows the same figure\./);
+    assert.match(seen(partOf(s.root, "how").querySelector(".fold-body")), /one real year from 1928 to 2025 at random/);
+    assert.equal(knownChance({ store: { get: () => s.plan() }, fmt: { today: () => T17 } }), R.usual, "a way tried is never Compare's figure");
+    const keep = () => everything(s.root).find((e) => e.tagName === "BUTTON" && e.textContent === "Keep years picked from history");
+    assert.equal(keep().className, "secondary", "outlined: never a second filled button");
+    // Keep asks first; a No saves nothing
+    globalThis.window.confirm = (t) => { asked.push(t); return false; };
+    keep().dispatch("click");
+    assert.equal(s.saved.length, 0);
+    assert.deepEqual(asked, [view.confirmWords("history")]);
+    // a Yes: one change, the one field
+    globalThis.window.confirm = (t) => { asked.push(t); return true; };
+    keep().dispatch("click");
+    assert.equal(s.saved.length, 1);
+    assert.equal(s.plan().assumptions.chanceDraw, "history");
+    const before = migrate(base()); before.assumptions.chanceDraw = "history";
+    assert.equal(JSON.stringify({ ...s.plan(), meta: null }), JSON.stringify({ ...before, meta: null }), "nothing else in the plan changed");
+    await s.settle();
+    await wait(/Working out the chance with each way/);
+    assert.ok(opened(part()));
+    assert.equal(statusOf(part()), "1 set by you");
+    const ok = everything(part()).filter((e) => e.className === "notice ok");
+    assert.equal(ok.length, 1);
+    assert.ok(ok[0].textContent.startsWith(view.keptWords("history", R.history)), ok[0].textContent);
+    assert.ok(seen(s.root).split(" 8 more numbers")[0].endsWith("Drawn with years picked from history, as you chose."));
+    assert.ok(!keep(), "kept: no Keep button");
+    // the next visit opens drawn that way, asked for by the page (compute never reads the field)
+    const next = await page(s.plan());
+    assert.equal(next.runs[0].params.draw, "history");
+    assert.ok(seen(next.root).includes("Drawn with years picked from history, as you chose."));
+    // Undo: the field goes, the green line says what the plan reads again
+    const undo = everything(ok[0]).find((e) => e.tagName === "BUTTON" && e.textContent === "Undo");
+    undo.dispatch("click");
+    assert.equal("chanceDraw" in s.plan().assumptions, false);
+    await s.settle();
+    assert.equal(s.runs.at(-1).params.draw, undefined, "the usual way again");
+    const back = everything(part()).filter((e) => e.className === "notice ok");
+    assert.deepEqual(back.map((n) => n.textContent), [view.backWords("usual", R.usual)]);
+    assert.ok(!seen(s.root).includes("as you chose"));
+  } finally {
+    globalThis.window.confirm = had;
+    // the way tried is kept for the visit (module state): back to the usual way for the tests after this one
+    const usualChip = everything(s.root).find((e) => e.tagName === "BUTTON" && e.className.includes("chip") && e.textContent.startsWith("The usual way"));
+    if (usualChip && usualChip.getAttribute("aria-pressed") !== "true") { usualChip.dispatch("click"); await s.settle(); }
+  }
+});
+
+test("#35 a way kept, then the usual way kept again: the field goes; trying the kept way again is no try", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p0 = familyPlan(T35); p0.assumptions.chanceDraw = "prices";
+  const s = await page(p0, { query: { show: "careful" } });
+  const had = globalThis.window.confirm;
+  try {
+    assert.equal(s.runs[0].params.draw, "prices");
+    assert.equal(statusOf(partOf(s.root, "careful")), "1 set by you");
+    const chip = (start) => everything(s.root).find((e) => e.tagName === "BUTTON" && e.className.includes("chip") && e.textContent.startsWith(start));
+    chip("The usual way").dispatch("click");
+    await s.settle();
+    assert.ok(seen(s.root).includes("Trying the usual way: this page only, nothing saved."));
+    globalThis.window.confirm = () => true;
+    everything(s.root).find((e) => e.tagName === "BUTTON" && e.textContent === "Keep the usual way").dispatch("click");
+    assert.equal("chanceDraw" in s.plan().assumptions, false);
+    await s.settle();
+    assert.match(seen(partOf(s.root, "careful")), /Saved\. This page is back to the usual way(: the money lasts in \d+ of 100 pretend futures)?\./);
+    // tapping the way the plan keeps is no try: nothing to keep
+    chip("The usual way").dispatch("click");
+    await s.settle();
+    assert.ok(!seen(s.root).includes("Trying"));
+  } finally { globalThis.window.confirm = had; }
+});
+
+test("q1 fix P1: while a way is only tried, the sentence keeps its verdict but not the advice to change the plan", () => {
+  const usual = { good: 0.85, ok: 0.7 }, high = { good: 0.95, ok: 0.8 };
+  const tried = (successRate, lines) => view.answerFor({ successRate, endYear: 2085 }, lines, { trying: true }).lede;
+  assert.deepEqual([[1, usual], [0.93, usual], [0.8, usual], [0.5, usual], [0, usual], [0.86, high], [0.75, high]].map(([r, l]) => tried(r, l)), [
+    "Strong: the money lasted in every pretend future.",
+    "Strong: the money lasted in nearly every pretend future.",
+    "Fair: it lasted in most pretend futures, but not all.",
+    "Weak: it ran out in many pretend futures.",
+    "Weak: the money ran out in every pretend future.",
+    "Fair: under the 95 of 100 you call strong, at or above the 80 you call fair.",
+    "Weak: under the 80 of 100 you call fair."]);
+  // the key and the figure are the way kept's own cases (the same words up to the advice)
+  for (const [r, l] of [[1, usual], [0.8, usual], [0.5, usual], [0, usual], [0.86, high], [0.75, high]]) {
+    const a = view.answerFor({ successRate: r, endYear: 2085 }, l), t = view.answerFor({ successRate: r, endYear: 2085 }, l, { trying: true });
+    assert.deepEqual([t.key, t.value, t.label], [a.key, a.value, a.label]);
+    assert.ok(a.lede.startsWith(t.lede), `${a.lede} | ${t.lede}`);
+  }
+});
+
+test("q1 fix P1, P6: a way tried: the hero drops the advice, says a different answer is normal, and Back to ... returns, writing nothing", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const lines = { good: 0.85, ok: 0.7 };
+  const at = (p, w) => compute(migrate(p), { today: T17, paths: 200, careful: false, ...(w === "usual" ? {} : { draw: w }) });
+  for (const keptWay of ["usual", "history"]) {
+    const p0 = familyPlan(T35); if (keptWay !== "usual") p0.assumptions.chanceDraw = keptWay;
+    const s = await page(p0, { query: { show: "careful" } });
+    const hero = () => seen(s.root).split(" 8 more numbers")[0];
+    const backBtn = () => everything(s.root).find((e) => e.tagName === "BUTTON" && e.textContent.startsWith("Back to ")) ?? null;
+    const chip = (start) => everything(s.root).find((e) => e.tagName === "BUTTON" && e.className.includes("chip") && e.textContent.startsWith(start));
+    try {
+      // the way the plan keeps: the full sentence, advice and all; no way back, nothing said about a test
+      assert.ok(hero().includes(view.answerFor(at(p0, keptWay), lines).lede), hero());
+      assert.ok(!backBtn() && !hero().includes(view.TRY_NORMAL));
+      // try prices that rise unevenly
+      chip("Prices that rise unevenly").dispatch("click");
+      await s.settle();
+      assert.equal(s.runs.at(-1).params.draw, "prices");
+      const t = view.answerFor(at(p0, "prices"), lines, { trying: true });
+      assert.ok(hero().includes(`${t.value} pretend futures where the money lasts to 2085 ${t.lede} Trying prices that rise unevenly: this page only, nothing saved. ${view.TRY_NORMAL}`), hero());
+      assert.ok(!/Look at spending|A little less spending/.test(hero()), "no advice to change the plan while a way is only tried");
+      const b = backBtn();
+      assert.equal(b.textContent, view.backToWords(keptWay));
+      assert.equal(b.className, "secondary small", "outlined: never a second filled button");
+      // the way back: the way the plan keeps, nothing written, Set my own numbers as it was
+      b.dispatch("click");
+      await s.settle();
+      assert.equal(s.saved.length, 0, "the way back writes nothing");
+      assert.equal(s.runs.at(-1).params.draw, keptWay === "usual" ? undefined : keptWay);
+      assert.ok(!hero().includes("Trying") && !backBtn(), hero());
+      assert.ok(hero().includes(view.answerFor(at(p0, keptWay), lines).lede));
+      assert.ok(opened(partOf(s.root, "careful")), "Set my own numbers stays open");
+    } finally {
+      // the way tried is kept for the visit (module state): back to the way kept for the tests after this one
+      backBtn()?.dispatch("click");
+      await s.settle();
+    }
+  }
+});

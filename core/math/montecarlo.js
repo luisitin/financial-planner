@@ -44,3 +44,38 @@ export function simulate({ start, years, meanReturn, stdev, paths = 1000, seed =
   const last = byYear[years];
   return { successRate: 1 - failures / paths, byYear, final: { p10: last.p10, p50: last.p50, p90: last.p90 }, paths, seed };
 }
+
+// ---------------------------------------------------------------- years picked at random, and a value that drifts (gap next-60 #35)
+/** pickIndices(n, years, count, seed = 1) -> n paths of `years` whole numbers from 0 to count - 1, each floor(u x count) of a
+ * fresh mulberry32(seed) draw u, path by path, year by year: the same seed gives the same picks. */
+export function pickIndices(n, years, count, seed = 1) {
+  const rand = mulberry32(seed);
+  const out = [];
+  for (let p = 0; p < n; p++) { const path = new Array(years); for (let y = 0; y < years; y++) path[y] = Math.min(count - 1, Math.floor(rand() * count)); out.push(path); }
+  return out;
+}
+/** lag1(xs) -> the sample lag-1 autocorrelation sum((x_t - m)(x_(t+1) - m)) / sum((x_t - m)^2) (Box and Jenkins); 0 for fewer
+ * than 2 values or no spread. */
+export function lag1(xs) {
+  const n = xs?.length ?? 0;
+  if (n < 2) return 0;
+  const m = xs.reduce((s, x) => s + x, 0) / n;
+  let num = 0, den = 0;
+  for (let t = 0; t < n; t++) { den += (xs[t] - m) ** 2; if (t + 1 < n) num += (xs[t] - m) * (xs[t + 1] - m); }
+  return den > 0 ? num / den : 0;
+}
+/** ar1Paths(n, years, { mean, phi, sd, seed = 1 }) -> n paths of `years` values that drift around `mean`: x_0 = 0, then
+ * x_t = phi x_(t-1) + sd sqrt(1 - phi^2) z_t (z standard normal from mulberry32(seed)), value = mean + x_t. Settled, the values
+ * swing by `sd` (the AR(1) stationary variance sd_e^2 / (1 - phi^2)); a high value tends to be followed by another (phi > 0). */
+export function ar1Paths(n, years, { mean, phi, sd, seed = 1 }) {
+  const rand = mulberry32(seed);
+  const f = Math.max(-0.999, Math.min(0.999, Number(phi) || 0)), e = Math.max(0, Number(sd) || 0) * Math.sqrt(1 - f * f);
+  const out = [];
+  for (let p = 0; p < n; p++) {
+    const path = new Array(years);
+    let x = 0;
+    for (let y = 0; y < years; y++) { if (y > 0) x = f * x + e * normal(rand); path[y] = mean + x; }
+    out.push(path);
+  }
+  return out;
+}

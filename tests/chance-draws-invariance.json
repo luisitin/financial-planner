@@ -1,0 +1,452 @@
+{
+ "note": "digests of Chance the money lasts and the pages that share its draws, before the ways of drawing the pretend years and the odds of living (commit 81a5288); tests/chance-draws-invariance.test.mjs says how to write them again",
+ "shared": {
+  "uniform": "9f9Llf_T8Hwa28PhucvwTm",
+  "normal": "P80o0J-7psYzS1gDmAJlkP",
+  "shocks": "4WpVnU2RLu11g9Avfke-Mf",
+  "shaped": "x-CV7aLXjuAgvlKC9DCMXA",
+  "sequences": "uoJIQvuAGoXgPde6e3Nh8w"
+ },
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "page": "2Vv0LpEQUDuNf-MxtjLCc_",
+   "ends": "3X7y4iyeQlTxlSXmEwnRIQ",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "yM_XjKIrhVlhOEyHtsVbjt",
+   "summary": "3k6z-eHkiOwcLSBMolubkb",
+   "fire": "mk-weqDxAzdKAJD5e468Nv",
+   "goals": "xLzIwFcvfYdDwXoWbtsAw3",
+   "compare": "7CrPgzh-N2Exc1UOc7NVzp"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "page": "MZiv7M5qFlGfmZAnBC72hp",
+   "ends": "MZiv7M5qFlGfmZAnBC72hp",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "MZiv7M5qFlGfmZAnBC72hp",
+   "summary": "BUNPs0xF4gZLFIQN4W-mbm",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "nkCn9jxPDIBm02AWecyvbC"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "page": "2Vv0LpEQUDuNf-MxtjLCc_",
+   "ends": "3X7y4iyeQlTxlSXmEwnRIQ",
+   "careful": "3VI2aoQcTiB9yM8n39atW-",
+   "report": "yM_XjKIrhVlhOEyHtsVbjt",
+   "summary": "3k6z-eHkiOwcLSBMolubkb",
+   "fire": "mk-weqDxAzdKAJD5e468Nv",
+   "goals": "xLzIwFcvfYdDwXoWbtsAw3",
+   "compare": "7CrPgzh-N2Exc1UOc7NVzp"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "page": "-DhPRTX2E7rrW7ubXS-EL1",
+   "ends": "J41PX3oNuwjanWDzPNux2k",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "958OEh8WHjSkDeioxe3-1z",
+   "summary": "IAXUzG48zse2zxf3QWOFc2",
+   "fire": "p435GFpUSId4OmyHNWaFXT",
+   "goals": "jUhmbdSEu-JDBZ8unt_7mz",
+   "compare": "DWLGSF316hgtUwxicKRbxD"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "page": "dYeBIld1xU3kK6RdX8nl3f",
+   "ends": "7WNjfhNB6VXbxRhMB1OpCJ",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "iCwqjQX2zRH9qm2WtwaDhD",
+   "summary": "paWObvNXCW6zzDnLBlcV-T",
+   "fire": "h0rt4FAZFBfN3iY9xBzI7M",
+   "goals": "xLzIwFcvfYdDwXoWbtsAw3",
+   "compare": "SZbluhyAaSHgaN608VFT5k"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "page": "XZAdtvfJJT73uGUUXTlKfl",
+   "ends": "hTpAifdCV0t9vH5xnWH0lf",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "ucO8W11y2HEkvFeWfD2Xcg",
+   "summary": "ZA8bQQLcPFM3L3oreI8f2K",
+   "fire": "08AV48FwubLLYI-_OKGEHu",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "xD_eUWltZ2VKO55_cRSj2_"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "page": "EXhWIFe9TMIPVoxpHESaI0",
+   "ends": "xEr2GSIFoX4Hm2md2Lml-w",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "S0scknja7zd74jF0bVtkC3",
+   "summary": "xzAWRr9E9nvsg9MgCaOzCJ",
+   "fire": "7uV0gdvMzwfS3VpKNwzt-9",
+   "goals": "yZY1EZ_tptVY04w_WiPKN5",
+   "compare": "_3S9R2WHIz-RZ0w53o0RkB"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "page": "EXhWIFe9TMIPVoxpHESaI0",
+   "ends": "xEr2GSIFoX4Hm2md2Lml-w",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "S0scknja7zd74jF0bVtkC3",
+   "summary": "WOAgp6s_GyddkQG9kNNmYs",
+   "fire": "Vv7547bDyX7dzIkRqvCEXd",
+   "goals": "yZY1EZ_tptVY04w_WiPKN5",
+   "compare": "_3S9R2WHIz-RZ0w53o0RkB"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "page": "aVWbR8vOYLKxAlCFjMqAKQ",
+   "ends": "_XnPK3sIXJsmYsDVo1FcrI",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "y2xiGIkJu1nhhqtAkP1N-1",
+   "summary": "44f-Ii5dgkSU3Sc0c7Oh2P",
+   "fire": "qpyh9ieecBtZf1bwg7EKHx",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "DZDksHyFNKXcFvUkja4iz-"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "page": "lVH0IZpYTQ_5k9vzInkv0U",
+   "ends": "DlOO_9VwxjiQRnsT-bTg9F",
+   "careful": "hLkR6e1QyhfxRbv_xSiT-2",
+   "report": "iaiKO0hP7QDxu3hxEjVY7-",
+   "summary": "URE0nJvToOImbOolyTiJ7B",
+   "fire": "oMVG1VLi308u3AA5NALIU5",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "3j851wbyET91jFOOprWw34"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "page": "MZiv7M5qFlGfmZAnBC72hp",
+   "ends": "MZiv7M5qFlGfmZAnBC72hp",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "MZiv7M5qFlGfmZAnBC72hp",
+   "summary": "BUNPs0xF4gZLFIQN4W-mbm",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "nkCn9jxPDIBm02AWecyvbC"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "page": "BH6fd31iaVGLQ3zAQ5ECHU",
+   "ends": "dRf3udsCsTVxNzGaLpKl_M",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "OWCGX5ktv6HdbOI2rpMkyq",
+   "summary": "NIKb0N5t30a4hvslir9BWM",
+   "fire": "sj5n8sBlyEWM_2eGOb_9j0",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "_0h8JCGd7azsrkDcm4xsRW"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "page": "zJ_5WQ04R1Y7HMiu5tubrt",
+   "ends": "M-eZN-V-BcWngpmpJcl-z1",
+   "careful": "LZ9N6p3O6oWaQgPqdl67DG",
+   "report": "55Ts-oEUMvaIfWRX8Pfhwy",
+   "summary": "aHPy0HMz_ZOdiO94RnWrpC",
+   "fire": "DF0zaDTXKP-ps906JgI0-1",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "AdjhhEcd7BFi5MqtziSqPk"
+  },
+  "01-single-adult/base": {
+   "page": "8LiV3LSlgODJEZjUhoszjH",
+   "ends": "Fuer_Ip3IzBN73LjE5tz-N",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "MYvK5JM3Xjv7bDtiqw4klt",
+   "summary": "bsefXbwPXe9OsqdgnTFcUP",
+   "fire": "Pt3Q0N9KLF0S0KGU0Gq1ua",
+   "goals": "hygOda8CKKWrVrEeyGyzzg",
+   "compare": "1w2My7z1rvoBYu7Rbs-iFo"
+  },
+  "02-couple-no-kids/base": {
+   "page": "I2r_D8L2JOT-XfyBn1AbHH",
+   "ends": "4czHtaYmXtWHnd959FgNsl",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "NG7RntIhECcVNMe4bKAUk5",
+   "summary": "-cIPRPW6tUxU_uobY76rCW",
+   "fire": "yQuoJb_X6rKQ3rkTHCAebD",
+   "goals": "qnr2BbeFcquWdvR1LObKp7",
+   "compare": "e26zNrFjAhaCiGyORjtYek"
+  },
+  "03-single-parent/base": {
+   "page": "E5xLj46Ts01B3ofHDROgg3",
+   "ends": "OOAXqi6KUNVAGvhwjJoMWp",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "I_YdrL1baSIk797S74AItM",
+   "summary": "vuuGSNjwC5Zz5NMNLZwK6r",
+   "fire": "FQce6N9I3QxhjKdFf01mby",
+   "goals": "NFrm4pxqBrUkVR7XH6LsgJ",
+   "compare": "OAw0NOLnPzhEf0gFV2anUK"
+  },
+  "04-two-parents/base": {
+   "page": "xpice8TNfC-Wl7VAV08K--",
+   "ends": "2Xk6sh03jDnjLkjDE6oFIW",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FTfnOGUUurI_ncWv5KMAbD",
+   "summary": "eHUw7sfrtk63TXVMFaXlpB",
+   "fire": "1evlvXK81JdXQ2epqMrZuv",
+   "goals": "MYIJkgsF5hE1a9MQ7H_CMf",
+   "compare": "qoEo__90l2RayfS3cd7Kek"
+  },
+  "05-stay-at-home-parent/base": {
+   "page": "ZnAe0VATLYrdoUXbRoLBFu",
+   "ends": "CBOVPWYN3SUD45nY4fsfjY",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "9WS380Aumv_yjmHsnKK8I5",
+   "summary": "eQbAim7sqojyc46vJk4jDi",
+   "fire": "t8ab6iLMEjWUYIBEIy9Eqv",
+   "goals": "54fCphbOL4uBiMPlz1WjoL",
+   "compare": "C_WSFAeIOL3fzzIc3SKMhQ"
+  },
+  "06-blended-family/base": {
+   "page": "OIn_OwrPLf_WR0Iyqk1nfP",
+   "ends": "fjm-SILUdRsHwjSlKPX6rN",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "zK1RjzJ86MJ64_iEmOgyDJ",
+   "summary": "x7mdJEZxc3r7M6Rnge5hJN",
+   "fire": "T1lkPUmMe6bqmTAL00f8YA",
+   "goals": "Khcl1kBFo49ChBN4gSNf_A",
+   "compare": "XLVKbwIpV9s-DvfbS-5lbv"
+  },
+  "07-multigenerational/base": {
+   "page": "19gFbLphOjZ65Lc3lhprOX",
+   "ends": "Rp6f38GdW0FyhUkc6AXU21",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "g4T_LTfRlbCPXukpdY1I0O",
+   "summary": "8oCfPS2YnIUzGGb6KvfRIP",
+   "fire": "eEm_a--4QYiPXbjk2zjGwh",
+   "goals": "Ty7ilIVwFdw1To1Snee1mm",
+   "compare": "n7W2oFUOmPqyl6k5Gunthn"
+  },
+  "08-retired/base": {
+   "page": "21UvRwVe6Rxit5JSH2Wrgr",
+   "ends": "Lzsjg9qpvoj4-nOBohZ3Bv",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "KsnyprB_sQJQhJe2RVs_iI",
+   "summary": "KlNgMxY4yaUTvGGb27zQuL",
+   "fire": "r60aEqCknt3YBDy8Bs46yb",
+   "goals": "fexh45Usy2lMUTGFykPFR8",
+   "compare": "CaP2n8XwD0G77UWGL5R3ST"
+  },
+  "09-near-retirement/base": {
+   "page": "dKjKS6g6XyGG7SQAPd8d-z",
+   "ends": "PPqhrmXxAF3a9WLpQHcnDN",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "1nkJtYXc8I0u7oUirW_PYB",
+   "summary": "5xXzEzi-efT6EZ8UVuinaX",
+   "fire": "8DyrevNwjer_mXdOdcOLmm",
+   "goals": "UFFu3ddTLxQePojs5RezOq",
+   "compare": "EEz_k3mIjdhyhfADLqAb9t"
+  },
+  "10-student-and-starter/base": {
+   "page": "mba39oODQV_Yl0EImEpYV4",
+   "ends": "DowM4ZhVfKdPdTfpxh52A9",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "4So41Of8smmT3wEqOUqo8F",
+   "summary": "EWaqCtJfmrCcVB80m466Ty",
+   "fire": "YFvWB3fY3fgei3my5xGpmT",
+   "goals": "G3ey3qZxLI41zKww9ho0kd",
+   "compare": "_ieWJX6frqRNJpoC2Mk7vU"
+  },
+  "11-self-employed/base": {
+   "page": "K8KPC-Q-YneYHT5v5wuIig",
+   "ends": "ydk3og_s6ZAqh8RDhCeJ8q",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "5j-QBs0dSwxd_uiwDwjpwT",
+   "summary": "r5YoHOgAZVEXRBpM4trEw7",
+   "fire": "_jgYtdfHIl_XU8VbOyvggQ",
+   "goals": "LLkFK6PheaZT1pP5n678Ae",
+   "compare": "DUXaXTNiVJCz5TUMaR56ob"
+  },
+  "12-high-net-worth/base": {
+   "page": "jAC-IW800CJ2zkckcVxwgF",
+   "ends": "eLBbDfHQ-2tAXDm5QVO910",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "i-9TTUUvG3aYCuPeKCWzlk",
+   "summary": "TzpDaMihpbyTbD8Zih7FUK",
+   "fire": "-qac8zo8cfuLQ-qh4fEMtz",
+   "goals": "7yG80TVV5R-_4Dff19P395",
+   "compare": "nGgkwd9nBeDkMzwK0bcAcy"
+  },
+  "13-in-crisis/base": {
+   "page": "wtdzgfmUHNLf_A75U4x2Jv",
+   "ends": "_YzCt1DxHNcJatTRfHvcCP",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "4lltyVY7HYZgByT8UaDKoP",
+   "summary": "JMGWgljq8S2Z-7vMmcfEAJ",
+   "fire": "yPz0JdD5unTKqmGnANTdcC",
+   "goals": "ZF1SESnQzyVn8cDt2GQqbf",
+   "compare": "j-FL8de8L9oGj_U8L8um9q"
+  },
+  "14-unusual-structures/base": {
+   "page": "_9SEicSnmLJodHbIWpsoH8",
+   "ends": "ilr5Frb2AC9FoW4-bgan2h",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "L7DjLbxW9njpUuQG6KTHwP",
+   "summary": "9k6pPw55JWCDLGFW3Q294G",
+   "fire": "SVttiHU1nDjgWfDJTVLEhf",
+   "goals": "hM7YWh-FaVT9uhjTCs9G0A",
+   "compare": "PETtmGHlg-DeuQAmMTdqOM"
+  },
+  "phone casey": {
+   "page": "k0f-gQzaH51f0Q2-8c5aPo",
+   "ends": "_5NA5SBs5RPs4IN8PbV9Ha",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "SP59znYSI7H9i8sOJZwv3S",
+   "summary": "P8Rd5aXwr6jjAeVtza2XfK",
+   "fire": "Eu9ElfQm7kBbdicd0TK670",
+   "goals": "6xXyDmtE7pg3n7X-8dcJeN",
+   "compare": "BI9UzfK_Y0KkyHQTUTaHqq"
+  },
+  "phone danaLee": {
+   "page": "JFKKbwws6w54k8JxUvFwjn",
+   "ends": "s2AGlsFk_6x56Unks4LVe5",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "VWapUo4izI58jbjcaKPKma",
+   "summary": "XW83MemvtCNdfAsj8LXRov",
+   "fire": "iPK0XYLNsdsyIM_yzgegAe",
+   "goals": "kOz3HlHbCF7TZRs3i0LkHM",
+   "compare": "isj7n66nsepGkOfi5sqR5A"
+  },
+  "phone jamie": {
+   "page": "CgVvXwtJgl_WweMGA-2bcs",
+   "ends": "IdL3HQG1N1-YAIFkdH0RFW",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "vNbIpi1NeCD5Yk1ScBM-Dv",
+   "summary": "sU1O2uZuxHr8-sdkfseypQ",
+   "fire": "ZeaKURgw16fPquKaS-kGND",
+   "goals": "l89bUo8vHzqXyUjLgycJ-z",
+   "compare": "5v5IOtxv_uvC0TJ37znwZ_"
+  },
+  "phone morgan": {
+   "page": "K9vs5xL6eR3a-2UBxXbdhG",
+   "ends": "dJnyKbv5z5Ab-tmT_s0IIz",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "zdstdFdzuOcCzP78q9Av60",
+   "summary": "secJ9db-1sBHV98qzb5eyT",
+   "fire": "mRm_uRdTy3s5G1HT-plA85",
+   "goals": "7aXfveAU9rjSHN5Fj-AqF7",
+   "compare": "-LYjj63CaNms75VrwJmdmO"
+  },
+  "phone robin": {
+   "page": "got87pqYNBmYdX0iYI7Gbs",
+   "ends": "erF_i9GOc4OQPMTC3-eo1O",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "extHTp-a3lCHJPtZHkue_j",
+   "summary": "6Gj1FYExab_CbDxaKdfDBH",
+   "fire": "uSpDwQ3PjstIoi4tDTOKIB",
+   "goals": "l7RPlsVyEd1fqGIKa7y1sX",
+   "compare": "xLAjipzM53iJsIZz6gG0G9"
+  },
+  "round8 earlyRetireePlan": {
+   "page": "2scyumh2CxvMDpxQkmc39e",
+   "ends": "6639bAzMW7pVnxgZ2G_8Vc",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "-_618A1mXCnnMb9cOXnAku",
+   "summary": "K0FPbcBLDMs4dXHPfabcBQ",
+   "fire": "t3kHMZeOxvbICNnsasOJ_L",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "6uGosPh5QEBs-4J4kQSAUl"
+  },
+  "round8 equityPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "RlbukRr52RWPVrfRb6r4Qi",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "gg7ArNuWJsGoVMq1ZmY466"
+  },
+  "round8 firstRmdPlan": {
+   "page": "UY71MznWM3K7HJyXTcPpw0",
+   "ends": "QSZhSUfrSC0gOjw7PrBU5G",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "ZkyFlnFtpeXN97OZHPL1uE",
+   "summary": "NkBqh1f4j84USUgnwwMNtN",
+   "fire": "2fqIJW4RewciQDH1PEDLn_",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "jS1WcX2jICYPmaKp5ll0CC"
+  },
+  "round8 freelancerPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "YtTCiaUcM8ofXKpk92_85V",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "zZNk-jYn7YPxDg0c9utRbT"
+  },
+  "round8 highFreelancerPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "P88onz5VAsJzFZ1SpRYRmZ",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "INvi40HpUrFH7NvhkSJv79"
+  },
+  "round8 landlordBusinessPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "t3M4nKtn1REXsby7oJlW_W",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "jCkNjALfj4Y0TAbwtGUFZu"
+  },
+  "round8 landlordPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "fEBVyEjebtCM7-5il-hqQ5",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "_N4hl78LbJmxt7NPbVHN8L"
+  },
+  "round8 parentLoanPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "KNya7tX88HPcnFwQabNiQo",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "PyIAzJRq-VPHCgEkyzAnOh"
+  },
+  "round8 stockAndBusinessPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "e5HAAenRWhiN02xQNmWQ9G",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "iRdHosRHBGHIn3qNBr0Olf"
+  },
+  "round8 studentLoanPlan": {
+   "page": "FM0mMF7yk94OCFQHfwG4LS",
+   "ends": "FM0mMF7yk94OCFQHfwG4LS",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "FM0mMF7yk94OCFQHfwG4LS",
+   "summary": "0I5b3tMHf3Re_8XIEqIrZf",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "jZtTmZJmgFbysp28uF8uJW"
+  },
+  "round8 widowPlan": {
+   "page": "u1oJ66lmkTKXtE9HGboFf6",
+   "ends": "u0jSgfbGGYWj2Ih5wOVcg2",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "q6oOiNaTfD7zl49wTtOs1M",
+   "summary": "qdy9SO1Rui35ECg6LcnxLY",
+   "fire": "hK0Y7J7oLfcW3St_xs_f1h",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "xDCFPYWpu77s7PLVuj5RRe"
+  },
+  "empty plan": {
+   "page": "yL3jhXybNonmsEcWH37p5J",
+   "ends": "yL3jhXybNonmsEcWH37p5J",
+   "careful": "dCNOmK_nSY-12vHzasLXis",
+   "report": "yL3jhXybNonmsEcWH37p5J",
+   "summary": "BUNPs0xF4gZLFIQN4W-mbm",
+   "fire": "RWk0mJf7VHXi5v-ZmehHwd",
+   "goals": "b1rcsN-_A3G-MDy6XJadSM",
+   "compare": "RWWNHKs2dyASQZ1nPclVwA"
+  }
+ }
+}

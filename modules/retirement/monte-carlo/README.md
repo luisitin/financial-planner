@@ -7,6 +7,8 @@
 The projection inputs; `params.paths` (default 2,000; the server caps at `compute.maxPaths`), `params.seed`. From the plan, all
 optional (gap #17, 2026-11-13): `assumptions.carefulChance` (how careful the spending that lasts is; 9 in 10 when not set),
 `assumptions.goodChance` and `assumptions.okChance` (the person's own lines for strong and fair; 85 and 70 when not set).
+`params.draw` ("history" or "prices"; anything else is the usual way) and, read by the view alone, `assumptions.chanceDraw`
+(gap next-60 #35, below).
 
 ## Outputs
 `successRate`, `medianEndReal`, `failAges` (p10, p50, count), `bands[]` per year (p10..p90 of real total), `byAge[]` (share still funded), `verdict` (strong >= 85%, fair >= 70%, weak; or the plan's own lines).
@@ -29,7 +31,8 @@ grey sentence at the end of a paragraph said why the plan looked short.
 `tests/montecarlo-stats.test.mjs`: reproducible seeds, exact zero-volatility compounding, 99.9% mean and standard-deviation intervals, lognormal skew and kurtosis, joint return correlation, success-rate convergence, and the binomial standard-error helper. `tests/retirement-pages.test.mjs`: ordered bands and the server cap.
 
 ## Ideas / not yet
-- Random inflation; fat tails (historical bootstrap); the chart's touch readout.
+- The chart's touch readout; runs of real years kept together (a block draw) for years picked from history; cash that follows
+  prices when prices rise unevenly. (Random inflation and years picked from history are built: gap next-60 #35, below.)
 
 ## The careful spending figure (round 5, 2026-11-02)
 `spendingAtChance(inputs, { chance = 0.9, seed = 1, legacy = 0 })` is the most a year (today's dollars, whole $100s, the same
@@ -257,3 +260,108 @@ equal to `runsCsv`, its green line, and the red line with the button usable agai
 **Builder chose:** the bars' width is the share of all runs (not of the biggest group), so the red and green rows compare on
 one scale; the button says the page's word, "pretend futures", and how many (it said the brief's "Save every run as a file",
 and the row "How this is done" gave no hint of a file: n1 fix P3, which also gave the row its status, "with a spreadsheet"); the Export page's list of files is not given this file (`reports/**` is another batch's this round).
+
+## How the pretend years are drawn: years picked from history, prices that rise unevenly (gap next-60 #35, 2026-11-15)
+**Where.** No new row: the page's first view is at four rows and 81 words, and the brief's rule is that its counts may only go
+down or stay (a new row adds a part and words). The brief asked for a quiet row of its own; the block sits in **"Set my own
+numbers"** instead (kind `own`), where the page's other saves are and whose status already counts what the person set ("1 set by
+you" once a way is kept). `node qa/first-view-node.mjs retirement/monte-carlo` reads 81/0/0/1/1/4 (empty plan 53/0/0/0/1/0)
+before and after.
+
+**On screen** (in "Set my own numbers", after the spending that lasts, before the lines for strong and fair):
+- A heading of its own, "How the pretend years are drawn" (so it reads apart from how careful the spending that lasts is, whose
+  chips say "9 in 10"), and the line "Each way tests the same plan with its own pretend years. The figure on each is how many of
+  100 pretend futures the money lasts in, like the answer at the top. Tap one to try it and see what it means; nothing is saved
+  unless you keep it." (q1 fix P2, P3: the figure's scale and what a tap does are said before any tap), then three chips
+  (`choice()`, no "Type my own"), each with its chance: for the family (Ana and Bo, the money to 2085) "The usual way: 80 of 100", "Years picked from
+  history: 69 of 100", "Prices that rise unevenly: 72 of 100". The way shown has its chance from the page's own run; the other
+  two are asked for when the part is opened, one after the other (`ctx.computeRemote`, so on the computer when it is connected),
+  with the same number of pretend futures, and kept for the visit; meanwhile "Working out the chance with each way..." (and, if
+  they cannot be had, "The chance with each way could not be worked out. Reload the page to try again."). They are asked for
+  once the spending that lasts above is filled in, so that line comes as soon as it always did: with the CPU slowed 4 times
+  (a phone), the family's line came in 8.6 s (7.9 s at 81a5288, the same within the noise) and the three chances 1.9 s after it;
+  asked for at once, the chances came at 3.6 s and the line at 10.2 s.
+- One sentence for the way shown (`WAY_WORDS`): usual "Each year's returns are drawn at random around your own averages and
+  swings, and prices rise steadily by your figure."; history "Each pretend year is a real year from 1928 to 2025, picked at
+  random: its stocks, bonds, cash and prices move together as they did that year, set to average your own figures."; prices
+  "Returns as the usual way, but prices rise unevenly around your figure, with swings like those since 1928: a year of high
+  prices tends to be followed by another."
+- **Trying** (a chip tap): the way is kept for the visit in module state (like the number of pretend futures), the page runs
+  again with it (the answer, the numbers, how the futures end, the file), the part stays open, nothing is written. The hero
+  says so under its sentence (never folded, R9): "Trying years picked from history: this page only, nothing saved. Neither way
+  is the right one: they are two ways to test the same plan, so a different answer is normal.", and its sentence keeps the
+  verdict but drops the advice ("Weak: it ran out in many pretend futures.", not "... Look at spending, ..."): a test is not a
+  reason to change the plan (q1 fix P1). Under it one small outlined button, "Back to the usual way" (or back to the way the
+  plan keeps), which does what tapping that chip does (q1 fix P6: the way tried is not a step of the browser's history, so
+  Back leaves the page; this is the way back from the top). The part
+  says "You are trying this on this page only; your plan is not changed." with one outlined button, "Keep years picked from
+  history" (or "Keep prices that rise unevenly", "Keep the usual way").
+- **Keeping**: the button asks first (`ui.confirm`): "Keep years picked from history? This page will draw its pretend years
+  this way from now on. No other page changes." ("Keep the usual way? This page will draw its pretend years the usual way
+  again. No other page changes."). Yes: one change (`ui.undoable`), `assumptions.chanceDraw` set (or removed for the usual
+  way), and the green line where the button was, naming the new answer (R7): "Saved. This page now draws years picked from
+  history: the money lasts in 69 of 100 pretend futures." / "Saved. This page now has prices that rise unevenly: ..." /
+  "Saved. This page is back to the usual way: ...", with Undo: "Back to the usual way: the money lasts in 80 of 100 pretend
+  futures." A kept way: the hero says "Drawn with years picked from history, as you chose."
+- When the way shown is not the usual one: "The spending that lasts, above, is always worked out the usual way, so every page
+  shows the same figure." How this is done's sentence on the method is that way's (`methodWords`, one per way; the usual way's
+  is the sentence it always had).
+
+**Who reads the field.** Only this page's view (`drawOf(plan)`), which asks compute for the way (`params.draw`). `compute()`
+never reads it, so Reports, the plan summary, Compare, Goal seek and the careful figure on every page stay the usual way's when
+it is kept (tested). Compare's figure for "Your plan" (`rememberChance`) is kept only from the usual way's run.
+
+**Formulas.**
+- **The history** (`HISTORY`, worked out from `modules/retirement/historical/data/returns.js`): 98 years, 1928 to 2025; arithmetic
+  means stocks 11.86% (S&P 500 with dividends), bonds 4.82% (10-year Treasury), cash 3.42% (3-month bills), inflation 3.11%
+  (CPI change); inflation's swing (sample standard deviation, n - 1) 3.90% and lag-1 autocorrelation 0.61. Every class the plan
+  uses (stocks, bonds, cash) is in it, and inflation too, so both ways are built.
+- **Years picked from history** (`historySequences`): each pretend year picks one real year k = floor(u x 98), u from
+  mulberry32(seed) (`pickIndices`, core/math/montecarlo.js), with replacement, one year at a time, path by path; it takes that
+  year's four figures together, each set to average the plan's own figure m: (1 + r_k) x (1 + m) / (1 + h) - 1, h the history's
+  mean (m: `returnStocks`, `returnBonds`, `returnCash`, `inflation`). Over the 98 years each class then averages exactly the
+  plan's figure; the swings (stocks about 18.6% for a 7% plan, bonds 7.6%), the fat tails, the years when stocks and bonds fell
+  together and the years of high prices are history's. Decision (the brief was silent): history's raw returns average 11.9% for
+  stocks, so the raw years would mostly measure history's higher averages (the family: 98 of 100) rather than how the years are
+  drawn; If history repeated replays them as they were. Setting each class to the plan's average shows what the shape of real
+  years does to the plan: 69 of 100 against 80.
+- **Prices that rise unevenly** (`pricesSequences`): the returns are the usual draw on the same seed (the same good and bad
+  years), and each year's inflation is i_t = m + x_t, x_0 = 0 (this year at the plan's figure), x_t = phi x_(t-1) + s sqrt(1 -
+  phi^2) z_t with phi = 0.61 and s = 3.90% (history's, above), z standard normal (Box-Muller) from mulberry32(seed XOR 0x5bd1e995)
+  (`ar1Paths`). The AR(1) process (Box and Jenkins, *Time Series Analysis: Forecasting and Control*, 1970) has the stationary
+  variance s_e^2 / (1 - phi^2), so with s_e = s sqrt(1 - phi^2) the drawn swing settles at history's 3.90%, and a year of high
+  prices tends to be followed by another, as in the 1940s and 1970s. Cash keeps the plan's rate. What the engine raises with each
+  year's prices (`project`'s `priceLevel`: the spending, Social Security and pensions that rise with prices, one-time costs, the
+  health line) follows the drawn inflation, and the results are in today's dollars of that pretend future; the tax brackets keep
+  rising by the plan's own figure (`paramsFor(FEDERAL, year, { inflation })`), as on If history repeated, so a pretend future with
+  high prices pays a little more tax than the law's yearly indexing would charge (a limit, not a rule). The family: 72 of 100.
+- `lag1(xs)` = sum((x_t - m)(x_(t+1) - m)) / sum((x_t - m)^2), the sample autocorrelation at lag 1 (Box and Jenkins).
+- **The fixed seed**: every way uses `params.seed` (1 on the page): the same plan gives the same answer each visit.
+- **The careful figure** is always the usual way's (one figure on every page), whatever way the page draws.
+
+**Source and licence of the history.** Aswath Damodaran, NYU Stern, "Historical Returns on Stocks, Bonds and Bills" (histretSP),
+read into the repo by `tools/extract-history.py`, whose note says "free for any use with attribution"; this README is that
+attribution. The source page (pages.stern.nyu.edu) could not be read this session (the network refused it, 2026-11-15), so the
+licence words are the repo's own note, not re-read; the figures above are computed from the bundled file and no current figure
+is used. The idea of drawing real years and random inflation: ProjectionLab's simulation settings (a reference only, map item
+B3; no code taken).
+
+**Tests** (`module.test.mjs`, "#35 ..."): the history's figures by hand; `lag1`, `pickIndices`, `ar1Paths` by hand on the same
+stream; years picked from history use only real years (every class of every pretend year read back to one RETURNS row, the stock
+return alone naming one of the 98), each class averages the plan's figure over the 98 years exactly (1e-12) and over 12,000
+drawn years within four standard errors; prices: the returns are the usual draw's, this year at the plan's figure, 80,000 drawn
+years average the plan's 3% within 0.002 (over six standard errors), settled swing within 0.002 of 3.90% and lag-1 within 0.02
+of 0.61; compute: the usual way, an unknown way or none gives the old bytes, each way says so and gives the family 80, 69 and 72;
+endings and the file follow the way; the careful figure is the usual way's; every sentence; the page on the fake DOM (try,
+nothing saved, part open, the hero's line, Keep asked first, one field, the green line with Undo, the next visit drawn that way,
+Undo). `tests/chance-draws-invariance.test.mjs`: with the usual way, every figure of this page and of the pages that share its
+draws is the one 81a5288 gave, over 44 plans (digests), and the same with a way kept in the plan.
+
+**Builder chose:** the block in Set my own numbers, not a new row (above); history set to the plan's averages, not raw (above);
+the chips keep "80 of 100" and the line over them says what it counts (q1 fix P2: "Years picked from history: money lasts in 69
+of 100" is wider than a 390 px screen's chip row and would break in two); trying a way is not a step of the browser's history
+(the hero's "Back to ..." is the way back; Back leaves the page, as it does after a tap on how many pretend futures to try);
+inflation in years picked from history comes from the same real year (prices and returns moved together in history: 1974's
+-26% stocks came with 12% prices); one real year at a time, with replacement (the plain reading of "years picked from history";
+blocks of years are an idea above); a confirm before Keep and Undo after it (the brief's); "Keep the usual way" removes the
+field rather than writing "usual".

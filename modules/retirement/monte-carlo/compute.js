@@ -2,10 +2,11 @@
 // The same projection thousands of times with returns drawn at random around the plan's
 // assumptions (lognormal, the plan's means and swings), to say how often the money lasts.
 import { project, affordableSpending } from "../../../core/math/retirement.js";
-import { mulberry32, normal, percentile } from "../../../core/math/montecarlo.js";
+import { mulberry32, normal, percentile, pickIndices, ar1Paths, lag1 } from "../../../core/math/montecarlo.js";
 import { buildInputs } from "../projection/compute.js";
 import { BAD_RUN_NOTE } from "../odds.js";
 import { toCsv } from "../../../core/csv.js";
+import { RETURNS } from "../historical/data/returns.js";
 
 /** Yearly return sequences: lognormal draws with the given arithmetic mean and standard deviation, stocks and bonds drawn together with a mild correlation. */
 export function drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, corr = 0.1, seed = 1 }) {
@@ -197,6 +198,70 @@ export function settledAtChance(plan, build, options = {}) {
   for (;;) { const r = it.next(); if (r.done) return r.value; }
 }
 
+// ---------------------------------------------------------------- how the pretend years are drawn (gap next-60 #35)
+/** The ways Chance the money lasts can draw its pretend years: the usual way (drawSequences: returns around the plan's averages
+ * and swings, prices rising steadily), years picked from history, and prices that rise unevenly. */
+export const DRAWS = Object.freeze(["usual", "history", "prices"]);
+/** asDraw(x) -> "history" | "prices" for those words, else "usual" (anything else is the usual way). */
+export const asDraw = (x) => (x === "history" || x === "prices" ? x : "usual");
+/** drawOf(plan) -> the way the person kept on Chance the money lasts (`assumptions.chanceDraw`, read only by that page's view,
+ * which asks compute() for it: compute() never reads the field, so no other page moves when it is kept). */
+export const drawOf = (plan) => asDraw(plan?.assumptions?.chanceDraw);
+const meanOf = (xs) => xs.reduce((t, x) => t + x, 0) / xs.length;
+const sdOf = (xs) => { const m = meanOf(xs); return Math.sqrt(xs.reduce((t, x) => t + (x - m) ** 2, 0) / (xs.length - 1)); };
+/**
+ * HISTORY: what the bundled history holds (modules/retirement/historical/data/returns.js: Damodaran, NYU Stern, S&P 500 with
+ * dividends, 10-year Treasury, 3-month bills and CPI, yearly; README), worked out from the file itself: its first and last
+ * year, how many years, each class's arithmetic mean (cash is the bills), and inflation's swing (sample standard deviation) and
+ * lag-1 autocorrelation. 1928 to 2025: means 11.86%, 4.82%, 3.42% and 3.11%; inflation's swing 3.90%, lag-1 0.61.
+ */
+export const HISTORY = Object.freeze((() => {
+  const col = (k) => RETURNS.map((r) => r[k]);
+  const infl = col("inflation");
+  return { from: RETURNS[0].year, to: RETURNS[RETURNS.length - 1].year, years: RETURNS.length,
+    mean: Object.freeze({ stocks: meanOf(col("stocks")), bonds: meanOf(col("bonds")), cash: meanOf(col("bills")), inflation: meanOf(infl) }),
+    inflationSd: sdOf(infl), inflationLag1: lag1(infl) };
+})());
+/** The second stream's seed for prices that rise unevenly: the seed XOR this, so the returns keep the usual draw's own seed. */
+export const PRICES_SEED = 0x5bd1e995;
+/**
+ * historySequences(n, years, { stocks, bonds, cash, inflation, seed }) -> { picks, seqs }: years picked from history. Each
+ * pretend year picks one real year k (pickIndices: floor(u x 98), u from mulberry32(seed), with replacement) and takes that
+ * year's stocks, bonds, bills (cash) and CPI change together, each set to average the plan's own figure m over the whole
+ * history: (1 + r_k) x (1 + m) / (1 + h) - 1, h the history's mean (HISTORY.mean). So over the 98 years each class averages
+ * exactly the plan's figure; the swings, the tails and the moving together are history's. `picks` holds the index of the real
+ * year behind each pretend year (RETURNS[k]).
+ */
+export function historySequences(n, years, { stocks, bonds, cash, inflation, seed = 1 }) {
+  const picks = pickIndices(n, years, RETURNS.length, seed);
+  const M = HISTORY.mean;
+  const k = { stocks: (1 + stocks) / (1 + M.stocks), bonds: (1 + bonds) / (1 + M.bonds), cash: (1 + cash) / (1 + M.cash), inflation: (1 + inflation) / (1 + M.inflation) };
+  const seqs = picks.map((path) => path.map((i) => {
+    const r = RETURNS[i];
+    return { stocks: (1 + r.stocks) * k.stocks - 1, bonds: (1 + r.bonds) * k.bonds - 1, cash: (1 + r.bills) * k.cash - 1, inflation: (1 + r.inflation) * k.inflation - 1 };
+  }));
+  return { picks, seqs };
+}
+/**
+ * pricesSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, inflation, seed }) -> the usual draw (drawSequences on the
+ * same seed: the same good and bad years for stocks and bonds) with each year's inflation drawn too: ar1Paths around the plan's
+ * figure, swinging by history's 3.90% with history's lag-1 of 0.61 (a year of high prices tends to be followed by another),
+ * this year at the plan's figure, from a second stream (seed XOR PRICES_SEED).
+ */
+export function pricesSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, inflation, seed = 1 }) {
+  const base = drawSequences(n, years, { stocks, bonds, stdevStocks, stdevBonds, seed });
+  const infl = ar1Paths(n, years, { mean: inflation, phi: HISTORY.inflationLag1, sd: HISTORY.inflationSd, seed: (seed ^ PRICES_SEED) >>> 0 });
+  return base.map((path, p) => path.map((st, y) => ({ ...st, inflation: infl[p][y] })));
+}
+/** drawFor(way, n, years, inputs, seed) -> the pretend years for a way (asDraw), from projection inputs. */
+export function drawFor(way, n, years, I, seed = 1) {
+  const o = { stocks: I.returns.stocks, bonds: I.returns.bonds, stdevStocks: I.stdev.stocks, stdevBonds: I.stdev.bonds, seed };
+  const w = asDraw(way);
+  if (w === "history") return historySequences(n, years, { stocks: o.stocks, bonds: o.bonds, cash: Number(I.rates?.cash) || 0, inflation: Number(I.rates?.inflation) || 0, seed }).seqs;
+  if (w === "prices") return pricesSequences(n, years, { ...o, inflation: Number(I.rates?.inflation) || 0 });
+  return drawSequences(n, years, o);
+}
+
 // ---------------------------------------------------------------- how the runs end, and every run as a file (gap next-60 #36)
 /** The ages that split the runs that ran out: before 80, 80 to 89, 90 or later. */
 export const FAIL_EDGES = Object.freeze([80, 90]);
@@ -265,7 +330,7 @@ export function runsCsv(d) {
 }
 
 /**
- * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance, endings, runs }) -> {
+ * compute(plan, { today, paths = 2000, seed = 1, maxPaths, careful = true, legacy = 0, chance, endings, runs, draw }) -> {
  *   ready, paths, successRate, medianEndReal, failAges: { p10, p50 } (ages money ran out among failing paths),
  *   bands: [{ year, age, p10, p25, p50, p75, p90 }] real totals per year, byAge: [{ age, alive: share of paths still funded }],
  *   verdict: "strong" | "fair" | "weak" (verdictOf with the plan's lines, linesOf), inputsSummary,
@@ -278,6 +343,8 @@ export function runsCsv(d) {
  *   with runs: true, also runs: [{ failAge (null when it lasted), endReal, balances? (each year's end, today's dollars, while
  *            runs x years <= RUNS_CELLS) }] and runsYears (the years of those columns, [] when left out): runsCsv(d) is the file.
  *   Without either, the result is what it always was, byte for byte (tests/n1-invariance.test.mjs).
+ *   with draw: "history" or "prices" (gap next-60 #35), the pretend years are drawn that way (drawFor) and the result also holds
+ *            draw: the way; any other draw is the usual way, byte for byte (tests/chance-draws-invariance.test.mjs);
  * }
  */
 export function compute(plan, params = {}) {
@@ -286,7 +353,11 @@ export function compute(plan, params = {}) {
   const want = Math.max(100, Number(params.paths ?? 2000));
   const paths = Math.min(want, Number(params.maxPaths ?? 20000));
   const years = b.inputs.endYear - b.inputs.startYear + 1;
-  const seqs = drawSequences(paths, years, { stocks: b.inputs.returns.stocks, bonds: b.inputs.returns.bonds, stdevStocks: b.inputs.stdev.stocks, stdevBonds: b.inputs.stdev.bonds, seed: Number(params.seed ?? 1) });
+  // the way the pretend years are drawn (gap next-60 #35): the usual way unless "history" or "prices" is asked for, by the line
+  // it always was
+  const way = asDraw(params.draw);
+  const seqs = way === "usual" ? drawSequences(paths, years, { stocks: b.inputs.returns.stocks, bonds: b.inputs.returns.bonds, stdevStocks: b.inputs.stdev.stocks, stdevBonds: b.inputs.stdev.bonds, seed: Number(params.seed ?? 1) })
+    : drawFor(way, paths, years, b.inputs, Number(params.seed ?? 1));
   const perYear = Array.from({ length: years }, () => []);
   let successes = 0; const failAges = [];
   const alive = new Array(years).fill(0);
@@ -315,8 +386,10 @@ export function compute(plan, params = {}) {
     // settled on the seed's first 2,000 paths whatever `paths` asks for (the Chance page's own draw: one answer on every page);
     // `legacy` is what the money should still hold at the end (Goal seek's goal)
     // and settled on the plan spending it (carefulSettled, M-1)
-    careful: params.careful === false ? null : settledAtChance(plan, (q) => (q === plan ? b.inputs : buildInputs(q, params).inputs ?? null), { chance: params.chance === undefined || params.chance === null ? carefulChanceOf(plan) : asCarefulChance(params.chance), seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
+    careful: params.careful === false ? null : settledAtChance(plan, (q) => (q === plan ? b.inputs : buildInputs(q, params).inputs ?? null), { chance: params.chance === undefined || params.chance === null ? carefulChanceOf(plan) : asCarefulChance(params.chance), seed: Number(params.seed ?? 1), legacy: Math.max(0, Number(params.legacy) || 0), sequences: paths >= CAREFUL_SETTLE_PATHS && way === "usual" ? seqs.slice(0, CAREFUL_SETTLE_PATHS) : null }),
   };
+  // another way of drawing says so (the careful figure above is always the usual way's: one figure on every page)
+  if (way !== "usual") out.draw = way;
   if (wantEnds) {
     const startAge = bands[0].age, endAge = bands[bands.length - 1].age;
     const left = leftBands(lastingEnds);

@@ -4,7 +4,8 @@
 // Simple first (opt C14, 2026-11-13): the answer and one sentence; the rest in quiet rows (core/ui/more.js), one of them
 // "Set my own numbers": how careful the spending that lasts is, and my own lines for strong and fair (gap #17); another
 // "How the pretend futures end" (gap next-60 #36), with "Save all 2,000 pretend futures as a spreadsheet" at the foot of How this
-// is done (its status says "with a spreadsheet").
+// is done (its status says "with a spreadsheet"). Gap next-60 #35 adds no row (the first view may not grow): "How the pretend
+// years are drawn" sits in Set my own numbers (try a way, keep it with Undo).
 import { needButtons } from "../needs.js";
 import { rememberChance, chanceKey, whenCareful, monthlyOf, slot, busyWords, carefulChanceOf, badRunNote, inWords, linesOf, verdictOf, perHundred, CAREFUL_CHANCE, CAREFUL_CHOICES, GOOD_CHANCE, OK_CHANCE } from "../careful.js";
 import { buildInputs, healthAdded } from "../projection/compute.js";
@@ -12,9 +13,12 @@ import { bandChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { needsWords } from "../../../core/words.js";
 import { parts, choice } from "../../../core/ui/more.js";
-import { runsCsv } from "./compute.js";
+import { runsCsv, DRAWS, drawOf, HISTORY } from "./compute.js";
 
-const state = { paths: 2000, seed: 1 };
+// draw: the way being tried on this visit (null: the way the plan keeps, drawOf); never in the plan until "Keep ..." is tapped
+const state = { paths: 2000, seed: 1, draw: null };
+const chances = new Map();   // "<plan key>|<pretend futures>|<way>" -> the share that lasts: each way's chance, for the visit
+let reopen = false;          // a way was just tried: Set my own numbers stays open on the next draw (nothing was saved)
 let pending = null;   // after a save: { part (stays open on the next draw, R17), say(d) -> the green line (R7) }
 let last = null;      // { key, successRate }: the plan's chance as last drawn, so a new line can say at once what the plan now reads
 
@@ -22,11 +26,14 @@ const LEAD = { weak: "Look at spending, the retirement age and Social Security t
 const WORD = { strong: "strong", fair: "fair", weak: "weak" };
 
 /**
- * answerFor(d, lines) -> { key, value, label, lede }: the answer (one ui.stat with its words, R3) and the one sentence under it
- * for each case the page can reach (R5): every, strong, fair, weak, none, and with the person's own lines (gap #17) strongOwn,
- * fairOwn, weakOwn, which name the line. `d` is compute()'s result; `lines` linesOf(plan).
+ * answerFor(d, lines, { trying }) -> { key, value, label, lede }: the answer (one ui.stat with its words, R3) and the one sentence
+ * under it for each case the page can reach (R5): every, strong, fair, weak, none, and with the person's own lines (gap #17)
+ * strongOwn, fairOwn, weakOwn, which name the line. `d` is compute()'s result; `lines` linesOf(plan). While another way of drawing
+ * the years is only tried (gap next-60 #35, q1 fix P1), the sentence keeps its verdict but not its advice: a test is not a reason
+ * to change the spending.
  */
-export function answerFor(d, lines = { good: GOOD_CHANCE, ok: OK_CHANCE }) {
+export function answerFor(d, lines = { good: GOOD_CHANCE, ok: OK_CHANCE }, { trying = false } = {}) {
+  const tip = (k) => (trying ? "" : ` ${LEAD[k]}`);
   const s = d.successRate;
   const n = perHundred(s);
   const value = s > 0 && n === 0 ? "under 1 of 100" : `${n} of 100`;
@@ -35,13 +42,13 @@ export function answerFor(d, lines = { good: GOOD_CHANCE, ok: OK_CHANCE }) {
   const v = verdictOf(s, lines);
   const G = perHundred(lines.good), O = perHundred(lines.ok);
   let key, lede;
-  if (s >= 1 || s <= 0) { key = s >= 1 ? "every" : "none"; lede = d.successRate >= 1 ? "Strong: the money lasted in every pretend future." : `Weak: the money ran out in every pretend future. ${LEAD.weak}`; }
+  if (s >= 1 || s <= 0) { key = s >= 1 ? "every" : "none"; lede = d.successRate >= 1 ? "Strong: the money lasted in every pretend future." : `Weak: the money ran out in every pretend future.${tip("weak")}`; }
   else if (!own) {
     key = v;
-    lede = { strong: "Strong: the money lasted in nearly every pretend future.", fair: `Fair: it lasted in most pretend futures, but not all. ${LEAD.fair}`, weak: `Weak: it ran out in many pretend futures. ${LEAD.weak}` }[v];
+    lede = { strong: "Strong: the money lasted in nearly every pretend future.", fair: `Fair: it lasted in most pretend futures, but not all.${tip("fair")}`, weak: `Weak: it ran out in many pretend futures.${tip("weak")}` }[v];
   } else {
     key = `${v}Own`;
-    lede = { strong: `Strong: that is at or above the ${G} of 100 you call strong.`, fair: `Fair: under the ${G} of 100 you call strong, at or above the ${O} you call fair. ${LEAD.fair}`, weak: `Weak: under the ${O} of 100 you call fair. ${LEAD.weak}` }[v];
+    lede = { strong: `Strong: that is at or above the ${G} of 100 you call strong.`, fair: `Fair: under the ${G} of 100 you call strong, at or above the ${O} you call fair.${tip("fair")}`, weak: `Weak: under the ${O} of 100 you call fair.${tip("weak")}` }[v];
   }
   return { key, value, label, lede };
 }
@@ -52,6 +59,9 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(n, cur);
   const said = pending; pending = null;
+  const again = reopen; reopen = false;
+  // the way the pretend years are drawn: the one being tried on this visit, else the one the plan keeps (the usual way)
+  const kept = drawOf(plan), way = state.draw ?? kept;
   const answer = ui.h("div", {}, ui.h("p", { class: "lede", "aria-busy": "true" }, `Trying your plan ${state.paths.toLocaleString("en-US")} times...`));
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Chance the money lasts"),
@@ -64,7 +74,8 @@ export function render(root, ctx) {
   // numbers" is opened (whenCareful, at the plan's own careful chance)
   const sentFor = chanceKey(ctx);   // the plan this run is for (Compare reads the figure by it)
   // endings: true adds how the runs end (the part below) to the same run; every other figure is the same (gap next-60 #36)
-  ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false, endings: true }).then((d) => {
+  // draw asks for the way shown when it is not the usual one (gap next-60 #35)
+  ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false, endings: true, ...(way !== "usual" ? { draw: way } : {}) }).then((d) => {
     answer.replaceChildren();
     if (!d || !d.ready) {
       // the same words as every page that cannot run yet (core/words.js needsWords; wording follow-up l001), never "...: see Will the money last?."
@@ -73,13 +84,21 @@ export function render(root, ctx) {
       answer.append(ui.h("p", {}, missing), needButtons(ui, d?.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")));
       return;
     }
-    // kept for the visit, so Compare shows this same figure for this same plan (stress test 2026-11-11, W7)
-    rememberChance(ctx, d, sentFor);
+    // kept for the visit, so Compare shows this same figure for this same plan (stress test 2026-11-11, W7); only the usual
+    // way's, the one Compare's own draw is moved from
+    if (way === "usual") rememberChance(ctx, d, sentFor);
+    chances.set(chanceSlot(sentFor, way), d.successRate);
     const lines = linesOf(plan);
-    const a = answerFor(d, lines);
+    const trying = way !== kept;
+    const a = answerFor(d, lines, { trying });
     last = { key: sentFor, successRate: d.successRate };
+    const note = wayNote(way, kept);
     answer.append(ui.stat(a.label, a.value), ui.h("p", {}, a.lede));
-    host.append(ui.h("div", {}, parts(ctx, numbersPart(ctx, d, lines, money), endingsPart(ctx, d, money), carefulPart(ctx, lines, said, money), howPart(ctx, lines, d))));
+    // while a way is only tried (q1 fix P1, P6): why the answer moved, and the way back to the way the plan keeps, here too
+    if (note) answer.append(ui.h("p", { class: "muted small" }, trying ? `${note} ${TRY_NORMAL}` : note));
+    if (trying) answer.append(ui.row(ui.button(backToWords(kept), () => tryWay(ctx, kept, kept), { class: "secondary small" })));
+    const draws = { way, kept, key: sentFor, again };
+    host.append(ui.h("div", {}, parts(ctx, numbersPart(ctx, d, lines, money), endingsPart(ctx, d, money), carefulPart(ctx, lines, said, money, draws), howPart(ctx, lines, d, way))));
   }).catch((e) => { answer.replaceChildren(); host.append(ui.notice("error", `Could not run it: ${e.message}`)); });
 }
 
@@ -215,11 +234,11 @@ function fileBlock(ctx, d) {
 }
 
 // ---------------------------------------------------------------- "Set my own numbers": how careful, and my own lines (gap #17)
-function carefulPart(ctx, lines, said, money) {
+function carefulPart(ctx, lines, said, money, draws) {
   const { ui, plan, store } = ctx;
   const chance = carefulChanceOf(plan);
   const A = plan.assumptions ?? {};
-  const mine = ["carefulChance", "goodChance", "okChance"].filter((k) => A[k] !== undefined && A[k] !== null).length;
+  const mine = ["carefulChance", "goodChance", "okChance", "chanceDraw"].filter((k) => A[k] !== undefined && A[k] !== null).length;
   const G = perHundred(lines.good), O = perHundred(lines.ok);
   const pickChance = (v) => {
     pending = { part: "careful", say: () => (v === CAREFUL_CHANCE ? "Saved. The spending that lasts is back to the usual 9 of 10 pretend futures." : `Saved. The spending that lasts now has to last in ${inWords(v, "of")} pretend futures.`) };
@@ -233,8 +252,12 @@ function carefulPart(ctx, lines, said, money) {
     const note = badRunNote(chance);
     const line = ui.h("p", { "aria-live": "polite", "aria-busy": "true", style: { color: "var(--muted)" } }, busyWords(ui, "Working out the spending that lasts. "),
       `Even in a bad run of years ${note}, the money can pay for about `, slot(ui, "$100,000"), " a year (", slot(ui, "$8,000"), ` a month)${onTop}.`);
-    // this page says the chance in words, so it asks for the plan's own (careful.js: a page that says "1 in 10" asks for none)
+    // this page says the chance in words, so it asks for the plan's own (careful.js: a page that says "1 in 10" asks for none);
+    // the other ways' chances below are asked for once this line is filled (gap next-60 #35: the line comes as soon as before)
+    let carefulDone = () => {};
+    const carefulReady = new Promise((r) => { carefulDone = r; });
     whenCareful(ctx, line, (c) => {
+      carefulDone();
       line.removeAttribute("aria-busy"); line.style.color = "";
       const cn = badRunNote(c?.chance ?? chance);
       line.replaceChildren(!c ? "The spending that lasts in a bad run of years could not be worked out."
@@ -271,22 +294,135 @@ function carefulPart(ctx, lines, said, money) {
       sync(); fold.addEventListener("toggle", sync);
     }
     return [
-      said ? ui.notice("ok", said.say()) : null,
+      said && said.at !== "draw" ? ui.notice("ok", said.say()) : null,
       ui.h("p", {}, "How careful should the spending that lasts be? It is the most you could spend each year and still have the money last in this many pretend futures."),
       choice(ctx, { id: "carefulChance", label: "How careful", value: chance,
         presets: CAREFUL_CHOICES.map((value) => ({ value, label: `${inWords(value)}${value === CAREFUL_CHANCE ? " (usual)" : ""}` })),
         own: { type: "percent", label: "Your own chance", name: "carefulChance", min: 60, max: 99, whole: true, show: (x) => inWords(x) }, onPick: pickChance }),
       line,
+      // how the pretend years are drawn (gap next-60 #35): try a way, keep it
+      ...drawBlock(ctx, draws, said?.at === "draw" ? said : null, carefulReady),
       ui.h("p", { class: "muted small" }, `We call the chance strong from ${G} of 100 and fair from ${O}.`),
       err,
       form,
     ];
   };
-  return { id: "careful", kind: "own", set: mine, says: inWords(chance), holds: ["carefulChance", "goodChance", "okChance"], open: said?.part === "careful", lazy: true, body };
+  return { id: "careful", kind: "own", set: mine, says: inWords(chance), holds: ["carefulChance", "goodChance", "okChance", "chanceDraw"], open: said?.part === "careful" || draws?.again || undefined, lazy: true, body };
+}
+
+// ---------------------------------------------------------------- how the pretend years are drawn (gap next-60 #35)
+/** The ways in words: the name in a sentence ("years picked from history") and on its chip ("Years picked from history"). */
+export const WAY_NAME = Object.freeze({ usual: "the usual way", history: "years picked from history", prices: "prices that rise unevenly" });
+export const WAY_CHIP = Object.freeze({ usual: "The usual way", history: "Years picked from history", prices: "Prices that rise unevenly" });
+/** chanceValue(share) -> "80 of 100" (perHundred), "under 1 of 100" for a share above 0 that rounds down to none. */
+export const chanceValue = (s) => { const n = perHundred(s); return s > 0 && n === 0 ? "under 1 of 100" : `${n} of 100`; };
+/** chipWords(way, share) -> "Years picked from history: 69 of 100", or the name alone while its chance is not known; the chance
+ * never breaks across lines in a narrow chip (no-break spaces: "69 of 100" moves down whole at 320 px). */
+export const chipWords = (w, s) => (Number.isFinite(s) ? `${WAY_CHIP[w]}: ${chanceValue(s).replace(/ /g, "\u00a0")}` : WAY_CHIP[w]);
+/** The block's heading and the line over the chips (q1 fix P2, P3: what the figure on a chip counts, the same as the answer at the
+ * top, apart from how careful the spending that lasts is; and what a tap does before it is tapped), the line while the other ways
+ * are worked out, and the line if they could not be. */
+export const DRAW_TITLE = "How the pretend years are drawn";
+export const DRAW_ASK = "Each way tests the same plan with its own pretend years. The figure on each is how many of 100 pretend futures the money lasts in, like the answer at the top. Tap one to try it and see what it means; nothing is saved unless you keep it.";
+export const DRAW_BUSY = "Working out the chance with each way...";
+export const DRAW_FAILED = "The chance with each way could not be worked out. Reload the page to try again.";
+/** One sentence for the way shown (R5). */
+export const WAY_WORDS = Object.freeze({
+  usual: "Each year's returns are drawn at random around your own averages and swings, and prices rise steadily by your figure.",
+  history: `Each pretend year is a real year from ${HISTORY.from} to ${HISTORY.to}, picked at random: its stocks, bonds, cash and prices move together as they did that year, set to average your own figures.`,
+  prices: `Returns as the usual way, but prices rise unevenly around your figure, with swings like those since ${HISTORY.from}: a year of high prices tends to be followed by another.`,
+});
+/** While a way is tried (not the one kept): the line over its Keep button. */
+export const TRY_WORDS = "You are trying this on this page only; your plan is not changed.";
+/** While a way is tried: the hero's line after "Trying ...", so a moved answer reads as another test, not a worse plan (q1 fix P1). */
+export const TRY_NORMAL = "Neither way is the right one: they are two ways to test the same plan, so a different answer is normal.";
+/** backToWords(kept) -> the hero's outlined button while a way is tried: back to the way the plan keeps (q1 fix P6). */
+export const backToWords = (w) => `Back to ${WAY_NAME[w]}`;
+/** Try a way (a chip, or the hero's way back): module state for the visit, the page runs again with it, Set my own numbers stays
+ * open, nothing is written. The way the plan keeps is no try. */
+function tryWay(ctx, w, kept) { state.draw = w === kept ? null : w; reopen = true; ctx.redraw?.(); }
+/** When the way shown is not the usual one: why the careful figure above does not move with it. */
+export const SAME_FIGURE = "The spending that lasts, above, is always worked out the usual way, so every page shows the same figure.";
+/** wayNote(way, kept) -> the muted line in the hero when the way shown is not the usual one, or null. */
+export function wayNote(way, kept) {
+  if (way === kept) return way === "usual" ? null : `Drawn with ${WAY_NAME[way]}, as you chose.`;
+  return `Trying ${WAY_NAME[way]}: this page only, nothing saved.`;
+}
+/** keepWords(way) -> the outlined button's words; confirmWords(way) -> what it asks first. */
+export const keepWords = (w) => `Keep ${WAY_NAME[w]}`;
+export const confirmWords = (w) => (w === "usual" ? "Keep the usual way? This page will draw its pretend years the usual way again. No other page changes." : `Keep ${WAY_NAME[w]}? This page will draw its pretend years this way from now on. No other page changes.`);
+/** keptWords(way, share) -> the green line after Keep (R7: it names the new answer); backWords(way, share) -> after its Undo. */
+export function keptWords(w, s) {
+  const tail = Number.isFinite(s) ? `: the money lasts in ${chanceValue(s)} pretend futures.` : ".";
+  return { usual: `Saved. This page is back to the usual way${tail}`, history: `Saved. This page now draws years picked from history${tail}`, prices: `Saved. This page now has prices that rise unevenly${tail}` }[w];
+}
+export const backWords = (w, s) => `Back to ${WAY_NAME[w]}${Number.isFinite(s) ? `: the money lasts in ${chanceValue(s)} pretend futures.` : "."}`;
+/** The key a way's chance is kept under for the visit: the plan as the projection reads it today, how many pretend futures, the way. */
+const chanceSlot = (key, way, paths = state.paths) => `${key}|${paths}|${way}`;
+
+/**
+ * The block inside Set my own numbers: the three ways as chips, each with its chance (the way shown has it already; the other
+ * two are asked for one after the other when the part is opened and its spending that lasts is filled in (`after`), here or on
+ * the computer, and kept for the visit); the way
+ * shown in one sentence; while a way is tried, "Keep ..." (outlined, asked first, then one change that Undo takes back, its
+ * green line where the button was). A chip tries a way: module state for the visit, the page runs again with it, nothing saved.
+ */
+function drawBlock(ctx, draws, said, after = Promise.resolve()) {
+  const { ui, fmt } = ctx;
+  if (!draws) return [];
+  const { way, kept, key } = draws;
+  const holder = ui.h("div", { "aria-live": "polite" });
+  const known = (w) => chances.get(chanceSlot(key, w));
+  let failed = false;
+  const keep = () => {
+    if (!ui.confirm(confirmWords(way))) return;
+    const next = { part: "careful", at: "draw", say: () => keptWords(way, known(way)), back: backWords(kept, known(kept)) };
+    pending = next;
+    state.draw = null;
+    next.undo = ui.undoable(ctx.store, (d) => { d.assumptions = d.assumptions ?? {}; if (way === "usual") delete d.assumptions.chanceDraw; else d.assumptions.chanceDraw = way; });
+  };
+  // Undo puts the field back; the words are set before its change draws the page again (the shell draws after a moment, the
+  // tests at once), so the next draw says them
+  const undo = said?.undo ? () => { const box = { r: null }; pending = { part: "careful", at: "draw", say: () => ui.undoneWords(box.r, said.back) }; box.r = said.undo(); return box.r; } : null;
+  const draw = () => {
+    const missing = DRAWS.some((w) => !Number.isFinite(known(w)));
+    holder.replaceChildren(choice(ctx, { id: "chanceDraw", label: "How the pretend years are drawn", value: way, presets: DRAWS.map((w) => ({ value: w, label: chipWords(w, known(w)) })), onPick: (w) => tryWay(ctx, w, kept) }));
+    if (missing) holder.append(ui.h("p", { class: "muted small", "aria-busy": failed ? null : "true" }, failed ? DRAW_FAILED : DRAW_BUSY));
+  };
+  draw();
+  // the other ways' chances, one after the other (each its own run of the same number of pretend futures), once the spending
+  // that lasts above is filled in, so that line comes as soon as it always did
+  const ask = DRAWS.filter((w) => !Number.isFinite(known(w)));
+  if (ask.length) (async () => {
+    await after;
+    for (const w of ask) {
+      const r = await ctx.computeRemote("retirement/monte-carlo", { today: fmt.today(), paths: state.paths, seed: state.seed, careful: false, ...(w !== "usual" ? { draw: w } : {}) });
+      if (r?.ready) chances.set(chanceSlot(key, w), r.successRate);
+      draw();
+    }
+  })().catch(() => { failed = true; draw(); });
+  return [
+    ui.h("h3", {}, DRAW_TITLE),
+    ui.h("p", { class: "small" }, DRAW_ASK),
+    holder,
+    ui.h("p", { class: "muted small" }, WAY_WORDS[way]),
+    way !== kept ? ui.h("p", { class: "small" }, TRY_WORDS) : null,
+    way !== kept ? ui.row(ui.button(keepWords(way), keep, { class: "secondary" })) : null,
+    said ? ui.notice("ok", said.say(), undo ? { undo, undone: () => {} } : {}) : null,
+    way !== "usual" ? ui.h("p", { class: "muted small" }, SAME_FIGURE) : null,
+  ];
 }
 
 // ---------------------------------------------------------------- "How this is done": the method, the lines, how many pretend futures
-function howPart(ctx, lines, d) {
+/** methodWords(way, assumptions, pct) -> the sentence on how each pretend future is drawn, one per way (R5); the usual way's is
+ * the sentence the page always had. */
+export function methodWords(way, A, pct) {
+  const same = "The random picks are the same each time, so the answer does not change when you reopen the page.";
+  if (way === "history") return `Each pretend future picks, for every year, one real year from ${HISTORY.from} to ${HISTORY.to} at random and takes its stock, bond and cash returns and its rise in prices together, set to average your own ${pct(A.returnStocks, 1)}, ${pct(A.returnBonds, 1)}, ${pct(A.returnCash, 1)} and ${pct(A.inflation, 1)}; the swings are history's own. ${same}`;
+  if (way === "prices") return `Each pretend future picks a random return for stocks and bonds every year, averaging ${pct(A.returnStocks, 1)} and ${pct(A.returnBonds, 1)}, with typical swings of ${pct(A.stdevStocks, 0)} and ${pct(A.stdevBonds, 0)}, and prices that rise by ${pct(A.inflation, 1)} a year on average but unevenly, by about ${pct(HISTORY.inflationSd, 1)} more or less in a typical year as from ${HISTORY.from} to ${HISTORY.to}; a year of high prices tends to be followed by another. ${same}`;
+  return `Each pretend future picks a random return for stocks and bonds every year, averaging ${pct(A.returnStocks, 1)} and ${pct(A.returnBonds, 1)}, with typical swings of ${pct(A.stdevStocks, 0)} and ${pct(A.stdevBonds, 0)}, and inflation steady at ${pct(A.inflation, 1)}. ${same}`;
+}
+function howPart(ctx, lines, d, way = "usual") {
   const { ui, plan } = ctx;
   // how many pretend futures: three chips (R23), not a box. A box in the parts card outside a form is a control the page keeps
   // for itself (docs/OPTIONAL.md R32, S15), and a reading part holds no box (R30). Kept for this visit only, never in the plan;
@@ -296,7 +432,7 @@ function howPart(ctx, lines, d) {
     onPick: (v) => { state.paths = v; ctx.redraw?.(); } });
   return { id: "how", kind: "how", title: "How this is done", says: d?.endings?.file ? FILE_SAYS : "", body: () => [
     ui.h("p", {}, "Your plan was tried thousands of times, each a pretend future with its own good and bad years mixed at random. The share of pretend futures in which the money lasts to the end is the chance it lasts."),
-    ui.h("p", { class: "muted small" }, `Each pretend future picks a random return for stocks and bonds every year, averaging ${ctx.fmt.pct(plan.assumptions.returnStocks, 1)} and ${ctx.fmt.pct(plan.assumptions.returnBonds, 1)}, with typical swings of ${ctx.fmt.pct(plan.assumptions.stdevStocks, 0)} and ${ctx.fmt.pct(plan.assumptions.stdevBonds, 0)}, and inflation steady at ${ctx.fmt.pct(plan.assumptions.inflation, 1)}. The random picks are the same each time, so the answer does not change when you reopen the page.`),
+    ui.h("p", { class: "muted small" }, methodWords(way, plan.assumptions, ctx.fmt.pct)),
     ui.h("p", { class: "muted small" }, `We call the chance strong from ${perHundred(lines.good)} of 100 and fair from ${perHundred(lines.ok)}; under that it is weak.`),
     ui.h("p", { class: "small" }, "How many pretend futures to try:"),
     pathsPick,
