@@ -10,6 +10,7 @@
 - The Federal estimate's `taxInputs`: AGI, each person's pay and pre-tax 401(k) kept out of income, the traditional IRA deduction, the health FSA, and HSA money and excess per person.
 - The Income page's other income, by person.
 - `dueDay` of `household/calendar` for the filing date.
+- `retirement.workPlans[personId].afterTax` and `.afterTaxToRoth` (optional; the two answers of "After-tax money into Roth", below), Get started's `.plan`, and `annualAdditions` in `data/limits.js` (the 415(c) limit: 70,000 for 2025, 72,000 for 2026).
 
 ## Outputs
 - `people[]` with `rows[]` for the 401(k), IRA and HSA: `limit` (with catch-up), `catchUp`, `catchUpFull`, `catchUpCapped`, `used`, `room`, `over`, `accounts`, `hasAccount`, `year`. HSA rows also have `eligible`, `shared`, `payroll` and `employer`.
@@ -18,6 +19,7 @@
 - `totals`, `fsa`, and `gift` (the exclusion and the five-year amount).
 - `roth`: `filingStatus`, `livedApart`, `separate`, `year`, `phaseOut`, `magi` (one return; `null` on separate returns), `status` (one return; on separate returns the more limited spouse's), and `people[]`. Each person has `magi`, `status`, `full`, `reduced`, `traditional`, `roth`, `allowed` and `over`.
 - `deadlines[]`, `notes`, `warnings` (Roth IRA money over what is allowed).
+- Beside `compute()` (which is unchanged by it): `afterTaxRoom(plan, params, d)`, the room for after-tax 401(k) money per adult with a plan at work (below).
 
 ## Formulas
 **401(k).** Money is sorted by the Contributions item's `limitKind`, not by account type. A Roth account is a Roth 401(k) when it has an employer match or its name says 401(k), 403(b), 457 or TSP. Its money counts against the 401(k) limit with the pre-tax money (IRC 402A(c)(2): Roth deferrals may not exceed the limit "over ... the aggregate amount of elective deferrals ... which the employee does not designate"). `hasAccount` uses the same test, with the account's largest match.
@@ -110,3 +112,96 @@ Review 2026-11-06 (round 7): "You can put up to ... in a Roth IRA", "You have no
   contribution can still be moved to a Roth IRA before the return is filed. That is a recharacterization, IRC 408A(d)(6);
   Pub. 590-A (2025), "Recharacterizations": by trustee-to-trustee transfer "by the due date (including extensions)", read
   2026-11-06.
+
+## After-tax money into Roth (gap list, next 60, item 28; 2026-11-15)
+The "mega backdoor": some 401(k) and 403(b) plans take money after tax on top of the pre-tax and Roth money, up to the
+yearly limit on all money going into a person's accounts in the plan, and let it be moved to Roth inside the plan or
+taken out while the person still works.
+
+**Who.** `atWorkPlan(plan, personId, pay)`: a row of theirs this year (or on an account they own) into a 401(k) or Roth
+401(k) at the current job, from pay or from the employer; else Get started's "Retirement plan at work?" (`workPlans[id].plan`:
+No closes it, Yes opens it); else pay on file and a 401(k) or Roth 401(k) of their own at the current job (Retirement
+contributions' `isLaterAccount` / `isNowAccount`: not marked from a job left, no "old", "former", "previous", "prior" or
+"rollover" in its name). An account that names no adult is the first adult's. An account named 457, TSP or Thrift is
+left out: a 457(b) plan or the Thrift Savings Plan is not a 401(k) or 403(b), which is what this route is about.
+
+**Formulas** (`afterTaxRoom`, pure; `annualAdditionsFor(year)` reads `annualAdditions` in `data/limits.js`, the newest
+year at or before it, the first before the table):
+- cap = min(the 415(c) amount, the person's compensation), or the amount when no compensation is on file. IRC 415(c)(1):
+  the lesser of the dollar amount and "100 percent of the participant's compensation". Compensation is the Federal
+  estimate's `k401.people[].compensation` (pay, and business income for someone self-employed), as the catch-up cap reads it.
+  With none on file (`payKnown` false) the person's words say so: "Ana's pay is not on the Income page, so this uses the
+  full $72,000. If Ana earns less than that, the limit is all of Ana's pay." (review o1 F4).
+- The amount: 72,000 for 2026, 70,000 for 2025. Notice 2025-67: "The limitation for defined contribution plans under
+  section 415(c)(1)(A) is increased in 2026 from $70,000 to $72,000" (read 2026-11-15, https://www.irs.gov/pub/irs-drop/n-25-67.pdf);
+  the IRS's COLA table, "Defined contribution plan limit 72,000 / 70,000" for 2026 / 2025 and nothing yet for 2027 (read
+  2026-11-15, https://www.irs.gov/retirement-plans/cola-increases-for-dollar-limitations-on-benefits-and-contributions).
+- own = min(the 401(k) row's pre-tax and Roth money, the 402(g) amount); catch-up money does not count. The IRS's 401(k)
+  limits page (read 2026-11-15, https://www.irs.gov/retirement-plans/plan-participant-employee/retirement-topics-401k-and-profit-sharing-plan-contribution-limits):
+  the limit "applies to the total of: elective deferrals (but not catch-up contributions), employer matching
+  contributions, employer nonelective contributions, allocations of forfeitures", and "cannot exceed the lesser of: 100%
+  of the participant's compensation, or $72,000 in 2026 ($80,000 including catch-up contributions or up to $83,250 for
+  those age 60 to 63)". catchUpIn = min(catch-up, max(0, the row's money - the 402(g) amount)).
+- employer = the employer's money a year on the person's 401(k) rows (the match; the plan holds no other employer money).
+- A row's person (review o1 F1): the adult it names, else the account's owner, else the first adult, as `atWorkPlan`,
+  Retirement contributions' list per person and the Federal estimate read it, so a row marked "Household" counts. The
+  catch-up is worked as compute() works it (414(v)(2)(A)(ii)) on those rows: the same figure whenever every row names its
+  person. compute()'s own 401(k) row is unchanged and still counts only rows that name the person (as Retirement
+  contributions' compute does); changing it would move figures on this page and that one, so it is left for its own change.
+- room = max(0, cap - own - employer). regularLeft = max(0, the 402(g) amount - the row's money): money put there uses
+  the same room, and the page says so ("It counts toward the same $72,000: what goes in there comes off the $56,730.").
+- Worked (the invented family, 2026): Ana, 36, puts 470 every two weeks (12,220 a year) in her 401(k) and her employer
+  adds 3,050: 72,000 - 12,220 - 3,050 = 56,730; 24,500 - 12,220 = 12,280 of usual room left. Riley (the renter), 39,000
+  of pay, nothing in: all of the pay, 39,000. At 55 with 32,500 in (24,500 + the 8,000 catch-up) and 10,000 from the
+  employer: 72,000 - 24,500 - 10,000 = 37,500.
+- The tax on the move, said in one line: "You generally include the taxable amount (fair market value minus your basis
+  in the distribution) of an in-plan Roth rollover in your gross income" (IRS, Retirement plans FAQs on designated Roth
+  accounts, read 2026-11-15, https://www.irs.gov/retirement-plans/retirement-plans-faqs-on-designated-roth-accounts);
+  "Earnings associated with after-tax contributions are pretax amounts" (IRS, Rollovers of after-tax contributions in
+  retirement plans, on Notice 2014-54, read 2026-11-15, https://www.irs.gov/retirement-plans/rollovers-of-after-tax-contributions-in-retirement-plans).
+  The same FAQ: the plan may limit in-plan Roth rollovers to amounts it could pay out, and says when an in-service
+  withdrawal is allowed; hence the second question asks whether the money can be moved to Roth while working, either
+  way, and its help names both ("in-plan Roth conversion" or "in-service withdrawal").
+
+**Cases** (`verdict`, one sentence each, `afterTaxWords`): "full" no room ("Ana's work plan is already at its $72,000
+limit for 2026, so no after-tax money fits this year."; with the pay as the limit "... at its 2026 limit, which is all
+of Ana's pay ($30,000), ..."); "no" the plan does not take it ("Ana's plan does not take after-tax money, so this way
+into Roth is closed."); "stuck" it cannot be moved or taken out while working, whatever the first answer ("Ana's plan
+cannot move after-tax money to Roth while Ana works, so this way into Roth is closed. After-tax money left in the plan
+grows, and the growth is taxed as pay when it comes out."; with the first answer still "Not sure", review o1 F5: "If
+Ana's plan takes after-tax money, that money cannot be moved to Roth while Ana works, so this way into Roth is
+closed."); "ok" two yeses ("Ana could put up to $56,730 more into the plan after tax this year and move it to Roth.");
+"ask" otherwise, saying where to find out, with the words the plan's papers use (review o1 P2): both ("... if the plan
+allows it. Not sure? Ask HR, or look on the plan's website for "after-tax contributions" and "in-plan Roth
+conversion"."), the move ("Ana's plan takes after-tax money: up to $56,730 more could go in this year. Not sure? Ask
+HR, or look on the plan's website for "in-plan Roth conversion" or "in-service withdrawal"."), or whether it takes it
+("... if the plan takes after-tax money. Not sure? Ask HR, or look on the plan's website for "after-tax
+contributions"."). The questions: "Does Ana's work plan take after-tax money, on top of the usual 401(k) money?" and
+"Can that money be moved to Roth while Ana still works there?" (moved inside the plan or taken out to a Roth IRA, the
+two ways the FAQ names). An unnamed first adult reads "You could ...", "Your plan ...", "while you still work there"
+(core/words.js). A date before the table (a phone's clock set back) says "The 2025 limit (the earliest this app has)",
+never "not out yet" (review o1 F2).
+
+**Builder's choices.**
+- Nothing is counted in the plan. Retirement contributions has no kind for after-tax money: a row into a 401(k) there
+  counts as pre-tax money against the 24,500 (and the Federal estimate takes it off income up to that), and a row into a
+  Roth account named 401(k) counts as Roth 401(k) money. So the link is for what goes in from pay and from the employer,
+  which the room is worked from, and the page never asks for after-tax money to be typed there. Counting it needs a
+  `limitKind` "after-tax" on Contributions, the Federal estimate leaving it in income, and this page's `own` reading it.
+- The limit is per employer ("plans maintained by one employer", the IRS page): all of a person's 401(k) money is
+  counted against one limit, the careful side for someone in two unrelated employers' plans.
+- The answers are facts about the person's plan at work, so they live beside Get started's answer on
+  `retirement.workPlans`, not in `whatIfs`; no figure reads them (the invariance test).
+- The room is the brief's formula even when the usual 401(k) room is not used: the line "Ana also has $12,280 of usual
+  401(k) room left this year. It counts toward the same $72,000: what goes in there comes off the $56,730." says what
+  comes off it, as part of the same limit, so it does not read as contradicting the figure (review o1 P3). It gives no
+  order to fill them in: that would be advice. When the way is closed only the first sentence stays.
+- A hand-edited `workPlans` entry that is not a plain object is read as nothing when an answer is written, never spread
+  into keys "0", "1" ... (review o1 F3).
+- Words on screen never say "415(c)" or "mega backdoor"; the search words do.
+
+**Tests** (`module.test.mjs`): the limit by year and the page's other 2026 figures against Notice 2025-67, Rev. Proc.
+2025-19 and Rev. Proc. 2025-32 (all agree, nothing corrected); the room in every case above; who has a plan at work; the
+verdicts from the answers; every sentence, "you" forms included; the two keys' writes; review o1 (a "Household" row,
+a date before the table, a malformed entry, no pay, "stuck" with the first answer unknown, the plain questions); invariance: compute() here and on Retirement contributions byte-identical to 461df76 over the fixtures, the
+empty plan and the 1,400 households (digests), and with the answers saved every page's compute() is unchanged.

@@ -2,14 +2,14 @@
 // person and account kind (401(k), IRA, HSA, health FSA, 529 gifts) against what is going
 // in, the room left, the catch-ups that apply, the Roth IRA income limit per person (and the
 // amount each adult may put in a Roth IRA directly), and the deadlines.
-import { compute as computeContributions, limitsFor, catchUpFor, limitKind } from "../../retirement/contributions/compute.js";
+import { compute as computeContributions, limitsFor, catchUpFor, limitKind, isLaterAccount, isNowAccount } from "../../retirement/contributions/compute.js";
 import { LIMITS } from "../../retirement/contributions/data/limits.js";
 import { taxInputs, compute as computeFederal } from "../../taxes/federal/compute.js";
 import { known } from "../../taxes/federal/known.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { dueDay } from "../../household/calendar/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
-import { nameIn, NameOf } from "../../../core/words.js";
+import { nameIn, NameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 
 const HSA_LABEL = { none: "HSA (no high-deductible plan)", self: "HSA (self-only coverage)", family: "HSA (family coverage)" };
 const STATUS_RANK = { ok: 0, partial: 1, over: 2 };
@@ -249,5 +249,213 @@ export function compute(plan, params = {}) {
     year, limitsYear, kindYear: L.kindYear, base: { "401k": L.kinds["401k"].limit, ira: L.kinds.ira.limit, hsa: L.kinds.hsa.limit, hsaFamily: L.kinds.hsa.family }, payKnown,
     people, hsa: { coverage: hp.coverage, coveredName, shared: hp.shared }, fsa: { limit: L.kinds.fsa?.limit ?? null }, gift: { exclusion: L.giftExclusion ?? 19000, superfund: (L.giftExclusion ?? 19000) * 5 },
     roth, deadlines, totals, notes, warnings, hasContributions: c.items.length > 0,
+  };
+}
+
+// ---------------------------------------------------------------- after-tax money into Roth (gap list, next 60, item 28)
+// Some 401(k) and 403(b) plans take money after tax on top of the pre-tax and Roth money, up to the yearly limit on all
+// money going into the person's accounts in the plan (IRC 415(c)), and let it be moved to Roth inside the plan or taken
+// out while the person still works. Nothing here is counted in the plan: compute() above is unchanged, and the view asks
+// for this only when the person opens its part (README "After-tax money into Roth").
+
+/** A 457(b) plan or the Thrift Savings Plan: not a 401(k) or 403(b), so not offered this route here (README). */
+const NOT_401K = /\b(?:457|tsp|thrift)\b/i;
+/** The two answers kept on `retirement.workPlans[personId]` (DATA_MODEL): absent is "not sure". */
+export const AFTER_TAX_KEYS = Object.freeze(["afterTax", "afterTaxToRoth"]);
+
+/**
+ * The yearly limit on all money going into one person's accounts in a work plan (IRC 415(c)(1)(A): $72,000 for 2026,
+ * Notice 2025-67), from the newest table year at or before `year` that has it (a year before the table: the first).
+ * -> { limit, year } | null
+ */
+export function annualAdditionsFor(year) {
+  const ys = Object.keys(LIMITS).map(Number).filter((y) => Number.isFinite(LIMITS[y].annualAdditions)).sort((a, b) => a - b);
+  if (!ys.length) return null;
+  const y = ys.filter((x) => x <= Number(year)).pop() ?? ys[0];
+  return { limit: LIMITS[y].annualAdditions, year: y };
+}
+
+/** The two answers about a person's plan at work: { afterTax, toRoth }, each true, false or null (not sure). */
+export function afterTaxAnswer(plan, personId) {
+  const w = plan?.retirement?.workPlans?.[personId] ?? {};
+  const yn = (v) => (v === true ? true : v === false ? false : null);
+  return { afterTax: yn(w.afterTax), toRoth: yn(w.afterTaxToRoth) };
+}
+
+/**
+ * Write one answer on the draft: "yes" -> true, "no" -> false, anything else ("unsure") -> removed. An entry left with
+ * nothing goes, and `workPlans` with it, as Get started's own write does; the entry's other answers (match, plan) stay.
+ */
+export function setAfterTaxAnswer(draft, personId, key, value) {
+  if (!AFTER_TAX_KEYS.includes(key) || !personId) return draft;
+  draft.retirement = draft.retirement ?? {};
+  // a hand-edited entry that is not a plain object (a string, a list) is read as nothing, never spread into keys "0", "1" ...
+  const plain = (v) => (v !== null && typeof v === "object" && !Array.isArray(v) ? v : {});
+  const all = plain(draft.retirement.workPlans);
+  const wp = { ...plain(all[personId]) };
+  if (value === "yes") wp[key] = true;
+  else if (value === "no") wp[key] = false;
+  else delete wp[key];
+  draft.retirement.workPlans = { ...all, [personId]: wp };
+  if (!Object.keys(wp).length) delete draft.retirement.workPlans[personId];
+  if (!Object.keys(draft.retirement.workPlans).length) delete draft.retirement.workPlans;
+  return draft;
+}
+
+/**
+ * Whether `personId` has a 401(k) or 403(b) at work this year: a row of theirs (or on an account they own) into a 401(k)
+ * or Roth 401(k) at the current job, from pay or from the employer (as coveredAtWork, without an old job's account,
+ * a 457 or the TSP); else Get started's answer "Retirement plan at work?" (`workPlans[id].plan`: No closes it, Yes opens
+ * it); else pay on file (`pay`) and a 401(k) or Roth 401(k) of their own at the current job (Retirement contributions'
+ * isLaterAccount / isNowAccount: not marked from a job left, and no "old", "former", "previous", "prior" or "rollover"
+ * in its name). An account that names no adult is the first adult's ("Me"), as everywhere on this page.
+ */
+export function atWorkPlan(plan, personId, pay = 0) {
+  const accounts = plan.accounts ?? [];
+  const rows = plan.retirement?.contributions ?? [];
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const me = adults.find((p) => p.role === "self") ?? adults[0] ?? null;
+  const matchOn = (id) => rows.filter((x) => x.accountId === id).reduce((m, x) => Math.max(m, Number(x.employerMatch) || 0), 0);
+  const work = (a) => !!a && !NOT_401K.test(String(a.name ?? "")) && (isLaterAccount(a) || isNowAccount(a, matchOn(a.id)));
+  const ownerOf = (a) => adults.find((p) => p.id === a.ownerId) ?? me;
+  const isMe = (p) => (p?.id ?? null) === (personId ?? null);
+  const going = rows.some((c) => {
+    const a = accounts.find((x) => x.id === c.accountId);
+    return work(a) && (Number(c.amount) > 0 || Number(c.employerMatch) > 0) && isMe(adults.find((p) => p.id === c.personId) ?? ownerOf(a));
+  });
+  if (going) return true;
+  const said = plan.retirement?.workPlans?.[personId]?.plan;
+  if (said === false) return false;
+  if (said === true) return true;
+  return Number(pay) > 0 && accounts.some((a) => work(a) && isMe(ownerOf(a)));
+}
+
+/**
+ * afterTaxRoom(plan, params, d = compute(plan, params)) -> {
+ *   year, limit (the 415(c) amount), limitYear (the year it is from),
+ *   people: [{ id, name, age, pay, compensation, payKnown, cap, capByPay, base (the 402(g) amount), used, own, catchUp, catchUpIn,
+ *     employer, room, regularLeft, afterTax, toRoth, verdict: "ok" | "ask" | "no" | "stuck" | "full", asks: ["afterTax" |
+ *     "toRoth"], set }],
+ *   total (the room of the adults whose way in is not closed), set (answers given)
+ * }
+ * For each adult with a 401(k) or 403(b) at work (atWorkPlan): the room for after-tax money this year
+ *   cap = the 415(c) amount, or the person's compensation when that is less (415(c)(1)(B); the pay and business income
+ *         on the Income page, as the catch-up cap reads it; none on file: the amount, and `payKnown` false);
+ *   own = min(the 401(k) row's pre-tax and Roth money, the 402(g) amount): catch-up money does not count (414(v)(3)(A));
+ *   employer = the employer's money a year on the person's 401(k) rows;
+ *   a row's person: the adult it names, else the account's owner, else the first adult (as atWorkPlan, Retirement
+ *   contributions' own list per person and the Federal estimate read it), so a row marked "Household" is counted;
+ *   room = max(0, cap - own - employer); regularLeft = max(0, the 402(g) amount - the 401(k) row's money).
+ * verdict: "full" with no room; "no" when the plan does not take after-tax money; "stuck" when it cannot be moved to Roth
+ * or taken out while working; "ok" when both answers are yes; "ask" otherwise (`asks`: what to ask the plan).
+ */
+export function afterTaxRoom(plan, params = {}, d = null) {
+  const today = params.today ?? null;
+  const D = d ?? compute(plan, params);
+  const A = annualAdditionsFor(D.year);
+  if (!A) return { year: D.year, limit: null, limitYear: null, people: [], total: 0, set: 0 };
+  const ti = taxInputs(plan, { today });
+  const items = computeContributions(plan, { today }).items;
+  const accounts = plan.accounts ?? [];
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const me = adults.find((p) => p.role === "self") ?? adults[0] ?? null;
+  const ownerOf = (i) => adults.find((p) => p.id === i.personId) ?? adults.find((p) => p.id === accounts.find((a) => a.id === i.accountId)?.ownerId) ?? me;
+  const k401 = items.filter((i) => i.limitKind === "401k");
+  const people = D.people.map((p) => {
+    const k = ti.k401.people.find((x) => x.id === p.id);
+    if (!atWorkPlan(plan, p.id, k?.pay ?? 0)) return null;
+    const r = p.rows.find((x) => x.kind === "401k");
+    const base = r.limit - r.catchUp;
+    const compensation = k?.compensation ?? 0;
+    const cap = compensation > 0 ? Math.min(A.limit, compensation) : A.limit;
+    // the person's 401(k) rows, a "Household" row on their account included (compute()'s row counts only rows naming them)
+    const mine = k401.filter((i) => (ownerOf(i)?.id ?? null) === p.id);
+    const used = mine.reduce((s, i) => s + i.yearly, 0);
+    // the catch-up as compute() works it (414(v)(2)(A)(ii)), on these rows: the same figure whenever every row names its person
+    const catchUp = D.payKnown ? Math.min(r.catchUpFull, Math.max(0, compensation - Math.min(used, base))) : r.catchUpFull;
+    const own = Math.min(used, base);
+    const catchUpIn = Math.min(catchUp, Math.max(0, used - base));
+    const employer = mine.reduce((s, i) => s + (Number(i.matchYearly) || 0), 0);
+    const room = Math.max(0, cap - own - employer);
+    const { afterTax, toRoth } = afterTaxAnswer(plan, p.id);
+    const verdict = room <= 0 ? "full" : afterTax === false ? "no" : toRoth === false ? "stuck" : afterTax && toRoth ? "ok" : "ask";
+    const asks = verdict === "ask" ? [afterTax === null ? "afterTax" : null, toRoth === null ? "toRoth" : null].filter(Boolean) : [];
+    return {
+      id: p.id, name: p.name, age: p.age, pay: k?.pay ?? 0, compensation, payKnown: compensation > 0, cap, capByPay: cap < A.limit, base, used, own,
+      catchUp, catchUpIn, employer, room, regularLeft: Math.max(0, base - used), afterTax, toRoth, verdict, asks,
+      set: (afterTax === null ? 0 : 1) + (toRoth === null ? 0 : 1),
+    };
+  }).filter(Boolean);
+  return {
+    year: D.year, limit: A.limit, limitYear: A.year, people,
+    total: people.filter((x) => x.verdict === "ok" || x.verdict === "ask").reduce((s, x) => s + x.room, 0),
+    set: people.reduce((s, x) => s + x.set, 0),
+  };
+}
+
+/**
+ * The words for one adult of afterTaxRoom (`x`), one written sentence per case (docs/OPTIONAL.md R5), so the tests read
+ * what the page says: { line (the answer), next (the second sentence: where to find out, with the words the plan's papers
+ * use, or why the way is closed), pay (no pay on file: the full limit is used), sum (how the room is worked out), regular
+ * (the usual 401(k) room left), catchUp, q1, q2 (the two questions) }.
+ * `money` formats a figure; `year`, `limit` and `limitYear` come from afterTaxRoom.
+ */
+export function afterTaxWords(x, { money = (n) => `$${Math.round(n).toLocaleString("en-US")}`, year, limit, limitYear = year } = {}) {
+  const Who = NameIn(x.name), who = nameIn(x.name), Whose = NameOf(x.name), whose = nameOf(x.name);
+  const works = verbFor(x.name, "works", "work"), has = verbFor(x.name, "has", "have"), earns = verbFor(x.name, "earns", "earn");
+  const open = x.verdict === "ok" || x.verdict === "ask";
+  const m = (n) => money(n);
+  const room = m(x.room);
+  let line, next = null;
+  if (x.verdict === "full") {
+    line = x.capByPay
+      ? `${Whose} work plan is already at its ${limitYear} limit, which is all of ${whose} pay (${m(x.cap)}), so no after-tax money fits this year.`
+      : `${Whose} work plan is already at its ${m(x.cap)} limit for ${limitYear}, so no after-tax money fits this year.`;
+  } else if (x.verdict === "no") {
+    line = `${Whose} plan does not take after-tax money, so this way into Roth is closed.`;
+  } else if (x.verdict === "stuck") {
+    // the first answer still "Not sure": the sentence does not take for granted that the plan takes after-tax money
+    line = x.afterTax === true
+      ? `${Whose} plan cannot move after-tax money to Roth while ${who} ${works}, so this way into Roth is closed.`
+      : `If ${whose} plan takes after-tax money, that money cannot be moved to Roth while ${who} ${works}, so this way into Roth is closed.`;
+    next = "After-tax money left in the plan grows, and the growth is taxed as pay when it comes out.";
+  } else if (x.verdict === "ok") {
+    line = `${Who} could put up to ${room} more into the plan after tax this year and move it to Roth.`;
+  } else if (x.asks.length === 2) {
+    line = `${Who} could put up to ${room} more into the plan after tax this year, if the plan allows it.`;
+    next = 'Not sure? Ask HR, or look on the plan\'s website for "after-tax contributions" and "in-plan Roth conversion".';
+  } else if (x.asks[0] === "toRoth") {
+    line = `${Whose} plan takes after-tax money: up to ${room} more could go in this year.`;
+    next = 'Not sure? Ask HR, or look on the plan\'s website for "in-plan Roth conversion" or "in-service withdrawal".';
+  } else {
+    line = `${Who} could put up to ${room} more into the plan after tax this year, if the plan takes after-tax money.`;
+    next = 'Not sure? Ask HR, or look on the plan\'s website for "after-tax contributions".';
+  }
+  // how the room is worked out: the limit, then what goes in
+  // a later year than the table: the newest limit, "not out yet"; an earlier one (a phone's clock set back): the first kept
+  const whichLimit = limitYear < year ? `${limitYear} limit (${year}'s is not out yet)` : limitYear > year ? `${limitYear} limit (the earliest this app has)` : `${limitYear} limit`;
+  const limitIs = x.capByPay
+    ? `The ${whichLimit} on all money into ${whose} work plan is ${m(x.cap)}, all of ${whose} pay: it is the pay when that is less than ${m(limit)}.`
+    : `The ${whichLimit} on all money into ${whose} work plan is ${m(x.cap)}.`;
+  const leaves = x.room > 0 ? `which leaves ${room}` : "which leaves nothing";
+  const goesIn = x.own > 0 && x.employer > 0 ? `${m(x.own)} goes in from ${whose} pay, before tax or as Roth, and ${m(x.employer)} from the employer, ${leaves}.`
+    : x.own > 0 ? `${m(x.own)} goes in from ${whose} pay, before tax or as Roth, ${leaves}.`
+    : x.employer > 0 ? `${m(x.employer)} goes in from the employer, ${leaves}.`
+    : "Nothing goes in yet, so all of it is room.";
+  // the usual room is part of the same limit: said as such, so it does not read as room on top of the figure above
+  const regular = x.regularLeft > 0 && x.verdict !== "full"
+    ? `${Who} also ${has} ${m(x.regularLeft)} of usual 401(k) room left this year.${open ? ` It counts toward the same ${m(x.cap)}: what goes in there comes off the ${room}.` : ""}`
+    : null;
+  // no pay on the Income page: the limit cannot be checked against the pay, so the screen says so and where to add it
+  const pay = x.payKnown === false
+    ? `${Whose} pay is not on the Income page, so this uses the full ${m(x.cap)}. If ${who} ${earns} less than that, the limit is all of ${whose} pay.`
+    : null;
+  const catchUp = x.catchUpIn > 0
+    ? `Of what goes in from ${whose} pay, ${m(x.catchUpIn)} is catch-up money: it is on top of this limit and does not use it.`
+    : x.catchUp > 0 ? `The ${m(x.catchUp)} catch-up from ${x.age >= 60 && x.age <= 63 ? "60 to 63" : "50"} is on top of this limit and does not use it.` : null;
+  return {
+    line, next, pay, sum: `${limitIs} ${goesIn}`, regular, catchUp,
+    q1: `Does ${whose} work plan take after-tax money, on top of the usual 401(k) money?`,
+    q2: `Can that money be moved to Roth while ${who} still ${works} there?`,
   };
 }

@@ -22,6 +22,7 @@ export const LIMITS = {
     // Notice 2024-80 (IR-2024-285, read 2026-11-06 at irs.gov/newsroom/401k-limit-increases-to-23500-for-2025-ira-limit-remains-7000)
     iraDeductPhaseOut: { covered: { single: [79000, 89000], married_joint: [126000, 146000], married_separate: [0, 10000] }, spouse: { married_joint: [236000, 246000], married_separate: [0, 10000] } },
     giftExclusion: 19000,   // the yearly gift-tax exclusion, the practical limit on 529 gifts per giver per child (Rev. Proc. 2024-40)
+    annualAdditions: 70000,   // IRC 415(c)(1)(A): all money into one person's accounts in one employer's plans (Notice 2024-80); read through investments/limits annualAdditionsFor
   },
   2026: {
     kinds: {
@@ -36,6 +37,9 @@ export const LIMITS = {
     // someone covered "$242,000 and $252,000", separate "$0 and $10,000"
     iraDeductPhaseOut: { covered: { single: [81000, 91000], married_joint: [129000, 149000], married_separate: [0, 10000] }, spouse: { married_joint: [242000, 252000], married_separate: [0, 10000] } },
     giftExclusion: 19000,   // Rev. Proc. 2025-32
+    // Notice 2025-67: "The limitation for defined contribution plans under section 415(c)(1)(A) is increased in 2026 from
+    // $70,000 to $72,000" (read 2026-11-15 at https://www.irs.gov/pub/irs-drop/n-25-67.pdf). Catch-up money is outside it.
+    annualAdditions: 72000,
   },
   2027: {   // partial: only the HSA was published by 2026-10-31
     kinds: {

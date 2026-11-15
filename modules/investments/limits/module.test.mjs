@@ -205,3 +205,309 @@ test("round 8 items 9 and 12: Limits says how much of the IRA money comes off, a
   // no traditional IRA money: no deduct figure at all
   assert.equal("deduct" in compute(equityPlan(), { today: "2026-11-06" }).people[0].rows.find((r) => r.kind === "ira"), false);
 });
+
+// ================================================================ after-tax money into Roth (gap list, next 60, item 28)
+import { annualAdditionsFor, afterTaxRoom, afterTaxWords, afterTaxAnswer, setAfterTaxAnswer, atWorkPlan, AFTER_TAX_KEYS } from "./compute.js";
+import { LIMITS } from "../../retirement/contributions/data/limits.js";
+import { limitsFor } from "../../retirement/contributions/compute.js";
+const T13 = "2026-11-13";
+const ROOM = { year: 2026, limit: 72000, limitYear: 2026 };
+/** One adult (or two) through the household() above, with answers on workPlans and extra accounts. */
+const withPlan = (o = {}, answers = null, extra = []) => {
+  const p = household(o);
+  for (const a of extra) p.accounts.push({ balance: 0, ownerId: "a", ...a });
+  if (answers) p.retirement.workPlans = { a: answers };
+  return p;
+};
+const roomOf = (p, today = T13) => afterTaxRoom(p, { today });
+
+test("the yearly limit on all money into a work plan (IRC 415(c)(1)(A)): 70,000 in 2025, 72,000 in 2026; a later year keeps the newest; the page's other 2026 figures as the IRS printed them", () => {
+  // Notice 2025-67 (read 2026-11-15, https://www.irs.gov/pub/irs-drop/n-25-67.pdf): "The limitation for defined contribution
+  // plans under section 415(c)(1)(A) is increased in 2026 from $70,000 to $72,000."
+  assert.deepEqual(annualAdditionsFor(2026), { limit: 72000, year: 2026 });
+  assert.deepEqual(annualAdditionsFor(2025), { limit: 70000, year: 2025 });
+  assert.deepEqual(annualAdditionsFor(2027), { limit: 72000, year: 2026 }, "2027's is not out (the IRS's table, read 2026-11-15, ends at 2026)");
+  assert.deepEqual(annualAdditionsFor(2020), { limit: 70000, year: 2025 }, "a year before the table: the first");
+  // the IRS's 401(k) page (read 2026-11-15): "$72,000 in 2026 ($80,000 including catch-up contributions or up to $83,250 for
+  // those age 60 to 63)": the catch-up is on top
+  const K = limitsFor(2026).kinds["401k"];
+  assert.equal(72000 + K.catchUp, 80000); assert.equal(72000 + K.superCatchUp.amount, 83250);
+  // the page's other 2026 figures, checked at irs.gov on 2026-11-15: Notice 2025-67 (402(g) 24,500; catch-up 8,000; 60 to 63
+  // 11,250; IRA 7,500 + 1,100; Roth IRA 153,000-168,000 and 242,000-252,000; IRA deduction 81,000-91,000, 129,000-149,000,
+  // spouse 242,000-252,000), Rev. Proc. 2025-19 s.2.01(1) (HSA 4,400 / 8,750), Rev. Proc. 2025-32 (health FSA 3,400,
+  // carryover 680; gift exclusion 19,000). All agree; nothing was corrected.
+  const L = LIMITS[2026];
+  assert.deepEqual([L.kinds["401k"].limit, L.kinds["401k"].catchUp, L.kinds["401k"].superCatchUp.amount, L.kinds.ira.limit, L.kinds.ira.catchUp], [24500, 8000, 11250, 7500, 1100]);
+  assert.deepEqual([L.rothPhaseOut.single, L.rothPhaseOut.married_joint, L.rothPhaseOut.married_separate], [[153000, 168000], [242000, 252000], [0, 10000]]);
+  assert.deepEqual([L.iraDeductPhaseOut.covered.single, L.iraDeductPhaseOut.covered.married_joint, L.iraDeductPhaseOut.spouse.married_joint], [[81000, 91000], [129000, 149000], [242000, 252000]]);
+  assert.deepEqual([L.kinds.hsa.limit, L.kinds.hsa.family, L.kinds.fsa.limit, L.kinds.fsa.carryover, L.giftExclusion], [4400, 8750, 3400, 680, 19000]);
+});
+
+test("after-tax room = the limit (or all of the pay when less) - what goes in from pay (up to 24,500, catch-up left out) - the employer's money, never below 0 (IRC 415(c)(1), 414(v)(3)(A))", () => {
+  // Ana, 36: 12,220 of her pay and 3,050 from the employer: 72,000 - 12,220 - 3,050 = 56,730; 24,500 - 12,220 = 12,280 usual room left
+  const a = roomOf(withPlan({ a: { birth: "1990-06-01", pay: 101400, k401: 12220, match: 3050 } })).people[0];
+  assert.deepEqual(pick(a, "cap", "capByPay", "own", "employer", "room", "regularLeft", "catchUp", "catchUpIn", "verdict"), { cap: 72000, capByPay: false, own: 12220, employer: 3050, room: 56730, regularLeft: 12280, catchUp: 0, catchUpIn: 0, verdict: "ask" });
+  // all of the pay when less (415(c)(1)(B)): 39,000 of pay, a 401(k) at the job, nothing going in
+  const b = roomOf(withPlan({ a: { pay: 39000 } }, null, [{ id: "w", name: "Work 401(k)", type: "401k" }])).people[0];
+  assert.deepEqual(pick(b, "cap", "capByPay", "own", "employer", "room"), { cap: 39000, capByPay: true, own: 0, employer: 0, room: 39000 });
+  // at the limit, and past it: never below 0
+  assert.equal(roomOf(withPlan({ a: { pay: 200000, k401: 24500, match: 47500 } })).people[0].room, 0);
+  const over = roomOf(withPlan({ a: { pay: 200000, k401: 24500, match: 60000 } })).people[0];
+  assert.equal(over.room, 0); assert.equal(over.verdict, "full");
+  // money over the 24,500 (no catch-up at 46) is not counted twice: only 24,500 of it
+  assert.equal(roomOf(withPlan({ a: { pay: 150000, k401: 30000 } })).people[0].own, 24500);
+  assert.equal(roomOf(withPlan({ a: { pay: 150000, k401: 30000 } })).people[0].room, 47500);
+  // 55: 32,500 in = 24,500 + the 8,000 catch-up, which does not count; 10,000 from the employer -> 72,000 - 24,500 - 10,000 = 37,500
+  const c = roomOf(withPlan({ a: { birth: "1971-06-01", pay: 150000, k401: 32500, match: 10000 } })).people[0];
+  assert.deepEqual(pick(c, "own", "catchUp", "catchUpIn", "room"), { own: 24500, catchUp: 8000, catchUpIn: 8000, room: 37500 });
+  // 61: the 11,250 catch-up from 60 to 63, none of it used
+  const d = roomOf(withPlan({ a: { birth: "1965-06-01", pay: 150000, k401: 10000 } })).people[0];
+  assert.deepEqual(pick(d, "catchUp", "catchUpIn", "room"), { catchUp: 11250, catchUpIn: 0, room: 62000 });
+  // no pay on file at all: the limit itself (the page cannot know the pay)
+  const e = roomOf(withPlan({ a: { k401: 10000 } })).people[0];
+  assert.deepEqual(pick(e, "compensation", "payKnown", "cap", "capByPay", "room"), { compensation: 0, payKnown: false, cap: 72000, capByPay: false, room: 62000 });
+  assert.equal(a.payKnown, true);
+  // Roth 401(k) money counts with the pre-tax money (both are what goes in from pay)
+  assert.equal(roomOf(withPlan({ a: { pay: 150000, k401: 10000, roth401k: 5000 } })).people[0].own, 15000);
+  // two adults: each their own room, and the total of those whose way is not closed
+  const two = roomOf(withPlan({ status: "married_joint", a: { pay: 150000, k401: 10000 }, b: { pay: 90000, k401: 5000, match: 2000 } }));
+  assert.deepEqual(two.people.map((x) => x.room), [62000, 65000]); assert.equal(two.total, 127000);
+  assert.equal(two.limit, 72000); assert.equal(two.limitYear, 2026);
+  // a 2027 date: 2026's limit, said as such
+  const y = roomOf(withPlan({ a: { pay: 150000, k401: 10000 } }), "2027-03-01");
+  assert.deepEqual([y.year, y.limit, y.limitYear], [2027, 72000, 2026]);
+  // a date before the table (a phone's clock set back): the first year kept, 2025's
+  const old = roomOf(withPlan({ a: { pay: 150000, k401: 10000 } }), "2024-06-01");
+  assert.deepEqual([old.year, old.limit, old.limitYear], [2024, 70000, 2025]);
+});
+
+test("review o1 F1: a row marked Household (no person) counts for the account's owner, else the first adult, as on Retirement contributions and the Federal estimate", () => {
+  // one adult, a 401(k) of hers, a row naming no one: 10,000 from pay and 5,000 from the employer -> 72,000 - 10,000 - 5,000 = 57,000
+  const p = withPlan({ a: { pay: 100000, k401: 10000, match: 5000 } });
+  p.retirement.contributions[0].personId = null;
+  const x = roomOf(p).people[0];
+  assert.deepEqual(pick(x, "used", "own", "employer", "room", "regularLeft"), { used: 10000, own: 10000, employer: 5000, room: 57000, regularLeft: 14500 });
+  // "" (the Contributions form's "Household") reads the same, and a row naming her reads the same: one figure either way
+  p.retirement.contributions[0].personId = "";
+  assert.equal(roomOf(p).people[0].room, 57000);
+  p.retirement.contributions[0].personId = "a";
+  assert.equal(roomOf(p).people[0].room, 57000);
+  // two adults, Ben's 401(k), a row naming no one: Ben's, not Ana's (the account's owner)
+  const two = withPlan({ status: "married_joint", a: { pay: 150000, k401: 10000 }, b: { pay: 90000, k401: 6000, match: 2000 } });
+  two.retirement.contributions.find((c) => c.accountId === "k401-b").personId = "";
+  assert.deepEqual(roomOf(two).people.map((z) => [z.id, z.own, z.employer, z.room]), [["a", 10000, 0, 62000], ["b", 6000, 2000, 64000]]);
+  // an account that names no one and a row that names no one: the first adult's ("Me"); Ben then has no 401(k) of his own
+  two.accounts.find((a) => a.id === "k401-b").ownerId = "";
+  assert.deepEqual(roomOf(two).people.map((z) => [z.id, z.own, z.employer]), [["a", 16000, 2000]]);
+  // the catch-up on such a row: 55, 32,500 in (24,500 + 8,000), 10,000 from the employer, the row naming no one -> 37,500 as when it names her
+  const c = withPlan({ a: { birth: "1971-06-01", pay: 150000, k401: 32500, match: 10000 } });
+  c.retirement.contributions[0].personId = "";
+  assert.deepEqual(pick(roomOf(c).people[0], "own", "catchUp", "catchUpIn", "room"), { own: 24500, catchUp: 8000, catchUpIn: 8000, room: 37500 });
+});
+
+test("who has a 401(k) or 403(b) at work: money going in, Get started's answer, or pay and an account at the job; not an old job's account, a 457 or the TSP", () => {
+  const at = (p) => roomOf(p).people.map((x) => x.id);
+  const acct = (o) => ({ id: "w", name: "401(k)", type: "401k", ...o });
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct()])), ["a"], "pay and a 401(k) of their own");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, { plan: false }, [acct()])), [], "Get started: no plan at work");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000, k401: 5000 } }, { plan: false })), ["a"], "money going in shows a plan whatever was answered");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, { plan: true })), ["a"], "Get started: yes, before any account");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct({ name: "Old job 401(k)" })])), [], "an old job's 401(k)");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct({ formerJob: true })])), [], "a 401(k) from a job left");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct({ name: "457(b) plan" })])), [], "a 457 is not a 401(k)");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct({ name: "TSP" })])), [], "nor the Thrift Savings Plan");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct({ type: "roth", name: "Roth 401(k)" })])), ["a"], "a Roth 401(k) at the job");
+  assert.deepEqual(at(withPlan({ a: { pay: 80000 } }, null, [acct({ type: "roth", name: "Roth IRA" })])), [], "a Roth IRA is not a plan at work");
+  assert.deepEqual(at(withPlan({ a: {} }, null, [acct()])), [], "no pay and nothing going in");
+  // an account that names no adult is the first adult's (as on the rest of this page)
+  assert.deepEqual(at(withPlan({ status: "married_joint", a: { pay: 80000 }, b: { pay: 70000 } }, null, [acct({ ownerId: "" })])), ["a"]);
+  assert.equal(atWorkPlan(emptyPlan(), "x", 50000), false);
+  // the retired couple and the empty plan: nobody, so the page draws nothing new
+  assert.equal(roomOf(emptyPlan()).people.length, 0);
+});
+
+test("the answers decide the case: No closes it, a plan that cannot move it closes it, two yeses open it, else what to ask; no room is no room", () => {
+  const v = (answers, o = { pay: 150000, k401: 10000 }) => { const x = roomOf(withPlan({ a: o }, answers)).people[0]; return [x.verdict, x.asks.join(","), x.set]; };
+  assert.deepEqual(v(null), ["ask", "afterTax,toRoth", 0]);
+  assert.deepEqual(v({ afterTax: true }), ["ask", "toRoth", 1]);
+  assert.deepEqual(v({ afterTaxToRoth: true }), ["ask", "afterTax", 1]);
+  assert.deepEqual(v({ afterTax: true, afterTaxToRoth: true }), ["ok", "", 2]);
+  assert.deepEqual(v({ afterTax: false }), ["no", "", 1]);
+  assert.deepEqual(v({ afterTax: false, afterTaxToRoth: true }), ["no", "", 2]);
+  assert.deepEqual(v({ afterTax: true, afterTaxToRoth: false }), ["stuck", "", 2]);
+  assert.deepEqual(v({ afterTaxToRoth: false }), ["stuck", "", 1]);
+  assert.deepEqual(v({ afterTax: true, afterTaxToRoth: true }, { pay: 200000, k401: 24500, match: 47500 }), ["full", "", 2]);
+  // the total leaves out the closed ways
+  const p = withPlan({ status: "married_joint", a: { pay: 150000, k401: 10000 }, b: { pay: 90000, k401: 5000 } });
+  p.retirement.workPlans = { b: { afterTax: false } };
+  assert.equal(roomOf(p).total, 62000);
+  assert.deepEqual(afterTaxAnswer(p, "b"), { afterTax: false, toRoth: null });
+  assert.deepEqual(afterTaxAnswer(p, "a"), { afterTax: null, toRoth: null });
+});
+
+test("one written sentence per case (R5): ok, the three asks, no, closed, full; how the room is worked out; the usual room; the catch-up; you and your for an unnamed first adult", () => {
+  const X = { name: "Ana", age: 36, cap: 72000, capByPay: false, payKnown: true, own: 12220, employer: 3050, room: 56730, regularLeft: 12280, catchUp: 0, catchUpIn: 0, afterTax: null, toRoth: null, verdict: "ask", asks: ["afterTax", "toRoth"] };
+  const w = (o = {}, r = ROOM) => afterTaxWords({ ...X, ...o }, r);
+  assert.equal(w({ verdict: "ok", asks: [] }).line, "Ana could put up to $56,730 more into the plan after tax this year and move it to Roth.");
+  assert.equal(w({ verdict: "ok", asks: [] }).next, null);
+  assert.equal(w().line, "Ana could put up to $56,730 more into the plan after tax this year, if the plan allows it.");
+  // review o1 P2: where to find out, with the words the plan's papers use
+  assert.equal(w().next, 'Not sure? Ask HR, or look on the plan\'s website for "after-tax contributions" and "in-plan Roth conversion".');
+  assert.equal(w({ asks: ["toRoth"] }).line, "Ana's plan takes after-tax money: up to $56,730 more could go in this year.");
+  assert.equal(w({ asks: ["toRoth"] }).next, 'Not sure? Ask HR, or look on the plan\'s website for "in-plan Roth conversion" or "in-service withdrawal".');
+  assert.equal(w({ asks: ["afterTax"] }).line, "Ana could put up to $56,730 more into the plan after tax this year, if the plan takes after-tax money.");
+  assert.equal(w({ asks: ["afterTax"] }).next, 'Not sure? Ask HR, or look on the plan\'s website for "after-tax contributions".');
+  assert.equal(w({ verdict: "no", asks: [] }).line, "Ana's plan does not take after-tax money, so this way into Roth is closed.");
+  assert.equal(w({ verdict: "stuck", afterTax: true, asks: [] }).line, "Ana's plan cannot move after-tax money to Roth while Ana works, so this way into Roth is closed.");
+  // review o1 F5: the first answer still "Not sure": the sentence does not take for granted that the plan takes after-tax money
+  assert.equal(w({ verdict: "stuck", afterTax: null, asks: [] }).line, "If Ana's plan takes after-tax money, that money cannot be moved to Roth while Ana works, so this way into Roth is closed.");
+  assert.equal(w({ verdict: "stuck", asks: [] }).next, "After-tax money left in the plan grows, and the growth is taxed as pay when it comes out.");
+  assert.equal(w({ verdict: "full", room: 0, own: 24500, employer: 47500, asks: [] }).line, "Ana's work plan is already at its $72,000 limit for 2026, so no after-tax money fits this year.");
+  assert.equal(w({ verdict: "full", room: 0, cap: 30000, capByPay: true, own: 24500, employer: 6000, asks: [] }).line, "Ana's work plan is already at its 2026 limit, which is all of Ana's pay ($30,000), so no after-tax money fits this year.");
+  // how the room is worked out, each case
+  assert.equal(w().sum, "The 2026 limit on all money into Ana's work plan is $72,000. $12,220 goes in from Ana's pay, before tax or as Roth, and $3,050 from the employer, which leaves $56,730.");
+  assert.equal(w({ employer: 0, room: 59780 }).sum, "The 2026 limit on all money into Ana's work plan is $72,000. $12,220 goes in from Ana's pay, before tax or as Roth, which leaves $59,780.");
+  assert.equal(w({ own: 0, room: 68950 }).sum, "The 2026 limit on all money into Ana's work plan is $72,000. $3,050 goes in from the employer, which leaves $68,950.");
+  assert.equal(w({ own: 0, employer: 0, room: 72000 }).sum, "The 2026 limit on all money into Ana's work plan is $72,000. Nothing goes in yet, so all of it is room.");
+  assert.equal(w({ cap: 39000, capByPay: true, own: 0, employer: 0, room: 39000 }).sum, "The 2026 limit on all money into Ana's work plan is $39,000, all of Ana's pay: it is the pay when that is less than $72,000. Nothing goes in yet, so all of it is room.");
+  assert.equal(w({ verdict: "full", own: 24500, employer: 47500, room: 0 }).sum, "The 2026 limit on all money into Ana's work plan is $72,000. $24,500 goes in from Ana's pay, before tax or as Roth, and $47,500 from the employer, which leaves nothing.");
+  assert.equal(w({}, { year: 2027, limit: 72000, limitYear: 2026 }).sum, "The 2026 limit (2027's is not out yet) on all money into Ana's work plan is $72,000. $12,220 goes in from Ana's pay, before tax or as Roth, and $3,050 from the employer, which leaves $56,730.");
+  // review o1 F2: a year before the table (a phone's clock set back) is not "not out yet": the first year this app has
+  assert.equal(w({ cap: 70000, room: 54730 }, { year: 2024, limit: 70000, limitYear: 2025 }).sum, "The 2025 limit (the earliest this app has) on all money into Ana's work plan is $70,000. $12,220 goes in from Ana's pay, before tax or as Roth, and $3,050 from the employer, which leaves $54,730.");
+  // the usual room, and the catch-up
+  // review o1 P3: the usual room is said as part of the same limit, not as room on top of the figure
+  assert.equal(w().regular, "Ana also has $12,280 of usual 401(k) room left this year. It counts toward the same $72,000: what goes in there comes off the $56,730.");
+  assert.equal(w({ verdict: "no", asks: [] }).regular, "Ana also has $12,280 of usual 401(k) room left this year.", "a closed way: no room to come off");
+  assert.equal(w({ regularLeft: 0 }).regular, null);
+  assert.equal(w({ verdict: "full", regularLeft: 100 }).regular, null, "no room: nothing about the usual room");
+  assert.equal(w().catchUp, null);
+  assert.equal(w({ age: 55, catchUp: 8000 }).catchUp, "The $8,000 catch-up from 50 is on top of this limit and does not use it.");
+  assert.equal(w({ age: 61, catchUp: 11250 }).catchUp, "The $11,250 catch-up from 60 to 63 is on top of this limit and does not use it.");
+  assert.equal(w({ age: 55, catchUp: 8000, catchUpIn: 8000 }).catchUp, "Of what goes in from Ana's pay, $8,000 is catch-up money: it is on top of this limit and does not use it.");
+  // review o1 F4: no pay on the Income page: said, with what it means
+  assert.equal(w().pay, null);
+  assert.equal(w({ payKnown: false }).pay, "Ana's pay is not on the Income page, so this uses the full $72,000. If Ana earns less than that, the limit is all of Ana's pay.");
+  // the two questions, in plain words (review o1 P2)
+  assert.equal(w().q1, "Does Ana's work plan take after-tax money, on top of the usual 401(k) money?");
+  assert.equal(w().q2, "Can that money be moved to Roth while Ana still works there?");
+  // an unnamed first adult ("Me"): you and your
+  const me = (o = {}) => w({ name: "Me", ...o });
+  assert.equal(me({ verdict: "ok", asks: [] }).line, "You could put up to $56,730 more into the plan after tax this year and move it to Roth.");
+  assert.equal(me({ asks: ["toRoth"] }).line, "Your plan takes after-tax money: up to $56,730 more could go in this year.");
+  assert.equal(me().q2, "Can that money be moved to Roth while you still work there?");
+  assert.equal(me({ verdict: "stuck", afterTax: true, asks: [] }).line, "Your plan cannot move after-tax money to Roth while you work, so this way into Roth is closed.");
+  assert.equal(me({ verdict: "stuck", asks: [] }).line, "If your plan takes after-tax money, that money cannot be moved to Roth while you work, so this way into Roth is closed.");
+  assert.equal(me().regular, "You also have $12,280 of usual 401(k) room left this year. It counts toward the same $72,000: what goes in there comes off the $56,730.");
+  assert.equal(me({ payKnown: false }).pay, "Your pay is not on the Income page, so this uses the full $72,000. If you earn less than that, the limit is all of your pay.");
+  assert.equal(me().sum, "The 2026 limit on all money into your work plan is $72,000. $12,220 goes in from your pay, before tax or as Roth, and $3,050 from the employer, which leaves $56,730.");
+  assert.equal(me().q1, "Does your work plan take after-tax money, on top of the usual 401(k) money?");
+});
+
+test("the answers are kept on retirement.workPlans[person]: yes and no as true and false, not sure as nothing, the entry's other answers kept, an empty entry removed", () => {
+  const p = { retirement: { workPlans: { a: { match: false } } } };
+  setAfterTaxAnswer(p, "a", "afterTax", "yes");
+  assert.deepEqual(p.retirement.workPlans.a, { match: false, afterTax: true });
+  setAfterTaxAnswer(p, "a", "afterTaxToRoth", "no");
+  assert.deepEqual(p.retirement.workPlans.a, { match: false, afterTax: true, afterTaxToRoth: false });
+  setAfterTaxAnswer(p, "a", "afterTax", "unsure"); setAfterTaxAnswer(p, "a", "afterTaxToRoth", "unsure");
+  assert.deepEqual(p.retirement.workPlans, { a: { match: false } }, "Get started's answer stays");
+  const q = { retirement: {} };
+  setAfterTaxAnswer(q, "b", "afterTax", "no"); assert.deepEqual(q.retirement.workPlans, { b: { afterTax: false } });
+  setAfterTaxAnswer(q, "b", "afterTax", "unsure"); assert.equal("workPlans" in q.retirement, false, "nothing left: workPlans goes");
+  setAfterTaxAnswer(q, "b", "match", "yes"); setAfterTaxAnswer(q, "", "afterTax", "yes");
+  assert.equal("workPlans" in q.retirement, false, "only the two keys, only for a person");
+  assert.deepEqual(AFTER_TAX_KEYS, ["afterTax", "afterTaxToRoth"]);
+  // review o1 F3: an entry (or workPlans) that is not a plain object, from a hand-edited file, is read as nothing, never
+  // spread into keys "0", "1" ...
+  for (const [wp, want] of [[{ a: "abc" }, { a: { afterTax: true } }], [{ a: [1] }, { a: { afterTax: true } }], [{ a: null, b: { plan: true } }, { a: { afterTax: true }, b: { plan: true } }], ["x", { a: { afterTax: true } }], [[1, 2], { a: { afterTax: true } }]]) {
+    const r = { retirement: { workPlans: structuredClone(wp) } };
+    setAfterTaxAnswer(r, "a", "afterTax", "yes");
+    assert.deepEqual(r.retirement.workPlans, want, JSON.stringify(wp));
+  }
+});
+
+// ---------------------------------------------------------------- invariance (gap spec 3.5)
+// With the new fields absent, every figure this page and Retirement contributions (whose data file gained annualAdditions)
+// worked out before is byte-identical: compute() of both over every qa/fixtures plan builder, the empty plan, and the
+// 1,400 qa/households plans (one digest per household type over its plans, in catalog order). The digests were taken at
+// 461df76 (before gap next-60 #28) with today = 2026-11-13; letters stand for the digits (the leak guard refuses long digit
+// runs). Refresh them only for a deliberate change: LIMITS_DIGESTS=print node --test <this file>.
+const BEFORE_28 = {
+  fixtures: {
+    "card-gap-plan.mjs:cardGapPlan": "djkpniagakngklgo", "debt-plan.mjs:debtPlan": "oiphpfpapphmcjoa", "family-plan.mjs:familyPlan": "djkpniagakngklgo",
+    "guessed-plan.mjs:guessedPlan": "ebdnmflomhjfodhp", "held-plan.mjs:heldPlan": "djkpniagakngklgo", "investments-plan.mjs:investmentsPlan": "fbhjleldoeaoklkg",
+    "renter-debt-plan.mjs:renterDebtPlan": "mjfpjkifllbdocph", "renter-debt-plan.mjs:renterPayingExtraPlan": "mjfpjkifllbdocph",
+    "retired-couple-plan.mjs:retiredCouplePlan": "eiinnoepggaeephj", "retirement-plan.mjs:retirementPlan": "ckbahppmhfdodfhf", "sample-plan.mjs:samplePlan": "nhkdhblgdknajlom",
+    "tax-plan.mjs:taxPlan": "lcemdkkdpgefljnf", "widow-plan.mjs:widowPlan": "cgnfehcbndlcobjk", empty: "nhkdhblgdknajlom",
+  },
+  households: {
+    "01-single-adult": "hbjbchjbpnalfopf", "02-couple-no-kids": "lmdckdlfaajgidkc", "03-single-parent": "ghalmecaehdchkpl", "04-two-parents": "eaknjkghdanfnfol",
+    "05-stay-at-home-parent": "mggaoonfnegghdkg", "06-blended-family": "jmfonfdapmchhjno", "07-multigenerational": "cacefhajhnndmfae", "08-retired": "iplmdmcnckapfhjh",
+    "09-near-retirement": "knjnlcodcpcbdekn", "10-student-and-starter": "kgcccbidldbfhdhe", "11-self-employed": "ekjbhpclekgkjjml", "12-high-net-worth": "hdolhcmnjabkgolh",
+    "13-in-crisis": "pbcodoloifbaeofc", "14-unusual-structures": "cnkmlbecnglfloin",
+  },
+};
+test("invariance: with no after-tax answers, compute() here and on Retirement contributions is byte-identical to 461df76 (fixtures, households, empty plan)", async () => {
+  const fs = await import("node:fs");
+  const { createHash } = await import("node:crypto");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { compute: contributions } = await import("../../retirement/contributions/compute.js");
+  const { ARCHETYPES, COMMON_PACKS, SPECIAL_PACKS } = await import("../../../qa/households/lib/catalog.mjs");
+  const letters = (hex) => hex.replace(/[0-9]/g, (d) => "ghijklmnop"[d]);
+  const sha = (s) => createHash("sha256").update(s).digest("hex").slice(0, 16);
+  const both = (plan) => { const q = migrate(structuredClone(plan)); return JSON.stringify([compute(q, { today: T13 }), contributions(q, { today: T13 })]); };
+  const now = { fixtures: {}, households: {} };
+  const dir = new URL("../../../qa/fixtures/", import.meta.url);
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(new URL(f, dir).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) now.fixtures[`${f}:${name}`] = letters(sha(both(fn())));
+  }
+  now.fixtures.empty = letters(sha(both(emptyPlan())));
+  for (const a of ARCHETYPES) {
+    const list = [sha(both(a.build()))];
+    for (const [, vs] of Object.entries({ ...COMMON_PACKS, special: SPECIAL_PACKS[a.id] ?? [] })) for (const v of vs) { const p = structuredClone(a.build()); v.apply(p); list.push(sha(both(p))); }
+    now.households[a.id] = letters(sha(list.join(",")));
+  }
+  if (process.env.LIMITS_DIGESTS === "print") console.log(JSON.stringify(now, null, 1));
+  for (const [k, v] of Object.entries(BEFORE_28.fixtures)) assert.equal(now.fixtures[k], v, `fixture ${k}: a figure moved`);
+  for (const [k, v] of Object.entries(BEFORE_28.households)) assert.equal(now.households[k], v, `households ${k}: a figure moved`);
+});
+
+test("invariance: the two answers change no page's figures: with both saved for every adult, every page's compute() is byte-identical (fixtures: every page; households: the groups whose pages read workPlans); no other file reads them", async () => {
+  const { default: REGISTRY } = await import("../../registry.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const mods = (await Promise.all(REGISTRY.map(async (e) => (await e.load()).default))).filter((m) => !m.placeholder && !m.heavy);
+  const answered = (plan, a, b) => { const q = structuredClone(plan); for (const p of (q.household?.people ?? []).filter((x) => x.role !== "dependent")) { setAfterTaxAnswer(q, p.id, "afterTax", a); setAfterTaxAnswer(q, p.id, "afterTaxToRoth", b); } return q; };
+  // Diagnostics and Settings measure the plan file's size, and Export writes the plan out: a longer plan is a bigger file
+  const out = (m, q) => { try { const r = m.compute(q, { today: T13 }); if (["diagnostics", "settings"].includes(m.id) && r) { delete r.size; delete r.sizeKB; } return JSON.stringify(r); } catch (e) { return `THROW ${e.message}`; } };
+  const fixtures = [investmentsPlan(), familyPlan(T13), renterDebtPlan(), retiredCouplePlan(), emptyPlan()];
+  // the groups with a page that reads retirement.workPlans (Next best action, our guesses, Get started, the document reader,
+  // People, the scenarios, Benefits, the retirement levers, Retirement contributions) and this page's own
+  const near = mods.filter((m) => ["retirement", "investments", "overview", "career", "scenarios", "household", "ai"].includes(m.group));
+  let n = 0;
+  // yes to one, no to the other: both keys written, an entry made where there was none
+  for (const plan of fixtures) {
+    const a = migrate(structuredClone(plan)), q = answered(a, "yes", "no");
+    for (const m of mods.filter((x) => !(x.group === "reports" && x.id === "export"))) { assert.equal(out(m, q), out(m, a), `${m.group}/${m.id}`); n++; }
+  }
+  for (const plan of ARCHETYPES.map((a) => a.build())) {
+    const a = migrate(structuredClone(plan)), q = answered(a, "yes", "no");
+    for (const m of near) { assert.equal(out(m, q), out(m, a), `${m.group}/${m.id}`); n++; }
+  }
+  assert.ok(n > 900, `${n} page drawings compared`);
+  // and no code outside this page reads the new fields
+  const fs = await import("node:fs"); const path = await import("node:path"); const { fileURLToPath } = await import("node:url");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : /\.m?js$/.test(e.name) ? [path.join(d, e.name)] : []));
+  const readers = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core")), ...walk(path.join(ROOT, "server"))]
+    .filter((f) => !f.includes(`${path.sep}investments${path.sep}limits${path.sep}`) && /afterTaxToRoth|workPlans[^\n]*\.afterTax\b/.test(fs.readFileSync(f, "utf8")));
+  assert.deepEqual(readers, []);
+  // the 415(c) figure added to Retirement contributions' data file is read here only
+  const rel = (f) => path.relative(ROOT, f).split(path.sep).join("/");
+  const added = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core"))].filter((f) => /\bannualAdditions\b/.test(fs.readFileSync(f, "utf8"))).map(rel).filter((f) => !f.endsWith(".test.mjs"));
+  assert.deepEqual(added.sort(), ["modules/investments/limits/compute.js", "modules/retirement/contributions/data/limits.js"]);
+});
