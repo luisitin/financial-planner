@@ -24,11 +24,30 @@ Target-date glide used for a fund named with a year: 90% stocks 25+ years out, g
 - The first view of the empty list went from 116 words and 9 boxes to 85 words and 5 boxes (the families' worst,
   `node qa/first-view-node.mjs investments/holdings`), so its entry left `tests/first-view.known.json`.
 
+## Your own labels (gap list, next 60, item 44; 2026-11-15)
+- The form has "Your own labels" under "More details (optional)" with a chip for each label already used in the plan;
+  the rules and the box are Net worth's (`balance/net-worth/labels.js`, `labels-view.js`; README there). Saved as
+  `holdings[].labels` only when there are some; an emptied box removes it; the green line says "Labels: kids." or "No
+  labels now.".
+- Once a holding, or an account that holds one, carries a label, one row of chips ("All holdings", then each label)
+  sits above the account cards. A tap lists only the holdings that carry the label or sit in an account that does
+  (`byLabel`), hides account cards left empty, and says one line per case: "2 holdings labeled kids: $117,600." (one
+  holding: "1 holding labeled ...") for Sam and Lee with BND and VNQ labeled; "1 holding in an account labeled
+  retirement: $90,000." when all are listed for their account's label ("in accounts labeled" for two or more); and
+  "3 holdings labeled kids: $151,000. 2 of them are listed because their account is labeled kids." when some are
+  (Brokerage and VTI labeled kids; critic P1, 2026-11-15: a holding with no pill of its own must not look labeled by
+  mistake). `byLabel` gives `own` (how many carry the label themselves) and `accounts` (how many accounts the others
+  sit in) for those words. The total at the top stays the whole list's; nothing is written (a module variable for the
+  visit; a save that leaves the holding outside the label shown puts the list back to all). A holding's own labels
+  show as pills on its row, and an account's labels as pills on its card's line, all labels shown or one.
+- `holdingLabels(plan)`: the labels on holdings and on the accounts that hold one (an account with nothing in it offers
+  no chip here). `compute()` is unchanged; a holding's `labels` rides along in `items[]` as every field of the record does.
+
 ## Edge cases
 Prices are whatever was typed or imported (no market data); the page shows when. A holding pointing at an account that is no longer an investment account is flagged. Import updates matching symbols in the chosen account and adds new ones; holdings the file does not list are left alone.
 
 ## Tests
-`tests/investments.test.mjs` (the three positions fixtures `qa/fixtures/positions-*.csv`, classification, totals), `module.test.mjs`.
+`tests/investments.test.mjs` (the three positions fixtures `qa/fixtures/positions-*.csv`, classification, totals), `module.test.mjs` (the five boxes and the fold, the same record open or shut, the importer as a part and S11, How often it pays, the labels: save, removal, words, refusal and its words, the filter, the three cases of its line, the account's pills).
 
 ## Ideas / not yet
 - Price lookups (would need a market-data service: the app has none by design), lots from the brokerage's cost-basis export, crypto and employer-stock pages.

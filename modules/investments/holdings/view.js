@@ -3,17 +3,33 @@
 // importer for a brokerage positions file (paste or choose the file).
 // Simple first (opt spec 6.1, done with gap next-60 #8): the form asks five boxes (account, symbol, shares, price, what
 // you paid); the rest wait under "More details (optional)"; the importer is one quiet card drawn by the helper.
-import { compute, parsePositions, mergePositions, CLASS_OPTIONS, ASSET_CLASSES } from "./compute.js";
+import { compute, parsePositions, mergePositions, CLASS_OPTIONS, ASSET_CLASSES, holdingLabels, byLabel } from "./compute.js";
+import { labelsOf, hasLabel, planLabels, labelChange, labelWords, sameLabel } from "../../balance/net-worth/labels.js";
+import { LABELS_FIELD, labelPicks, readLabels, labelChips } from "../../balance/net-worth/labels-view.js";
 import { costFromLots } from "../tax-lots/compute.js";
 import { part } from "../../../core/ui/more.js";
 import { PAYS } from "../dividends/compute.js";
 
 /** How often a holding pays, in the green line's words ("" = as usual for its kind). */
 export const PAYS_WORDS = { "": "as usual for its kind", month: "every month", quarter: "every 3 months", half: "twice a year", year: "once a year" };
+/**
+ * The line under the label chips: how many holdings carry the label (or sit in an account that does) and their worth,
+ * and, when some are listed only for their account's label, that they are (critic P1: a holding with no pill of its own
+ * must not look labeled by mistake). One sentence per case: all their own; all by their account; some of each.
+ */
+export function labelLine(t, money) {
+  const n = `${t.count} holding${t.count === 1 ? "" : "s"}`;
+  const own = t.own ?? t.count, by = t.count - own;
+  const where = t.accounts > 1 ? `accounts labeled ${t.label}` : `an account labeled ${t.label}`;
+  if (!by) return `${n} labeled ${t.label}: ${money(t.value)}.`;
+  if (!own) return `${n} in ${where}: ${money(t.value)}.`;
+  return `${n} labeled ${t.label}: ${money(t.value)}. ${by} of them ${by === 1 ? "is" : "are"} listed because ${by === 1 ? "its account is" : t.accounts > 1 ? "their accounts are" : "their account is"} labeled ${t.label}.`;
+}
 /** The importer's title (pinned in qa/first-view-lib.mjs PINNED_TITLES: the opt spec's own words for this page). */
 export const IMPORT_TITLE = "Import a positions file";
 
 let pending = null;
+let shownLabel = null;      // the label the list is narrowed to by its chips (gap next-60 #44): this visit's choice, never the plan's
 let pendingAt = null;       // "import": the green line goes inside the importer, which stays open after its save (R17)
 let lastAccountId = null;   // the account the last holding went into: the next add starts there (a second fund landed on the first account)
 let editId = null;          // the holding open for editing: its form opens under its row, inside its account card
@@ -48,7 +64,9 @@ export function render(root, ctx) {
     // how often it pays: Dividends' "Month by month" spreads the year by it (gap next-60 #8); left as usual, by its kind
     { key: "paysEvery", label: "How often it pays", type: "select", more: true, options: [{ value: "", label: "As usual for its kind" }, { value: "month", label: "Every month" }, { value: "quarter", label: "Every 3 months" }, { value: "half", label: "Twice a year" }, { value: "year", label: "Once a year" }],
       help: "left as usual, we count bond funds and cash as paying every month and the rest every 3 months; the fund's own page says which" },
+    LABELS_FIELD,
   ];
+  const known = planLabels(plan);
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${money(d.total)} invested` : "What you hold"),
     ui.h("p", { class: "lede" }, d.hasData
@@ -71,7 +89,7 @@ export function render(root, ctx) {
 
   // one form for a holding: to add (at the foot of the page, folded once there is data) or to edit (under its row)
   const holdingForm = (editing) => {
-    const values = editing ? { ...editing, assetClass: editing.assetClass ?? "" } : { accountId: pickFirst ? "" : (lastAccountId ?? accounts[0]?.id), assetClass: "" };
+    const values = editing ? { ...editing, assetClass: editing.assetClass ?? "", labelsText: labelsOf(editing).join(", ") } : { accountId: pickFirst ? "" : (lastAccountId ?? accounts[0]?.id), assetClass: "" };
     const inLots = editing ? (editing.lots ?? []).reduce((t, l) => t + (Number(l.shares) || 0), 0) : 0;
     // one lot holding every share (Crypto makes it from the purchase date): it is the holding's own purchase. Fewer shares
     // (a typo, 0.5 for 0.05) and a new "What you paid in all" follow into it; more shares do not (their purchase date is not
@@ -82,6 +100,9 @@ export function render(root, ctx) {
     const fields = locked ? FIELDS.map((fd) => fd.key === "costBasis" ? { ...fd, help: `the total of its ${locked.count} purchases on Tax lots, ${fmt.money(locked.total, cur)}. To change one, remove it on Tax lots and add it again with the right cost` } : fd) : FIELDS;
     const f = ui.form(fields, values, (v) => {
       if (!v.accountId) return false;
+      // your own labels (gap next-60 #44): written as `labels` only when there are some, taken off when the box is emptied
+      const lab = readLabels(v.labelsText, known);
+      if (lab.error) { const b = f.elements.labelsText; b.setCustomValidity(lab.error); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; }
       // judged on the shares as typed: more shares than the lots hold take their cost here; the lots' own total is always fine
       const lockedNow = editing ? costFromLots({ ...editing, shares: v.shares ?? 0 }) : null;
       if (lockedNow && Math.abs((v.costBasis ?? 0) - (Number(editing.costBasis) || 0)) > 0.005 && Math.abs((v.costBasis ?? 0) - lockedNow.total) > 0.005) { const b = f.elements.costBasis; b.setCustomValidity(`${editing.symbol}'s cost is its ${lockedNow.count} purchases on Tax lots, ${fmt.money(lockedNow.total, cur)} in all. Type ${fmt.money(lockedNow.total, cur)}, or remove a purchase on Tax lots and add it again with the right cost.`); b.reportValidity(); b.addEventListener("input", () => b.setCustomValidity(""), { once: true }); return false; }
@@ -93,6 +114,7 @@ export function render(root, ctx) {
       // optional, written only when chosen (left as usual: the record is what it was before this box existed)
       const pays = Object.prototype.hasOwnProperty.call(PAYS, v.paysEvery ?? "") ? v.paysEvery : "";
       if (pays) clean.paysEvery = pays;
+      if (lab.list.length) clean.labels = lab.list;
       if (!clean.symbol) return false;
       const id = editing?.id ?? ui.uid();
       lastAccountId = clean.accountId;
@@ -105,11 +127,16 @@ export function render(root, ctx) {
       pending = editing ? `${clean.symbol} saved.${more ? ` The other ${sharesWord(newShares - oldShares)} ${Math.abs(newShares - oldShares - 1) < 1e-12 ? "is" : "are"} in no purchase yet: on Tax lots, add when you bought them and what they cost, and "What you paid in all" goes up by that cost.` : ""}${follow ? ` Its purchase${oneLot.date ? ` on ${fmt.date(oneLot.date)}` : ""} now has ${sharesWord(fewer ? newShares : oldShares)}, cost ${fmt.money(costTo ?? (Number(oneLot.cost) || 0), cur)}.` : ""}${editing && !oneLot && newShares > (Number(editing.shares) || 0) + 1e-9 && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(editing.costBasis) || 0)) < 0.005 ? ` If you bought more, add what the new shares cost to "What you paid in all", so the gain stays right.` : ""}${editing && newShares < (Number(editing.shares) || 0) - 1e-9 && costTo === null && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(editing.costBasis) || 0)) < 0.005 ? ` If you sold some, lower "What you paid in all" by what those shares cost, so the gain stays right.` : ""}` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
       // how often it pays changes no figure here: the green line says where it shows (Dividends' Month by month)
       if (pays !== (Object.prototype.hasOwnProperty.call(PAYS, editing?.paysEvery ?? "") ? editing.paysEvery : "")) pending += ` Dividends now counts it as paying ${PAYS_WORDS[pays]}.`;
+      const relabel = labelChange(editing ? labelsOf(editing) : [], lab.list);
+      if (relabel) pending += ` ${labelWords(relabel)}`;
+      // the list stays narrowed only when what was saved still shows under that label (else it would vanish from view)
+      if (shownLabel && !lab.list.some((l) => sameLabel(l, shownLabel)) && !hasLabel(plan.accounts.find((a) => a.id === clean.accountId), shownLabel)) shownLabel = null;
       editId = null; showId = id;
-      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) { p.holdings[i] = { ...p.holdings[i], ...clean }; if (!pays) delete p.holdings[i].paysEvery; if (follow) { const old = Number(oneLot.shares) || 0; p.holdings[i].lots = (p.holdings[i].lots ?? []).map((l) => l.id === oneLot.id ? { ...l, shares: fewer ? newShares : l.shares, cost: costTo ?? l.cost } : l); } } } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
+      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) { p.holdings[i] = { ...p.holdings[i], ...clean }; if (!pays) delete p.holdings[i].paysEvery; if (!lab.list.length) delete p.holdings[i].labels; if (follow) { const old = Number(oneLot.shares) || 0; p.holdings[i].lots = (p.holdings[i].lots ?? []).map((l) => l.id === oneLot.id ? { ...l, shares: fewer ? newShares : l.shares, cost: costTo ?? l.cost } : l); } } } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
     }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing,
       // a holding with no kind yet is tapped to pick one ("pick a class"): its box is in view, not folded away
       moreOpen: editing && classify0(editing) === "unknown" ? true : undefined, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
+    labelPicks(ui, f, known);
     return f;
   };
   function classify0(h) { return d.items.find((x) => x.id === h.id)?.cls ?? ""; }
@@ -130,22 +157,32 @@ export function render(root, ctx) {
     formHost.append(ui.h("div", {}, ui.h("h2", {}, "Add a holding"), holdingForm(null)));
   };
   drawForm();
+  // your own labels (gap next-60 #44): chips narrow the list to one label (a holding's own, or its account's) and say its
+  // worth; the figures above stay the whole list's
+  const ownLabels = holdingLabels(plan);
+  if (shownLabel && !ownLabels.some((l) => sameLabel(l, shownLabel))) shownLabel = null;
+  const shown = shownLabel ? byLabel(plan, d.items, shownLabel) : null;
+  // (a card of its own: the chips' own bottom margin goes, the line keeps its distance)
+  if (ownLabels.length) root.append(ui.card(null, labelChips(ui, ownLabels, shownLabel, (l) => { shownLabel = l; redraw(); }, "All holdings", { marginBottom: "0" }),
+    shown ? ui.h("p", { class: "small", style: { margin: "10px 0 0" } }, labelLine(shown, money)) : null));
   // holdings by account; the one being edited opens its form under its row
   let showRow = null, editBox = null;
   for (const a of d.byAccount.filter((x) => x.count)) {
-    const mine = d.items.filter((h) => h.accountId === a.accountId).sort((x, y) => y.value - x.value);
+    const mine = d.items.filter((h) => h.accountId === a.accountId && (!shown || shown.items.includes(h))).sort((x, y) => y.value - x.value);
+    if (!mine.length) continue;
     const rowOf = (h) => {
       const li = ui.h("li", { role: "button", tabindex: "0", "data-id": h.id, "aria-expanded": editId === h.id ? "true" : "false", style: { cursor: "pointer" },
         onClick: () => { if (editId === h.id) return; editId = h.id; showId = h.id; redraw(); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, ASSET_CLASSES[h.cls].icon || ""),
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, h.symbol, " ", ui.h("span", { class: h.cls === "unknown" ? "pill warn" : "pill" }, h.cls === "unknown" ? "pick a class" : h.clsLabel)), ui.h("div", { class: "d" }, `${h.name ? `${h.name} · ` : ""}${fmt.num(h.shares, 3)} shares${h.priced ? ` at ${money(h.price)}` : ""}${h.costBasis ? ` · paid ${money(h.costBasis)}` : ""}`)),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, h.symbol, " ", ui.h("span", { class: h.cls === "unknown" ? "pill warn" : "pill" }, h.cls === "unknown" ? "pick a class" : h.clsLabel)), ui.h("div", { class: "d" }, `${h.name ? `${h.name} · ` : ""}${fmt.num(h.shares, 3)} shares${h.priced ? ` at ${money(h.price)}` : ""}${h.costBasis ? ` · paid ${money(h.costBasis)}` : ""}`, ...labelsOf(h).map((l) => ui.h("span", { class: "pill" }, l)))),
         ui.h("span", { class: "st amount" }, ui.h("div", {}, money(h.value)), h.costBasis > 0 ? ui.h("div", { class: "muted small", style: h.gain < 0 ? { color: "var(--bad)" } : null }, signed(h.gain)) : null));
       if (h.id === showId) showRow = li;
       return li;
     };
     const at = mine.findIndex((h) => h.id === editId);
-    const parts = [ui.h("p", { class: "muted small" }, `${a.typeLabel} · ${money(a.value)} in ${a.count} holding${a.count === 1 ? "" : "s"}${Math.abs(a.gap) > 1 ? ` · Net worth balance ${money(a.balance)}` : ""}`)];
+    // the account's own labels as pills on its line, so a holding listed under a label for its account's sake shows why
+    const parts = [ui.h("p", { class: "muted small" }, `${a.typeLabel} · ${money(a.value)} in ${a.count} holding${a.count === 1 ? "" : "s"}${Math.abs(a.gap) > 1 ? ` · Net worth balance ${money(a.balance)}` : ""}`, ...labelsOf((plan.accounts ?? []).find((x) => x.id === a.accountId)).map((l) => ui.h("span", { class: "pill" }, l)))];
     if (at < 0) parts.push(ui.h("ul", { class: "page-list" }, mine.map(rowOf)));
     else {
       const editing = { ...plan.holdings.find((x) => x.id === editId) };

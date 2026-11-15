@@ -135,3 +135,104 @@ test("How often it pays (gap next-60 #8): saved only when chosen, taken off when
   fill(same.root.querySelector("form"), {});
   assert.doesNotMatch((await page(same.saved.at(-1))).text(), /Dividends now counts/);
 });
+
+// ---------------------------------------------------------------- your own labels (gap list, next 60, item 44)
+const { holdingLabels, byLabel } = await import("./compute.js");
+const { labelLine } = await import("./view.js");
+const usd = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const tagged = () => { const p = INV.investmentsPlan(); p.holdings.find((h) => h.symbol === "BND").labels = ["kids"]; p.holdings.find((h) => h.symbol === "VNQ").labels = ["Kids", "house"]; p.accounts.find((a) => a.id === "roth").labels = ["retirement"]; p.accounts.find((a) => a.id === "chk").labels = ["bills"]; return p; };
+
+test("holdingLabels and byLabel: a holding's own labels and its account's (an account holding nothing offers none); the subtotal; the sentence", () => {
+  const p = tagged();
+  assert.deepEqual(holdingLabels(p), ["house", "kids", "retirement"], "checking's 'bills' holds no holding: no chip for it");
+  const items = compute(p, { today: T }).items;
+  const kids = byLabel(p, items, "kids");
+  assert.deepEqual(kids.items.map((h) => h.symbol).sort(), ["BND", "VNQ"]);
+  assert.equal(kids.value, 51100 + 66500);
+  assert.equal(labelLine(kids, usd), "2 holdings labeled kids: $117,600.");
+  assert.equal(kids.own, 2);
+  const ret = byLabel(p, items, "retirement");
+  assert.deepEqual(ret.items.map((h) => h.symbol), ["ACME"], "by its account");
+  assert.equal(ret.own, 0); assert.equal(ret.accounts, 1);
+  assert.equal(labelLine(ret, usd), "1 holding in an account labeled retirement: $90,000.");
+  assert.equal(byLabel(p, items, "nothing").count, 0);
+  assert.deepEqual(holdingLabels(INV.investmentsPlan()), []);
+});
+
+test("R5, critic P1: the line says when holdings are listed only for their account's label; the account's labels show on its card", async () => {
+  // Brokerage labeled kids, and only VTI labeled kids itself: BND and SPAXX are listed for their account's sake
+  const p = INV.investmentsPlan(); p.accounts.find((a) => a.id === "brk").labels = ["kids"]; p.holdings.find((h) => h.symbol === "VTI").labels = ["kids"];
+  const t = byLabel(p, compute(p, { today: T }).items, "kids");
+  assert.deepEqual([t.count, t.own, t.accounts], [3, 1, 1]);
+  assert.equal(labelLine(t, usd), "3 holdings labeled kids: $151,000. 2 of them are listed because their account is labeled kids.");
+  // one listed by its account
+  assert.equal(labelLine({ label: "kids", count: 2, value: 10, own: 1, accounts: 1 }, usd), "2 holdings labeled kids: $10. 1 of them is listed because its account is labeled kids.");
+  // listed by two accounts' labels
+  assert.equal(labelLine({ label: "kids", count: 3, value: 10, own: 1, accounts: 2 }, usd), "3 holdings labeled kids: $10. 2 of them are listed because their accounts are labeled kids.");
+  assert.equal(labelLine({ label: "kids", count: 3, value: 10, own: 0, accounts: 2 }, usd), "3 holdings in accounts labeled kids: $10.");
+  assert.equal(labelLine({ label: "kids", count: 3, value: 10, own: 0, accounts: 1 }, usd), "3 holdings in an account labeled kids: $10.");
+  // on the page: the Brokerage card carries its "kids" pill, all accounts or one label shown
+  const r = await page(p);
+  const card = () => r.root.querySelectorAll("section").find((x) => x.querySelector("h2") && r.textOf(x.querySelector("h2")) === "Brokerage");
+  const pills = () => card().querySelector("p").querySelectorAll("span").filter((x) => /\bpill\b/.test(x.getAttribute("class") ?? "")).map((x) => r.textOf(x));
+  assert.deepEqual(pills(), ["kids"]);
+  r.button("kids").click();
+  assert.match(r.text(), /3 holdings labeled kids: \$151,000\. 2 of them are listed because their account is labeled kids\./);
+  assert.deepEqual(pills(), ["kids"]);
+  // an account with no label: no pill
+  const none = await page(INV.investmentsPlan());
+  assert.equal(none.root.all().filter((x) => /\bpill\b/.test(x.getAttribute?.("class") ?? "") && x.parentNode?.tagName === "P").length, 0);
+});
+
+test("the label save on Holdings: under More details (optional), chips to pick, the plan's spelling kept, taken off when emptied, said in the green line", async () => {
+  const r = await page(tagged(), { rest: [], query: { edit: "h1" } });   // VTI
+  const form = r.root.querySelector("form");
+  const box = form.querySelector('[name="labelsText"]');
+  assert.ok(box.closest("details"));
+  const picks = r.root.all().find((e) => e.dataset?.labelPicks !== undefined);
+  assert.equal(r.textOf(picks), "Or tap one you already use: bills house kids retirement", "every label of the plan, accounts and holdings: the person's own words");
+  picks.querySelectorAll("button").find((b) => r.textOf(b) === "kids").click();
+  assert.equal(box.value, "kids");
+  fill(form, { labelsText: "KIDS, college" });
+  const saved = r.saved.at(-1).holdings.find((h) => h.id === "h1");
+  assert.deepEqual(saved.labels, ["kids", "college"]);
+  assert.ok(!("labelsText" in saved));
+  assert.match((await page(r.saved.at(-1))).text(), /VTI saved\. Labels: kids, college\./);
+  const e = await page(r.saved.at(-1), { rest: [], query: { edit: "h1" } });
+  assert.equal(e.root.querySelector("form").querySelector('[name="labelsText"]').value, "kids, college");
+  fill(e.root.querySelector("form"), { labelsText: "" });
+  assert.ok(!("labels" in e.saved.at(-1).holdings.find((h) => h.id === "h1")));
+  assert.match((await page(e.saved.at(-1))).text(), /VTI saved\. No labels now\./);
+  // too long: held back, nothing saved
+  const t = await page(tagged(), { rest: [], query: { edit: "h1" } });
+  fill(t.root.querySelector("form"), { labelsText: "z".repeat(31) });
+  assert.equal(t.saved.length, 0);
+  assert.equal(t.root.querySelector("form").querySelector('[name="labelsText"]').validity, "Keep each label to 30 letters or fewer. Separate two labels with a comma.", "held back at the box, with words (critic P7)");
+  t.button("Cancel").click();
+});
+
+test("the filter on Holdings: chips only once something carries a label; a tap lists only those holdings and their worth, hides empty account cards, writes nothing", async () => {
+  const none = await page(INV.investmentsPlan());
+  assert.equal(none.root.all().find((e) => e.dataset?.labelFilter !== undefined), undefined);
+  const r = await page(tagged());
+  const filter = r.root.all().find((e) => e.dataset?.labelFilter !== undefined);
+  assert.equal(r.textOf(filter), "All holdings house kids retirement");
+  const cards = () => r.root.querySelectorAll("section").filter((s) => s.querySelector("h2") && s.querySelector(".page-list")).map((s) => r.textOf(s.querySelector("h2")));
+  const rowIds = () => r.root.querySelectorAll("li").filter((li) => li.getAttribute("data-id")).map((li) => li.getAttribute("data-id"));
+  assert.equal(rowIds().length, 8);
+  const hero = r.textOf(r.root.querySelector("h1"));
+  r.button("kids").click();
+  assert.equal(r.saved.length, 0);
+  assert.deepEqual(rowIds().sort(), ["h2", "h7"]);
+  assert.deepEqual(cards(), ["Brokerage", "Lee's IRA"]);
+  assert.match(r.text(), /2 holdings labeled kids: \$117,600\./);
+  assert.equal(r.textOf(r.root.querySelector("h1")), hero, "the total stays the whole list's");
+  r.button("retirement").click();
+  assert.deepEqual(rowIds(), ["h8"]);
+  assert.match(r.text(), /1 holding in an account labeled retirement: \$90,000\./);
+  assert.deepEqual(cards(), ["Sam's Roth"]);
+  r.button("All holdings").click();
+  assert.equal(rowIds().length, 8);
+  assert.doesNotMatch(r.text(), /labeled/);
+  assert.match(r.textOf(r.root.querySelectorAll("li").find((li) => li.getAttribute("data-id") === "h7")), /Kids house/, "the holding's own labels on its row");
+});

@@ -834,3 +834,162 @@ test("C6 round 2 P5: a typed balance cleared on Edit asks for it with the way ba
   // a balance of ours, or a new account, has no such words (the box is not asked that way)
   assert.equal(draw(emptyPlan()).box("balance").dataset.missing, undefined);
 });
+
+// ---------------------------------------------------------------- your own labels (gap list, next 60, item 44)
+const L = await import("./labels.js");
+const { labelTotals } = await import("./compute.js");
+const { labelLine } = await import("./view.js");
+const money0 = (n) => (n < 0 ? `-$${Math.round(-n).toLocaleString("en-US")}` : `$${Math.round(n).toLocaleString("en-US")}`);
+const labelled = () => { const p = plan(); p.accounts[0].labels = ["kids"]; p.accounts[2].labels = ["kids", "retirement"]; p.accounts[1].labels = ["Retirement"]; p.accounts[5].labels = ["car"]; p.accounts[3].labels = ["car"]; return p; };
+
+test("labels: typed with commas, spaces squeezed, the same label once (capitals not counted), nothing cut; picked spellings win", () => {
+  assert.deepEqual(L.cleanLabels("kids,  Retirement ,, Kids "), ["kids", "Retirement"]);
+  assert.deepEqual(L.cleanLabels(["a  b", "A B", "", null, 7]), ["a b", "7"]);
+  assert.deepEqual(L.cleanLabels(""), []);
+  assert.deepEqual(L.cleanLabels(undefined), []);
+  assert.deepEqual(L.labelsOf({ labels: "kids" }), [], "stored data that is not a list reads as none");
+  assert.deepEqual(L.labelsOf({ labels: ["kids", "KIDS", " x "] }), ["kids", "x"]);
+  assert.ok(L.sameLabel("Kids ", "kids") && !L.sameLabel("kid", "kids"));
+  assert.ok(L.hasLabel({ labels: ["Kids"] }, "kids") && !L.hasLabel({}, "kids") && !L.hasLabel(null, "kids"));
+  assert.deepEqual(L.labelsIn([{ labels: ["retirement", "kids"] }], [{ labels: ["Kids", "car"] }, null]), ["car", "kids", "retirement"]);
+  assert.deepEqual(L.planLabels(labelled()), ["car", "kids", "Retirement"], "the first spelling met: the 401k's 'Retirement' (accounts in order), not the Roth's");
+  assert.deepEqual(L.spellAs(["Kids", "college"], ["kids", "car"]), ["kids", "college"]);
+  assert.equal(L.tooLong("kids, " + "x".repeat(31)), "x".repeat(31));
+  assert.equal(L.tooLong("x".repeat(30)), null);
+  assert.equal(L.LABEL_MAX, 30);
+  assert.equal(L.labelChange(["kids"], ["Kids"]), null);
+  assert.equal(L.labelChange(["kids", "car"], ["car", "kids"]), null);
+  assert.deepEqual(L.labelChange([], ["kids"]), ["kids"]);
+  assert.deepEqual(L.labelChange(["kids"], []), []);
+  assert.equal(L.labelWords(null), "");
+  assert.equal(L.labelWords([]), "No labels now.");
+  assert.equal(L.labelWords(["kids"]), "Label: kids.");
+  assert.equal(L.labelWords(["kids", "college"]), "Labels: kids, college.");
+  assert.equal(L.toggleIn("kids", "car"), "kids, car");
+  assert.equal(L.toggleIn("kids, Car", "car"), "kids");
+  assert.equal(L.toggleIn("", "kids"), "kids");
+});
+
+test("a label over 30 letters is held back with plain words, one or several typed (critic P7)", async () => {
+  const { readLabels } = await import("./labels-view.js");
+  const words = "Keep each label to 30 letters or fewer. Separate two labels with a comma.";
+  assert.deepEqual(readLabels("this label is far far too long for one chip on a phone", []), { error: words });
+  assert.deepEqual(readLabels("kids, " + "x".repeat(31), []), { error: words });
+  assert.deepEqual(readLabels("Kids, college", ["kids"]), { list: ["kids", "college"] });
+});
+
+test("labelTotals and its sentence, one per case: things owned, debts only, both", () => {
+  const p = labelled();
+  const kids = labelTotals(p, "KIDS");
+  assert.deepEqual([kids.count, kids.assets, kids.liabilities, kids.net, kids.hasAssets, kids.hasDebts], [2, 6000, 0, 6000, true, false]);
+  assert.deepEqual(kids.ids, ["1", "3"]);
+  assert.equal(labelLine(kids, money0), "2 accounts labeled KIDS: $6,000.");
+  const car = labelTotals(p, "car");
+  assert.deepEqual([car.count, car.assets, car.liabilities, car.net], [2, 8000, 3000, 5000], "a debt counts as owed, whatever sign was typed");
+  assert.equal(labelLine(car, money0), "2 accounts labeled car: $8,000 owned, $3,000 owed, $5,000 in all.");
+  const q = plan(); q.accounts[4].labels = ["cards"];
+  assert.equal(labelLine(labelTotals(q, "cards"), money0), "1 account labeled cards: $500 owed.");
+  const r = plan(); r.accounts[4].labels = ["x"]; r.accounts[0].labels = ["x"]; r.accounts[0].balance = 100;
+  assert.equal(labelLine(labelTotals(r, "x"), money0), "2 accounts labeled x: $100 owned, $500 owed, -$400 in all.");
+  assert.equal(labelTotals(emptyPlan(), "x").count, 0);
+});
+
+test("invariance: no label anywhere, every compute output as before; labels on accounts change no figure of compute()", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  for (const p of [plan(), familyPlan(T), ...ARCHETYPES.map((a) => a.build())]) {
+    const a = JSON.stringify(compute(p, { today: T }));
+    const q = structuredClone(p);
+    for (const [i, x] of (q.accounts ?? []).entries()) x.labels = i % 2 ? ["kids"] : ["retirement", "car"];
+    assert.equal(JSON.stringify(compute(q, { today: T })), a);
+  }
+});
+
+const nwView = async (p, query = {}) => {
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const r = await renderPage(view, p, T, { computeOf, route: { rest: [], query } });
+  const btn = (words) => r.root.querySelectorAll("button").find((b) => textOf(b) === words);
+  const rows = () => r.root.querySelectorAll(".records").filter((u) => u.classList.contains("only-narrow"))[0]?.children ?? [];
+  return { ...r, textOf, btn, rows };
+};
+const submit = (form, typed) => { for (const [k, v] of Object.entries(typed)) form.querySelector(`[name="${k}"]`).value = v; form.reset = () => {}; form.dispatch("submit"); };
+
+test("labels on the form: not asked on the first account; then under More details (optional) with a chip for each label used", async () => {
+  const first = await nwView(emptyPlan());
+  assert.equal(first.root.querySelector('[name="labelsText"]'), null, "the empty page's form is as it was");
+  const r = await nwView(labelled(), { add: "savings" });
+  const box = r.root.querySelector('[name="labelsText"]');
+  assert.ok(box && box.closest("details")?.classList.contains("form-more"));
+  const picks = r.root.all().find((e) => e.dataset?.labelPicks !== undefined);
+  assert.equal(r.textOf(picks), "Or tap one you already use: car kids Retirement");
+  // a chip adds its label to the box, a second tap takes it out
+  const chip = picks.querySelectorAll("button").find((b) => r.textOf(b) === "kids");
+  chip.click(); assert.equal(box.value, "kids"); assert.equal(chip.getAttribute("aria-pressed"), "true");
+  picks.querySelectorAll("button").find((b) => r.textOf(b) === "car").click(); assert.equal(box.value, "kids, car");
+  chip.click(); assert.equal(box.value, "car"); assert.equal(chip.getAttribute("aria-pressed"), "false");
+});
+
+test("the label save: a new account keeps the plan's spelling and says its labels; Edit shows them, empties them, says so", async () => {
+  const r = await nwView(labelled(), { add: "savings" });
+  submit(r.root.querySelector("form"), { name: "College fund", balance: "2500", labelsText: "Kids,  college" });
+  const added = r.saved.at(-1).accounts.at(-1);
+  assert.deepEqual(added.labels, ["kids", "college"]);
+  assert.ok(!("labelsText" in added));
+  const shown = await nwView(r.saved.at(-1));
+  assert.match(shown.text(), /College fund added\. Labels: kids, college\./);
+  // Edit: the box holds them (its line opens by itself); emptied, the field goes
+  const e = await nwView(r.saved.at(-1), { edit: added.id });
+  const box = e.root.querySelector("form").querySelector('[name="labelsText"]');
+  assert.equal(box.value, "kids, college");
+  assert.ok(box.closest("details").hasAttribute("open"));
+  submit(e.root.querySelector("form"), { labelsText: "" });
+  const back = e.saved.at(-1).accounts.find((a) => a.id === added.id);
+  assert.ok(!("labels" in back));
+  assert.match((await nwView(e.saved.at(-1))).text(), /College fund saved\. No labels now\./);
+  // saved with the same labels: no word about them
+  const same = await nwView(labelled(), { edit: "1" });
+  submit(same.root.querySelector("form"), {});
+  assert.match((await nwView(same.saved.at(-1))).text(), /Checking saved\.(?! Label)/);
+});
+
+test("invariance of the form: the labels box left empty writes the record it wrote before (no labels, no labelsText)", async () => {
+  const r = await nwView(plan(), { add: "savings" });
+  submit(r.root.querySelector("form"), { name: "Rainy day", balance: "2500" });
+  const a = r.saved.at(-1).accounts.at(-1);
+  assert.deepEqual(Object.keys(a).sort(), ["asOf", "balance", "history", "id", "institution", "name", "ownerId", "type"].sort());
+  // and on Edit of an account with no labels, nothing new is written
+  const e = await nwView(plan(), { edit: "2" });
+  submit(e.root.querySelector("form"), { balance: "21000" });
+  const k = e.saved.at(-1).accounts.find((x) => x.id === "2");
+  assert.ok(!("labels" in k) && !("labelsText" in k));
+});
+
+test("a label over 30 characters is held back at Save with words; nothing is saved", async () => {
+  const r = await nwView(labelled(), { add: "savings" });
+  submit(r.root.querySelector("form"), { name: "X", balance: "1", labelsText: "kids, " + "y".repeat(31) });
+  assert.equal(r.saved.length, 0);
+});
+
+test("the filter: chips only once an account has a label; a tap lists only that label's accounts and its subtotal, writes nothing, and the top figures stay", async () => {
+  const none = await nwView(plan());
+  assert.equal(none.root.all().find((e) => e.dataset?.labelFilter !== undefined), undefined, "no label: no chip, the page as it was");
+  const r = await nwView(labelled());
+  const filter = r.root.all().find((e) => e.dataset?.labelFilter !== undefined);
+  assert.equal(r.textOf(filter), "All accounts car kids Retirement");
+  assert.equal(r.rows().length, 6);
+  const top = r.textOf(r.root.querySelector(".stat"));
+  r.btn("car").click();
+  assert.equal(r.saved.length, 0, "never the plan");
+  assert.deepEqual(r.rows().map((li) => r.textOf(li.querySelector(".rec-title"))), ["Car", "Car loan"]);
+  assert.match(r.text(), /2 accounts labeled car: \$8,000 owned, \$3,000 owed, \$5,000 in all\./);
+  assert.equal(r.textOf(r.root.querySelector(".stat")), top, "net worth is still the whole plan's");
+  assert.equal(r.btn("car").getAttribute("aria-pressed"), "true");
+  r.btn("Retirement").click();
+  assert.deepEqual(r.rows().map((li) => r.textOf(li.querySelector(".rec-title"))), ["401k", "Roth"], "capitals not counted: the Roth's 'retirement' too");
+  assert.match(r.text(), /2 accounts labeled Retirement: \$25,000\./);
+  r.btn("All accounts").click();
+  assert.equal(r.rows().length, 6);
+  assert.doesNotMatch(r.text(), /labeled/);
+  // the labels show on the rows, quietly
+  assert.match(r.textOf(r.rows().find((li) => r.textOf(li.querySelector(".rec-title")) === "Roth")), /kids retirement$/);
+});

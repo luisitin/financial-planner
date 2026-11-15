@@ -1,5 +1,7 @@
 // modules/balance/net-worth/view.js -- DOM only.
-import { ACCOUNT_TYPES, isLiability, countedBalance, typeName, balanceGuessKey, balanceGuessPath } from "./compute.js";
+import { ACCOUNT_TYPES, isLiability, countedBalance, typeName, balanceGuessKey, balanceGuessPath, labelTotals } from "./compute.js";
+import { labelsOf, hasLabel, labelsIn, planLabels, labelChange, labelWords, sameLabel } from "./labels.js";
+import { LABELS_FIELD, labelPicks, readLabels, labelChips } from "./labels-view.js";
 import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
 import { isGuess, clearGuess, guessAt, markGuess, applies, same } from "../../../core/estimate/index.js";
 import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
@@ -10,6 +12,8 @@ import { part } from "../../../core/ui/more.js";
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
 let pending = null;
+// The label the Accounts list is narrowed to by its chips (gap next-60 #44): a choice of this visit, never the plan's.
+let shownLabel = null;
 // A page that sends people here to add one thing opens the form already set to it (DP-3, B4, D1, CF-1):
 //   ?add=<type>   the add form open, Type chosen, a heading and a name hint for that kind ("add=debt": a loan or card)
 //   ?edit=<id>    that account's edit form open
@@ -72,6 +76,13 @@ const ownerField = (plan, current) => {
   return options.length > 1 ? { key: "ownerId", label: "Whose account", type: "select", options } : null;
 };
 
+/** The line under the label chips (one sentence per case): what carries the label and its subtotal. */
+export function labelLine(t, money) {
+  const n = `${t.count} account${t.count === 1 ? "" : "s"} labeled ${t.label}`;
+  if (t.hasAssets && t.hasDebts) return `${n}: ${money(t.assets)} owned, ${money(t.liabilities)} owed, ${money(t.net)} in all.`;
+  if (t.hasDebts) return `${n}: ${money(t.liabilities)} owed.`;
+  return `${n}: ${money(t.assets)}.`;
+}
 /** Every balance counted is our guess (the hero says "A rough start", not "Partly", P1: a first account saved empty). */
 const allOurs = (d) => (d.guessedAssets ?? 0) + (d.guessedLiabilities ?? 0) > 0 && Math.abs((d.guessedAssets ?? 0) - (d.assets ?? 0)) < 0.5 && Math.abs((d.guessedLiabilities ?? 0) - (d.liabilities ?? 0)) < 0.5;
 
@@ -186,7 +197,11 @@ export function render(root, ctx) {
       // a balance left as our guess is said with its figure (spec 9.4's words)
       // (the row says how to change it, "Our guess for now. Tap Edit to type the real one.": said once, P5)
       const ours = g ? ` Its balance is our guess for now: about ${fmt.money(Math.abs(g.value), cur)}.` : "";
-      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.` : `${v.name} added.${ours}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.` : `${v.name || was.name} saved.${ours}` };
+      // a change of labels is said (gap next-60 #44); the list stays narrowed only if the record still carries that label
+      const labelled = labelsNow === null ? "" : (() => { const ch = labelChange(was ? labelsOf(was) : [], labelsNow); return ch ? ` ${labelWords(ch)}` : ""; })();
+      if (shownLabel && labelsNow !== null && !labelsNow.some((l) => sameLabel(l, shownLabel))) shownLabel = null;
+      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.${labelled}` : `${v.name} added.${ours}${labelled}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.${labelled}` : `${v.name || was.name} saved.${ours}${labelled}` };
+      const setLabels = (acc) => { if (!acc || labelsNow === null) return; if (labelsNow.length) acc.labels = labelsNow; else delete acc.labels; };
       // a mortgage balance of ours saved here becomes the person's: the tax and insurance its payment was read with stay in that
       // payment, so the payoff date does not jump (home.js escrowKept; fix round 1, 2026-11-11)
       const held = escrowBefore(plan, fmt.today());
@@ -197,11 +212,12 @@ export function render(root, ctx) {
             // left as our guess: the figure we count, marked; a guess is not a balance anyone saw, so no point goes in its history
             p.accounts[i] = { ...p.accounts[i], ...v, balance: g.value };
             markGuess(p, `accounts[${was.id}].balance`, g, fmt.today());
+            setLabels(p.accounts[i]);
           } else if (i >= 0) {
             const old = p.accounts[i];
             const moved = Number(v.balance) !== Number(old.balance);
             // a typing mistake is fixed where it stood (its points and the saved totals), never kept as a point
-            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; markTyped(p, old.id, fmt.today()); return; }
+            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; markTyped(p, old.id, fmt.today()); setLabels(p.accounts[i]); return; }
             // a new balance is today's unless you dated it yourself; the old one stays a point on its own date
             if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
             p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
@@ -209,12 +225,14 @@ export function render(root, ctx) {
             // saved from the form, even unchanged, the balance is the person's: it is no longer our guess (spec S2)
             clearGuess(p, `accounts[${old.id}].balance`);
             escrowKept(p, held, fmt.today());
+            setLabels(p.accounts[i]);
           }
         }
         else {
           const { later, ...typed } = v;
           p.accounts.push({ id, ...typed, ...(g ? { balance: g.value } : {}), history: [] });
           if (g) markGuess(p, `accounts[${id}].balance`, g, fmt.today());
+          setLabels(p.accounts.at(-1));
         }
       });
       // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
@@ -236,10 +254,18 @@ export function render(root, ctx) {
       : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
       : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
     const owner = ownerField(plan, values.ownerId);
+    // your own labels (gap next-60 #44): not asked on the first account (the empty page's first view stays as it was)
+    const known = planLabels(plan);
+    const askLabels = !empty;
+    let labelsNow = null;   // what Save writes: null = the form had no labels box (nothing changes)
+    if (askLabels && editing) values.labelsText = labelsOf(editing).join(", ");
     const start = { ownerId: "", ...values };
     // cleared on Edit, a typed balance is asked for again with the way back in view (P5, round 2: "Type an amount first." alone)
     const keepWords = typedBalance ? `Type the ${w === WORDS.debt ? "amount owed" : w === WORDS.thing ? "value" : "balance"}, or tap Cancel to keep ${fmt.money(Math.abs(Number(editing.balance) || 0), cur)}.` : null;
-    const theForm = ui.form([...fields.map((f) => (keepWords && f.key === "balance" ? { ...f, missing: keepWords } : f)), ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : [])], start, (typed, meta) => {
+    const theForm = ui.form([...fields.map((f) => (keepWords && f.key === "balance" ? { ...f, missing: keepWords } : f)), ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : []), ...(askLabels ? [LABELS_FIELD] : [])], start, (typed0, meta) => {
+      // the labels box is read apart: Save writes `labels` (or takes it off), never the box's text
+      const { labelsText, ...typed } = typed0;
+      if (askLabels) { const r = readLabels(labelsText, known); if (r.error) return ui.fieldError(theForm.querySelector('[name="labelsText"]'), r.error); labelsNow = r.list; }
       // no "Whose account" box (one adult): the owner saved is what the box would have held, as before
       let v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
       // the balance box left empty over our grey figure: that guess, for the kind and owner the form holds now
@@ -265,6 +291,7 @@ export function render(root, ctx) {
       save(v, false);
     }, { submitLabel: editing ? "Save changes" : asked && w !== WORDS.asset ? w.submit : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null });
     formHost.append(theForm);
+    if (askLabels) labelPicks(ui, theForm, known);
     // another kind picked under Type: the boxes' words follow it
     const typeSel = formHost.querySelector('select[name="type"]');
     typeSel?.addEventListener("change", () => {
@@ -287,10 +314,18 @@ export function render(root, ctx) {
   const typeLabel = (a) => typeName(a.type);
   // Anything that counts against you (a loan, or an overdrawn asset) shows a minus in red (F-008).
   const balance = (a) => { const against = isLiability(a.type) || countedBalance(a) < 0; return ui.h("span", { class: against ? "bad" : "" }, (against ? "-" : "") + fmt.money(Math.abs(countedBalance(a)), cur)); };
-  const rows = [...plan.accounts].sort((a, b) => Number(isLiability(a.type)) - Number(isLiability(b.type)) || Math.abs(b.balance) - Math.abs(a.balance));
+  // your own labels (gap next-60 #44): chips narrow the list to one label and say its subtotal; the figures above stay the whole plan's
+  const ownLabels = labelsIn(plan.accounts);
+  if (shownLabel && !ownLabels.some((l) => sameLabel(l, shownLabel))) shownLabel = null;
+  const pills = (a) => labelsOf(a).map((l) => ui.h("span", { class: "pill" }, l));
+  const rows = [...plan.accounts].filter((a) => !shownLabel || hasLabel(a, shownLabel)).sort((a, b) => Number(isLiability(a.type)) - Number(isLiability(b.type)) || Math.abs(b.balance) - Math.abs(a.balance));
+  const redrawHere = () => (ctx.redraw ? ctx.redraw() : (root.replaceChildren(), render(root, ctx)));
+  const filter = ownLabels.length ? ui.h("div", { dataset: { labels: "" } },
+    labelChips(ui, ownLabels, shownLabel, (l) => { shownLabel = l; redrawHere(); }, "All accounts"),
+    shownLabel ? ui.h("p", { class: "small" }, labelLine(labelTotals(plan, shownLabel), (n) => fmt.money(n, cur))) : null) : null;
   // Desktop: a table. Phone: one stacked record per account (tester F-002).
   const table = ui.h("div", { class: "only-wide" }, ui.table([
-    { key: "name", label: "Account" },
+    { key: "name", label: "Account", render: (a) => (labelsOf(a).length ? ui.h("span", {}, a.name ?? "", ...pills(a)) : (a.name ?? "")) },
     { key: "type", label: "Type", render: typeLabel },
     { key: "institution", label: "Bank or company" },
     { key: "balance", label: "Balance", align: "right", render: balance },
@@ -305,13 +340,14 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.name),
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
-    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""))));
+    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : a.asOf ? `as of ${fmt.date(a.asOf)}` : "", ...pills(a)))));
   // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
   const twins = guessTwins(plan);
   if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
   root.append(ui.card(empty ? null : "Accounts",
     said("accounts"),
     empty ? null : ui.h("p", {}, ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update all balances at once")),
+    empty ? null : filter,
     empty ? null : table, empty ? null : records,
     formHost,
   ));

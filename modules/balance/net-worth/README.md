@@ -276,3 +276,40 @@ no guess over a typed balance on Edit; no slip question over our guess; "A rough
 (`plan.accounts` not a list, a null person) without throwing (F6). Round 2 ("C6 round 2 ..."): grey equals counted for
 every kind in three households, the Texas home and the spouse's 401(k) named; Edit says Add's why and a bank guess follows
 the household; the words for a typed balance cleared on Edit.
+
+## Your own labels (gap list, next 60, item 44; 2026-11-15) -- `labels.js`, `labels-view.js`
+- **What a person sees.** Nothing new until they label something. The account form (from the second account on: the
+  first account's form is the empty page's first view and stays as it was) has "Your own labels" under "More details
+  (optional)", with the help "For example, kids or retirement. Commas between two or more." and, under the box, a chip
+  for each label already used anywhere in the plan (accounts and holdings): a tap adds it, a second tap takes it out.
+  Once an account carries a label, the Accounts card shows one row of chips, "All accounts" then each label, a to z;
+  a tap lists only the accounts with that label and says one line, written per case:
+  "2 accounts labeled kids: $6,000." (things owned), "1 account labeled cards: $500 owed." (debts only),
+  "2 accounts labeled car: $8,000 owned, $3,000 owed, $5,000 in all." (both). The labels show as quiet pills on the
+  rows. The figures at the top stay the whole plan's.
+- **Saved.** `accounts[].labels` (docs/DATA_MODEL.md): written by the form's own Save; absent when the box is empty (an
+  emptied box removes it); the green line adds "Labels: kids, college." or "No labels now." when they changed. A label
+  over 30 characters is held back at Save with words at the box: "Keep each label to 30 letters or fewer. Separate two
+  labels with a comma." (`readLabels`; a long label is often two typed without a comma). A label already used keeps
+  its first spelling ("Kids" typed, "kids" on file: "kids").
+- **No invitation on the first view** (decided 2026-11-15, after a critic's note): until something carries a label,
+  nothing on the page mentions labels; the box waits with the account's other optional details under "More details
+  (optional)" on Add and on Edit. Simple first (design log 2026-11-12), and this page's first view is already over its
+  word budget, whose counts may only go down. If the owner wants a hint, the place would be one quiet line in the
+  "+ Add another account" form, not on the first view.
+- **Rules** (`labels.js`, pure, imports nothing; Holdings uses them too): split at commas, spaces squeezed, two labels
+  are the same when only capitals or spaces differ, nothing is cut. `labelTotals(plan, label)` in `compute.js` counts
+  each balance as `compute()` does (`countedBalance`: an asset keeps its sign, a debt is what is owed).
+- **Never the plan.** The label shown by the chips is a module variable for the visit (a reload shows all again, and
+  Back leaves the page rather than stepping through chip taps: the address is not changed by a chip); a tap
+  calls `ctx.redraw()` and writes nothing. A save that leaves the record outside the label shown puts the list back to
+  all, so what was just saved is in view. No new localStorage key.
+- **Net worth lists accounts only**: a holding's own label is not offered here (its value is part of its account's
+  balance, which cannot be split by it); Holdings lists those.
+- **Invariance.** With no label anywhere: no chip, no pill, no extra node on a row; `compute()` and the page's words
+  are what they were at 154a597 over every invented household and fixture (the builder's scratch run, 2,828 runs and
+  1,414 drawings); the form saved with the box empty writes the same record as before (no `labels`, no `labelsText`),
+  tested on add and on Edit. `compute()` never reads labels (its module test sets labels on every account and compares).
+- **Tests** in `module.test.mjs`: the rules, `labelTotals` and its three sentences, the save on add and on Edit, the
+  removal, the words, the 30-character refusal, the first account without the box, the chips to pick, the filter (only
+  the rows and the line change, `store.update` never called, the top figure the same), the invariance.

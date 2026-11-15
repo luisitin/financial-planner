@@ -37,7 +37,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## balance
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `balance/net-worth` | Net worth | usable | 0 | Shows your accounts and totals, how liquid they are, which tax bucket each sits in and your net worth history. Once a plan kept by "Save today's totals" is six months old, one quiet row says whether savings are ahead of it or behind (gap #35). | Maybe |
+| `balance/net-worth` | Net worth | usable | 0 | Shows your accounts and totals, how liquid they are, which tax bucket each sits in and your net worth history. Once a plan kept by "Save today's totals" is six months old, one quiet row says whether savings are ahead of it or behind (gap #35). Your own labels on an account ("kids", "retirement"), and chips to list only one label with its subtotal (gap next-60 #44). | Maybe |
 | `balance/update` | Update my balances | usable | 10 | Every account on one screen: type today's balances, save once, and each is dated today with today's net worth saved. | Monarch, Empower manual accounts |
 | `balance/accounts` | Account detail | usable | 3 | Shows each account's balance history, what goes in and out of it, whether its last statement was checked, and your notes on it. | Actual |
 | `balance/liquidity` | Emergency fund | usable | 2 | How many months of bills your cash covers, and whether your emergency fund is big enough. | - |
@@ -128,7 +128,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 ## investments
 | key | title | status | phase | purpose | seeds |
 |---|---|---|---|---|---|
-| `investments/holdings` | Holdings | usable | 7 | What you hold in each investment account, what it is worth and what you paid; type it in or import the brokerage's positions file. | Ghostfolio, Maybe |
+| `investments/holdings` | Holdings | usable | 7 | What you hold in each investment account, what it is worth and what you paid; type it in or import the brokerage's positions file. Your own labels on a holding ("kids"), and chips to list only one label with its worth (gap next-60 #44). | Ghostfolio, Maybe |
 | `investments/allocation` | Allocation | usable | 7 | Your mix by asset class across every account against the mix you aim for, and how far each class has drifted. | Ghostfolio |
 | `investments/rebalance` | Rebalance | usable | 7 | The trades that bring your mix back to its target: new money first, then sells where they cost no tax and buys with the cash freed. | - |
 | `investments/fees` | Fees | usable | 7 | What your funds and any advisor charge each year and what that costs over a lifetime. | - |

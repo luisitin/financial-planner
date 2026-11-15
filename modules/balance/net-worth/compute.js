@@ -7,6 +7,7 @@
 // plain: the words this page and Emergency fund show for a kind whose label is a hard word (plain-words pass C10,
 // 2026-11-13; SPEC 13.1); typeName() gives them, falling back to the label.
 import { isGuess } from "../../../core/estimate/index.js";
+import { hasLabel } from "./labels.js";
 
 export const ACCOUNT_TYPES = {
   checking:        { label: "Checking",            side: "asset",     liquid: true,  invested: false, taxBucket: "taxable" },
@@ -118,4 +119,17 @@ export function compute(plan, params = {}) {
     partlyGuessed: (assets > 0 && guessedAssets / assets >= 0.5) || (liabilities > 0 && guessedLiabilities / liabilities >= 0.5),
   } : {};
   return { assets, liabilities, netWorth, liquid, cash, investable, byType, bySide: { asset: assets, liability: liabilities }, byTaxBucket, count: accounts.length, history, change, ...guesses };
+}
+
+/**
+ * labelTotals(plan, label) -> { label, count, ids, assets, liabilities, net, hasAssets, hasDebts }: the accounts carrying the
+ * person's own label (labels.js hasLabel; gap next-60 #44) and their subtotal, counted as compute() counts each balance
+ * (countedBalance: an asset keeps its sign, a debt is what is owed). What the label filter lists and says; never the plan's
+ * own totals, which compute() gives unchanged.
+ */
+export function labelTotals(plan, label) {
+  const mine = (Array.isArray(plan?.accounts) ? plan.accounts : []).filter((a) => hasLabel(a, label));
+  let assets = 0, liabilities = 0;
+  for (const a of mine) { if (isLiability(a.type)) liabilities += countedBalance(a); else assets += countedBalance(a); }
+  return { label, count: mine.length, ids: mine.map((a) => a.id), assets, liabilities, net: assets - liabilities, hasAssets: mine.some((a) => !isLiability(a.type)), hasDebts: mine.some((a) => isLiability(a.type)) };
 }

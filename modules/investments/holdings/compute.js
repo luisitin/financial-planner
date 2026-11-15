@@ -5,6 +5,7 @@
 // other investments page starts from compute() here so they all agree.
 import { FUNDS, TARGET_DATE_PATTERNS } from "./data/funds.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
+import { labelsIn, hasLabel } from "../../balance/net-worth/labels.js";
 import { parseCsv } from "../../../core/csv.js";
 
 export const ASSET_CLASSES = {
@@ -106,6 +107,24 @@ export function compute(plan, params = {}) {
     unknown, unpriced, feeYearly: items.reduce((s, h) => s + h.feeYearly, 0), incomeYearly: items.reduce((s, h) => s + h.incomeYearly, 0),
     investedAccounts, hasData: items.length > 0, warnings, thisYear,
   };
+}
+
+// ---------------------------------------------------------------- your own labels (gap next-60 #44; net-worth/labels.js)
+/** The labels a holding can be shown by: its own, and those of the account it is in. */
+const labelledBy = (plan, h, label) => hasLabel(h, label) || hasLabel((plan.accounts ?? []).find((a) => a.id === h.accountId), label);
+/** holdingLabels(plan) -> every label on a holding or on an account that holds one, a to z: the Holdings page's chips. */
+export function holdingLabels(plan) {
+  const held = new Set((plan.holdings ?? []).map((h) => h.accountId));
+  return labelsIn(plan.holdings, (plan.accounts ?? []).filter((a) => held.has(a.id)));
+}
+/** byLabel(plan, items, label) -> { label, items, count, value, own, accounts }: the holdings (compute's items) that carry
+ * the label or sit in an account that does, and what they are worth. own: how many carry it themselves (the others are
+ * listed only for their account's label); accounts: how many accounts those others sit in. What the filter lists and
+ * says; compute() itself is unchanged. */
+export function byLabel(plan, items, label) {
+  const mine = (items ?? []).filter((h) => labelledBy(plan, h, label));
+  const inherit = mine.filter((h) => !hasLabel(h, label));
+  return { label, items: mine, count: mine.length, value: mine.reduce((s, h) => s + (Number(h.value) || 0), 0), own: mine.length - inherit.length, accounts: new Set(inherit.map((h) => h.accountId)).size };
 }
 
 /**
