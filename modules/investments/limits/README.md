@@ -118,6 +118,26 @@ The "mega backdoor": some 401(k) and 403(b) plans take money after tax on top of
 yearly limit on all money going into a person's accounts in the plan, and let it be moved to Roth inside the plan or
 taken out while the person still works.
 
+**On screen.** Nothing new on the first view except one quiet row, and only when an adult has a 401(k) or 403(b) at work:
+a one-row parts card after the Roth IRA card, "After-tax money into Roth" (kind `own`, title pinned in
+`qa/first-view-lib.mjs` `PINNED_TITLES`: it holds two picks and no figure to type, so "Set my own numbers" would be
+untrue). Its status is the room summed over the adults whose way is not closed, said "$56,730 if allowed" while an answer
+is "Not sure" and "$56,730 of room" only once both are yes (`roomSays`, at most 19 characters for three adults: review o1
+P1, most plans do not take after-tax money, so the figure is never shown as a promise), "no room left", "not possible",
+or once an answer is given "N set by you" (R25). Opened, it says what this is in two sentences, then for each adult: the
+room in the same words at the right of the name ("Closed", no figure, once the way is closed; "No room left"), the
+answer (one sentence per case, with where to find out in the plan's own words), when no pay is on file the sentence that
+the full limit is used and a 44 px link "Add pay on the Income page ›" (review o1 F4), how the room is worked out, the
+usual 401(k) room still left, the catch-up, and two questions as chips, "Yes", "No", "Not sure" ("Not sure" on until
+answered; the second question goes when the first is "No"; neither shows when there is no room). Then: "Only what the money earns before the move is taxed,
+so moving it soon after it goes in keeps the tax small. This is information, not advice." and "Nothing here changes your
+plan. The room uses what goes in from pay and from the employer, which you can change here:" with "What you save for
+retirement ›" under it (a 44 px row). A tap saves at once
+(`store.update`), the part stays open on the redraw (R17) and its green line names the new answer ("Saved. Ana's plan
+takes after-tax money: up to $56,730 more could go in this year."). First view, before and after (node
+qa/first-view-node.mjs investments/limits): retired couple 430 words / 32 figures both (no plan at work: no row, the
+page's entry unchanged), family 395/28 -> 402/29, renter 331/20 -> 338/21, empty plan 293/11 both.
+
 **Who.** `atWorkPlan(plan, personId, pay)`: a row of theirs this year (or on an account they own) into a 401(k) or Roth
 401(k) at the current job, from pay or from the employer; else Get started's "Retirement plan at work?" (`workPlans[id].plan`:
 No closes it, Yes opens it); else pay on file and a 401(k) or Roth 401(k) of their own at the current job (Retirement
@@ -203,5 +223,7 @@ never "not out yet" (review o1 F2).
 **Tests** (`module.test.mjs`): the limit by year and the page's other 2026 figures against Notice 2025-67, Rev. Proc.
 2025-19 and Rev. Proc. 2025-32 (all agree, nothing corrected); the room in every case above; who has a plan at work; the
 verdicts from the answers; every sentence, "you" forms included; the two keys' writes; review o1 (a "Household" row,
-a date before the table, a malformed entry, no pay, "stuck" with the first answer unknown, the plain questions); invariance: compute() here and on Retirement contributions byte-identical to 461df76 over the fixtures, the
+a date before the table, a malformed entry, no pay, "stuck" with the first answer unknown, the plain questions); the page
+(no row without a plan at work, shut on arrival, the title and status, no number box, a tap saves and names the answer,
+the plan changes only there); S11; invariance: compute() here and on Retirement contributions byte-identical to 461df76 over the fixtures, the
 empty plan and the 1,400 households (digests), and with the answers saved every page's compute() is unchanged.

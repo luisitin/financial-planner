@@ -1,7 +1,24 @@
 // modules/investments/limits/view.js -- DOM only. The room left this year first, then each
 // person's limits with a bar, what each adult may put in a Roth IRA directly, and the deadlines.
-import { compute } from "./compute.js";
+import { compute, afterTaxRoom, afterTaxWords, setAfterTaxAnswer } from "./compute.js";
 import { nameIn, NameIn, nameOf, verbFor } from "../../../core/words.js";
+import { parts, choice } from "../../../core/ui/more.js";
+
+/** The after-tax part's id and its title (pinned in qa/first-view-lib.mjs PINNED_TITLES, with its reason). */
+export const AFTER_TAX_PART = "aftertax";
+export const AFTER_TAX_TITLE = "After-tax money into Roth";
+const YES_NO = [{ value: "yes", label: "Yes" }, { value: "no", label: "No" }, { value: "unsure", label: "Not sure" }];
+/**
+ * The room as the shut row and each adult's heading say it (review o1 P1): "of room" only once both answers are yes; while
+ * either is "Not sure", "if allowed" (most plans do not take after-tax money); a closed way shows no figure. At most 19
+ * characters for two or three adults ($216,000 if allowed), under the status's 20.
+ */
+export const roomSays = (money, room, verdicts) => (verdicts.every((v) => v === "ok") ? `${money(room)} of room` : `${money(room)} if allowed`);
+const headOf = (money, x) => (x.verdict === "full" ? "No room left" : x.verdict === "no" || x.verdict === "stuck" ? "Closed" : roomSays(money, x.room, [x.verdict]));
+// after a tap on an answer: { part, pid }, so the shell's redraw keeps the part open and its green line names the new answer (R7, R17)
+let pending = null;
+/** For tests: forget a tap's pending green line. */
+export const _reset = () => { pending = null; };
 
 const RETURN = {
   married_joint: "Filing jointly",
@@ -106,9 +123,56 @@ export function render(root, ctx) {
       ui.h("ul", { class: "records" }, r.people.map(line)),
     ));
   }
+  // after-tax money into Roth, the "mega backdoor" (gap list, next 60, item 28): one quiet row, only for a household with
+  // a 401(k) or 403(b) at work; nothing in it is counted in the plan
+  const at = afterTaxRoom(plan, { today: fmt.today() }, d);
+  const saved = pending?.part === AFTER_TAX_PART ? pending : null;
+  pending = null;
+  if (at.people.length) {
+    const open = at.people.filter((x) => x.verdict === "ok" || x.verdict === "ask");
+    const says = at.total > 0 ? roomSays(money, at.total, open.map((x) => x.verdict)) : at.people.every((x) => x.verdict === "full") ? "no room left" : "not possible";
+    root.append(ui.h("div", {}, parts(ctx, { id: AFTER_TAX_PART, kind: "own", title: AFTER_TAX_TITLE, set: at.set, says, open: !!saved,
+      body: () => afterTaxBody(ctx, at, { money, saved }) })));
+  }
   const hsaOff = d.people.some((p) => p.rows.some((r) => r.kind === "hsa" && !r.eligible));
   root.append(ui.card("Deadlines",
     ui.h("ul", { class: "records" }, d.deadlines.map((x) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.label), ui.h("span", { class: "rec-value" }, fmt.date(x.date))), ui.h("div", { class: "rec-sub" }, x.note)))),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/retirement/contributions" }, "Edit retirement contributions"), hsaOff ? ui.h("a", { class: "btn secondary", href: "#/taxes/hsa-fsa" }, "HSA coverage") : null),
   ));
+}
+
+/**
+ * The after-tax part's body: what it is in two sentences, then each adult with a 401(k) or 403(b) at work (the room, the
+ * answer, how the room is worked out, and the two questions as chips), then the tax line and the way to Retirement
+ * contributions. A chip writes its answer at once (store.update); the part stays open and its green line names the answer.
+ */
+function afterTaxBody(ctx, at, { money, saved }) {
+  const { ui } = ctx;
+  const words = (x) => afterTaxWords(x, { money, year: at.year, limit: at.limit, limitYear: at.limitYear });
+  const who = saved ? at.people.find((x) => x.id === saved.pid) : null;
+  const ask = (x, key, label, value) => ui.h("div", { dataset: { ask: key } },
+    ui.h("p", { class: "small", style: { margin: "10px 0 6px" } }, label),
+    choice(ctx, { id: `${key}-${x.id}`, label, presets: YES_NO, value: value === true ? "yes" : value === false ? "no" : "unsure",
+      onPick: (v) => { pending = { part: AFTER_TAX_PART, pid: x.id }; ctx.store.update((draft) => { setAfterTaxAnswer(draft, x.id, key, v); }); } }));
+  const person = (x) => {
+    const w = words(x);
+    return ui.h("li", { dataset: { person: x.id ?? "" } },
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, NameIn(x.name)), ui.h("span", { class: "rec-value" }, headOf(money, x))),
+      // the answer in the text's own color; when no pay is on file, that the full limit is used and the way to the Income
+      // page (review o1 F4); how the room is worked out under it, quieter
+      ui.h("p", { class: "small", style: { margin: "4px 0 6px" } }, [w.line, w.next].filter(Boolean).join(" ")),
+      w.pay ? ui.h("p", { class: "small", style: { margin: "0" } }, w.pay) : null,
+      w.pay ? ui.h("a",{ href: "#/cashflow/income", class: "small", dataset: { pay: x.id ?? "" }, style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Add pay on the Income page ›") : null,
+      ui.h("div", { class: "rec-sub" }, [w.sum, w.regular, w.catchUp].filter(Boolean).join(" ")),
+      x.verdict === "full" ? null : ask(x, "afterTax", w.q1, x.afterTax),
+      x.verdict === "full" || x.afterTax === false ? null : ask(x, "afterTaxToRoth", w.q2, x.toRoth));
+  };
+  return [
+    who ? ui.notice("ok", `Saved. ${words(who).line}`) : null,
+    ui.h("p", { class: "small" }, "Some work plans take money after tax on top of the usual 401(k) limit, and let you move it to Roth, where it grows tax-free. It works only if the plan allows it."),
+    ui.h("ul", { class: "records" }, at.people.map(person)),
+    ui.h("p", { class: "small" }, "Only what the money earns before the move is taxed, so moving it soon after it goes in keeps the tax small. This is information, not advice."),
+    ui.h("p", { class: "small", style: { marginBottom: "0" } }, "Nothing here changes your plan. The room uses what goes in from pay and from the employer, which you can change here:"),
+    ui.h("a", { href: "#/retirement/contributions", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px", justifySelf: "start" } }, "What you save for retirement ›"),
+  ];
 }

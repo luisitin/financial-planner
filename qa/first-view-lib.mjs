@@ -302,6 +302,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Years to independence at each saving rate", // retirement/fire (gap next-60 #53): the brief's own title for the table of years at 10% to 70% of take-home pay
   "Watch a shop or category",      // cashflow/spending (gap #13; R24's own part with no figure, its test: one pick): a shop or a category to watch, so not "Set my own numbers"
   "Compare two offers",            // debt/refinance (gap list, next 60, item 1): two lenders' quotes side by side, an option a person looks for by name; not our guess overridden, so not "Set my own numbers"
+  "After-tax money into Roth",     // investments/limits (gap list, next 60, item 28): the room for after-tax 401(k) money and two yes/no picks about the plan, no figure to type, so not "Set my own numbers"
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;

@@ -426,6 +426,174 @@ test("the answers are kept on retirement.workPlans[person]: yes and no as true a
   }
 });
 
+// ---------------------------------------------------------------- the page: one quiet row, saved only by a tap on an answer
+async function livePage(plan0, today = T13) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  let cur = migrate(structuredClone(plan0));
+  const page = { saves: 0, root: null };
+  const store = { get: () => cur, update: (fn) => { const d = structuredClone(cur); fn(d); cur = d; page.saves++; page.draw(); } };
+  page.draw = () => { page.root = new FakeElement("main"); render(page.root, { ui, fmt: { ...fmt, today: () => today }, plan: cur, route: { group: "investments", id: "limits", rest: [], query: {} }, module: { group: "investments", id: "limits" }, store, redraw: () => page.draw(), computeOf: () => null }); return page; };
+  page.plan = () => cur;
+  page.text = () => textOf(page.root);
+  page.part = (id) => page.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.part === id);
+  page.body = (id) => textOf(page.part(id)?.querySelector(".fold-body"));
+  page.status = (id) => textOf(page.part(id)?.querySelector(".fold-status"));
+  page.first = () => { const walk = (n) => (n.data !== undefined ? n.data : n.hidden ? "" : n.tagName === "DETAILS" && !n.hasAttribute("open") ? walk(n.childNodes.find((c) => c.tagName === "SUMMARY") ?? { data: "" }) : n.tagName === "STYLE" ? "" : n.childNodes.map(walk).join(" ")); return walk(page.root).replace(/\s+/g, " ").trim(); };
+  page.open = () => Object.fromEntries(page.root.all().filter((e) => e.tagName === "DETAILS" && e.dataset.part).map((e) => [e.dataset.part, e.hasAttribute("open")]));
+  page.chips = (key) => page.root.all().filter((e) => e.dataset?.ask === key);
+  page.tap = (key, label, n = 0) => { const box = page.chips(key)[n]; assert.ok(box, `question ${key}`); const b = box.all().find((e) => e.tagName === "BUTTON" && textOf(e) === label); assert.ok(b, `chip ${label}`); b.click(); return page; };
+  page.on = (key, n = 0) => page.chips(key)[n]?.all().find((e) => e.tagName === "BUTTON" && e.getAttribute("aria-pressed") === "true")?.textContent;
+  page.notices = () => page.root.all().filter((e) => /\bnotice\b/.test(e.className ?? "")).map((e) => [e.className.replace("notice", "").trim(), textOf(e)]);
+  page.head = (pid) => textOf(page.root.all().find((e) => e.tagName === "LI" && e.dataset?.person === pid)?.querySelector(".rec-value"));
+  return page.draw();
+}
+const fresh = async () => { (await import("./view.js"))._reset(); };
+const familyOf = async () => (await import("../../../qa/fixtures/family-plan.mjs")).familyPlan(T13);
+
+test("the page: one shut row only with a 401(k) or 403(b) at work, titled as pinned, the room as its status; nothing new on the first view beyond it; no box inside", async () => {
+  await fresh();
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  // the retired couple (no plan at work) and the empty plan: the page exactly as before
+  for (const p of [retiredCouplePlan(), emptyPlan()]) { const pg = await livePage(p); assert.equal(pg.part("aftertax"), undefined); assert.ok(!/after tax|after-tax/i.test(pg.text())); }
+  const page = await livePage(await familyOf());
+  const part = page.part("aftertax");
+  assert.ok(part && !part.hasAttribute("open"), "shut on arrival");
+  assert.equal(part.dataset.kind, "own");
+  assert.equal(textOf_(part.querySelector(".fold-title")), "After-tax money into Roth");
+  const { PINNED_TITLES } = await import("../../../qa/first-view-lib.mjs");
+  assert.ok(PINNED_TITLES.includes("After-tax money into Roth"));
+  // review o1 P1: before any answer the room is "if allowed", never a promise (most plans do not take after-tax money)
+  assert.equal(page.status("aftertax"), "$56,730 if allowed");
+  assert.equal(page.head("p-ana"), "$56,730 if allowed");
+  // the first view: the title and its status only
+  assert.match(page.first(), /After-tax money into Roth \$56,730 if allowed/);
+  for (const w of ["Ask the plan", "Not sure", "information, not advice", "What you save for retirement"]) assert.ok(!page.first().includes(w), w);
+  // the link is a full 44 px row, not a small inline link
+  assert.equal(part.all().find((e) => e.tagName === "A").style.minHeight, "44px");
+  // one tap away: Ana's answer, the sum, the usual room, the two questions, the tax line, the way to Retirement contributions
+  const body = page.body("aftertax");
+  for (const w of [
+    "Some work plans take money after tax on top of the usual 401(k) limit, and let you move it to Roth, where it grows tax-free. It works only if the plan allows it.",
+    'Ana could put up to $56,730 more into the plan after tax this year, if the plan allows it. Not sure? Ask HR, or look on the plan\'s website for "after-tax contributions" and "in-plan Roth conversion".',
+    "The 2026 limit on all money into Ana's work plan is $72,000. $12,220 goes in from Ana's pay, before tax or as Roth, and $3,050 from the employer, which leaves $56,730.",
+    "Ana also has $12,280 of usual 401(k) room left this year. It counts toward the same $72,000: what goes in there comes off the $56,730.",
+    "Does Ana's work plan take after-tax money, on top of the usual 401(k) money?",
+    "Can that money be moved to Roth while Ana still works there?",
+    "Only what the money earns before the move is taxed, so moving it soon after it goes in keeps the tax small. This is information, not advice.",
+    "Nothing here changes your plan.",
+  ]) assert.ok(body.includes(w), w);
+  // the family has pay on file: nothing about it, and no way to the Income page
+  assert.ok(!body.includes("not on the Income page")); assert.equal(part.all().filter((e) => e.getAttribute?.("href") === "#/cashflow/income").length, 0);
+  // Bo's only 401(k) is his old job's: not at work, not listed
+  assert.ok(!body.includes("Bo"));
+  assert.ok(part.all().some((e) => e.tagName === "A" && e.getAttribute("href") === "#/retirement/contributions" && /What you save for retirement/.test(e.textContent)));
+  // R24's pinned title: no number box inside, only the picks; and no hand-written <details>
+  assert.equal(part.all().filter((e) => ["INPUT", "SELECT", "TEXTAREA"].includes(e.tagName)).length, 0);
+  assert.ok(page.root.all().filter((e) => e.tagName === "DETAILS").every((d) => d.dataset.part));
+  // "Not sure" is on for both questions until answered
+  assert.equal(page.on("afterTax"), "Not sure"); assert.equal(page.on("afterTaxToRoth"), "Not sure");
+  // no filled button anywhere (a chip is not one)
+  assert.equal(page.root.all().filter((e) => e.tagName === "BUTTON" && !/secondary|chip/.test(e.className)).length, 0);
+});
+const textOf_ = (el) => String(el?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+test("a tap on an answer saves it at once, the green line names the new answer, and the plan changes only there", async () => {
+  await fresh();
+  const page = await livePage(await familyOf());
+  const before = structuredClone(page.plan());
+  page.tap("afterTax", "Yes");
+  assert.equal(page.saves, 1);
+  assert.deepEqual(page.plan().retirement.workPlans, { "p-ana": { afterTax: true } });
+  const after = structuredClone(page.plan()); delete after.retirement.workPlans;
+  assert.deepEqual(after, before, "nothing else in the plan moved");
+  assert.deepEqual(page.notices().filter(([k]) => k === "ok"), [["ok", "Saved. Ana's plan takes after-tax money: up to $56,730 more could go in this year."]]);
+  assert.equal(page.status("aftertax"), "1 set by you");
+  assert.equal(page.on("afterTax"), "Yes");
+  assert.equal(page.head("p-ana"), "$56,730 if allowed", "one yes: still if allowed");
+  page.tap("afterTaxToRoth", "Yes");
+  assert.deepEqual(page.notices().filter(([k]) => k === "ok"), [["ok", "Saved. Ana could put up to $56,730 more into the plan after tax this year and move it to Roth."]]);
+  assert.equal(page.status("aftertax"), "2 set by you");
+  assert.equal(page.head("p-ana"), "$56,730 of room", "two yeses: the room");
+  page.tap("afterTaxToRoth", "No");
+  assert.deepEqual(page.notices().filter(([k]) => k === "ok"), [["ok", "Saved. Ana's plan cannot move after-tax money to Roth while Ana works, so this way into Roth is closed."]]);
+  // review o1 P1: a closed way shows no figure beside the closed sentence
+  assert.equal(page.head("p-ana"), "Closed");
+  assert.ok(page.body("aftertax").includes("After-tax money left in the plan grows, and the growth is taxed as pay when it comes out."));
+  // No to the first question: the second goes, the way is closed
+  page.tap("afterTax", "No");
+  assert.deepEqual(page.notices().filter(([k]) => k === "ok"), [["ok", "Saved. Ana's plan does not take after-tax money, so this way into Roth is closed."]]);
+  assert.equal(page.chips("afterTaxToRoth").length, 0);
+  assert.equal(page.head("p-ana"), "Closed");
+  // Not sure takes the answers back off the plan
+  page.tap("afterTax", "Not sure");
+  assert.deepEqual(page.plan().retirement.workPlans, { "p-ana": { afterTaxToRoth: false } });
+  // a chip already on does nothing
+  const n = page.saves; page.tap("afterTax", "Not sure"); assert.equal(page.saves, n);
+  // a later visit: nothing pending, the part shut again, saying what is set
+  await fresh();
+  const again = await livePage(page.plan());
+  assert.equal(again.open().aftertax, false); assert.equal(again.status("aftertax"), "1 set by you");
+  assert.deepEqual(again.notices().filter(([k]) => k === "ok"), []);
+});
+
+test("S11: after a save only the saved part changes: a tap opens After-tax money into Roth on the redraw, and no other part opens or shuts", async () => {
+  await fresh();
+  const page = await livePage(await familyOf());
+  assert.deepEqual(page.open(), { aftertax: false });
+  page.tap("afterTax", "Yes");
+  assert.deepEqual(page.open(), { aftertax: true }, "the saved part stays open (R17)");
+  // the next draw that is not after a save draws it as the page does
+  page.draw();
+  assert.deepEqual(page.open(), { aftertax: false });
+});
+
+test("the page for an unnamed first adult says you and your; a full plan shows no questions; two adults at work each have their row", async () => {
+  await fresh();
+  const p = withPlan({ a: { pay: 200000, k401: 24500, match: 47500 } }); p.household.people[0].name = "Me";
+  const full = await livePage(p);
+  assert.equal(full.status("aftertax"), "no room left");
+  assert.ok(full.body("aftertax").includes("Your work plan is already at its $72,000 limit for 2026, so no after-tax money fits this year."));
+  assert.equal(full.chips("afterTax").length, 0);
+  const two = await livePage(withPlan({ status: "married_joint", a: { pay: 150000, k401: 10000 }, b: { pay: 90000, k401: 5000, match: 2000 } }));
+  assert.equal(two.status("aftertax"), "$127,000 if allowed");
+  assert.equal(two.chips("afterTax").length, 2);
+  two.tap("afterTax", "No", 1);
+  assert.deepEqual(two.plan().retirement.workPlans, { b: { afterTax: false } });
+  assert.equal(two.notices().filter(([k]) => k === "ok")[0][1], "Saved. Ben's plan does not take after-tax money, so this way into Roth is closed.");
+  // both closed: "not possible"
+  two.tap("afterTax", "No", 0);
+  assert.equal(two.status("aftertax"), "2 set by you");
+  await fresh();
+  const q = two.plan(); const shut = await livePage(q);
+  assert.equal(shut.status("aftertax"), "2 set by you");
+  const none = structuredClone(q); none.retirement.workPlans = { a: { afterTaxToRoth: false }, b: { afterTaxToRoth: false } };
+  const r = afterTaxRoom(none, { today: T13 }); assert.equal(r.total, 0); assert.deepEqual(r.people.map((x) => x.verdict), ["stuck", "stuck"]);
+});
+
+test("review o1 F4 and P1: no pay on file says the full limit is used and leads to the Income page; the status and headings fit and say 'if allowed' until both answers are yes", async () => {
+  await fresh();
+  const { roomSays } = await import("./view.js");
+  // 5,000 into her 401(k), no income row: the room is worked from the dollar limit, and the screen says why
+  const page = await livePage(withPlan({ a: { k401: 5000 } }));
+  assert.equal(page.status("aftertax"), "$67,000 if allowed");
+  const body = page.body("aftertax");
+  assert.ok(body.includes("Ana's pay is not on the Income page, so this uses the full $72,000. If Ana earns less than that, the limit is all of Ana's pay."), body);
+  const to = page.part("aftertax").all().filter((e) => e.tagName === "A" && e.getAttribute("href") === "#/cashflow/income");
+  assert.equal(to.length, 1); assert.equal(textOf_(to[0]), "Add pay on the Income page ›"); assert.equal(to[0].style.minHeight, "44px");
+  // with pay added, neither the sentence nor the way to the Income page
+  const paid = await livePage(withPlan({ a: { pay: 60000, k401: 5000 } }));
+  assert.ok(!paid.body("aftertax").includes("not on the Income page"));
+  // the status stays one short line (more.js STATUS_MAX) for up to three adults at the whole limit
+  const { STATUS_MAX } = await import("../../../core/ui/more.js");
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  for (const n of [56730, 144000, 216000]) for (const v of [["ask"], ["ok"], ["ok", "ask"]]) assert.ok(roomSays(money, n, v).length <= STATUS_MAX, roomSays(money, n, v));
+  assert.equal(roomSays(money, 56730, ["ok", "ok"]), "$56,730 of room"); assert.equal(roomSays(money, 56730, ["ok", "ask"]), "$56,730 if allowed");
+});
+
 // ---------------------------------------------------------------- invariance (gap spec 3.5)
 // With the new fields absent, every figure this page and Retirement contributions (whose data file gained annualAdditions)
 // worked out before is byte-identical: compute() of both over every qa/fixtures plan builder, the empty plan, and the
