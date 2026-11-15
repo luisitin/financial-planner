@@ -402,13 +402,13 @@ test("C9 (critic e9 F6, F7) the cost box, its gray figure and its line show only
 test("C9 S11 (R17): saving a child's college with the cost left empty saves no figure, and only that part stays open", async () => {
   const a = await drawEdu(customBlank());
   const before = openParts(a.root);
-  assert.deepEqual(before, { "college-p-cy": false, borrow: false, state: false, growth: false });
+  assert.deepEqual(before, { "college-p-cy": false, borrow: false, state: false, school: false, growth: false });
   a.root.querySelector('[name="yearly"]').closest("form").dispatch("submit");
   assert.equal(a.saved.length, 1);
   assert.equal(a.saved[0].whatIfs.college["p-cy"].yearly, null, "our figure is never written");
   assert.equal(a.saved[0].guesses, undefined);
   const b = await drawEdu(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { "college-p-cy": true, borrow: false, state: false, growth: false }, "the part just saved stays open; no other moves");
+  assert.deepEqual(openParts(b.root), { "college-p-cy": true, borrow: false, state: false, school: false, growth: false }, "the part just saved stays open; no other moves");
   assert.match(b.textOf(b.root), /college saved\./);
   // the growth row: saving it opens only itself
   const c = await drawEdu(familyPlan(T13));
@@ -416,7 +416,7 @@ test("C9 S11 (R17): saving a child's college with the cost left empty saves no f
   c.root.querySelector('[name="growth"]').closest("form").dispatch("submit");
   assert.equal(c.saved[0].whatIfs.college.growth, 0.05);
   const e = await drawEdu(c.saved[0]);
-  assert.deepEqual(openParts(e.root), { "college-p-cy": false, borrow: false, state: false, growth: true });
+  assert.deepEqual(openParts(e.root), { "college-p-cy": false, borrow: false, state: false, school: false, growth: true });
   assert.match(e.textOf(e.root.querySelectorAll("details").find((x) => x.dataset.part === "growth")), /At 5\.0% a year, a public in-state year \(\$25,850 in 2025-26\) would cost about \$\d/);
 });
 
@@ -482,6 +482,19 @@ test("state break: two children, the older one starting first: from then on only
   assert.deepEqual([s.case, s.put, s.counted, s.years, s.last.name], ["full", 4200, 4000, 12, "Cy"]);
   near(s.total, (4000 * 8 + 3000 * 4) * 0.044);
 });
+test("critic q4 M5: a true, an array or an object stored by hand is not a figure (Number(true) is 1, Number([5000]) is 5000)", () => {
+  // before: stateRate true counted as a 100% rate and stateDeduction [5000] as $5,000
+  const s = stateBreak(inColorado({ stateDeduction: [5000], stateRate: true }), { today: T13 });
+  assert.deepEqual([s.case, s.deduction, s.rate, s.rateFrom], ["ask", null, 0.044, "flat"]);
+  for (const bad of [true, false, [5000], { v: 1 }, "  "]) {
+    const q = familyPlan(T13); q.whatIfs = { college: { loanRate: bad, schoolYearly: bad, stateRate: bad, stateDeduction: bad } };
+    assert.deepEqual([saveOrBorrow(q, { today: T13 }).loanRate, saveOrBorrow(q, { today: T13 }).example], [0.06, true], JSON.stringify(bad));
+    assert.deepEqual([schoolFirst(q, { today: T13 }).picked, schoolFirst(q, { today: T13 }).case], [null, "ask"], JSON.stringify(bad));
+    assert.equal(stateBreak(q, { today: T13 }).deduction, null, JSON.stringify(bad));
+  }
+  // a figure typed as text still counts (the form stores numbers; an older copy may hold a string)
+  assert.equal(stateBreak(inColorado({ stateDeduction: "2000" }), { today: T13 }).deduction, 2000);
+});
 test("critic q4 P1, P2: the state row's status says what it holds while shut; its green line is short and names the figure", () => {
   // Texas (the family): no income tax on pay, said in two words in the shut row
   assert.equal(stateStatus(stateBreak(familyPlan(T13), { today: T13 })), "Texas: none");
@@ -539,7 +552,7 @@ test("state break, the page S11: one quiet row, nothing new in the first view; t
   assert.equal(a.saved.length, 1);
   assert.deepEqual([a.saved[0].whatIfs.college.stateDeduction, a.saved[0].whatIfs.college.stateRate], [5000, null]);
   const b = await drawEdu(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: false, state: true, growth: false });
+  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: false, state: true, school: false, growth: false });
   // the green line names the new figure in a few words; the full sentence is right under it, once (critic q4 P2)
   const said = partOf(b.root, "state").querySelector(".notice");
   assert.equal(b.textOf(said), "Saved. About $130 a year less state tax.");
@@ -688,7 +701,7 @@ test("save or borrow, the page S11: one quiet row; Retirement first moved into i
   box.closest("form").dispatch("submit");
   assert.equal(a.saved[0].whatIfs.college.loanRate, 0.05);
   const b = await drawEdu(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: true, state: false, growth: false });
+  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: true, state: false, school: false, growth: false });
   const k = saveOrBorrow(a.saved[0], { today: T13 }).children[0];
   // the green line names the new payment in a few words; the sentences are under it, once (critic q4 P2)
   assert.equal(b.textOf(partOf(b.root, "borrow").querySelector(".notice")), `Saved. At 5% a year: ${money10(k.payment)} a month for 10 years after college.`);
@@ -698,4 +711,158 @@ test("save or borrow, the page S11: one quiet row; Retirement first moved into i
   const c = await drawEdu(inCollege());
   assert.equal(partOf(c.root, "borrow"), undefined);
   assert.ok(c.root.querySelectorAll("li").some((li) => c.textOf(li) === RETIREMENT_FIRST));
+});
+
+// ---------------------------------------------------------------- gap list, next 60, item 4: school before college (map U6)
+import { schoolFirst, SCHOOL } from "./compute.js";
+import { schoolLine, schoolSentence, schoolChild, SCHOOL_CHIPS, schoolSaved, SCHOOL_HINT } from "./view.js";
+
+test("school before college: the federal yearly limit as read at irs.gov (Topic no. 313): $20,000 from 2026, $10,000 before", () => {
+  assert.deepEqual([SCHOOL.limit, SCHOOL.before, SCHOOL.from, SCHOOL.grades, SCHOOL.source], [20000, 10000, 2026, 13, "https://www.irs.gov/taxtopics/tc313"]);
+  // the limit is the federal one; a state may not follow it (critic q4 M2): said on the same line
+  assert.equal(schoolLine(money10), "529 money can also pay up to $20,000 a year of a child's school before college, kindergarten to 12th grade: tuition, books and tutoring at a public, private or religious school (from 2026; $10,000 before). That is the federal rule: your state may tax this money differently.");
+  assert.deepEqual(SCHOOL_CHIPS.map((x) => x.value), [0, 5000, 10000, 20000]);
+});
+test("school before college by hand: $10,000 a year of Cy's school, 2027-28 to 2037-38, at the plan's 6.1%", () => {
+  const p = familyPlan(T13);
+  const c = compute(p, { today: T13 }).children[0];
+  const ask = schoolFirst(p, { today: T13 });
+  assert.equal(ask.case, "ask"); assert.equal(ask.children[0].lost, 0); near(ask.children[0].newMonthly, c.neededMonthly);
+  assert.equal(schoolSentence(ask, money10), "Pick an amount a year to see how much less that leaves for college.");
+  const sf = schoolFirst(p, { today: T13, yearly: 10000 });
+  const k = sf.children[0];
+  // November 2026: 2026-27 has begun, so the first school year ahead is 2027-28; the last before college 2037-38
+  assert.deepEqual([sf.case, sf.yearly, k.first, k.last, k.firstLabel, k.lastLabel, k.years], ["one", 10000, 2027, 2037, "2027-28", "2037-38", 11]);
+  // each August payment and what it would have grown to by August 2038: 10,000 x (1 + 0.061 / 12)^(12 x (2038 - y))
+  let lost = 0; for (let y = 2027; y <= 2037; y++) lost += 10000 * Math.pow(1 + 0.061 / 12, 12 * (2038 - y));
+  near(k.lost, lost, 1e-6); near(k.lost, 161417.62, 0.01);
+  near(k.newMonthly, pmtToReach(0.061 / 12, 141, c.atStart + lost, 4000), 1e-6); near(k.newMonthly, 1528.52, 0.01);
+  assert.equal(schoolSentence(sf, money10), "Paying $10,000 a year of Cy's school from the 529, 11 school years from 2027-28 to 2037-38, leaves about $161,420 less for college in 2038, at the plan's 6.1% a year. To pay for both, put in about $1,530 a month instead of $740.");
+  assert.equal(schoolSaved(sf, money10), "$10,000 a year for school: put in about $1,530 a month to pay for both.");
+  assert.equal(k.empty, false);
+  // the saved amount is read from the plan the same way
+  const saved = familyPlan(T13); saved.whatIfs = { college: { schoolYearly: 10000 } };
+  assert.deepEqual(schoolFirst(saved, { today: T13 }), sf);
+  // None: nothing lost; over the limit: the most that counts
+  const none = schoolFirst(p, { today: T13, yearly: 0 });
+  assert.deepEqual([none.case, none.children[0].lost], ["none", 0]);
+  assert.equal(schoolSentence(none, money10), "Nothing taken out for school: college keeps all of it.");
+  assert.equal(schoolSaved(none, money10), "Nothing taken out for school.");
+  const over = schoolFirst(p, { today: T13, yearly: 30000 });
+  assert.deepEqual([over.yearly, over.capped], [20000, true]);
+  near(over.children[0].lost, 2 * lost, 1e-6);
+});
+test("school before college: the school years (August 15, kindergarten at 13 years before college, none left), several children", () => {
+  // before August 15 the school year of this calendar year is still ahead
+  assert.equal(schoolFirst(familyPlan("2026-08-14"), { today: "2026-08-14", yearly: 5000 }).children[0].first, 2026);
+  assert.equal(schoolFirst(familyPlan("2026-08-15"), { today: "2026-08-15", yearly: 5000 }).children[0].first, 2027);
+  // a one-year-old: 13 school years, kindergarten in 2030-31 to 12th grade in 2042-43
+  const baby = familyPlan(T13); baby.household.people.find((x) => x.id === "p-cy").birthDate = "2025-06-01";
+  const b = schoolFirst(baby, { today: T13, yearly: 5000 }).children[0];
+  assert.deepEqual([b.first, b.last, b.years, b.startYear], [2030, 2042, 13, 2043]);
+  // a child starting college next August has no school year left before it: no row
+  const senior = familyPlan(T13); senior.household.people.find((x) => x.id === "p-cy").birthDate = "2009-02-01";
+  assert.equal(schoolFirst(senior, { today: T13, yearly: 5000 }), null);
+  assert.equal(schoolFirst(emptyPlan(), { today: T13 }), null);
+  assert.equal(schoolFirst(inCollege(), { today: T8 }), null);
+  // two children: one line before the list, one line each (Bo with a goal of his own, so his 529 holds something)
+  const two = familyPlan(T13); two.household.people.push({ id: "p-bo", name: "Bo", role: "dependent", birthDate: "2016-04-04" });
+  two.goals.push({ id: "g-bo", name: "Bo's college", icon: "🎓", target: 60000, targetDate: "2034-08-15", priority: 2, saved: 0, fundedBy: [], monthly: 100, rate: null, inflates: true });
+  const sf = schoolFirst(two, { today: T13, yearly: 10000 });
+  assert.equal(sf.case, "several");
+  assert.deepEqual(sf.children.map((k) => [k.name, k.years, k.startYear]), [["Cy", 11, 2038], ["Bo", 7, 2034]]);
+  let lostBo = 0; for (let y = 2027; y <= 2033; y++) lostBo += 10000 * Math.pow(1 + 0.061 / 12, 12 * (2034 - y));
+  near(sf.children[1].lost, lostBo, 1e-6);
+  assert.equal(schoolSentence(sf, money10), "Paying $10,000 a year of each child's school from the 529, at the plan's 6.1% a year:");
+  assert.equal(schoolChild(sf.children[1], money10), `Bo: 7 school years from 2027-28 to 2033-34, about ${money10(lostBo)} less for college in 2034; for school and college, ${money10(sf.children[1].newMonthly)} a month instead of ${money10(sf.children[1].neededMonthly)}.`);
+  assert.equal(schoolSaved(sf, money10), `$10,000 a year for each child's school: Cy ${money10(sf.children[0].newMonthly)} a month, Bo ${money10(sf.children[1].newMonthly)} a month for school and college.`);
+  // one school year left: said as that year
+  const last = familyPlan(T13); last.household.people.find((x) => x.id === "p-cy").birthDate = "2009-12-01";   // college from 2027... 18 in 2027
+  const one = schoolFirst(last, { today: "2026-03-01", yearly: 10000 });
+  assert.equal(one.children[0].years, 1);
+  assert.match(schoolSentence(one, money10), /, the 2026-27 school year, leaves about/);
+});
+test("critic q4 P6: a child with nothing set aside and nothing going in: no 'less for college' from an empty 529, but what to put in for both", () => {
+  const p = familyPlan(T13); p.goals = p.goals.filter((g) => g.id !== "g-col");
+  const c = compute(p, { today: T13 }).children[0];
+  assert.deepEqual([c.saved, c.monthly], [0, 0]);
+  const sf = schoolFirst(p, { today: T13, yearly: 10000 }), k = sf.children[0];
+  assert.deepEqual([k.empty, k.saved, k.putMonthly], [true, 0, 0]);
+  near(k.newMonthly, pmtToReach(0.061 / 12, 141, c.atStart + k.lost, 0), 1e-6);
+  assert.equal(schoolSentence(sf, money10), `Nothing is set aside for Cy yet. To pay $10,000 a year of school from a 529, 11 school years from 2027-28 to 2037-38, and still cover college, put in about ${money10(k.newMonthly)} a month instead of ${money10(k.neededMonthly)}.`);
+  assert.equal(schoolChild(k, money10), `Cy: nothing set aside yet; to pay 11 school years from 2027-28 to 2037-38 and college, ${money10(k.newMonthly)} a month instead of ${money10(k.neededMonthly)}.`);
+  assert.doesNotMatch(schoolSentence(sf, money10), /less for college/);
+  // the hint on which amount is usual
+  assert.equal(SCHOOL_HINT, "None is usual with a public school (no tuition). Pick an amount for private school or tutoring.");
+});
+test("critic q4 M4: a school year before 2026 counts at most $10,000, the limit of its tax year", () => {
+  const p = familyPlan("2025-03-01");
+  const sf = schoolFirst(p, { today: "2025-03-01", yearly: 20000 }), k = sf.children[0];
+  assert.deepEqual([k.first, k.last, sf.yearly], [2025, 2037, 20000]);
+  const r = sf.returnRate / 12;
+  let lost = 0; for (let y = 2025; y <= 2037; y++) lost += (y < 2026 ? 10000 : 20000) * Math.pow(1 + r, 12 * (2038 - y));
+  near(k.lost, lost, 1e-6);   // before: 20,000 counted for 2025 too
+  // under the old limit, nothing changes
+  const ten = schoolFirst(p, { today: "2025-03-01", yearly: 10000 }).children[0];
+  let lost10 = 0; for (let y = 2025; y <= 2037; y++) lost10 += 10000 * Math.pow(1 + r, 12 * (2038 - y));
+  near(ten.lost, lost10, 1e-6);
+});
+test("school before college, the page S11: a chip saves at once, keeps the row open and names the new answer; no box until Type my own", async () => {
+  const { fullSelectors } = await import("../../../qa/fixtures/fake-dom.mjs");
+  fullSelectors();
+  await drawEdu(familyPlan(T13));
+  const a = await drawEdu(familyPlan(T13));
+  const row = partOf(a.root, "school");
+  assert.ok(row && !row.hasAttribute("open"));
+  assert.equal(a.textOf(row.querySelector(".fold-title")), "School before college");
+  assert.equal(row.querySelector(".fold-status") ?? null, null);
+  assert.equal(row.querySelector('[name="schoolYearly"]') ?? null, null, "no box until Type my own");
+  assert.ok(a.textOf(row).includes(schoolLine(money10)));
+  const chip = row.querySelectorAll("button").find((b) => a.textOf(b) === "$10,000");
+  chip.dispatch("click");
+  assert.equal(a.saved.length, 1);
+  assert.equal(a.saved[0].whatIfs.college.schoolYearly, 10000);
+  const b = await drawEdu(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { "college-p-cy": false, borrow: false, state: false, school: true, growth: false });
+  const body = b.textOf(partOf(b.root, "school"));
+  // the green line names the new monthly in a few words; the sentence is under the chips, once (critic q4 P2)
+  assert.equal(b.textOf(partOf(b.root, "school").querySelector(".notice")), "Saved. $10,000 a year for school: put in about $1,530 a month to pay for both.");
+  assert.equal(body.split("leaves about $161,420 less for college in 2038").length, 2, "the answer once");
+  assert.ok(body.includes(SCHOOL_HINT));
+  assert.equal(partOf(b.root, "school").querySelectorAll("button").find((x) => b.textOf(x) === "$10,000").getAttribute("aria-pressed"), "true");
+  assert.ok(b.textOf(partOf(b.root, "school").querySelector("summary")).includes("set by you"));
+  // "Type my own": the box says it saves when it is left (critic q4 P5), and leaving it saves
+  const own = partOf(b.root, "school").querySelectorAll("button").find((x) => b.textOf(x) === "Type my own");
+  own.dispatch("click");
+  const box = partOf(b.root, "school").querySelector('[name="schoolYearly"]');
+  assert.ok(box, "the box opens in place");
+  assert.match(b.textOf(box.closest("label") ?? box.parentNode), /saved when you leave the box/);
+  // the plan changed only there
+  const before = familyPlan(T13), after = structuredClone(a.saved[0]);
+  delete after.whatIfs.college.schoolYearly;
+  assert.deepEqual(after.whatIfs.college, before.whatIfs?.college ?? {});
+});
+
+// ---------------------------------------------------------------- invariance: nothing new typed, nothing moves (gap next 60, items 3 and 4)
+test("invariance: the three rows' fields change nothing compute() or educationTarget() say, over every invented household", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { educationTarget } = await import("./compute.js");
+  const KEYS = ["growth", "returnRate", "inflation", "children", "costYear", "aotc", "generic"];
+  const plans = [familyPlan(T13), renterDebtPlan(), retiredCouplePlan(T13), migrate(emptyPlan()), inCollege(), customBlank(), ...ARCHETYPES.map((a) => a.build())];
+  let kids = 0, rows = 0;
+  for (const p0 of plans) for (const today of [T13, T8]) {
+    const p = migrate(structuredClone(p0));
+    const a = JSON.stringify([compute(p, { today }), compute(p, { today, previews: null }), educationTarget(p, { today })]);
+    const q = structuredClone(p);
+    q.whatIfs = { ...(q.whatIfs ?? {}), college: { ...(q.whatIfs?.college ?? {}), stateDeduction: 5000, stateRate: 0.05, loanRate: 0.07, schoolYearly: 10000 } };
+    assert.equal(JSON.stringify([compute(q, { today }), compute(q, { today, previews: null }), educationTarget(q, { today })]), a, "the new fields are read only by the new rows");
+    for (const k of Object.keys(compute(p, { today }))) assert.ok(KEYS.includes(k), `no new key: ${k}`);
+    kids += compute(p, { today }).children.length;
+    // with nothing typed, the rows ask or use the page's own figures (never a figure of ours as the person's)
+    const sb = saveOrBorrow(p, { today }), tb = stateBreak(p, { today }), sf = schoolFirst(p, { today });
+    if (sb) { rows++; assert.equal(sb.example, true); }
+    if (tb) assert.ok(["none", "ask"].includes(tb.case), tb.case);
+    if (sf) assert.equal(sf.case, "ask");
+  }
+  assert.ok(kids >= 20 && rows >= 10, `${kids} children, ${rows} plans with the rows`);
 });

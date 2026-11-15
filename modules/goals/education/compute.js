@@ -313,3 +313,50 @@ export function saveOrBorrow(plan, { today = null, d = null, loanRate } = {}) {
   });
   return { loanRate: L, example: t === null, termYears: LOAN.years, returnRate: R, children };
 }
+
+/**
+ * 529 money for school before college (map U6): up to $20,000 a year for each child from 2026, $10,000 before; tuition,
+ * curriculum, books, tutoring and more, kindergarten to grade 12, at a public, private or religious school. IRS Topic no.
+ * 313, Qualified tuition programs (QTPs), https://www.irs.gov/taxtopics/tc313 (page updated 2026-11-09, read 2026-11-15):
+ * "limited up to a total amount of $20,000 per year ($10,000 limit before Dec. 31, 2025) from all of the designated
+ * beneficiary's QTPs". Kindergarten to grade 12 is 13 school years (`grades`).
+ */
+export const SCHOOL = { limit: 20000, before: 10000, from: 2026, grades: 13, read: "2026-11-15", source: "https://www.irs.gov/taxtopics/tc313" };
+
+/**
+ * School before college: what paying A a year of a child's school from the 529 leaves for college (map U6).
+ *   the school years: y from max(first, startYear - 13) to startYear - 1, where first is this year's school year while its
+ *     fall bill (August 15) is still ahead, else next year's
+ *   A = min(the amount picked, SCHOOL.limit) (`yearly`); each school year y pays A_y = min(the amount picked, the limit of
+ *     its tax year y: SCHOOL.limit from SCHOOL.from, SCHOOL.before earlier; critic q4 M4, reached only with a date before
+ *     2026); lost = sum over those years of A_y x (1 + R / 12)^(12 x (startYear - y)) (each payment, August 15 of its year,
+ *     and what it would have grown to by the first college bill, at the plan's return R)
+ *   newMonthly = pmtToReach(R / 12, months left, atStart x share + lost, set aside): the monthly that still covers college
+ *   empty: nothing set aside for the child and nothing going in (the 529 holds nothing to pay school from yet: the row
+ *     says how much to put in for both, not how much less college gets; critic q4 P6)
+ * The amount is `whatIfs.college.schoolYearly` (null: not picked; 0: "None"), for each child.
+ * -> null (no child still to start with a school year before college) | { limit, before, from, yearly, picked, capped,
+ *   returnRate, case: "ask" | "none" | "one" | "several", children: [{ id, name, startYear, first, last, firstLabel,
+ *   lastLabel, years, lost, neededMonthly, newMonthly, saved, putMonthly, empty }] }
+ */
+export function schoolFirst(plan, { today = null, d = null, yearly } = {}) {
+  const dd = d ?? compute(plan, { today });
+  const year = today ? Number(String(today).slice(0, 4)) : COST_YEAR + 1;
+  const first = today && String(today).slice(5, 10) >= BILLS.fall ? year + 1 : year;
+  const kids = toStart(dd).map((c) => ({ c, from: Math.max(first, c.startYear - SCHOOL.grades) })).filter((k) => k.c.startYear > k.from);
+  if (!kids.length) return null;
+  const picked = typedOf(yearly !== undefined ? yearly : plan.whatIfs?.college?.schoolYearly);
+  const A = picked === null ? null : Math.min(SCHOOL.limit, Math.max(0, picked));
+  const R = dd.returnRate, r = R / 12;
+  const children = kids.map(({ c, from }) => {
+    const years = c.startYear - from;
+    let lost = 0;
+    if (A) for (let y = from; y < c.startYear; y++) lost += Math.min(A, y >= SCHOOL.from ? SCHOOL.limit : SCHOOL.before) * Math.pow(1 + r, 12 * (c.startYear - y));
+    const neededMonthly = Math.max(0, c.neededMonthly ?? 0);
+    const putMonthly = Math.max(0, Number(c.monthly) || 0), saved = Math.max(0, Number(c.saved) || 0);
+    return { id: c.id, name: c.name, startYear: c.startYear, first: from, last: c.startYear - 1, firstLabel: label(from), lastLabel: label(c.startYear - 1), years, lost, neededMonthly,
+      newMonthly: A ? Math.max(0, pmtToReach(r, c.monthsLeft, c.atStart * c.share + lost, c.saved)) : neededMonthly, saved, putMonthly, empty: saved < 0.5 && putMonthly < 0.005 };
+  });
+  return { limit: SCHOOL.limit, before: SCHOOL.before, from: SCHOOL.from, yearly: A, picked, capped: picked !== null && picked > SCHOOL.limit, returnRate: R,
+    case: A === null ? "ask" : A === 0 ? "none" : children.length === 1 ? "one" : "several", children };
+}

@@ -253,3 +253,80 @@ borrowing; $486.65 less, under 1%: about the same. Save keeps the row open and s
 words, "Saved. At 5% a year: $1,340 a month for 10 years after college." (`borrowSaved`; each child's payment when there
 are several; "Saved. Nothing to borrow." when nothing is), with the sentences under it, once (R7, R17, critic q4 P2; test
 "save or borrow, the page S11"). Tests: module.test.mjs "save or borrow", "critic q4 M1".
+
+## School before college (gap list, next 60, item 4, second half; map U6; 2026-11-15)
+One quiet row in "Good to know", **"School before college"** (kind `item`), shown while a child still to start college has a
+school year left before it. Its first line is the brief's "one line": "529 money can also pay up to $20,000 a year of a
+child's school before college, kindergarten to 12th grade: tuition, books and tutoring at a public, private or religious
+school (from 2026; $10,000 before). That is the federal rule: your state may tax this money differently." (The second
+sentence, critic q4 M2: secondary sources read 2026-11-15 say many states do not follow the federal K-12 limit for their own
+tax; no state's rule was read at its source, so the line says only that the state may differ.) It sits inside the row rather than as a bullet, the builder's choice: the page's first
+view was already over its words budget (179 then), and the row's title says what is inside. Then the question "How much a
+year from the 529 for school:" as chips ("None", "$5,000", "$10,000", "$20,000, the most", "Type my own", R23: the old and
+the new limit among them), with a gray line above them on which is usual ("None is usual with a public school (no
+tuition). Pick an amount for private school or tutoring.", `SCHOOL_HINT`, critic q4 P6: a plain fact, no share of families
+claimed), saved at once on a tap (`whatIfs.college.schoolYearly`, one amount a year for each child), and the answer. "Type
+my own" opens one box labelled "A year for school, saved when you leave the box" (critic q4 P5: `choice()` commits on the
+box's change, and there is no Save to tap).
+Shut, it says nothing until an amount is picked ("set by you").
+Once picked it cannot go back to "not picked" (critic q4 M6, left): "None" gives the same answer, and the status says
+"set by you", which is true.
+
+**The figure, read at its source.** IRS Topic no. 313, Qualified tuition programs (QTPs),
+https://www.irs.gov/taxtopics/tc313 (page "Last Reviewed or Updated: 09-Nov-2026", read 2026-11-15): the expenses for a
+child's enrollment or attendance at an elementary or secondary public, private or religious school ("kindergarten through
+grade 12": tuition, curriculum and curricular materials, books, tutoring outside the home, test fees, dual enrollment,
+therapies for students with disabilities) "are limited up to a total amount of $20,000 per year ($10,000 limit before Dec.
+31, 2025) from all of the designated beneficiary's QTPs". Also read the same day, and still at $10,000 because they cover
+2025: Publication 970 (2025), chapter 7, https://www.irs.gov/publications/p970 (updated 2026-04-30; its early draft for 2025
+returns says the same), and "529 plans: Questions and answers", https://www.irs.gov/newsroom/529-plans-questions-and-answers
+(updated 2026-01-30). The law that changed it (the 2025 act) was not read on congress.gov; the IRS page is the source.
+Constants: `SCHOOL = { limit: 20000, before: 10000, from: 2026, grades: 13, read, source }` in compute.js; check it each year.
+
+`schoolFirst(plan, { today, d?, yearly? })` (pure; `compute()` is not changed), for each child still to start:
+- school years: y from max(first, startYear - 13) to startYear - 1. `first` is this calendar year's school year while its
+  August 15 is still ahead, else next year's (the page's own fall bill, `BILLS.fall`); 13 = kindergarten to 12th grade.
+- A = min(the amount picked, $20,000). lost = sum over those years of A_y x (1 + R/12)^(12 x (startYear - y)): each
+  payment, made August 15 of its school year, and what it would have grown to by the first college bill at the plan's
+  return R. A_y = min(the amount picked, the limit of tax year y): $20,000 from 2026, $10,000 for a school year paid in 2025
+  (critic q4 M4; reached only with a date before 2026).
+- newMonthly = pmtToReach(R/12, months left, at the first bill x share + lost, set aside): the monthly that still covers
+  college as planned with those payments out (the same formula as the card's own monthly, with the payments added).
+- empty: nothing set aside for the child and nothing going in. Then there is no 529 money to pay school from yet, and "less
+  for college" would read oddly beside "$0 set aside" (critic q4 P6): the sentence says how much to put in for both.
+- Not modelled: whether the 529 holds the money when a school bill comes (an early year can ask for more than is in it);
+  a state's own rules on 529 money for school (some states tax it); the extra the person pays above $20,000 (counted as
+  $20,000, and the row says "The most that counts is $20,000 a year").
+
+One sentence per case (`schoolSentence`, `schoolChild`, view.js; each has a module test):
+| case | sentence |
+|---|---|
+| ask (nothing picked) | "Pick an amount a year to see how much less that leaves for college." |
+| none ("None") | "Nothing taken out for school: college keeps all of it." |
+| one child | "Paying $10,000 a year of Cy's school from the 529, 11 school years from 2027-28 to 2037-38, leaves about $161,420 less for college in 2038, at the plan's 6.1% a year. To pay for both, put in about $1,530 a month instead of $740." |
+| one child, nothing set aside or going in | "Nothing is set aside for Cy yet. To pay $10,000 a year of school from a 529, 11 school years from 2027-28 to 2037-38, and still cover college, put in about $1,570 a month instead of $780." |
+| several | "Paying $10,000 a year of each child's school from the 529, at the plan's 6.1% a year:" and a line each, "Bo: 7 school years from 2027-28 to 2033-34, about $89,950 less for college in 2034; for school and college, $1,920 a month instead of $1,160." (with nothing set aside or going in: "Cy: nothing set aside yet; to pay 11 school years from 2027-28 to 2037-38 and college, $1,570 a month instead of $780.") |
+A single school year reads "the 2026-27 school year".
+
+By hand, the family on 2026-11-13 ($10,000 a year, 2027-28 to 2037-38, R = 6.1%): sum of 10,000 x (1.0050833)^(12 x
+(2038 - y)) for y = 2027 to 2037 = $161,417.62 (shown $161,420); the monthly that still covers college: pmtToReach(0.0050833,
+141, $160,696.35 + $161,417.62, $4,000) = $1,528.52 (shown $1,530) instead of $742.60 ($740). A chip tap keeps the row open
+and says, inside it, the new monthly in a few words, "Saved. $10,000 a year for school: put in about $1,530 a month to pay
+for both." (`schoolSaved`; each child's monthly when there are several; "Saved. Nothing taken out for school." for None),
+with the full sentence under the chips, once (R7, R17, critic q4 P2; test "school before college, the page S11"). Tests:
+module.test.mjs "school before college", "critic q4 M4", "critic q4 P6".
+
+## The three rows together (gap list, next 60, items 3 and 4)
+- Order in "Good to know": Save or borrow, Your state's tax break, School before college, How fast prices rise. All are
+  kind `item` like the row that was there, so they are not counted against R12's five parts (the first-view check's S2
+  leaves items out); with one child the page has five rows in all, each further child adds its own row in its own card.
+- Each saves only its own fields and keeps only itself open after a save (R17); its green line is inside it, where the
+  Save or the chip was tapped, and names the new answer in a few words, the full sentence staying under it (R7; critic q4
+  P2: the green line had repeated the whole answer, nine lines for two children, right above the same words). The other
+  saves on the page (a child's college, the growth row) still say theirs at the top, as before.
+- Invariance: `compute()` and `educationTarget()` give the same bytes with the four new fields set or absent, over the
+  fixtures, the round-8 household in college and every `qa/households` archetype, at two dates (module test
+  "invariance"); and the same bytes as at 81a5288, the commit this work started from (a one-off comparison of 54 plans
+  and dates, in the builder's log).
+- First view: 190 words before (the counts file's entry), 176 after (entry 180), figures 14 before and after; no box,
+  tile or filled button added.

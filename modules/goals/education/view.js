@@ -1,9 +1,9 @@
 // modules/goals/education/view.js -- DOM only. Each child's college: what it would cost when they get
 // there, what is set aside, the monthly saving that covers the share you choose, and how much today's
 // saving covers; the kind of college and the share per child in a fold; a button to set the goal.
-import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount, previewsOf, stateBreak, STATE_EXAMPLE, saveOrBorrow, LOAN } from "./compute.js";
+import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount, previewsOf, stateBreak, STATE_EXAMPLE, saveOrBorrow, LOAN, schoolFirst, SCHOOL } from "./compute.js";
 import { previewText } from "../house/compute.js";
-import { part } from "../../../core/ui/more.js";
+import { part, choice } from "../../../core/ui/more.js";
 
 let pending = null;   // the confirmation shown on the next render: { text, part } (the part just saved stays open, R17)
 
@@ -119,6 +119,43 @@ export function borrowSaved(sb, money) {
   return owing.length === 1 ? `${at}: ${money(owing[0].payment)} a month for ${sb.termYears} years after college.`
     : `${at}: ${owing.map((k) => `${k.name} ${money(k.payment)} a month`).join(", ")}, for ${sb.termYears} years after college.`;
 }
+/** School before college's first line: the federal limit, read at irs.gov (README "School before college"). Pure. */
+export function schoolLine(money) {
+  return `529 money can also pay up to ${money(SCHOOL.limit)} a year of a child's school before college, kindergarten to 12th grade: tuition, books and tutoring at a public, private or religious school (from ${SCHOOL.from}; ${money(SCHOOL.before)} before). That is the federal rule: your state may tax this money differently.`;
+}
+/** Which amount is usual, under the question (critic q4 P6). Pure. */
+export const SCHOOL_HINT = "None is usual with a public school (no tuition). Pick an amount for private school or tutoring.";
+/** A child's school years in words: "11 school years from 2027-28 to 2037-38", or "the 2037-38 school year". */
+const schoolYears = (k) => (k.years === 1 ? `the ${k.firstLabel} school year` : `${k.years} school years from ${k.firstLabel} to ${k.lastLabel}`);
+/** School before college's answer, one written out for each case (schoolFirst's `case`); several children: the line before the list. Pure. */
+export function schoolSentence(sf, money) {
+  const k = sf.children[0], pct = `${(sf.returnRate * 100).toFixed(1)}%`;
+  switch (sf.case) {
+    case "ask": return "Pick an amount a year to see how much less that leaves for college.";
+    case "none": return "Nothing taken out for school: college keeps all of it.";
+    // nothing set aside and nothing going in: there is no 529 money to pay school from yet (critic q4 P6)
+    case "one": return k.empty
+      ? `Nothing is set aside for ${k.name} yet. To pay ${money(sf.yearly)} a year of school from a 529, ${schoolYears(k)}, and still cover college, put in about ${money(k.newMonthly)} a month instead of ${money(k.neededMonthly)}.`
+      : `Paying ${money(sf.yearly)} a year of ${k.name}'s school from the 529, ${schoolYears(k)}, leaves about ${money(k.lost)} less for college in ${k.startYear}, at the plan's ${pct} a year. To pay for both, put in about ${money(k.newMonthly)} a month instead of ${money(k.neededMonthly)}.`;
+    case "several": return `Paying ${money(sf.yearly)} a year of each child's school from the 529, at the plan's ${pct} a year:`;
+    default: return "";
+  }
+}
+/** One child's line under the several-children sentence. Pure. */
+export function schoolChild(k, money) {
+  return k.empty
+    ? `${k.name}: nothing set aside yet; to pay ${schoolYears(k)} and college, ${money(k.newMonthly)} a month instead of ${money(k.neededMonthly)}.`
+    : `${k.name}: ${schoolYears(k)}, about ${money(k.lost)} less for college in ${k.startYear}; for school and college, ${money(k.newMonthly)} a month instead of ${money(k.neededMonthly)}.`;
+}
+/** School before college's green line after a pick (R7, critic q4 P2): the new monthly that pays for both. Pure. */
+export function schoolSaved(sf, money) {
+  if (sf.case === "none") return "Nothing taken out for school.";
+  if (sf.case === "one") return `${money(sf.yearly)} a year for school: put in about ${money(sf.children[0].newMonthly)} a month to pay for both.`;
+  if (sf.case === "several") return `${money(sf.yearly)} a year for each child's school: ${sf.children.map((k) => `${k.name} ${money(k.newMonthly)} a month`).join(", ")} for school and college.`;
+  return "";
+}
+/** The chips: none, then from low to the most that counts (the limit before 2026 among them). */
+export const SCHOOL_CHIPS = [{ value: 0, label: "None" }, { value: 5000, label: "$5,000" }, { value: SCHOOL.before, label: "$10,000" }, { value: SCHOOL.limit, label: "$20,000, the most" }];
 /** The sentence that moved from "Good to know" into the state row (it stays in the list when there is no row). */
 export const STATE_CHECK = "Many states take money put into a 529 off state income tax: check your state's plan first, it says how much.";
 
@@ -269,6 +306,24 @@ export function render(page, ctx) {
         pending = { part: "borrow" };
         store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), loanRate: v.loanRate ?? null }; });
       }, { submitLabel: "Save" })] });
+  // School before college (gap list, next 60, item 4): while a child has a school year left before college; one amount a
+  // year for each child, picked with a chip (saved at once, never per keystroke) or typed
+  const sf = d.children.length ? schoolFirst(plan, { today: fmt.today(), d }) : null;
+  const schoolRow = sf && part(ctx, { id: "school", kind: "item", title: "School before college", set: given(w.schoolYearly), open: said?.part === "school", holds: ["schoolYearly"], body: () => [
+    savedHere("school", schoolSaved(sf, money)),
+    ui.h("p", { class: "ed2-d" }, schoolLine(money)),
+    ui.h("p", {}, "How much a year from the 529 for school:"),
+    ui.h("p", { class: "muted small" }, SCHOOL_HINT),
+    // the typed box saves when it is left (choice() commits on change): its label says so (critic q4 P5)
+    choice(ctx, { id: "schoolYearly", label: "How much a year from the 529 for school", presets: SCHOOL_CHIPS, value: given(w.schoolYearly) ? Number(w.schoolYearly) : null,
+      own: { type: "money", name: "schoolYearly", label: "A year for school, saved when you leave the box", min: 0, max: SCHOOL.limit },
+      onPick: (v) => {
+        pending = { part: "school" };
+        store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), schoolYearly: v ?? null }; });
+      } }),
+    ui.h("p", {}, schoolSentence(sf, money)),
+    ...(sf.case === "several" ? [ui.h("ul", {}, sf.children.map((k) => ui.h("li", {}, schoolChild(k, money))))] : []),
+    sf.capped ? ui.h("p", { class: "ed2-d" }, `The most that counts is ${money(SCHOOL.limit)} a year: this counts that.`) : null] });
   if (d.children.length) root.append(ui.card("Good to know", ui.h("ul", {},
     // the state clause lives in its row when there is one (moved, never deleted)
     ui.h("li", {}, tb ? "A 529 plan grows tax-free when spent on college." : "A 529 plan grows tax-free when spent on college, and many states take contributions off state income tax: check your state's plan first."),
@@ -280,7 +335,7 @@ export function render(page, ctx) {
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
     // how fast prices rise: its box, with what the rate does to the first child's first year, one quiet row (its title as
     // before; an item part with its own name: the page's one row about all the children, beside one row per child)
-    ui.h("div", { class: "folds" }, borrowRow || null, stateRow || null, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
+    ui.h("div", { class: "folds" }, borrowRow || null, stateRow || null, schoolRow || null, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
       ui.h("p", { class: "ed2-d" }, growthExample(d, money)),
       ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, placeholder: "", help: `Left empty, we count ${(DEFAULT_GROWTH * 100).toFixed(0)}% a year.` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = { text: "Saved.", part: "growth" };
