@@ -7,7 +7,9 @@
 Everything the Projection page reads (`buildInputs`), `household.filingStatus`, `retirement.taxMode`, `retirement.withdrawalOrder`, `retirement.rothConversion`, `retirement.gainShare` / `dividendYield`; `real` (page state: today's dollars or nominal).
 
 ## Outputs
-For a state with rules in `core/math/state-tax.js` (gap #40) also `rows[].state`, `totals.state` and `state: { code, name,
+With `gains: true` (the page passes it; the Tax report, the export and the tests that do not get exactly the output of
+before) also `gains`: the long-term gain each retirement year could take at the 0% rate (section "Gains you could take
+tax-free" below). For a state with rules in `core/math/state-tax.js` (gap #40) also `rows[].state`, `totals.state` and `state: { code, name,
 none, total, average, zeroYears, rules, yearWords, indexed, local }`; for any other state these keys are absent and the
 output is byte for byte what it was (`compute(plan, { stateBrackets: false })` is the old code, tests/state-tax-invariance.test.mjs).
 `rows[]` for the retirement years (ordinary income, Social Security and the taxable part, gains and dividends, deduction, taxable income, bracket, tax, effective rate, conversion, RMD), `totals`, `average`, `peak` (the biggest year and what drives it), `byBracket`, `flatTaxes` (what the flat setting would charge over the same years), `zeroYears`, `success` / `failYear`.
@@ -22,6 +24,10 @@ Working years are not taxed by the engine (wages and their tax are outside the p
 `tests/tax-pages.test.mjs`, `tests/retirement.test.mjs` (brackets mode), `module.test.mjs`.
 
 ## Ideas / not yet
+- Gains at 0%: "plan to take $X in year Y" (the brief's own optional step, not built: information only); one search over
+  withdrawal order, conversions and gain harvesting together (gap next-60 #23); the shares' own cost from Holdings or Tax lots
+  in place of the plan's gain share; the step-up at death (shares kept for life lose their gain at death, so taking it early
+  only helps for shares that will be sold).
 - Medicare premiums and the IRMAA surcharge as a cost line.
 - The state tax in the projection's own spending (Will the money last?): today it is shown here only, next to the federal
   tax the engine pays; putting it into the engine would move every projection answer and is its own design.
@@ -197,3 +203,121 @@ mix (the month's taxes, Budget's `yearTaxes`, do use it). Retirement years count
 not applied: the figure may be a little high for a New York or federal retiree. A person counts as 59½ from the year they
 turn 60. Roth conversions are not counted toward New York's $20,000 (not read at the source); Illinois leaves them out (its
 Line 5 names Form 1040 line 4b, where conversions are reported).
+
+## Gains you could take tax-free (gap list, next 60, item 25, 2026-11-15)
+**What the person sees.** First view: one quiet row more, in one card with "How this is worked out" (R12: parts as rows of
+one card, `more` before `how`): "Gains you could take tax-free", its status the years with room ("29 years with room", "1 year
+with room", "no room"). The row is drawn only when some retirement year starts with money in taxable accounts and the plan
+counts some of it as gain (no shares, or no gain in them: nothing to take).
+Opened (`gainsBody` in view.js, words in compute.js `gainsWords` / `gainsYearLine` / `gainsStatus`, one written sentence per
+case, each tested): the 0% line and what "room" means ("Federal tax on the profit from shares held more than a year is 0%
+while your taxable income stays under $98,900 (the 2026 line, rising with prices). What is left under that line in a year is
+its room."); the answer: the profit the plan counts and the years whose room would cover it ("We assume about half of what
+your taxable accounts hold is profit: about $60,000 in 2026. The room in 2026 alone would cover it."); the next five years
+with room, in date order, as records (year, ages, that year's room; a second line only when taking all of it costs $50 or
+more: "$437 more tax on Social Security" (or "$55 more tax: a smaller deduction for 65 and over", "... the 3.8% tax on
+investment income", or several), "$4,458 North Carolina tax", "marketplace help stops past $34,769", "Medicare premiums go up
+past $80,274"); the years at or past the line; what taking it buys (a higher cost, so less tax later; the 30-day wait is only
+for shares sold at a loss, ask a tax preparer); "What to watch:" with one sentence for each catch that taking that profit, in
+those years, runs into (more federal tax and why, marketplace help, Medicare's surcharge two years later, the state); "Nothing
+here changes your plan."; and, last, the next step: "What would selling some shares this year cost?" (Capital gains). No box,
+no button, nothing saved. No sum of the room over the years is said: it is not gain anyone holds (fix round, critics M1, P1).
+
+**First view, before and after** (`node qa/first-view-node.mjs taxes/projection`, worst household): words 367 -> 350, money and
+% figures 60 -> 60, boxes 1, tiles 4, filled buttons 0, parts 2 -> 3. The one new part is this row, which the brief asks
+for. To keep the words from rising, the hero's sentence "Brackets and deductions rise with the plan's inflation rate. By law
+the Social Security thresholds do not, so more of the benefit gets taxed over time." moved into "How this is worked out"
+(it is how the tax is worked out); the state's sentence stays in sight (R9). The status is a count of years, not money, and
+the title has no "0%" in it, so the figure count stays at 60. "More on this" keeps its three rows: the Capital gains question
+is the row's own last line.
+
+**Formulas** (`compute.js`: `zeroTop`, `zeroRoom`, `agiRoom`, `gainsRoom`).
+- The 0% line (IRC 1(h)(1)(B), 1(j)(5)(B)): taxable income up to the "maximum zero rate amount" pays 0% on long-term gains and
+  qualified dividends, which stack on top of ordinary income (Qualified Dividends and Capital Gain Tax Worksheet). Later years:
+  the 2026 table raised with the plan's inflation, rounded to $50 (`paramsFor`), as every bracket on this page.
+- Room in a year = the largest g >= 0 with taxable income (that year's return, g more of long-term gain) at or under the line,
+  whole dollars rounded down. The return is the engine's own (core/math/retirement.js taxFor: ordinary income = pensions, a
+  partner's pay, pre-tax withdrawals, required withdrawals, conversions; qualified = the gain share of taxable withdrawals and
+  the dividends; Social Security; people 65 or over; no itemizing), so "before" is each row's taxable income to the cent (a
+  test checks it). A search (`largestAtOrUnder`), not a subtraction: the gain also pulls Social Security into tax (IRC 86, up to
+  85 cents a dollar while it phases in) and, 2025 to 2028, shrinks the senior deduction past $75,000 / $150,000 of AGI.
+  By hand, one person of 66 in 2026 with a $20,000 pension and $30,000 of Social Security: $5,350 of it taxed, AGI $25,350,
+  deduction $16,100 + $2,050 + $6,000 = $24,150, taxable $1,200. Each $1 of gain adds $1.85 until 85% of the benefit ($25,500)
+  is taxed, at $23,705.88, then $1: room = $49,450 - ($20,000 + $25,500 - $24,150) = $28,100; $20,150 more Social Security
+  taxed; tax $120 -> $2,314 (10% x $12,400 + 12% x $8,950 on the $21,350 of ordinary taxable income): $2,194 more.
+- A year's extra federal tax (`extraTax`) = total tax with all the room - without: the Social Security (`ssMore`),
+  senior-deduction (`seniorLost`) and 3.8% investment income tax (`niitMore`) effects, each named in words when it is a cause
+  (the gain itself is in the 0% band by construction). The 3.8% tax starts at $200,000 of AGI ($250,000 joint, IRC 1411(b)),
+  a line the law never raises with prices (the app's `niitThreshold`, modules/taxes/federal README), while the 0% line and the
+  deduction do: in 2026 the line plus the deduction ($65,550 alone, $131,100 joint) is far under it, but at 2.5% a year the
+  couple's passes $250,000 in the 2050s (the invented family's 2055: about $2,500 more tax in that year's dollars, all of it this tax; the first
+  build named it "more tax on Social Security"). By hand at 3.1 times 2026's prices, one person with a $100,000 pension: room
+  $103,200, AGI $203,200, 3.8% x $3,200 = $121.60 more. By hand, head of household,
+  65, 2026, $40,000 pension: deduction $24,150 + $2,050 + $6,000, taxable $7,800, tax $780; past $75,000 of AGI each $1 of gain
+  adds $1.06 of taxable income (6% of it comes off the senior deduction), so 1.06 x AGI - $36,700 = $66,200: AGI $97,075.47,
+  room $57,075; the deduction loses 6% x $22,075 = $1,324.50; tax $912.45 (10% of the $9,124.50 of ordinary taxable income
+  left under the gain): $132.45 more.
+- Gain the plan counts = `retirement.gainShare` (0.5 when not set: the share of a taxable sale the engine taxes as gain) x the
+  taxable accounts as the first listed year starts; at 0 (or under $1) there is no row.
+- What is taken (`taken`, fix round, critics M1, M2): that gain, in date order through the years with room, each year up to
+  its room (all the room, when the room never adds up to it). Cover year = the last year taken when the gain is all taken.
+  "What to watch" is worked on what is taken, never on room the plan has no gain for: per year taken, federal tax, state tax
+  and AGI with `qualified + taken` (the year's own dollars), less without. Retired couple: $60,000 in 2026 (of $80,580 of
+  room), $437 more federal tax; household 09: $100,477 in 2030, about $3,650 of North Carolina tax (the first build said
+  $60,818 "over the plan, if you took all the room"); household 14: 2031, 2032 and $29,025 of 2033, Medicare's line passed in
+  2031 and 2032 only.
+- Amounts under $50 (`GAINS_SMALL`) are not said, on a year's line or in "What to watch" (critic P7).
+- Medicare (two years later): the years y where someone is 65 or over in y + 2 (`medicareYears`, the Medicare page's rule); the
+  line is the first surcharge tier for the filing status (CMS 2026: $109,000, $218,000 joint; retirement/medicare/data, as the
+  app holds it) times the year's prices. Past it = AGI with all the room over the line; then `agiRoom` gives the gain that keeps
+  AGI under it. Inside the 0% room AGI is at most the line + the deduction (2026: $73,600 alone, $146,400 for a couple, both
+  65+), under the surcharge's line, except for a qualifying surviving spouse, who has the joint 0% line and the single surcharge
+  line (household 14: every year past it).
+- Marketplace help (before 65): retirement/healthcare's own years and line (`marketplaceLines` in roth-conversions/ceiling.js);
+  its income is AGI plus untaxed Social Security (26 USC 36B(d)(2)(B)), which a gain raises $1 for $1, so the gain before the
+  help stops = the line (today's dollars x the year's prices) - that income. A year already past the line is not named (no help
+  left to lose); filing separately has no help (`creditAllowed`), so none is named.
+- The state: the page's own `stateYear` with the year's gains and dividends (and the federal taxed Social Security) raised by
+  the room, less without; a state without rules here says it is not counted; a state with no income tax says nothing.
+
+| figure | value | source (read 2026-11-15) |
+|---|---|---|
+| 0% line, 2026 | $98,900 joint and surviving spouse; $49,450 separately; $66,200 head of household; $49,450 all others | IRS Rev. Proc. 2025-32, sec. 4.03 "Maximum Capital Gains Rate", https://www.irs.gov/pub/irs-drop/rp-25-32.pdf (already the app's `ltcgBrackets[0]`, modules/taxes/federal/data/federal.js) |
+| standard deduction, 2026 | $16,100; $32,200 joint; $24,150 head of household; $1,650 more each 65 or over, $2,050 unmarried | same, sec. 4.14 (the app's table; used in the hand checks) |
+| 0% line, 2027 (not used) | $102,100 joint and surviving spouse; $51,050 separately; $68,350 head of household; $51,050 all others | IRS Rev. Proc. 2026-35, sec. 4.03, https://www.irs.gov/pub/irs-drop/rp-26-35.pdf. The federal table is generated by tools/extract-tax.mjs and a 2027 year would move every projection answer, so the page keeps its own indexing: at 2.5% inflation its 2027 line is $101,350 joint and $50,700 alone, so 2027's room reads about $750 / $350 low |
+| long-term | held more than 1 year | IRS Pub. 550 (2025), "If you hold investment property more than 1 year, any capital gain or loss is a long-term capital gain or loss", https://www.irs.gov/publications/p550 |
+| buying back at once | the wash-sale rule is about losses only | same: "A wash sale occurs when you sell or trade stock or securities at a loss and within 30 days before or after the sale you..." |
+
+**Builder's choices.**
+- Information only, as the brief says: the plan does not take the gains, and the engine does not follow the shares' cost, so
+  each year's room is worked on that year alone. Summed over the plan it is room, not gain the person will have, so no sum is
+  said (fix round): the answer is the gain the plan counts and the years that would cover it, and what it costs is worked on
+  that gain.
+- The list is the next five years with room in date order (critic P2: biggest first put "ages 100 / 97" fourth and read as a
+  plan); each record shows that year's whole room, which can be more than the gain held (the answer above it says how much).
+- A year with room under $1 (only in today's dollars, where a $1 room shrinks with prices) counts with the years at or past
+  the line, and the sentence says "at or past" (critic M3).
+- "What to watch" says only the catches that apply to what is taken: no "It does not raise your Medicare premiums" line
+  (critic P5). Buying back: the wash-sale rule is for "stock or securities" sold at a loss (Pub. 550), so the sentence says
+  shares and sends the person to a tax preparer (critic P6).
+- Only years that start with money in taxable accounts are listed (no shares, nothing to sell); with none, no row.
+- Married filing separately: the engine works one return on the separate schedule for the household (as the rest of the page),
+  so the room is that return's.
+- The title is the brief's own ("Gains you could take tax-free"), pinned in qa/first-view-lib.mjs with its reason; the first
+  sentence says the 0% is federal tax, and "What to watch:" names what taking the gain can still cost.
+- The Medicare and marketplace lines are the ones the app already holds (no new figure): Medicare's in today's dollars times
+  prices, the marketplace's from the Healthcare page. Tax-exempt interest, which both count, is not in the engine's return.
+- Not said: the step-up at death and the shares' real cost (README "Ideas").
+
+**Tests** (module.test.mjs, "next-60 #25"): the 0% line per status; `zeroRoom` by hand for one person ($33,550), a couple of
+65 and over ($81,400), a year with Social Security ($28,100, $20,150, $2,194), a head of household whose senior deduction
+shrinks ($57,075, $1,324.50, $132.45), years already over the line (0), an unused
+deduction ($60,550), one dollar more crossing the line; `agiRoom` by hand ($18,729); the 3.8% tax inside the band by hand
+($121.60) and on the family's 2055; the engine's taxable income per row; what is taken never passing the gain held or a
+year's room, its costs only in the years taken and never the summed room in words (every household, both kinds of dollars);
+the retired couple, household 14 (Medicare and marketplace on what is taken), 12 (every year over), 09 (North Carolina at
+3.99%, at most 3.99% of the gain held), real against nominal, no taxable money or no gain (no row); every sentence case; the
+view (S11: one shut row, the answer before the list, date order, no box, nothing saved, the Capital gains question last,
+"More on this" as before); invariance over every fixture plan, the 14 households and the phone households (with or without the
+row, every other key byte for byte).
+

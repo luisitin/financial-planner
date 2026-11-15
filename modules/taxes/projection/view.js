@@ -1,10 +1,11 @@
 // modules/taxes/projection/view.js -- DOM only. Lifetime tax and the worst year first, the tax
 // line over the years, then the year-by-year table (a list on the phone: six years, then "N more years"). Simple first
-// (core/ui/more.js, docs/OPTIONAL.md): how the tax is worked out, the state's rules among it (gap design #40), is one
-// quiet part; "More on this" links the pages that go deeper.
+// (core/ui/more.js, docs/OPTIONAL.md): the gains each year could take at 0% (gap list, next 60, item 25) and how the tax is
+// worked out, the state's rules among it (gap design #40), are two quiet rows of one card; "More on this" links the pages
+// that go deeper.
 import { needItem } from "../../../core/words.js";
-import { part, rest, links } from "../../../core/ui/more.js";
-import { compute, stateLine, stateNames, stateNameOf } from "./compute.js";
+import { parts, rest, links } from "../../../core/ui/more.js";
+import { compute, stateLine, stateNames, stateNameOf, GAINS_TITLE, gainsStatus, gainsWords, gainsYearLine } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 import { statusLabel } from "../../../core/math/tax.js";
 
@@ -13,7 +14,7 @@ const state = { real: true };
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
   const cur = plan.meta.currency;
-  const d = compute(plan, { today: fmt.today(), real: state.real });
+  const d = compute(plan, { today: fmt.today(), real: state.real, gains: true });
   const money = (n) => fmt.money(n, cur);
   const redraw = () => { root.innerHTML = ""; render(root, ctx); };
   if (!d.ready && !d.noYears) {
@@ -34,7 +35,8 @@ export function render(root, ctx) {
     // one retirement year: "1 year, 2026", with no average and no biggest year (Review 2026-11-06, verifier: "1 years from 2026
     // to 2026 ... $813 a year on average ... The biggest year is 2026", as the Tax report read before this round)
     ui.h("p", { class: "lede" }, `${d.rows.length === 1 ? `1 year, ${first.year}` : `${d.rows.length} years from ${first.year} to ${last.year}`}, ${d.real ? "in today's dollars" : "in each year's dollars"}${d.rows.length === 1 ? "" : `: ${money(d.average)} a year on average`}, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak && d.rows.length > 1 ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${!d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
-    ui.h("p", { class: "muted small" }, `Brackets and deductions rise with the plan's inflation rate. By law the Social Security thresholds do not, so more of the benefit gets taxed over time. ${stateLine(d.state, money, d.rows.length === 1, d.state ? null : stateNameOf(plan.household?.state))}`),
+    // the state's one sentence stays in sight (R9: "not counted yet" is never folded); how brackets rise is under How this is worked out
+    ui.h("p", { class: "muted small" }, stateLine(d.state, money, d.rows.length === 1, d.state ? null : stateNameOf(plan.household?.state))),
   ));
   for (const n of d.notes) root.append(ui.notice("info", n));
   // the state's tax as a second line on the chart and a tile of its own when there is some (gap #40); the tile takes the place
@@ -71,8 +73,11 @@ export function render(root, ctx) {
     ], d.rows)),
     ui.h("div", { class: "only-narrow" }, ...rest(ctx, { id: "years", items: d.rows, row: recordRow, noun: "years", one: "year" })),
   ));
-  // how this is worked out: the federal steps, then the state's rules (gap #40, "New York: ...") or why there are none
-  root.append(part(ctx, { id: "how", kind: "how", card: true, says: d.state && !d.state.none ? d.state.name : "", body: () => howBody(ui, d, plan) }));
+  // two quiet rows of one card: the gains each year could take at 0% (only when some retirement year starts with gain in
+  // taxable accounts), then how this is worked out: the federal steps, then the state's rules (gap #40) or why there are none
+  root.append(ui.h("div", {}, parts(ctx,
+    d.gains && { id: "gains", kind: "more", title: GAINS_TITLE, says: gainsStatus(d.gains), body: () => gainsBody(ui, d, money) },
+    { id: "how", kind: "how", says: d.state && !d.state.none ? d.state.name : "", body: () => howBody(ui, d, plan) })));
   root.append(ui.h("div", {}, links(ctx, [
     { href: "#/taxes/state", ask: "What is my state's income tax this year?" },
     { href: "#/retirement/roth-conversions", ask: "Would moving money to a Roth lower these taxes?" },
@@ -86,6 +91,7 @@ export function howBody(ui, d, plan) {
   const s = d.state;
   const out = [
     ui.h("p", { class: "small" }, "Each year of retirement goes through that year's federal brackets: pensions, a partner's pay, money taken out of pre-tax accounts and Roth conversions as ordinary income; part of what is taken from taxable accounts as gains, with their dividends; and the part of Social Security the law taxes. The tax is paid from your savings in the plan's withdrawal order, so it counts the tax on the money taken out to pay it."),
+    ui.h("p", { class: "small" }, "Brackets and deductions rise with the plan's inflation rate. By law the Social Security thresholds do not, so more of the benefit gets taxed over time."),
   ];
   if (!s) {
     const code = String(plan.household?.state ?? "").toUpperCase();
@@ -108,4 +114,35 @@ export function howBody(ui, d, plan) {
   }
   out.push(ui.h("p", { class: "muted small" }, s && !s.none ? "Federal brackets from the IRS; the state's from its own tax department, read in November 2026." : "Federal brackets from the IRS."));
   return out;
+}
+
+/**
+ * The words inside "Gains you could take tax-free" (gap list, next 60, item 25): the line, the profit the plan counts and the years
+ * whose room would cover it, the next years with room (five at most, in date order, as records: the page's list is already the
+ * year list above), the years at or past the line, what taking it buys, what to watch when taking that profit, that nothing is
+ * saved, and the next step (critic P8, 2026-11-15: the Capital gains page, last in the part). Information only: no box, no button.
+ */
+export function gainsBody(ui, d, money) {
+  const g = d.gains, w = gainsWords(g, money);
+  const stateName = g.state && g.state.counted !== false ? g.state.name : null;
+  const who = d.people.length > 1 ? "ages" : "age";
+  const rec = (y) => {
+    const sub = gainsYearLine(y, money, stateName);
+    return ui.h("li", {},
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${y.year} · ${who} ${y.ages.join(" / ")}`), ui.h("span", { class: "rec-value" }, money(y.room))),
+      sub ? ui.h("div", { class: "rec-sub" }, sub) : null);
+  };
+  const tail = [w.total, w.over].filter(Boolean).join(" ");
+  return [
+    ui.h("p", { class: "small" }, w.intro),
+    w.held ? ui.h("p", { class: "small" }, w.held) : null,
+    g.roomYears ? ui.h("div", {}, w.label ? ui.h("p", { class: "small", style: "margin:0 0 4px" }, w.label) : null, ui.h("ul", { class: "records" }, g.next.slice(0, 5).map(rec))) : null,
+    tail ? ui.h("p", { class: "small" }, tail) : null,
+    w.buys ? ui.h("p", { class: "small" }, w.buys) : null,
+    w.watch.length ? ui.h("div", { class: "small" }, "What to watch:", ui.h("ul", { style: "margin:4px 0 0; padding-left:20px" }, w.watch.map((x) => ui.h("li", {}, x)))) : null,
+    ui.h("p", { class: "muted small" }, w.note),
+    ui.h("ul", { class: "page-list" }, ui.h("li", {}, ui.h("a", { href: "#/taxes/capital-gains", class: "row-link" },
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, "What would selling some shares this year cost?")),
+      ui.h("span", { "aria-hidden": "true", style: { color: "var(--muted)", fontSize: "22px", lineHeight: "1", alignSelf: "center" } }, "›")))),
+  ];
 }

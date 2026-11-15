@@ -1,11 +1,19 @@
 // The full checks for this page are in tests/tax-pages.test.mjs (fixture qa/fixtures/tax-plan.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, stateLine } from "./compute.js";
+import { compute, stateLine, zeroTop, zeroRoom, agiRoom, gainsWords, gainsYearLine, gainsStatus, GAINS_TITLE, GAINS_SMALL } from "./compute.js";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { paramsFor, indexParams, federalTax } from "../../../core/math/tax.js";
+import { FEDERAL } from "../federal/data/federal.js";
+import { ARCHETYPES } from "../../../qa/households/lib/catalog.mjs";
+import * as phone from "../../../qa/fixtures/phone-households.mjs";
 import { taxPlan } from "../../../qa/fixtures/tax-plan.mjs";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { stateIncomeTax } from "../../../core/math/state-tax.js";
 import { retiredCouplePlan } from "../../../qa/fixtures/retired-couple-plan.mjs";
+import { familyPlan as familyNow } from "../../../qa/fixtures/family-plan.mjs";
 
 const near = (a, b, tol = 1e-6) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
 
@@ -117,7 +125,7 @@ test("gap #40: later years: today's dollars are each year's divided by the price
   assert.equal(compute(couple("CA"), { today: NOV }).state.yearWords, "2026 brackets; the standard deduction and credits are 2025's: the 2026 ones are not out yet");
 });
 
-test("S11: the page saves nothing; its parts are the helper's (N more years, How this is worked out), shut, and say the state's rules", async () => {
+test("S11: the page saves nothing; its parts are the helper's (N more years, Gains you could take tax-free, How this is worked out), shut, and say the state's rules", async () => {
   const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
   const ui = await import("../../../core/ui/dom.js");
   const fmt = await import("../../../core/format.js");
@@ -130,8 +138,9 @@ test("S11: the page saves nothing; its parts are the helper's (N more years, How
   };
   const { root, saved } = draw(migrate(couple("NY")));
   const parts = root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
-  assert.deepEqual(parts, [["years", "more", false], ["how", "how", false]], "two parts, shut; no fold by hand");
+  assert.deepEqual(parts, [["years", "more", false], ["gains", "more", false], ["how", "how", false]], "three parts, shut; no fold by hand");
   const years = root.all().find((e) => e.dataset.part === "years"), how = root.all().find((e) => e.dataset.part === "how");
+  const gains = root.all().find((e) => e.dataset.part === "gains");
   assert.match(years.querySelector(".fold-title").textContent, /^\d+ more years$/);
   assert.equal(how.querySelector(".fold-title").textContent, "How this is worked out");
   assert.equal(how.querySelector(".fold-status").textContent, "New York");
@@ -143,7 +152,7 @@ test("S11: the page saves nothing; its parts are the helper's (N more years, How
   assert.match(textOf(how), /In later years New York's figures stay as written in its law/);
   assert.match(textOf(how), /New York City's and Yonkers' own income taxes are not counted\./);
   // outside the parts: the state's one sentence, and the dashed line named
-  const outside = textOf(root).replace(textOf(how), "").replace(textOf(years), "");
+  const outside = textOf(root).replace(textOf(how), "").replace(textOf(years), "").replace(textOf(gains), "");
   assert.match(outside, /New York income tax adds about \$[\d,]+ over the same years/);
   // the two lines' key beside the chart, and the state's total as a tile of its own in place of "A year" (fix round 1, P1 and P5)
   assert.match(outside, /Federal tax New York income tax/);
@@ -219,4 +228,333 @@ test("gap #40 stage 2: How this is worked out names the new states' rules, New J
   assert.match(how("GA"), /2026 rate and deductions; the retirement exclusion is 2025's: the 2026 one is not out yet\./);
   assert.match(how("AZ"), /The app has the income tax rules of California, New York, Illinois, Georgia, North Carolina, New Jersey and Virginia, and of the states with no income tax\. Pennsylvania, Ohio and Michigan come next\. For Arizona, the State tax page works out this year's tax from your own figures\./);
   assert.match(how("PA"), /Pennsylvania, Ohio and Michigan come next\. For Pennsylvania, the State tax page/);
+});
+
+// --- gap list, next 60, item 25: gains taken at 0% across several low-income years ------------------------------------------
+const P26 = paramsFor(FEDERAL, 2026);
+const money0 = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const one =(o) => ({ filingStatus: "single", otherOrdinary: 0, qualifiedIncome: 0, socialSecurity: 0, itemized: 0, ages65plus: 0, ...o });
+
+test("next-60 #25: the 0% line for each filing status is Rev. Proc. 2025-32's for 2026", () => {
+  assert.deepEqual(["single", "married_joint", "married_separate", "head_of_household", "qualifying_surviving"].map((s) => zeroTop(s, P26)), [49450, 98900, 49450, 66200, 98900]);
+});
+
+test("next-60 #25: the room at 0% by hand: one person, a couple, a year with Social Security, a year already over the line", () => {
+  // one person, $30,000 of pension and $2,000 of dividends: taxable 30,000 + 2,000 - 16,100 = 15,900; room 49,450 - 15,900
+  const a = zeroRoom(one({ otherOrdinary: 30000, qualifiedIncome: 2000 }), P26);
+  assert.equal(a.before.taxableIncome, 15900); assert.equal(a.room, 33550); assert.equal(a.after.taxableIncome, 49450);
+  assert.equal(a.after.totalTax, a.before.totalTax, "the gain itself is taxed at 0%"); assert.equal(a.after.qualifiedTax, 0);
+  // a couple, both 65 or over: deduction 32,200 + 2 x 1,650 + the senior deduction 2 x 6,000 (AGI under 150,000 even with the room)
+  const b = zeroRoom(one({ filingStatus: "married_joint", otherOrdinary: 60000, qualifiedIncome: 5000, ages65plus: 2 }), P26);
+  assert.equal(b.before.taxableIncome, 65000 - 35500 - 12000); assert.equal(b.room, 98900 - 17500); assert.equal(b.after.agi, 146400);
+  // one person, 66, $20,000 pension and $30,000 of Social Security: $5,350 of it taxed (provisional 35,000: 4,500 + 0.85 x 1,000),
+  // AGI 25,350, deduction 16,100 + 2,050 + 6,000 = 24,150, taxable 1,200. The gain pulls Social Security in at 85 cents a dollar
+  // until 85% of it is taxed (25,500, at a gain of 23,705.88), then 1:1: room = 49,450 - (20,000 + 25,500 - 24,150) = 28,100
+  const c = zeroRoom(one({ otherOrdinary: 20000, socialSecurity: 30000, ages65plus: 1 }), P26);
+  assert.equal(c.before.income.taxableSocialSecurity, 5350); assert.equal(c.before.taxableIncome, 1200);
+  assert.equal(c.room, 28100);
+  assert.equal(c.after.income.taxableSocialSecurity - c.before.income.taxableSocialSecurity, 20150);
+  // the tax: 10% of 1,200 = 120 before; after, ordinary taxable 49,450 - 28,100 = 21,350: 1,240 + 12% x 8,950 = 2,314
+  assert.equal(c.before.totalTax, 120); assert.equal(c.after.totalTax, 2314);
+  // the 2025-2028 deduction for people 65 and over shrinks by 6% of AGI past $75,000 (head of household): one person of 65 with a
+  // $40,000 pension: deduction 24,150 + 2,050 + 6,000, taxable 7,800 (tax $780). Past AGI 75,000 each $1 of gain adds $1.06 of
+  // taxable income: 1.06 AGI - 36,700 = 66,200, AGI 97,075.47, room $57,075; the deduction loses 6% x 22,075 = $1,324.50, and the
+  // 10% on the $9,124.50 of ordinary taxable income left under the gain is $912.45: $132.45 more tax
+  const h = zeroRoom(one({ filingStatus: "head_of_household", otherOrdinary: 40000, ages65plus: 1 }), P26);
+  assert.equal(h.before.taxableIncome, 7800); assert.equal(h.before.totalTax, 780);
+  assert.equal(h.room, 57075); near(h.before.deduction.senior - h.after.deduction.senior, 1324.5); assert.equal(h.after.totalTax, 912.45);
+  // already over: $80,000 of pension; or $50,000 and $20,000 of gains (taxable 53,900): no room
+  assert.equal(zeroRoom(one({ otherOrdinary: 80000 }), P26).room, 0);
+  assert.equal(zeroRoom(one({ otherOrdinary: 50000, qualifiedIncome: 20000 }), P26).room, 0);
+  // the deduction not used yet: the gain fills it first, at no tax either: 5,000 + g - 16,100 = 49,450
+  assert.equal(zeroRoom(one({ otherOrdinary: 5000 }), P26).room, 60550);
+  // a dollar more than the room is past the line (whole dollars, rounded down)
+  for (const x of [one({ otherOrdinary: 20000, socialSecurity: 30000, ages65plus: 1 }), one({ filingStatus: "head_of_household", otherOrdinary: 41234.56, qualifiedIncome: 789 })]) {
+    const z = zeroRoom(x, P26);
+    assert.ok(z.after.taxableIncome <= z.top + 1e-6);
+    assert.ok(zeroRoom({ ...x, qualifiedIncome: x.qualifiedIncome + z.room + 1 }, P26).before.taxableIncome > z.top, "one more dollar crosses");
+  }
+});
+
+test("next-60 #25: the room under Medicare's line by hand (agiRoom)", () => {
+  // AGI = 25,350 + 1.85 g while Social Security is phasing in: 60,000 is reached at g = 18,729.73
+  assert.equal(agiRoom(one({ otherOrdinary: 20000, socialSecurity: 30000, ages65plus: 1 }), P26, 60000), 18729);
+  assert.equal(agiRoom(one({ otherOrdinary: 70000 }), P26, 60000), 0);
+  assert.equal(agiRoom(one({ otherOrdinary: 10000 }), P26, 60000), 50000);
+});
+
+test("next-60 #25 (fix round, found while checking M1): the 3.8% tax on investment income can come inside the 0% band in later years, and is named", () => {
+  // the 0% line and the deduction rise with prices; the 3.8% tax's $200,000 line (one person) does not (IRC 1411(b)). At 3.1 times
+  // 2026's prices: deduction 16,100 x 3.1 = 49,910 -> 49,900; 0% line 49,450 x 3.1 = 153,295 -> 153,300. $100,000 of pension:
+  // taxable 50,100, room 153,300 - 50,100 = 103,200; AGI with it 203,200, so 3.8% of the 3,200 past $200,000 = $121.60, all of
+  // the extra tax (the gain itself is at 0%, no Social Security, under 65)
+  const p31 = indexParams(P26, 3.1, 2026);
+  const z = zeroRoom(one({ otherOrdinary: 100000 }), p31);
+  assert.equal(z.room, 103200); assert.equal(z.after.agi, 203200);
+  near(z.after.niit - z.before.niit, 121.6); near(z.after.totalTax - z.before.totalTax, 121.6);
+  assert.equal(gainsYearLine({ room: 103200, extraTax: 121.6, ssMore: 0, seniorLost: 0, niitMore: 121.6 }, money0), "$122 more tax: the 3.8% tax on investment income");
+  assert.equal(gainsYearLine({ room: 103200, extraTax: 2765, ssMore: 9000, seniorLost: 0, niitMore: 900 }, money0), "$2,765 more tax on Social Security and the 3.8% tax on investment income");
+  // a far year of the invented family (2055, each year's dollars): no more Social Security taxed, yet about $2,500 more tax: the
+  // 3.8% tax, not "more tax on Social Security" as the first build read
+  const d = compute(migrate(familyNow(NOV)), { today: NOV, real: false, gains: true });
+  const y = d.gains.years.find((v) => v.year === 2055);
+  assert.equal(y.ssMore, 0); assert.ok(y.niitMore > 100); near(y.niitMore, y.extraTax, 0.01);   // total tax is kept to the cent
+  assert.match(gainsYearLine(y, money0), /^\$[\d,]+ more tax: the 3\.8% tax on investment income$/);
+  // and 2026's own figures keep it out of reach: the 0% line plus the deduction is under $200,000 / $250,000
+  assert.equal(zeroRoom(one({ filingStatus: "married_joint", otherOrdinary: 0 }), P26).after.niit, 0);
+  assert.equal(federalTax(one({ qualifiedIncome: 49450 + 16100 }), P26).niit, 0);
+});
+
+const ARCH = Object.fromEntries(ARCHETYPES.map((a) => [a.id, a]));
+const gainsOf = (plan, o = {}) => compute(migrate(structuredClone(plan)), { today: NOV, gains: true, ...o });
+
+test("next-60 #25: each year's room is worked on the engine's own return for that year", () => {
+  for (const plan of [retiredCouplePlan(NOV), ARCH["09-near-retirement"].build(), ARCH["14-unusual-structures"].build(), ARCH["12-high-net-worth"].build()]) {
+    const d = gainsOf(plan);
+    assert.ok(d.gains, "this plan has money in taxable accounts");
+    for (const y of d.gains.years) {
+      const row = d.rows.find((r) => r.year === y.year);
+      near(y.before, row.taxableIncome, 1e-6);
+      // with the room taken, taxable income sits on the line: under it by less than the last dollar's worth (rounded down)
+      if (y.room >= 1) assert.ok(y.after <= y.top + 1e-6 && y.top - y.after < 2.5 / (y.top / zeroTop(d.filingStatus, P26)), `${y.year}: ${y.after} against ${y.top}`);
+      else assert.ok(y.before >= y.top - 1e-6, `${y.year}: no room only when already at or past the line`);
+    }
+    const next = d.gains.next.map((y) => y.year);
+    assert.deepEqual(next, [...next].sort((a, b) => a - b), "the years with room in date order (critic P2)");
+    near(d.gains.total, d.gains.years.filter((y) => y.room >= 1).reduce((s, y) => s + y.room, 0));
+    assert.equal(d.gains.roomYears + d.gains.overYears, d.gains.years.length);
+  }
+});
+
+test("next-60 #25 (critics M1, M2): what is taken never passes the gain the plan holds, nor a year's room, and its costs are worked on it", () => {
+  const plans = [retiredCouplePlan(NOV), familyNow(NOV), ...ARCHETYPES.map((a) => a.build())];
+  let some = 0;
+  for (const plan of plans) for (const real of [true, false]) {
+    const g = gainsOf(plan, { real }).gains;
+    if (!g || !g.roomYears) continue;
+    some++;
+    const took = g.taken.reduce((s, t) => s + t.amount, 0);
+    near(took, Math.min(g.held.amount, g.total), 1e-6);
+    const room = new Map(g.next.map((y) => [y.year, y.room]));
+    for (const t of g.taken) assert.ok(t.amount > 0 && t.amount <= room.get(t.year) + 1e-9, `${t.year}: ${t.amount} of ${room.get(t.year)}`);
+    assert.deepEqual(g.taken.map((t) => t.year), g.next.slice(0, g.taken.length).map((y) => y.year), "the first years with room, in date order");
+    assert.equal(g.coverYear, took >= g.held.amount - 0.5 ? g.taken.at(-1).year : null);
+    // the costs: only the years taken, and never more than taking all of those years' room
+    for (const k of ["extra", "medicare", "marketplace"]) if (g[k]) for (const yr of g[k].years) assert.ok(g.taken.some((t) => t.year === yr), `${k} ${yr} is a year taken`);
+    if (g.extra) assert.ok(g.extra.tax <= g.taken.reduce((s, t) => s + (g.years.find((y) => y.year === t.year).extraTax ?? 0), 0) + 1e-6);
+    if (g.state?.total) assert.ok(g.state.total <= g.taken.reduce((s, t) => s + (g.years.find((y) => y.year === t.year).state ?? 0), 0) + 1e-6);
+    // no sentence says the room summed over the years when the plan's gain is less than it (the first build: "In all, about $2,759,800")
+    const all = Object.values(gainsWords(g, money0)).flat().join(" ");
+    assert.ok(!/In all, about/.test(all));
+    if (g.coverYear !== null) assert.ok(!all.includes(money0(g.total)), `the room's sum ${money0(g.total)} is not said`);
+  }
+  assert.ok(some >= 10, `${some} plans with room`);
+});
+
+test("next-60 #25: the invented households: a retired couple, a surviving spouse, every year over the line, a state that taxes gains", () => {
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  // the retired couple (Arizona, joint): $120,000 in the brokerage, half of it gain as the plan counts it; 2026 alone covers it
+  const rc = gainsOf(retiredCouplePlan(NOV)).gains;
+  assert.deepEqual(rc.line, { year: 2026, top: 98900 });
+  assert.equal(rc.held.year, 2026); near(rc.held.amount, 60000); assert.equal(rc.coverYear, rc.next[0].year);
+  assert.deepEqual(rc.taken.map((t) => t.year), [2026]); near(rc.taken[0].amount, 60000);
+  const w = gainsWords(rc, money);
+  assert.equal(w.intro, "Federal tax on the profit from shares held more than a year is 0% while your taxable income stays under $98,900 (the 2026 line, rising with prices). What is left under that line in a year is its room.");
+  assert.equal(w.held, "We assume about half of what your taxable accounts hold is profit: about $60,000 in 2026. The room in 2026 alone would cover it.");
+  // taking $60,000 in 2026 taxes all the Social Security it can (85%) already, so it costs what all of 2026's room costs: $437
+  near(rc.extra.tax, rc.years[0].extraTax, 1e-6); assert.deepEqual(rc.extra.why, ["ss"]);
+  assert.deepEqual(w.watch, ["Taking the profit in 2026 also makes more of your Social Security taxed: about $437 more federal tax.", "Arizona income tax on these gains is not counted."]);
+  assert.equal(rc.medicare.over.length, 0);
+  // a qualifying surviving spouse: the joint 0% line ($98,900) and the single Medicare line ($109,000), so the room can pass it
+  const qs = gainsOf(ARCH["14-unusual-structures"].build()).gains;
+  for (const y of qs.years.filter((v) => v.medicare?.over)) assert.ok(y.medicare.room < y.room && y.medicare.room > 0, `${y.year}: some room is under Medicare's line`);
+  // her $235,085 of gain takes the room of 2031, 2032 and part of 2033; the first two pass Medicare's line, the last part does not
+  assert.deepEqual(qs.taken.map((t) => t.year), [2031, 2032, 2033]); assert.equal(qs.coverYear, 2033);
+  assert.deepEqual(qs.medicare.over, [2031, 2032]);
+  assert.ok(gainsWords(qs, money).watch.includes("Taking the profit in 2031 and 2032 would also pass the line where Medicare premiums go up two years later ($109,000 in today's dollars)."));
+  // its marketplace year: the help stops before the room is used up, and that year's line says where
+  assert.ok(qs.marketplace && qs.marketplace.cliff > 0); assert.deepEqual(qs.marketplace.years, [2031]);
+  const mk = qs.years.find((y) => y.year === qs.marketplace.years[0]);
+  assert.ok(mk.cliffRoom > 0 && mk.cliffRoom < mk.room);
+  assert.match(gainsYearLine(mk, money), new RegExp(`marketplace help stops past \\${money(mk.cliffRoom)}`));
+  // every year over the line: nothing to take, said in words, and no catch or "what it buys"
+  const hn = gainsOf(ARCH["12-high-net-worth"].build()).gains;
+  assert.equal(hn.roomYears, 0); assert.equal(gainsStatus(hn), "no room"); assert.deepEqual(hn.taken, []);
+  const hw = gainsWords(hn, money);
+  assert.equal(hw.total, "No year of your retirement has room: in each one your taxable income is already at or past the line.");
+  assert.deepEqual([hw.label, hw.over, hw.held, hw.buys, hw.watch.length], ["", "", "", "", 0]);
+  // North Carolina (3.99% on income past its deduction): the state's share of each year's room, and of the profit taken (M2:
+  // about $100,477 in 2030, so at most 3.99% of it, where the first build said $60,818 "over the plan, if you took all the room")
+  const nc = gainsOf(ARCH["09-near-retirement"].build()).gains;
+  assert.equal(nc.state.name, "North Carolina");
+  for (const y of nc.years.filter((v) => v.room >= 1)) assert.ok(y.state <= 0.0399 * y.room + 0.01, `${y.year}: ${y.state} of ${y.room}`);
+  assert.ok(nc.years.some((y) => y.room >= 1 && Math.abs(y.state - 0.0399 * y.room) < 1e-6), "past the deduction, exactly 3.99% of the room");
+  assert.deepEqual(nc.taken.map((t) => t.year), [2030]);
+  assert.ok(nc.state.total > 0 && nc.state.total <= 0.0399 * nc.held.amount + 0.01, `${nc.state.total} on ${nc.held.amount}`);
+  assert.match(gainsWords(nc, money).watch.at(-1), /^North Carolina taxes the profit as income: about \$[\d,]+\.$/);
+  // each year's dollars: the same room times the year's price level
+  const nom = gainsOf(retiredCouplePlan(NOV), { real: false });
+  const real = gainsOf(retiredCouplePlan(NOV));
+  for (const y of nom.gains.years) { const r = real.gains.years.find((v) => v.year === y.year), lvl = nom.rows.find((v) => v.year === y.year).priceLevel; near(y.room / lvl, r.room, 1e-6); }
+  // no money in taxable accounts in any retirement year: no row at all; nor when the plan counts none of it as gain
+  assert.equal(gainsOf(ARCH["01-single-adult"].build()).gains, null);
+  const noGain = retiredCouplePlan(NOV); noGain.retirement = { ...(noGain.retirement ?? {}), gainShare: 0 };
+  assert.equal(gainsOf(noGain).gains, null);
+  assert.equal(gainsOf(emptyPlan()).gains, undefined, "an empty plan has no answer to add to");
+});
+
+test("next-60 #25: one written sentence per case (R5)", () => {
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const g = (o) => ({ line: { year: 2026, top: 49450 }, years: [], next: [{ year: 2030, room: 20000 }, { year: 2031, room: 30000 }], total: 50000, roomYears: 2, overYears: 0, over: [], first: 2030, held: null, taken: [], coverYear: null, extra: null, marketplace: null, medicare: null, state: null, ...o });
+  const w = (o) => gainsWords(g(o), money);
+  // the line, and what "room" means
+  assert.equal(w({}).intro, "Federal tax on the profit from shares held more than a year is 0% while your taxable income stays under $49,450 (the 2026 line, rising with prices). What is left under that line in a year is its room.");
+  // the label over the list: the next years with room, in date order (critic P2: not the biggest first)
+  assert.equal(w({ roomYears: 6 }).label, "The next 5 years with room:");
+  assert.equal(w({}).label, "The years with room:");
+  assert.equal(w({ roomYears: 1, next: [{ year: 2031, room: 30000 }], total: 30000 }).label, "");
+  // no sum of the room over the years (critics M1, P1): it is not gain anyone has
+  assert.equal(w({}).total, "");
+  assert.ok(!Object.values(w({ held: { year: 2030, amount: 15000, share: 0.5 }, coverYear: 2030 })).flat().join(" ").includes("$50,000"), "the summed room is never said when the gain is less");
+  assert.equal(w({ roomYears: 1, next: [{ year: 2031, room: 30000 }], total: 30000 }).total, "2031 is the only year with room.");
+  assert.equal(w({ roomYears: 0, next: [], total: 0 }).total, "No year of your retirement has room: in each one your taxable income is already at or past the line.");
+  // the years at or past the line (critic M3: a year with under $1 of room is at the line, counted here)
+  assert.equal(w({}).over, "");
+  assert.equal(w({ overYears: 1, over: [2034] }).over, "In 2034 your taxable income is already at or past the line.");
+  assert.equal(w({ overYears: 8, over: [2034] }).over, "In 8 other years your taxable income is already at or past the line.");
+  // the profit the plan counts, against the room (critic P3: said as an assumption, in plain words)
+  assert.equal(w({}).held, "");
+  assert.equal(w({ held: { year: 2030, amount: 15000, share: 0.5 }, coverYear: 2030 }).held, "We assume about half of what your taxable accounts hold is profit: about $15,000 in 2030. The room in 2030 alone would cover it.");
+  assert.equal(w({ held: { year: 2030, amount: 45000, share: 0.4 }, coverYear: 2031 }).held, "We assume about 40% of what your taxable accounts hold is profit: about $45,000 in 2030. The room from 2030 to 2031 would cover it.");
+  assert.equal(w({ held: { year: 2030, amount: 90000, share: 1 } }).held, "We assume all of what your taxable accounts hold is profit: about $90,000 in 2030. All the room in your retirement, about $50,000, would cover only part of it.");
+  // what it buys (critic P6: shares only, and a tax preparer to confirm)
+  assert.equal(w({}).buys, "Selling shares in a year with room and buying them back raises what they count as having cost, so less is taxed when you sell them later. The 30-day wait on buying back is only for shares sold at a loss; ask a tax preparer before you count on it.");
+  assert.equal(w({}).note, "Nothing here changes your plan.");
+  // what to watch, worked on the profit taken in the years named: Social Security
+  assert.deepEqual(w({}).watch, []);
+  assert.deepEqual(w({ extra: { years: [2030, 2031], tax: 4300, why: ["ss"] } }).watch, ["Taking the profit in 2030 and 2031 also makes more of your Social Security taxed: about $4,300 more federal tax in all."]);
+  assert.deepEqual(w({ extra: { years: [2031], tax: 400, why: ["ss"] } }).watch, ["Taking the profit in 2031 also makes more of your Social Security taxed: about $400 more federal tax."]);
+  // ... or the 2025-2028 deduction for people 65 and over shrinking, or the 3.8% tax on investment income, or several
+  assert.deepEqual(w({ extra: { years: [2027], tax: 132, why: ["senior"] } }).watch, ["Taking the profit in 2027 also shrinks the extra deduction for people 65 and over: about $132 more federal tax."]);
+  assert.deepEqual(w({ extra: { years: [2026, 2027, 2028], tax: 900, why: ["ss", "senior"] } }).watch, ["Taking the profit in 2026 to 2028 also makes more of your Social Security taxed and shrinks the extra deduction for people 65 and over: about $900 more federal tax in all."]);
+  assert.deepEqual(w({ extra: { years: [2060], tax: 300, why: ["niit"] } }).watch, ["Taking the profit in 2060 also brings in the 3.8% tax on investment income: about $300 more federal tax."]);
+  // under $50 in all is not worth a line (critic P7)
+  assert.deepEqual(w({ extra: { years: [2027], tax: GAINS_SMALL - 1, why: ["senior"] } }).watch, []);
+  // the marketplace: with the line where its help stops, without one; one year, two, a run, years apart
+  assert.deepEqual(w({ marketplace: { years: [2027, 2028, 2029], cliff: 84600 } }).watch, ["In 2027 to 2029 you buy marketplace health insurance: the gain counts as income for its help, which shrinks with each dollar and stops once your income passes about $84,600 in today's dollars."]);
+  assert.deepEqual(w({ marketplace: { years: [2027], cliff: null } }).watch, ["In 2027 you buy marketplace health insurance: the gain counts as income for its help, which shrinks with each dollar."]);
+  assert.match(w({ marketplace: { years: [2027, 2028], cliff: null } }).watch[0], /^In 2027 and 2028 you buy/);
+  assert.match(w({ marketplace: { years: [2027, 2029, 2033], cliff: null } }).watch[0], /^In 3 years from 2027 to 2033 you buy/);
+  // Medicare, two years later: said only when taking the profit passes its line (critic P5: no line for a catch that does not apply)
+  assert.deepEqual(w({ medicare: { years: [2030], line: 218000, over: [] } }).watch, []);
+  assert.deepEqual(w({ medicare: { years: [2030, 2031], line: 109000, over: [2031] } }).watch, ["Taking the profit in 2031 would also pass the line where Medicare premiums go up two years later ($109,000 in today's dollars)."]);
+  assert.deepEqual(w({ medicare: { years: [2030, 2031], line: 109000, over: [2030, 2031] } }).watch, ["Taking the profit in 2030 and 2031 would also pass the line where Medicare premiums go up two years later ($109,000 in today's dollars)."]);
+  // the state: counted on the profit taken (critic M2), not counted (named, or none chosen)
+  assert.deepEqual(w({ state: { code: "CA", name: "California", total: 1500 } }).watch, ["California taxes the profit as income: about $1,500."]);
+  assert.deepEqual(w({ state: { counted: false, name: "Oregon" } }).watch, ["Oregon income tax on these gains is not counted."]);
+  assert.deepEqual(w({ state: { counted: false, name: null } }).watch, ["State income tax on these gains is not counted."]);
+  // all four, in this order; and none of them when no year has room
+  assert.equal(w({ extra: { years: [2031], tax: 400, why: ["ss"] }, marketplace: { years: [2027], cliff: null }, medicare: { years: [2030], line: 109000, over: [2030] }, state: { counted: false, name: null } }).watch.length, 4);
+  assert.deepEqual(w({ roomYears: 0, next: [], total: 0, extra: { years: [2031], tax: 400, why: ["ss"] }, state: { counted: false, name: null } }).watch, []);
+  // a year's second line (all of that year's room)
+  assert.equal(gainsYearLine({ room: 30000 }, money), "");
+  assert.equal(gainsYearLine({ room: 30000, extraTax: 1100, ssMore: 9000, seniorLost: 0, state: 2300, cliffRoom: 12300, medicare: { over: true, room: 9000 } }, money, "California"), "$1,100 more tax on Social Security · $2,300 California tax · marketplace help stops past $12,300 · Medicare premiums go up past $9,000");
+  assert.equal(gainsYearLine({ room: 30000, extraTax: 132, ssMore: 0, seniorLost: 1324 }, money), "$132 more tax: a smaller deduction for 65 and over");
+  assert.equal(gainsYearLine({ room: 30000, extraTax: 700, ssMore: 4000, seniorLost: 600 }, money), "$700 more tax on Social Security and a smaller deduction for 65 and over");
+  assert.equal(gainsYearLine({ room: 30000, cliffRoom: Infinity, medicare: { over: false } }, money), "", "no line under the larger credits; Medicare not passed");
+  assert.equal(gainsYearLine({ room: 30000, cliffRoom: 30000 }, money), "", "the help lasts the whole room");
+  assert.equal(gainsYearLine({ room: 30000, state: 0.4 }, money, "Georgia"), "", "under $1 of state tax is not said");
+  // amounts under $50 are left out (critic P7: "$5 more tax" beside $68,642)
+  assert.equal(GAINS_SMALL, 50);
+  assert.equal(gainsYearLine({ room: 68642, extraTax: 5, ssMore: 0, seniorLost: 80 }, money), "");
+  assert.equal(gainsYearLine({ room: 67854, extraTax: 55, ssMore: 0, seniorLost: 900 }, money), "$55 more tax: a smaller deduction for 65 and over");
+  assert.equal(gainsYearLine({ room: 30000, state: 49 }, money, "Georgia"), "");
+  // the status beside the title says what it counts (critic P4)
+  assert.deepEqual([gainsStatus(g({})), gainsStatus(g({ roomYears: 1 })), gainsStatus(g({ roomYears: 0 })), gainsStatus(g({ roomYears: 100 }))], ["2 years with room", "1 year with room", "no room", "100 years with room"]);
+  assert.ok(gainsStatus(g({ roomYears: 100 })).length <= 20, "one line beside the title at 320 px");
+});
+
+test("next-60 #25 S11: Gains you could take tax-free is one shut reading row; open, it holds no box and no button, and nothing is saved", async () => {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const draw = (plan) => {
+    const saved = [], root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => NOV }, plan, route: { group: "taxes", id: "projection", rest: [], query: {} }, module: { group: "taxes", id: "projection" }, store: { get: () => plan, update: (fn) => saved.push(fn) }, redraw() {} });
+    return { root, saved };
+  };
+  const plan = migrate(retiredCouplePlan(NOV));
+  const { root, saved } = draw(plan);
+  const gains = root.all().find((e) => e.dataset.part === "gains");
+  assert.equal(gains.querySelector(".fold-title").textContent, GAINS_TITLE);
+  assert.equal(GAINS_TITLE, "Gains you could take tax-free");
+  const d = compute(plan, { today: NOV, gains: true });
+  assert.equal(gains.querySelector(".fold-status").textContent, `${d.gains.roomYears} years with room`);
+  assert.ok(!gains.hasAttribute("open"), "shut until tapped");
+  // one card holds this row and How this is worked out, in that order
+  const card = root.all().find((e) => e.dataset.parts !== undefined);
+  assert.deepEqual(card.all().filter((e) => e.tagName === "DETAILS").map((e) => e.dataset.part), ["gains", "how"]);
+  const text = textOf(gains);
+  assert.match(text, /Federal tax on the profit from shares held more than a year is 0% while your taxable income stays under \$98,900 \(the 2026 line, rising with prices\)\./);
+  // the answer before the list: the plan's profit and the years whose room covers it (critic P3)
+  assert.match(text, /We assume about half of what your taxable accounts hold is profit: about \$60,000 in 2026\. The room in 2026 alone would cover it\./);
+  assert.ok(text.indexOf("We assume") < text.indexOf("The next 5 years with room:"));
+  // the next five years with room, in date order (critic P2)
+  const recs = gains.all().filter((e) => e.tagName === "LI" && /\brecords\b/.test(e.parentNode?.className ?? ""));
+  assert.deepEqual(recs.map((e) => Number(textOf(e).match(/\d{4}/)[0])), d.gains.next.slice(0, 5).map((y) => y.year));
+  assert.deepEqual(d.gains.next.slice(0, 5).map((y) => y.year), [2026, 2027, 2028, 2029, 2030]);
+  // no summed room (critics M1, P1), no "$5 more tax" (P7), no Medicare line that does not apply (P5)
+  assert.ok(!/In all, about/.test(text) && !/\$5 more tax/.test(text) && !/Medicare/.test(text), text);
+  assert.match(text, /What to watch:/);
+  assert.match(text, /ask a tax preparer before you count on it\./);
+  assert.match(text, /Nothing here changes your plan\./);
+  // the next step is the part's last row (critic P8), and only there: More on this keeps its three rows of before
+  const last = gains.all().filter((e) => e.tagName === "A").at(-1);
+  assert.equal(last.getAttribute?.("href") ?? last.href, "#/taxes/capital-gains");
+  assert.match(textOf(last), /What would selling some shares this year cost\?/);
+  assert.ok(text.lastIndexOf("Nothing here changes your plan.") < text.indexOf("What would selling some shares this year cost?"));
+  assert.equal(gains.all().filter((e) => ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(e.tagName)).length, 0, "information only");
+  assert.equal(saved.length, 0);
+  // the hero keeps the state's sentence; how brackets rise moved into How this is worked out
+  const hero = root.all().find((e) => /\bhero\b/.test(e.className ?? ""));
+  assert.ok(!/Brackets and deductions rise/.test(textOf(hero)) && /Arizona income tax is not counted yet\./.test(textOf(hero)));
+  assert.match(textOf(root.all().find((e) => e.dataset.part === "how")), /Brackets and deductions rise with the plan's inflation rate\. By law the Social Security thresholds do not, so more of the benefit gets taxed over time\./);
+  // More on this: the three rows of before (the Capital gains question lives in the part)
+  const more = root.all().find((e) => e.dataset.links !== undefined);
+  assert.deepEqual(more.all().filter((e) => e.tagName === "A").map((e) => e.getAttribute?.("href") ?? e.href), ["#/taxes/state", "#/retirement/roth-conversions", "#/retirement/projection"]);
+  // no taxable money in any retirement year: no row, How this is worked out alone
+  const none = draw(migrate(ARCH["01-single-adult"].build())).root;
+  assert.deepEqual(none.all().filter((e) => e.tagName === "DETAILS").map((e) => e.dataset.part).filter((x) => x !== "years"), ["how"]);
+});
+
+// The invariance proof (spec section 3.5): nothing new is typed for this row (it has no input), so every plan must give exactly
+// the answer of before. Without `gains: true` the compute runs no new line; with it, every key but `gains` is the same.
+// (A run against 154a597's own code, every household, is in the builder's log.)
+async function everyPlan() {
+  const out = [];
+  const dir = fileURLToPath(new URL("../../../qa/fixtures/", import.meta.url));
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push({ name: `fixture ${f}:${name}`, plan: fn(NOV) });
+  }
+  for (const a of ARCHETYPES) out.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) out.push({ name: `phone ${name}`, plan: fn(NOV) });
+  out.push({ name: "empty plan", plan: emptyPlan() });
+  return out;
+}
+test("next-60 #25 invariance: with or without the row, every existing figure of Tax, year by year is the same, for every invented household", async () => {
+  const all = await everyPlan();
+  assert.ok(all.length >= 30, `${all.length} plans`);
+  let withRow = 0;
+  for (const { name, plan } of all) for (const real of [true, false]) {
+    const p = migrate(structuredClone(plan));
+    const run = (o) => { try { return compute(structuredClone(p), { today: NOV, real, ...o }); } catch (e) { return { threw: e.message }; } };
+    const before = run({}), after = run({ gains: true });
+    assert.ok(!("gains" in before), `${name}: no gains unless asked`);
+    if (after.gains) withRow++;
+    const { gains, ...rest } = after;
+    assert.equal(JSON.stringify(rest), JSON.stringify(before), `${name}${real ? "" : " (each year's dollars)"}`);
+  }
+  assert.ok(withRow >= 10, `${withRow} draws with the row`);
 });
