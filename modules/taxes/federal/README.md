@@ -518,3 +518,20 @@ answer page's budget for every household and the empty plan (98 words of 100), w
 - *The empty plan keeps the three form rows and gets a short working* ("sources"): the boxes were on the page before; no
   "More on this" until there is income to explore.
 
+
+## A blank entry in the sales list (C11, 2026-11-15)
+`taxes.gains` is read through `salesOf(gains)`: a sale (`isSale`) is a plain object with a figure in what it sold for or what
+it cost (a number, or a word that reads as one); a `null` or `undefined` entry or an empty object (a hand-edited or
+half-imported file), a word, a number or a list is left out, and a `gains` that is not a list is no sales.
+`netGains` and the separate-returns split (`gainsOf`) both read it, so Federal estimate, Capital gains and Tax lots (which
+all net the year's sales here) compute and draw as if the blank entry were not there. Before, `netGains` read
+`g.proceeds` of a null and the three pages stopped with "Cannot read properties of null". A list of sales only is read
+exactly as before (the filter keeps every sale, in order: tests/c11-invariance.test.mjs). An empty object drew a sale of
+nothing on Capital gains ("sold for -, cost -") under a lead of a lone full stop; it is left out now, and that page's lead
+says "Your sales come out even: no gain or loss overall" when real sales net to nothing. The other readers of the list pass
+over a blank entry too: Tax lots counts the year's sales with `salesOf`, Capital gains' Edit and Remove find a sale by
+`x?.id`, removing a person on People and Get started's "what is in their name" read `g?.personId`. Left to its owner
+(another lane): taxes/filing-status's `separatePlan` still reads `g.proceeds` of every entry and throws on a null. Tests:
+module.test.mjs "C11 gains" (the kinds of entry, joint and separate, and each page drawn with the stand-in kit, as without
+the blank and, with nothing else, as with no sales), "C11 r1 P2" (what is a sale) and "C11 r1 F2" (People, Get started,
+Capital gains' Edit).

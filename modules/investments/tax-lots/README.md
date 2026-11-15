@@ -169,3 +169,8 @@ short-term only ("taxed like pay"); long-term only ("at the lower rates for gain
 with a carryover ("$3,000 comes off your other income and $7,000 carries to next year").
 
 **Tests**: "this year's sales: ..." and "Sales for your tax return: ..." in `module.test.mjs`.
+
+## A blank entry in the sales list (smart guesses C11, 2026-11-15)
+The row's status counts the year's sales with taxes/federal `salesOf`, the list the figures are worked from, so a blank entry
+(a null or an empty object in a hand-edited file) no longer reads "2 in 2026" for one sale. Test: taxes/federal module.test.mjs
+"C11 gains" (the page as without the blank, the count included).

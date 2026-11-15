@@ -62,3 +62,12 @@ Review fixes (2026-11-07): the 3.8% surtax threshold is the filing status's own 
 - `hasIncome` (compute: the return without the sales has gross income). With no income and no sale: a filled "Add your income", no $0 tiles, no "what one more sale" card (T3).
 - The "If you sold one more thing" boxes redraw only the answer under them, so the tap that leaves the Gain box still lands on a chip or the list (x-3, x-redraw-on-change).
 - "Remove this sale" asks first, naming the sale (x-4).
+
+## A blank entry in the sales list (smart guesses C11, 2026-11-15)
+- The year's sales come from `netGains` (taxes/federal `salesOf`): an entry that is not a sale (a null, an empty object, a
+  name with no figures) is left out, so the page draws as if it were not there, and its own empty state when nothing else is
+  on the list. Edit and Remove find a sale by `x?.id`, so a blank entry before it no longer stops the tap.
+- The hero's first sentence (`leadOf`) is the net gains, or the net loss, or, when the sales net to nothing (a fund sold for
+  what it cost, or a gain and a loss that cancel), "Your sales come out even: no gain or loss overall", never an empty lead
+  before the full stop (it read ". The 0% band is used up; ...").
+- Tests: module.test.mjs "C11 r1 P2"; taxes/federal module.test.mjs "C11 gains" and "C11 r1 F2".

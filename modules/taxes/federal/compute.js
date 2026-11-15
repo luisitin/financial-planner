@@ -81,9 +81,19 @@ export function itemizedTotal(itemized, agi, status, params) {
   return { total: lines.reduce((s, l) => s + l.amount, 0), lines: lines.filter((l) => l.amount > 0 || l.note), saltCap: cap };
 }
 
+/** A figure in a sale: a number, or a word that reads as one (a hand-edited file); never null, "" or true. */
+const saleFigure = (v) => (typeof v === "number" || (typeof v === "string" && v.trim() !== "")) && Number.isFinite(Number(v));
+/**
+ * A sale in `taxes.gains`: a plain object with a figure in what it sold for or what it cost. A blank entry (null or {}, from a
+ * hand-edited or half-imported file), a word, a number or a list is not a sale and is left out, so one bad entry never stops
+ * Federal estimate, Capital gains or Tax lots, nor draws a sale of nothing (C11).
+ */
+export const isSale = (g) => !!g && typeof g === "object" && !Array.isArray(g) && (saleFigure(g.proceeds) || saleFigure(g.basis));
+/** The year's sales: the entries of `taxes.gains` that are sales (none when it is not a list). */
+export const salesOf = (gains) => (Array.isArray(gains) ? gains.filter(isSale) : []);
 /** Net the year's sales the way Schedule D does: short and long offset each other; a net loss takes up to 3,000 off ordinary income. */
 export function netGains(gains, filingStatus) {
-  const rows = (gains ?? []).map((g) => ({ ...g, gain: (Number(g.proceeds) || 0) - (Number(g.basis) || 0) }));
+  const rows = salesOf(gains).map((g) => ({ ...g, gain: (Number(g.proceeds) || 0) - (Number(g.basis) || 0) }));
   const shortTotal = rows.filter((g) => g.held !== "long").reduce((s, g) => s + g.gain, 0);
   const longTotal = rows.filter((g) => g.held === "long").reduce((s, g) => s + g.gain, 0);
   let netShort = shortTotal, netLong = longTotal;
@@ -579,7 +589,7 @@ export function taxInputs(plan, params = {}) {
     // a row named for someone on neither return (a third adult) is treated as in neither name, as a joint return would count it
     const shareOf = (x, p, payLike) => { const o = adultOf(x.personId); const own = o && two.includes(o) ? o : null; return own ? (own === p ? 1 : 0) : payLike ? (p === me ? 1 : 0) : 0.5; };
     const sumFor = (p, types, payLike = false) => active.filter((x) => types.includes(x.type)).reduce((s, x) => s + x.yearly * shareOf(x, p, payLike), 0);
-    const gainsOf = (p) => netGains((t.gains ?? []).map((g) => { const s = shareOf(g, p, false); return { ...g, proceeds: (Number(g.proceeds) || 0) * s, basis: (Number(g.basis) || 0) * s }; }), filingStatus);
+    const gainsOf = (p) => netGains(salesOf(t.gains).map((g) => { const s = shareOf(g, p, false); return { ...g, proceeds: (Number(g.proceeds) || 0) * s, basis: (Number(g.basis) || 0) * s }; }), filingStatus);
     const halfItemized = Object.fromEntries(Object.entries(t.itemized ?? {}).map(([k, v]) => [k, typeof v === "number" ? v / 2 : v]));
     const payOf = (p) => sumFor(p, ["salary", "bonus"], true);
     const carrier = [...two].sort((a, b) => payOf(b) - payOf(a))[0];

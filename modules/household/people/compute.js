@@ -177,7 +177,7 @@ export function removePerson(draft, personId, { keep = false } = {}) {
   if (r?.socialSecurity?.[personId]) { delete r.socialSecurity[personId]; removed.push(`${NameOf(t.person.name)} Social Security`); }
   for (const map of [r?.workPlans, r?.longevity, draft.whatIfs?.humanCapital, draft.whatIfs?.paycheck, draft.whatIfs?.benefits, draft.whatIfs?.college, draft.guide?.setup?.status, draft.guide?.setup?.ss, draft.guide?.setup?.ssWrote, draft.guide?.setup?.ssClaimWrote]) if (map && typeof map === "object") delete map[personId];
   for (const holder of [draft.whatIfs?.benefits, draft.whatIfs?.offers, draft.equity]) if (holder?.personId === personId) holder.personId = "";
-  for (const g of draft.taxes?.gains ?? []) if (g.personId === personId) g.personId = "";
+  for (const g of Array.isArray(draft.taxes?.gains) ? draft.taxes.gains : []) if (g?.personId === personId) g.personId = "";   // (a blank entry in the list is skipped: C11)
   if (draft.taxes?.hsa?.coveredId === personId) delete draft.taxes.hsa.coveredId;
   if (draft.papers) draft.papers = draft.papers.filter((x) => x.key !== `birth:${personId}`);
   for (const s of [...(draft.scenarios ?? []), draft.advisor].filter(Boolean)) if (s.changes) for (const k of Object.keys(s.changes)) if (k.endsWith(`:${personId}`)) delete s.changes[k];

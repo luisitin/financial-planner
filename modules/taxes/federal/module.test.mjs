@@ -1502,3 +1502,86 @@ test("C3 S11 (R17, R7): after a save only the saved part changes, and its green 
   assert.deepEqual(e2.root.querySelectorAll(".notice.ok").map((n) => [textOf(n), !!n.closest("details")]), [[`Pay saved. ${textOf(e2.root.querySelector("h1")).replace(/ is about /, " is now about ")}.`, false]]);
   await pageOf(e.saved[0]);
 });
+
+// ---- C11 (the smart guesses' last step, 2026-11-15): a blank entry in the sales list is not a sale. Before, a null in
+// taxes.gains (a hand-edited or half-imported file) threw in netGains and stopped Federal estimate, Capital gains and Tax lots.
+const C11 = "2026-11-15";
+const { netGains, isSale, salesOf } = await import("./compute.js");
+const { familyPlan: famC11 } = await import("../../../qa/fixtures/family-plan.mjs");
+const SALE = { id: "g1", name: "Index fund", proceeds: 5000, basis: 3000, held: "long" };
+const LOSS = { id: "g2", name: "A stock", proceeds: 1000, basis: 2500, held: "short" };
+
+test("C11 gains: null, undefined, a word, a number and a list are not sales; netGains counts only the sales, in their order", () => {
+  for (const bad of [null, undefined, "x", 5, [], [SALE]]) assert.equal(isSale(bad), false, String(bad));
+  assert.equal(isSale(SALE), true);
+  const clean = netGains([SALE, LOSS], "single");
+  for (const list of [[null, SALE, LOSS], [SALE, undefined, LOSS, "x"], [5, SALE, [], LOSS, null]]) assert.deepEqual(netGains(list, "single"), clean);
+  assert.deepEqual(clean.rows.map((r) => r.id), ["g1", "g2"]);
+  assert.equal(clean.longTotal, 2000); assert.equal(clean.shortTotal, -1500);
+  assert.equal(clean.netLong, 500); assert.equal(clean.netShort, 0);
+  // not a list at all: no sales
+  for (const odd of [null, undefined, {}, "x", 7]) { assert.deepEqual(salesOf(odd), []); assert.deepEqual(netGains(odd, "single").rows, []); }
+});
+
+test("C11 gains: a plan whose sales list holds a blank entry gives the same figures as without it, joint and separate", () => {
+  for (const status of ["married_joint", "married_separate"]) {
+    const clean = famC11(C11); clean.household.filingStatus = status; clean.taxes.gains = [SALE, LOSS];
+    const blank = structuredClone(clean); blank.taxes.gains = [null, SALE, undefined, LOSS, "x"];
+    assert.deepEqual(compute(blank, { today: C11 }).gains, compute(clean, { today: C11 }).gains, status);
+    assert.deepEqual(compute(blank, { today: C11 }).result, compute(clean, { today: C11 }).result, status);
+  }
+});
+
+test("C11 gains: Federal estimate, Capital gains and Tax lots each compute and draw with a blank entry in the sales list", async () => {
+  const pages = [["taxes/federal", "../../taxes/federal"], ["taxes/capital-gains", "../../taxes/capital-gains"], ["investments/tax-lots", "../../investments/tax-lots"]];
+  // a null, an empty object and a name with no figures (r1, P2: {} drew "sold for -, cost -" and a lead of a lone full stop)
+  for (const blank of [null, {}, { name: "Old fund" }]) for (const [key, dir] of pages) {
+    const { compute: c } = await import(`${dir}/compute.js`);
+    const p = famC11(C11); p.taxes.gains = [blank, SALE];
+    const clean = famC11(C11); clean.taxes.gains = [SALE];
+    assert.doesNotThrow(() => c(p, { today: C11 }), key);
+    const drawn = await renderPage(new URL(`${dir}/view.js`, import.meta.url).href, p, C11);
+    const words = drawn.text();
+    assert.ok(words.length > 100, `${key} draws`);
+    // the same page as without the blank entry, Tax lots' count of the year's sales included ("1 in 2026")
+    assert.equal(words, (await renderPage(new URL(`${dir}/view.js`, import.meta.url).href, clean, C11)).text(), `${key}: the same page as without ${JSON.stringify(blank)}`);
+    assert.doesNotMatch(words, /\bnull\b|\bundefined\b|NaN|\. \./, key);
+    // nothing but the blank: the page's own empty state, as with no sales
+    const only = famC11(C11); only.taxes.gains = [blank];
+    const none = famC11(C11); none.taxes.gains = [];
+    assert.equal((await renderPage(new URL(`${dir}/view.js`, import.meta.url).href, only, C11)).text(), (await renderPage(new URL(`${dir}/view.js`, import.meta.url).href, none, C11)).text(), `${key}: only ${JSON.stringify(blank)}`);
+  }
+});
+
+test("C11 r1 P2: a sale has a figure in what it sold for or what it cost; an entry with neither is not one", () => {
+  for (const bad of [{}, { name: "Old fund" }, { proceeds: null, basis: "" }, { proceeds: true }, { proceeds: "abc", held: "long" }, { basis: NaN }]) assert.equal(isSale(bad), false, JSON.stringify(bad));
+  for (const good of [SALE, { proceeds: 0, basis: 0 }, { proceeds: 5000 }, { basis: 300 }, { proceeds: "5000", basis: "3000" }]) assert.equal(isSale(good), true, JSON.stringify(good));
+  assert.deepEqual(netGains([{}, SALE, { name: "x" }], "single"), netGains([SALE], "single"));
+});
+
+test("C11 r1 F2: removing a person, Get started's check of what is in their name, and Capital gains' Edit pass over a blank entry", async () => {
+  const { removePerson, tiedTo } = await import("../../household/people/compute.js");
+  const { personReferenced } = await import("../../overview/setup/compute.js");
+  const owned = { ...SALE, personId: "p-bo" };
+  const p = famC11(C11); p.taxes.gains = [null, owned];
+  // (Get started's check, on a plan where only the sale names the person)
+  const { emptyPlan } = await import("../../../core/schema/migrate.js");
+  const lone = emptyPlan(); lone.household.people = [{ id: "p-x", name: "Kai", role: "self" }]; lone.taxes.gains = [null, { ...SALE, personId: "p-x" }, {}];
+  assert.equal(personReferenced(lone, "p-x"), "investment sales are in their name");
+  lone.taxes.gains = [null, {}];
+  assert.equal(personReferenced(lone, "p-x"), null);
+  assert.doesNotThrow(() => tiedTo(p, "p-bo"));
+  const d = structuredClone(p);
+  assert.doesNotThrow(() => removePerson(d, "p-bo", { keep: true }));
+  assert.deepEqual(d.taxes.gains, [null, { ...SALE, personId: "" }], "the sale kept as the household's, the blank left as it was");
+  // Capital gains: tapping the sale opens its form even with a blank entry before it, and saving it changes that sale only
+  const r = await renderPage(new URL("../capital-gains/view.js", import.meta.url).href, (() => { const q = famC11(C11); q.taxes.gains = [null, SALE]; return q; })(), C11);
+  const row = r.root.all().find((x) => x.tagName === "LI" && /Index fund/.test(textOf(x)));
+  assert.ok(row, "the sale's row");
+  assert.doesNotThrow(() => row.dispatch("click"));
+  const form = r.root.all().filter((x) => x.tagName === "FORM").at(-1);
+  assert.equal(form.querySelector('[name="name"]').value, "Index fund");
+  form.querySelector('[name="proceeds"]').value = "6000";
+  assert.doesNotThrow(() => form.dispatch("submit"));
+  assert.deepEqual(r.saved.at(-1).taxes.gains.map((g) => g?.proceeds ?? null), [null, 6000]);
+});

@@ -77,3 +77,22 @@ test("hasIncome: false on an empty plan (the page asks for income first), true o
   assert.equal(compute(emptyPlan(), { today: "2026-09-16" }).hasIncome, false);
   assert.equal(compute(taxPlan(), { today: "2026-09-16" }).hasIncome, true);
 });
+
+test("C11 r1 P2: the hero's first sentence is never an empty lead before the full stop; sales that come out even say so", async () => {
+  const { leadOf } = await import("./view.js");
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const money = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  const g = (o) => ({ gains: { netLong: 0, netShort: 0, netLoss: 0, lossAllowed: 0, carryForward: 0, ...o } });
+  assert.equal(leadOf(g({ netLong: 2000 }), money), "$2,000 of long-term gain at the 0/15/20% rates");
+  assert.equal(leadOf(g({ netLong: 2000, netShort: 500 }), money), "$2,000 of long-term gain at the 0/15/20% rates and $500 of short-term gain at regular rates");
+  assert.equal(leadOf(g({ netShort: 500 }), money), "$500 of short-term gain at regular rates");
+  assert.equal(leadOf(g({ netLoss: -4000, lossAllowed: -3000, carryForward: -1000 }), money), "A net loss of $4,000: $3,000 comes off your other income this year, $1,000 carries forward");
+  assert.equal(leadOf(g({}), money), "Your sales come out even: no gain or loss overall");
+  // a fund sold for what it cost, and a gain and a loss that cancel: the page says so, with no lone full stop
+  for (const gains of [[{ id: "a", name: "Fund", proceeds: 3000, basis: 3000, held: "long" }], [{ id: "a", name: "Fund", proceeds: 4000, basis: 3000, held: "long" }, { id: "b", name: "Stock", proceeds: 1000, basis: 2000, held: "long" }]]) {
+    const p = taxPlan(); p.taxes.gains = gains;
+    const text = (await renderPage(new URL("./view.js", import.meta.url).href, p, "2026-11-15")).text();
+    assert.match(text, /Your sales add no tax in \d{4}\s*Your sales come out even: no gain or loss overall\. /);
+    assert.doesNotMatch(text, /\.\s*\. |rates\s*\.\s*The 0%/);
+  }
+});

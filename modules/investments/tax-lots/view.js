@@ -5,6 +5,7 @@
 // two or more purchases) and "Sales for your tax return" (the year's sales, their totals, a CSV and a printout for a tax
 // preparer); then each holding's lots, each card with its own folded "+ Add a lot".
 import { compute, costAfterLot, shareText } from "./compute.js";
+import { salesOf } from "../../taxes/federal/compute.js";
 import { sellOrders, sellable, hasChoice, yearSales, salesYear, salesCsv, leastSentence, orderValue, orderLine, washLine, salesSentence, saleLine, ORDER_TITLES } from "./sell.js";
 import { part, parts } from "../../../core/ui/more.js";
 import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
@@ -31,7 +32,7 @@ export function render(root, ctx) {
   const today = fmt.today();
   const signed0 = (n) => (n < -0.005 ? `−${money(-n)}` : money(n));   // a total: the tiles, and the printout's line under the title
   // the year's sales (Capital gains' rows): counted here for the row's status; the list is built when the row is opened
-  const salesN = (plan.taxes?.gains ?? []).length, salesFor = salesYear(plan, today);
+  const salesN = salesOf(plan.taxes?.gains).length, salesFor = salesYear(plan, today);
   const salesPart = () => ({ id: "sales", kind: "item", title: "Sales for your tax return", says: salesN ? `${salesN} in ${salesFor}` : `none in ${salesFor}`, lazy: true, body: () => salesBody() });
   const salesBody = () => {
     const s = yearSales(plan, { today });

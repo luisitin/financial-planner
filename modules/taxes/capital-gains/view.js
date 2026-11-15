@@ -7,6 +7,16 @@ import { withA } from "../../../core/words.js";
 let pending = null;
 let what = { amount: 10000, held: "long" };
 
+/** The hero's first sentence with sales on file: the net gains, or the net loss, or (sales that come out even) that there is
+ * neither, never an empty lead before the full stop (C11 r1). */
+export function leadOf(d, money) {
+  const g = d.gains;
+  const parts = [g.netLong > 0 ? `${money(g.netLong)} of long-term gain at the 0/15/20% rates` : "", g.netShort > 0 ? `${money(g.netShort)} of short-term gain at regular rates` : ""].filter(Boolean);
+  const loss = g.netLoss < 0 ? `A net loss of ${money(-g.netLoss)}: ${money(-g.lossAllowed)} comes off your other income this year${g.carryForward < 0 ? `, ${money(-g.carryForward)} carries forward` : ""}` : "";
+  const lead = `${parts.join(" and ")}${loss}`;
+  return lead || "Your sales come out even: no gain or loss overall";
+}
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
@@ -22,7 +32,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasSales ? d.taxOnGains > 0 ? `Your sales add about ${money(d.taxOnGains)} of tax in ${d.year}` : d.gains.netLoss < 0 ? `Your sales take about ${money(d.lossSaves)} off your ${d.year} tax` : `Your sales add no tax in ${d.year}` : "Tax on what you sell"),
     ui.h("p", { class: "lede" }, d.hasSales
-      ? `${d.gains.netLong > 0 ? `${money(d.gains.netLong)} of long-term gain at the 0/15/20% rates` : ""}${d.gains.netLong > 0 && d.gains.netShort > 0 ? " and " : ""}${d.gains.netShort > 0 ? `${money(d.gains.netShort)} of short-term gain at regular rates` : ""}${d.gains.netLoss < 0 ? `A net loss of ${money(-d.gains.netLoss)}: ${money(-d.gains.lossAllowed)} comes off your other income this year${d.gains.carryForward < 0 ? `, ${money(-d.gains.carryForward)} carries forward` : ""}` : ""}. ${d.zeroRoom > 0 ? `You could still realize ${money(d.zeroRoom)} of long-term gain this year at 0%.` : "The 0% band is used up; further long-term gains pay 15%."}`
+      ? `${leadOf(d, money)}. ${d.zeroRoom > 0 ? `You could still realize ${money(d.zeroRoom)} of long-term gain this year at 0%.` : "The 0% band is used up; further long-term gains pay 15%."}`
       : `Gains on things you held more than a year are taxed at 0%, 15% or 20%, depending on your taxable income; things held a year or less are taxed like wages. ${!d.hasIncome ? "Add what you earn first, then this page works out the tax on what you sell." : d.zeroRoom > 0 ? `With your income, ${money(d.zeroRoom)} of long-term gain would be taxed at 0% this year.` : "Your income already uses up the 0% rate."}${d.hasIncome ? " Add this year's sales below." : ""}`),
     // nothing earned on file and no sale: one way on instead of $0 tiles (stress test T3)
     !d.hasIncome && !d.hasSales ? ui.row(ui.h("a", { class: "btn", href: "#/cashflow/income" }, "Add your income")) : null,
@@ -71,16 +81,16 @@ export function render(root, ctx) {
         if (!v.name.trim()) return false;
         const clean = { name: v.name.trim(), proceeds: v.proceeds ?? 0, basis: v.basis ?? 0, held: v.held === "short" ? "short" : "long" };
         pending = editing ? "Sale saved." : "Sale added.";
-        store.update((p) => { p.taxes.gains = p.taxes.gains ?? []; if (editing) { const i = p.taxes.gains.findIndex((g) => g.id === editing.id); if (i >= 0) p.taxes.gains[i] = { ...p.taxes.gains[i], ...clean }; } else p.taxes.gains.push({ id: ui.uid(), ...clean }); });
+        store.update((p) => { p.taxes.gains = p.taxes.gains ?? []; if (editing) { const i = p.taxes.gains.findIndex((g) => g?.id === editing.id); if (i >= 0) p.taxes.gains[i] = { ...p.taxes.gains[i], ...clean }; } else p.taxes.gains.push({ id: ui.uid(), ...clean }); });
         editing = null;
       }, { submitLabel: editing ? "Save changes" : "Add sale", resetAfter: !editing, onCancel: (editing || d.hasSales) ? () => { editing = null; showForm = false; drawForm(); } : null }),
-      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this sale", () => { if (!ui.confirm(`Remove ${editing.name} from this year's sales?`)) return; const id = editing.id, name = editing.name; editing = null; pending = `${name} removed from this year's sales.`; store.update((p) => { p.taxes.gains = (p.taxes.gains ?? []).filter((g) => g.id !== id); }); }, { class: "danger" })) : null,
+      editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this sale", () => { if (!ui.confirm(`Remove ${editing.name} from this year's sales?`)) return; const id = editing.id, name = editing.name; editing = null; pending = `${name} removed from this year's sales.`; store.update((p) => { p.taxes.gains = (p.taxes.gains ?? []).filter((g) => g?.id !== id); }); }, { class: "danger" })) : null,
     ));
   };
   drawForm();
   if (d.rows.length) root.append(ui.card(`Sales in ${d.year}`,
     ui.h("ul", { class: "page-list" }, d.rows.map((g) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
-      onClick: () => { editing = { ...plan.taxes.gains.find((x) => x.id === g.id) }; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
+      onClick: () => { editing = { ...plan.taxes.gains.find((x) => x?.id === g.id) }; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
       onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
       ui.h("span", { class: "ic" }, g.held === "long" ? "📈" : "⚡"),
       ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, g.name), ui.h("div", { class: "d" }, `sold for ${money(g.proceeds)}, cost ${money(g.basis)} · ${g.held === "long" ? "long-term" : "short-term"}`)),

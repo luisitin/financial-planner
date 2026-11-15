@@ -405,7 +405,7 @@ export function personReferenced(plan, pid) {
   if ((plan?.retirement?.socialSecurity?.[pid]?.record ?? []).length > 0) return "their Social Security record is in the plan";
   if ((plan?.retirement?.annuities ?? []).some((x) => x.personId === pid)) return "an annuity is in their name";
   if (plan?.equity?.personId === pid) return "work stock is in their name";
-  if ((plan?.taxes?.gains ?? []).some((x) => x.personId === pid)) return "investment sales are in their name";
+  if (L(plan?.taxes, "gains").some((x) => x?.personId === pid)) return "investment sales are in their name";
   if ((plan?.estate?.gifts ?? []).some((x) => x.from === pid)) return "gifts are in their name";
   if ((plan?.estate?.beneficiaries ?? []).some((b) => [...(b.primary ?? []), ...(b.contingent ?? [])].some((x) => x.personId === pid))) return "they are named as a beneficiary";
   if (plan?.whatIfs?.college?.[pid]) return "a college plan is saved for them";
