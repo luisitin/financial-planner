@@ -867,3 +867,30 @@ export function compute(plan, params = {}) {
   const { care, ...rest } = b;   // the care detail after the result, so a digest sent breadth first keeps the tax
   return { ...rest, years: TAX_YEARS, result, marginal, nextDollar, steps, isIndexed: !!b.params.indexed, hasIncome: result.income.gross > 0, careFalls, careSets, nextDollarNoCare: noCare, care };
 }
+
+// ---- the gray figure in "Federal tax withheld so far" (smart guesses C11, 2026-11-15; docs/CONVENTIONS.md "Guesses") ----
+/** The words after "Our guess: ", by where the paycheck figure comes from (Withholding check's `from`); at most 70 characters. */
+export const WITHHELD_WHY = {
+  paycheck: "what your paychecks took out by today, worked out from your pay",
+  typed: "the paychecks so far, at the tax per paycheck you typed",
+  mixed: "the paychecks so far, partly worked out from your pay",
+};
+/**
+ * The estimator behind the gray figure. An empty "withheld so far" already counts: Withholding check runs the whole year at
+ * the paycheck rate (taxes/withholding projectedWithholding), so the gray figure is the part of that already taken out, which
+ * typed leaves the answer as it is. The page works it out from Withholding check's own compute (blanks.js withheldSoFar) and
+ * hands it over as `args` ({ soFar, from }): this file is read by Withholding check's compute and cannot read it back (a load
+ * cycle). A preview only: the box stays empty when saved blank and nothing here writes the plan (settle, finding no args,
+ * leaves alone the entry it never has).
+ */
+export const estimators = {
+  "taxes/federal:withheld": {
+    tier: 4, order: 40, label: "Federal tax withheld so far", unit: "total", weight: "small", basis: "yours",
+    page: () => "#/taxes/federal?show=withheld", reads: [],
+    fn(plan, { today, args }) {
+      const v = Number(args?.soFar);
+      if (!Number.isFinite(v) || v < 0.5) return null;
+      return { value: v, rounded: true, sigma: null, measured: false, why: WITHHELD_WHY[args.from] ?? WITHHELD_WHY.paycheck, uses: {}, sharperWith: [], tables: [], basis: "yours", dataAsOf: today ?? null };
+    },
+  },
+};

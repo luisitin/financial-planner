@@ -1,4 +1,4 @@
-import { compute } from "./compute.js";
+import { compute, estimators } from "./compute.js";
 import { render } from "./view.js";
 
 export default {
@@ -18,5 +18,6 @@ export default {
   aliases: ["tax", "taxes", "1040", "refund", "owe", "effective rate", "marginal rate", "standard deduction", "itemized", "withheld"],
   seeds: "UsTaxes, PolicyEngine",
   compute,
+  estimators,   // the gray figure in "Federal tax withheld so far" (docs/CONVENTIONS.md "Guesses"); core/app.js merges it
   render,
 };

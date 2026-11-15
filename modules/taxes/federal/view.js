@@ -3,8 +3,11 @@
 // it, and the page's one action. Then five quiet rows: "N more numbers" (the rates and the taxable income), the three
 // forms ("Figures the plan cannot see", with what the plan already knows under its boxes; "Itemized deductions"; "Year and
 // people") and "How this is worked out" (the walk, what the estimate leaves out, where the tables come from); then "More
-// on this".
+// on this". Empty boxes (smart guesses C11): "Federal tax withheld so far" shows in gray what an empty box already counts
+// (the paychecks so far); the itemized boxes name the plan's own figures in their help, and when itemizing those would pay,
+// the first view says how much (blanks.js).
 import { compute, ratePct } from "./compute.js";
+import { withheldSoFar, fromPlan as planFigures, planSentence, hintSentence, helpFor } from "./blanks.js";
 import { known } from "./known.js";
 import { taxAnswer, fullSteps } from "../withholding/compute.js";
 import { compute as computeEstimated } from "../estimated/compute.js";
@@ -174,6 +177,14 @@ export function render(root, ctx) {
   const careHint = hasIncome && d.care && d.care.persons > 0 && !(d.care.expensesAll > 0) && (d.filingStatus !== "married_separate" || d.care.elected > 0.5);
   const acctHint = careHint && d.care.elected > 0.5;
   const credLeft = careHint && d.filingStatus !== "married_separate" && (d.care.persons >= 2 ? 6000 : 3000) > Math.min(d.care.elected, d.care.benefitLimit) + 0.5;
+  // the plan's own mortgage interest, property tax and state income tax for the itemized boxes left empty (blanks.js): said in
+  // "Itemized deductions"; when itemizing them would save HINT_FROM or more it is money the person could keep, so
+  // it is on the first view (R9 item 6: data-worth), with one tap to the boxes
+  const own = hasIncome ? planFigures(plan, { today: fmt.today(), d, k }) : null;
+  const hint = own ? hintSentence(own, money) : "";
+  if (hint) root.append(ui.card(null,
+    ui.h("p", { dataset: { worth: "" }, style: { margin: "0" } }, hint),
+    ui.h("a", { class: "small", href: `#/taxes/federal?show=${own.lines[0].key}`, style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Type them under Itemized deductions ›")));
   if (careHint) root.append(ui.card(null,
     ui.h("p", { dataset: { worth: "" }, style: { margin: "0" } }, acctHint
       ? `Paying for child care so you can work? Add it on Expenses: the child care account pays it back. With no care to pay, the ${money(d.care.elected)} in the account would be lost.${credLeft ? " Care the account does not pay can still count for the child care credit." : ""}`
@@ -193,7 +204,7 @@ export function render(root, ctx) {
   const numbers = hasIncome && tiles.length ? { id: "numbers", kind: "more", n: tiles.length, noun: "numbers", one: "number", body: () => [ui.row(...tiles),
     ui.h("p", { class: "muted small", style: { margin: "0" } }, `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${full.se ? ` It includes ${money(full.se.tax)} of self-employment tax on the business.` : ""}`)] } : null;
   const figures = figuresPart(ctx, { owes, hasIncome, open: just?.part === "figures", green: saved("figures"), remember, known: hasIncome ? knownBody(ctx, { d, k, statusLabel, money }) : null });
-  const itemized = deductionsPart(ctx, d, r, { open: just?.part === "itemized", green: saved("itemized"), remember });
+  const itemized = deductionsPart(ctx, d, r, { open: just?.part === "itemized", green: saved("itemized"), remember, own });
   const year = yearPart(ctx, d, { open: just?.part === "year", green: saved("year"), remember });
   const how = { id: "how", kind: "how", says: hasIncome ? `${full.steps.length} steps` : "sources", body: () => howBody(ctx, { d, full, rets: r.separate, hasIncome, money }) };
   root.append(parts(ctx, numbers, figures, itemized, year, how));
@@ -289,10 +300,19 @@ function knownBody(ctx, { d, k, statusLabel, money }) {
  * sight, the other eight under "More details (optional)" (R13; the guide step opens this part by its title); then the green
  * line of its save, then what the plan already knows (the figures a box left blank uses). */
 function figuresPart(ctx, { owes, hasIncome, open, green, remember, known }) {
-  const { ui, store, plan } = ctx;
+  const { ui, store, plan, fmt } = ctx;
   const ty = plan.taxes?.thisYear ?? {};
+  // the gray figure in the empty "withheld so far" box: what the paychecks took out by today, which an empty box already counts
+  // (Withholding check runs the whole year at the paycheck rate). Drawn as the C9 calculators draw theirs (the placeholder and
+  // "Our guess: ..."), never saved: the box saved empty is still empty, and every figure on every page is as it was
+  const ws = hasIncome ? withheldSoFar(plan, { today: fmt.today() }) : null;
+  let g = null;
+  if (ws && typeof ctx.guess === "function") { try { g = ctx.guess("taxes/federal:withheld", { path: "taxes.thisYear.withheld", args: { soFar: ws.soFar, from: ws.from } }); } catch { g = null; } }
+  if (!(g && Number.isFinite(g.value))) g = null;
+  const WITHHELD_HELP = "from pay stubs, and from a pension or IRA (Form 1099-R box 4); last year's W-2 as a guide";
   const FIELDS = [
-    { key: "withheld", label: "Federal tax withheld so far", type: "money", min: 0, help: "from pay stubs, and from a pension or IRA (Form 1099-R box 4); last year's W-2 as a guide" },
+    { key: "withheld", label: "Federal tax withheld so far", type: "money", min: 0,
+      ...(g ? { placeholder: ui.guessText({ ...g, value: Math.round(g.value) }, "money"), help: `${ui.guessLine(g)} ${upFirst(WITHHELD_HELP)}.` } : { help: WITHHELD_HELP }) },
     { key: "wages", label: "Wages this year", type: "money", min: 0, more: true, help: "leave blank to use the Income page (pay less pre-tax 401(k) money, the health FSA and the child care account)" },
     { key: "iraWithdrawals", label: "IRA and 401(k) withdrawals this year", type: "money", min: 0, more: true, help: "the taxable part (Form 1099-R box 2a); leave blank to use the plan's required withdrawal" },
     { key: "otherOrdinary", label: "Other income taxed at regular rates", type: "money", min: 0, more: true, help: "interest, non-qualified dividends, Roth conversions; withdrawals go in the box above" },
@@ -310,20 +330,26 @@ function figuresPart(ctx, { owes, hasIncome, open, green, remember, known }) {
   refusedEnds(form, green);
   // a withdrawal typed as 0 is typed (none this year: it replaces the plan's)
   const typed = Object.entries(values).filter(([key, v]) => v !== null && (v !== 0 || key === "iraWithdrawals")).length;
-  return { id: "figures", kind: "own", title: "Figures the plan cannot see", holds: FIELDS.map((f) => f.key), set: typed, says: typed ? "" : "none typed",
+  // the gray figure is ours: the status says so ("our guess") in place of "none typed"
+  return { id: "figures", kind: "own", title: "Figures the plan cannot see", holds: FIELDS.map((f) => f.key), set: typed, guess: g ? 1 : 0, says: typed || g ? "" : "none typed",
     // what the pay takes out is not known (pay typed here, no paycheck to work it from): the box the answer waits for
     missing: hasIncome && owes === null && !typed, open,
     body: [ui.h("p", { class: "muted small", style: { margin: "0" } }, "Yearly amounts, whole dollars. Your last return or year-end statements have these."), form, green, known] };
 }
 
-function deductionsPart(ctx, d, r, { open, green, remember }) {
+function deductionsPart(ctx, d, r, { open, green, remember, own = null }) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const it = plan.taxes?.itemized ?? {};
+  // a box left empty names the plan's own figure in its help (blanks.js fromPlan): a labelled figure, never counted and never
+  // gray (an empty box here counts nothing, and a typed 0 is stored like an empty box, so a guess written from it could not
+  // tell "none" from "not typed")
+  const money = (n) => fmt.money(n, cur);
+  const mine = (key, help) => { const l = own?.lines?.find((x) => x.key === key); return l ? [help ? `${upFirst(help)}.` : "", helpFor(l, money)].filter(Boolean).join(" ") : help; };
   const FIELDS = [
-    { key: "mortgageInterest", label: "Mortgage interest", type: "money", min: 0, help: "Form 1098 from the lender" },
-    { key: "propertyTax", label: "Property tax", type: "money", min: 0 },
-    { key: "stateTax", label: "State and local income tax", type: "money", min: 0, help: `together with property tax, capped at ${fmt.money(d.itemized.saltCap, cur)}` },
+    { key: "mortgageInterest", label: "Mortgage interest", type: "money", min: 0, help: mine("mortgageInterest", "Form 1098 from the lender") },
+    { key: "propertyTax", label: "Property tax", type: "money", min: 0, help: mine("propertyTax", undefined) },
+    { key: "stateTax", label: "State and local income tax", type: "money", min: 0, help: mine("stateTax", `together with property tax, capped at ${fmt.money(d.itemized.saltCap, cur)}`) },
     { key: "charitable", label: "Charitable gifts", type: "money", min: 0 },
     { key: "medical", label: "Medical and dental", type: "money", min: 0, help: "only the part over 7.5% of income counts" },
     { key: "other", label: "Other itemized", type: "money", min: 0 },
@@ -338,6 +364,7 @@ function deductionsPart(ctx, d, r, { open, green, remember }) {
   const typed = Object.values(values).filter((v) => v !== null).length;
   return { id: "itemized", kind: "own", title: "Itemized deductions", holds: FIELDS.map((f) => f.key), set: typed, says: used === "itemized" ? `itemizing ${fmt.money(d.itemized.total, cur)}` : "standard is better", open,
     body: [ui.h("p", { class: "muted small", style: { margin: "0" } }, `You get the larger of the standard deduction (${fmt.money(r.deduction.standard, cur)} for you) and these added up (${fmt.money(d.itemized.total, cur)} now). Most households take the standard one.`),
+      planSentence(own, money) ? ui.h("p", { class: "muted small", style: { margin: "0" } }, planSentence(own, money)) : null,
       d.itemized.lines.length ? ui.h("ul", { class: "records" }, d.itemized.lines.map((l) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, l.label), ui.h("span", { class: "rec-value" }, fmt.money(l.amount, cur))), l.note ? ui.h("div", { class: "rec-sub" }, l.note) : null))) : null,
       form, green] };
 }

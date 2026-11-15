@@ -1585,3 +1585,190 @@ test("C11 r1 F2: removing a person, Get started's check of what is in their name
   assert.doesNotThrow(() => form.dispatch("submit"));
   assert.deepEqual(r.saved.at(-1).taxes.gains.map((g) => g?.proceeds ?? null), [null, 6000]);
 });
+
+// ---- C11: what an empty box stands for. "Federal tax withheld so far" shows in gray what an empty box already counts (the
+// paychecks so far); the itemized boxes name the plan's own figures, never counted; a hint on the first view only when it pays.
+const B = await import("./blanks.js");
+const { estimators: FED_EST, WITHHELD_WHY } = await import("./compute.js");
+const { estimate } = await import("../../../core/estimate/index.js");
+const { withholdingEstimate, taxAnswer } = await import("../withholding/compute.js");
+const P11 = await import("../../../qa/fixtures/setup-personas.mjs");
+const usd11 = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const ui11 = await import("../../../core/ui/dom.js");
+const fmt11 = await import("../../../core/format.js");
+const { migrate: migrate11 } = await import("../../../core/schema/migrate.js");
+const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+/** The page drawn as qa/fixtures/fake-dom.mjs renderPage draws it, with the shell's ctx.guess (this module's estimators). */
+async function drawC11(plan) {
+  const { render } = await import("./view.js");
+  const p = migrate11(structuredClone(plan));
+  const saved = [];
+  const root = new FakeElement("main");
+  const ctx = { ui: ui11, fmt: { ...fmt11, today: () => C11 }, plan: p, route: { rest: [], query: {} }, store: { get: () => p, update: (fn) => { const dd = structuredClone(p); fn(dd); saved.push(dd); } },
+    computeOf: () => null, computeRemote: async () => null,
+    guess: (k, o = {}) => estimate(p, k, { estimators: FED_EST, tables: {}, today: C11, ...o }) };
+  render(root, ctx);
+  await new Promise((r) => setTimeout(r, 0));
+  return { root, saved, text: () => textOf(root) };
+}
+const jordanSingle = () => {
+  const j = P11.finishSetup("jordan", P11.jordan(C11), C11); j.household.filingStatus = "single";
+  const m = j.accounts.find((a) => a.type === "mortgage"); m.balance = 420000;
+  const dd = j.debts.find((x) => x.accountId === m.id); dd.rate = 0.068; dd.minPayment = 2900;
+  j.taxes.state = { ...(j.taxes.state ?? {}), withheld: 6000 };
+  return j;
+};
+
+test("C11 withheld: the gray figure is what an empty box already counts: typed, the answer stays to the cent", () => {
+  const p = migrate11(famC11(C11));
+  const w = B.withheldSoFar(p, { today: C11 });
+  assert.equal(w.from, "paycheck");
+  assert.ok(Math.abs(w.soFar - 8477.21) < 0.01, `${w.soFar}`);
+  assert.ok(Math.abs(w.projected - 9469.6) < 0.01);
+  const typed = structuredClone(p); typed.taxes.thisYear = { ...typed.taxes.thisYear, withheld: w.soFar, withheldTyped: true };
+  assert.ok(Math.abs(withholdingEstimate(typed, { today: C11 }).projected - w.projected) < 1e-6);
+  assert.ok(Math.abs(taxAnswer(typed, { today: C11 }).balance - taxAnswer(p, { today: C11 }).balance) < 1e-6);
+  // a figure typed is the person's (0 included, with the flag; above 0 in a plan from before it): no gray figure
+  for (const ty of [{ withheld: 0, withheldTyped: true }, { withheld: 5000 }]) { const q = structuredClone(p); Object.assign(q.taxes.thisYear, ty); assert.equal(B.withheldSoFar(q, { today: C11 }), null); }
+  // nothing withheld from pay (Ruth, retired)
+  assert.equal(B.withheldSoFar(migrate11(P11.finishSetup("ruth", P11.ruth(C11), C11)), { today: C11 }), null);
+  // a tax year set ahead of today (next year's return): nothing taken out for it yet
+  const ahead = structuredClone(p); ahead.taxes.year = 2027;
+  assert.equal(B.withheldSoFar(ahead, { today: C11 }), null);
+  // a tax per paycheck typed on Withholding check: "typed"; with a spouse's worked out from pay: "mixed"
+  const t1 = structuredClone(p); t1.taxes.withholding = { self: { perPaycheck: 300, period: "biweekly" }, partner: { perPaycheck: 120, period: "biweekly" } };
+  assert.equal(B.withheldSoFar(t1, { today: C11 }).from, "typed");
+  const t2 = structuredClone(p); t2.taxes.withholding = { self: { perPaycheck: 300, period: "biweekly" } };
+  assert.equal(B.withheldSoFar(t2, { today: C11 }).from, "mixed");
+});
+
+test("C11 withheld: the estimator gives the page's figure the guess's shape, behind the gate; nothing without it", () => {
+  const p = migrate11(famC11(C11));
+  const k = "taxes/federal:withheld";
+  assert.equal(estimate(p, k, { estimators: FED_EST, tables: {}, today: C11 }), null, "no figure from the page: no guess");
+  const e = estimate(p, k, { estimators: FED_EST, tables: {}, today: C11, args: { soFar: 8477.21, from: "paycheck" } });
+  assert.equal(e.value, 8477.21); assert.equal(e.basis, "yours"); assert.equal(e.dataAsOf, C11); assert.deepEqual(e.tables, []);
+  assert.equal(e.why, "what your paychecks took out by today, worked out from your pay");
+  assert.equal(estimate(p, k, { estimators: FED_EST, tables: {}, today: C11, args: { soFar: 100, from: "typed" } }).why, "the paychecks so far, at the tax per paycheck you typed");
+  assert.equal(estimate(p, k, { estimators: FED_EST, tables: {}, today: C11, args: { soFar: 100, from: "mixed" } }).why, "the paychecks so far, partly worked out from your pay");
+  for (const w of Object.values(WITHHELD_WHY)) assert.ok(w.length <= 70, w);
+  for (const soFar of [0, 0.4, -5, NaN, "x"]) assert.equal(estimate(p, k, { estimators: FED_EST, tables: {}, today: C11, args: { soFar, from: "paycheck" } }), null, String(soFar));
+  const eur = structuredClone(p); eur.meta.currency = "EUR";
+  assert.equal(estimate(eur, k, { estimators: FED_EST, tables: {}, today: C11, args: { soFar: 8477, from: "paycheck" } }), null, "outside the U.S. dollar: no guess");
+});
+
+test("C11 withheld: the box shows the gray figure and says it is ours; saved empty it stays empty (withheld 0, not typed)", async () => {
+  const r = await drawC11(famC11(C11));
+  const part = partOf(r.root, "figures");
+  assert.equal(part.hasAttribute("open"), false, "the part stays shut");
+  assert.equal(textOf(part.querySelector(".fold-status")), "our guess");
+  const box = part.querySelector('[name="withheld"]');
+  assert.equal(box.getAttribute("placeholder"), "8,477");
+  assert.equal(box.value ?? "", "");
+  assert.equal(box.dataset?.guess, undefined, "drawn as a preview, not a guess box written on Save (S5)");
+  assert.match(textOf(part), /Our guess: what your paychecks took out by today, worked out from your pay\. From pay stubs, and from a pension or IRA \(Form 1099-R box 4\); last year's W-2 as a guide\./);
+  part.querySelector("form").dispatch("submit");
+  assert.equal(r.saved[0].taxes.thisYear.withheld, 0);
+  assert.equal(r.saved[0].taxes.thisYear.withheldTyped, false);
+  assert.equal(r.saved[0].guesses, undefined, "nothing is marked: the gray figure is never written");
+  // typed: the person's figure, no gray, the part says it was set
+  const t = famC11(C11); t.taxes.thisYear.withheld = 7000; t.taxes.thisYear.withheldTyped = true;
+  const r2 = await drawC11(t);
+  const box2 = partOf(r2.root, "figures").querySelector('[name="withheld"]');
+  assert.equal(box2.getAttribute("placeholder") ?? "", "");
+  assert.doesNotMatch(textOf(partOf(r2.root, "figures")), /Our guess/);
+  // the first view is the same words as before (the gray figure is inside the shut part)
+  const before = await pageOf(famC11(C11));
+  assert.equal(firstView(r.root).replace("our guess", "none typed"), firstView(before.root));
+});
+
+test("C11 itemized: the plan's own figures, one sentence per case, never counted, a typed box never replaced", () => {
+  const fam = migrate11(famC11(C11));
+  const f = B.fromPlan(fam, { today: C11 });
+  assert.deepEqual(f.lines, [{ key: "mortgageInterest", label: "mortgage interest", amount: 16353, from: "the Home page", capped: false }]);
+  assert.equal(f.standard, 32200); assert.equal(f.total, 16353); assert.equal(f.saving, 0); assert.equal(f.beats, false);
+  assert.equal(B.planSentence(f, usd11), "With your plan's own figures (mortgage interest about $16,350), these would come to about $16,350: still less than the standard deduction, so typing them would not change your tax.");
+  assert.equal(B.hintSentence(f, usd11), "");
+  assert.equal(B.helpFor(f.lines[0], usd11), "Your plan: about $16,350 (the Home page).");
+  // nothing is counted: the federal tax is the same with and without the lines
+  assert.deepEqual(compute(fam, { today: C11 }).itemized, { total: 0, lines: [], saltCap: compute(fam, { today: C11 }).itemized.saltCap });
+  // property tax typed on the Home page, and a state that taxes pay: three lines, listed in the box order
+  const h = structuredClone(fam); h.property = [{ id: "h1", kind: "home", accountId: "a-home", propertyTax: 6200 }]; h.household.state = "OH";
+  const f3 = B.fromPlan(h, { today: C11 });
+  assert.deepEqual(f3.lines.map((l) => [l.key, l.from]), [["mortgageInterest", "the Home page"], ["propertyTax", "the Home page"], ["stateTax", "the State tax page"]]);
+  assert.equal(f3.lines[1].amount, 6200);
+  assert.match(B.planSentence(f3, usd11), /^With your plan's own figures \(mortgage interest about \$16,350, property tax about \$6,200 and state income tax about \$[\d,]+\), these would come to about \$[\d,]+: still less than the standard deduction, so typing them would not change your tax\.$/);
+  // a typed box is the person's: no plan figure for it
+  const typed = structuredClone(h); typed.taxes.itemized.mortgageInterest = 9000;
+  assert.deepEqual(B.fromPlan(typed, { today: C11 }).lines.map((l) => l.key), ["propertyTax", "stateTax"]);
+  // every box typed: nothing to say
+  const all = structuredClone(h); Object.assign(all.taxes.itemized, { mortgageInterest: 9000, propertyTax: 4000, stateTax: 2500 });
+  assert.deepEqual(B.fromPlan(all, { today: C11 }), { lines: [], total: null, standard: null, saving: null, beats: false });
+  assert.equal(B.planSentence(B.fromPlan(all, { today: C11 }), usd11), "");
+  // no mortgage, no home, no state income tax (Sam in Texas): nothing
+  assert.deepEqual(B.fromPlan(migrate11(P11.finishSetup("sam", P11.sam(C11), C11)), { today: C11 }).lines, []);
+});
+
+test("C11 r1 F4: the Home page's own guess of the property tax paid apart is said as our guess in the box's help", () => {
+  const fam = migrate11(famC11(C11));
+  fam.debts.find((x) => x.id === "d-mort").escrowSaid = "no";   // "No, I pay them myself", nothing typed on Home: Home guesses them
+  const f = B.fromPlan(fam, { today: C11 });
+  const tax = f.lines.find((l) => l.key === "propertyTax");
+  assert.equal(tax.guessed, true);
+  assert.equal(B.helpFor(tax, usd11), "Your plan: about $5,020, our guess (the Home page).");
+  assert.equal(B.helpFor(f.lines.find((l) => l.key === "mortgageInterest"), usd11), "Your plan: about $16,350 (the Home page).");
+  // typed on Home: the person's own figure, no guess mark
+  const typed = structuredClone(fam); typed.property = [{ id: "h1", kind: "home", accountId: "a-home", propertyTax: 6200 }];
+  const t = B.fromPlan(typed, { today: C11 }).lines.find((l) => l.key === "propertyTax");
+  assert.equal(t.guessed, undefined);
+  assert.equal(B.helpFor(t, usd11), "Your plan: about $6,200 (the Home page).");
+});
+
+test("C11 itemized: when itemizing pays, the sentence says type them and the hint says how much (IRS Pub. 936 line on the interest)", () => {
+  const j = migrate11(jordanSingle());
+  const f = B.fromPlan(j, { today: C11 });
+  assert.deepEqual(f.lines.map((l) => [l.key, l.amount]), [["mortgageInterest", 28362], ["stateTax", 6000]]);
+  assert.equal(f.beats, true); assert.equal(f.standard, 16100); assert.equal(f.total, 34362);
+  assert.ok(Math.abs(f.saving - 2191.44) < 0.01, `${f.saving}`);
+  assert.equal(B.planSentence(f, usd11), "With your plan's own figures (mortgage interest about $28,360 and state income tax about $6,000), these would come to about $34,360, more than the standard deduction: type the exact figures below (Form 1098, your tax bills and pay stubs have them).");
+  assert.equal(B.hintSentence(f, usd11), "Itemizing could save you about $2,190: your plan's mortgage interest and state income tax bring your deductions to about $34,360, more than the $16,100 standard one.");
+  // the saving is the tax with them typed, to the cent
+  const typed = structuredClone(j); Object.assign(typed.taxes.itemized, { mortgageInterest: 28362, stateTax: 6000 });
+  assert.ok(Math.abs(compute(j, { today: C11 }).result.totalTax - compute(typed, { today: C11 }).result.totalTax - f.saving) < 0.01);
+  // under HINT_FROM: no hint
+  assert.equal(B.hintSentence({ ...f, saving: B.HINT_FROM - 1 }, usd11), "");
+  assert.equal(B.HINT_FROM, 100);
+  // interest on the first $750,000 owed ($375,000 filing separately): Pub. 936 (2025)
+  const big = structuredClone(j); big.accounts.find((a) => a.type === "mortgage").balance = 1000000;
+  const fb = B.fromPlan(big, { today: C11 });
+  const whole = fb.lines[0].amount / 0.75;
+  assert.equal(fb.lines[0].capped, 750000);
+  assert.equal(B.helpFor(fb.lines[0], usd11), `Your plan: about ${usd11(Math.round(fb.lines[0].amount / 10) * 10)} (the Home page; the interest on the first $750,000 owed).`);
+  big.household.filingStatus = "married_separate";
+  const fs2 = B.fromPlan(big, { today: C11 });
+  assert.equal(fs2.lines[0].capped, 375000);
+  assert.ok(Math.abs(fs2.lines[0].amount - whole * 0.375) < 2, `${fs2.lines[0].amount} vs ${whole * 0.375}`);
+  assert.deepEqual(B.MORTGAGE_LIMIT, { usual: 750000, married_separate: 375000 });
+});
+
+test("C11 itemized on the page: the boxes' help and the sentence inside the part; the hint on the first view only when it pays", async () => {
+  const r = await drawC11(famC11(C11));
+  const it = partOf(r.root, "itemized");
+  assert.match(textOf(it), /With your plan's own figures \(mortgage interest about \$16,350\), these would come to about \$16,350: still less than the standard deduction, so typing them would not change your tax\./);
+  assert.match(textOf(it), /Form 1098 from the lender\. Your plan: about \$16,350 \(the Home page\)\./);
+  for (const b of boxesIn(it)) { assert.equal(b.getAttribute("placeholder") ?? "", "", `${b.getAttribute("name")}: never gray`); assert.equal(b.value ?? "", ""); }
+  const worthOf = (root) => root.all().filter((x) => x.dataset?.worth !== undefined && /^Itemizing/.test(textOf(x)));
+  assert.equal(worthOf(r.root).length, 0, "no hint: itemizing would not pay");
+  // a save of the part writes the boxes as before (empty = 0), never the plan's figures
+  it.querySelector("form").dispatch("submit");
+  assert.deepEqual(r.saved[0].taxes.itemized, { mortgageInterest: 0, propertyTax: 0, stateTax: 0, charitable: 0, medical: 0, other: 0 });
+  // Jordan alone with a bigger mortgage: the hint is on the first view, with one tap to the boxes
+  const j = await drawC11(jordanSingle());
+  const worth = worthOf(j.root);
+  assert.equal(worth.length, 1);
+  assert.equal(textOf(worth[0]), "Itemizing could save you about $2,190: your plan's mortgage interest and state income tax bring your deductions to about $34,360, more than the $16,100 standard one.");
+  assert.ok(!worth[0].closest("details"), "never folded (R9 item 6)");
+  const link = worth[0].parentNode.querySelector("a");
+  assert.equal(link.getAttribute("href"), "#/taxes/federal?show=mortgageInterest");
+  assert.equal(textOf(link), "Type them under Itemized deductions ›");
+});

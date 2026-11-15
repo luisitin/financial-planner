@@ -535,3 +535,66 @@ over a blank entry too: Tax lots counts the year's sales with `salesOf`, Capital
 module.test.mjs "C11 gains" (the kinds of entry, joint and separate, and each page drawn with the stand-in kit, as without
 the blank and, with nothing else, as with no sales), "C11 r1 P2" (what is a sale) and "C11 r1 F2" (People, Get started,
 Capital gains' Edit).
+
+## What an empty box stands for (smart guesses C11, 2026-11-15; `blanks.js`)
+The last step of the smart guesses (modules/overview/guesses/coverage.js): each box a layperson may not know says how a blank
+is handled. Nothing on the first view changed for the qa households, and no compute's output moved
+(tests/c11-invariance.test.mjs: digests from ab3bdde over 44 plans, as they are and with every one of these boxes typed).
+
+**Federal tax withheld so far: a gray figure, never saved** (`guess:taxes/federal:withheld`). An empty box already counts:
+Withholding check runs the whole year at the paycheck rate (the tax per paycheck typed there, else worked out from pay as
+payroll does, plus the tax held back from stock as it vests; taxes/withholding `projectedWithholding`,
+`withholdingEstimate`), and a figure typed here adds the paychecks still to come. The box shows in gray the part of that
+already taken out:
+
+    so far = projected (box empty) - (projected (1 typed) - 1)
+
+so typing the gray figure leaves the April answer exactly as it is (Ana and Bo on 2026-11-15: 8,477.21 typed gives the same
+$5,253.01 to pay; the box shows "8,477"). The help says "Our guess: what your paychecks took out by today, worked out from
+your pay." ("the paychecks so far, at the tax per paycheck you typed" when Withholding check has the figure; "partly worked
+out from your pay" with both), and "Figures the plan cannot see" says "our guess" in place of "none typed". Saved empty, the
+box is still empty (withheld 0, `withheldTyped` false, as before): a stored "so far" would go stale with every paycheck and
+read as typed. No figure when one is typed (a typed 0 included), when nothing is withheld from pay (no pay figure, a
+retiree's pension with no withholding typed), or before any paycheck of the year. The estimator (`estimators` in
+compute.js, re-exported by module.js) only gives the page's figure the shape of a guess and the gate (U.S. dollars only): the
+page works the figure out (`withheldSoFar`) and hands it over as `args`, because Withholding check's compute reads this
+compute.js and cannot be read back (a load cycle). Drawn as the C9 calculators draw theirs (the box's placeholder and the
+"Our guess" line, not the kit's guess box), because the part is shut on the first view and a kit guess box is never folded.
+
+**Mortgage interest, property tax, state and local income tax: the plan's own figures, labelled, never counted**
+(`example`). An empty itemized box counts nothing, as before. When the plan has a figure for one (`fromPlan`):
+- mortgage interest: the Home page's year of interest on its mortgage, on the first $750,000 owed ($375,000 filing
+  separately): IRS Publication 936 (2025), "Home mortgage interest", https://www.irs.gov/publications/p936, read 2026-11-15
+  ("You can deduct home mortgage interest on the first $750,000 ($375,000 if married filing separately) of indebtedness";
+  a loan from before December 16, 2017 keeps $1 million, which the plan does not record, so the lower line is used);
+- property tax: the Home page's property tax line (typed on Home, the part of the mortgage payment, or our guess of what is
+  paid apart); never a line that holds the home insurance too, never read back from the itemized box itself;
+- state income tax: the State tax page's "withheld or paid this year" when typed (that box asks for "the total expected by
+  December", so it is the year's figure, not the part paid so far), else its tax for the year.
+The box's help names it ("Form 1098 from the lender. Your plan: about $16,350 (the Home page)."; figures in words are
+rounded to $10; the Home page's own guess of the tax paid apart says so: "Your plan: about $5,020, our guess (the Home
+page)."), and one sentence under the part's intro compares: "With your plan's own figures (mortgage interest about
+$16,350), these would come to about $16,350: still less than the standard deduction, so typing them would not change your
+tax." or, when they would beat it, "..., more than the standard deduction: type the exact figures below (Form 1098, your tax
+bills and pay stubs have them)." `total` is `itemizedTotal` with them in (the caps and floors applied); `saving` is the year's
+tax now less with them typed (known(), so the page's own total). At $100 or more (`HINT_FROM`) it is money the person could
+keep, so the first view says it in one card with `data-worth` (docs/OPTIONAL.md R9 item 6) and one tap to the boxes: "Itemizing
+could save you about $2,190: your plan's mortgage interest and state income tax bring your deductions to about $34,360,
+more than the $16,100 standard one." (Jordan filing single with $420,000 at 6.8% and $6,000 of Ohio tax withheld; none of
+the qa households reaches it, so their first view is unchanged.) "Save you", not "take off your tax": with the child tax
+credit's refundable part, less tax can mean more back (Jordan's $380 of tax and $4,400 back become about $2,190 more back),
+and the saving is the page's own total either way.
+Why labelled and not gray: a blank itemized box and a typed 0 are stored alike (0), so a guess written on Save could not tell
+"none" from "not typed" and would overwrite a typed 0 on the next save; counting a blank differently would move `taxInputs`,
+which 27 computes and the golden tests read (spec 16); and the Home and State tax computes read this compute.js, so settle could
+not work the figures out again without a load cycle. The person types the exact figures from their forms.
+
+**The other boxes** (coverage.js says each): other ordinary income, qualified dividends, tax-exempt interest and other itemized
+deductions count 0 when empty (the Income page's lines are counted already, and its dividends are taxed at regular rates until
+the qualified part is typed: no table of the qualified share is bundled, and the blank errs toward more tax); other
+adjustments count 0 beyond what is worked out (student loan interest from Debts, IRA and HSA money from their pages).
+
+Tests: module.test.mjs "C11 withheld" (the gray figure equals what is counted, to the cent; the three whys; no figure when
+typed, with no pay or a year ahead; the box, its words, the status, Save empty; the first view's words) and "C11 itemized"
+(each sentence; nothing counted; a typed box never replaced; the Pub. 936 line and filing separately; the hint only from
+$100, never folded, and its link).
