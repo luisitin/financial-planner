@@ -42,6 +42,15 @@ export const WITHDRAWAL_ORDERS = {
   "roth-first": { label: "Roth, then taxable, then pre-tax", order: ["free", "taxable", "deferred"], note: "the usual worst: spends the tax-free money first" },
 };
 export const orderKey = (order) => Object.keys(WITHDRAWAL_ORDERS).find((k) => WITHDRAWAL_ORDERS[k].order.join() === (order ?? []).join()) ?? "custom";
+/**
+ * The fifth order, beside the four (gap list, next 60, item 22; 2026-11-15): after cash, every account pays its share of what the
+ * year needs, by what it holds at the start of the year (core/math/retirement.js `withdrawalSplit`). Saved as
+ * `retirement.withdrawalSplit: "proportional"`; `withdrawalOrder` is kept as the order for money that comes in during a year to an
+ * account that held nothing at its start. Not in WITHDRAWAL_ORDERS, whose four the golden key and the tax pages' tests hold.
+ */
+export const WITHDRAWAL_SHARE = Object.freeze({ key: "proportional", label: "A share from every account", note: "each account pays its share of what comes out, by what it holds at the start of the year, so pre-tax, taxable and Roth money go down together" });
+/** Does the plan take a share from every account? (`retirement.withdrawalSplit`; any other value, or none: the order) */
+export const sharesWithdrawals = (rt) => rt?.withdrawalSplit === WITHDRAWAL_SHARE.key;
 
 /**
  * The owner's switches (critics' review of 2026-11-13). Each is a change the reviews found right, kept off until the owner says yes
@@ -1210,6 +1219,8 @@ export function buildInputs(plan, params = {}) {
     rmd: { birthYear: people[0].birthYear, startAge: rmdStartAge(adults.find((p) => p.id === people[0].id)?.birthDate ?? people[0].birthYear), owners: rmdOwners(plan, people, adults, balances.deferred) },
     strategy: STRATEGIES[rt.strategy] ? rt.strategy : "fixed-real", withdrawalRate: Number(rt.withdrawalRate ?? 0.04),
     withdrawalOrder: Array.isArray(rt.withdrawalOrder) && rt.withdrawalOrder.length ? rt.withdrawalOrder : ["taxable", "deferred", "free"],
+    // a share from every account (`retirement.withdrawalSplit`): only when the plan says so, so every other plan's inputs are as before
+    ...(sharesWithdrawals(rt) ? { withdrawalSplit: WITHDRAWAL_SHARE.key } : {}),
     tax: taxSettings(plan),
     rothConversion: rt.taxMode === "brackets" && rt.rothConversion?.on ? { fillRate: Number(rt.rothConversion.fillRate ?? 0.22), untilAge: rt.rothConversion.untilAge ? Number(rt.rothConversion.untilAge) : null } : null,
     ...(sw.incomePaysTaxFirst ? { incomePaysTaxFirst: true } : {}),
@@ -1252,10 +1263,12 @@ export function buildInputs(plan, params = {}) {
   // very same inputs object and nothing is added to what is returned; `happenings: false` leaves them out (the page works out
   // each one's own effect from that run)
   const hap = params.happenings === false ? null : applyHappenings(plan, inputs, { nowYear: year, today });
-  if (hap?.changed) return { inputs: hap.inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order", happenings: { used: hap.used.length, skipped: hap.skipped.length, goals: hap.goals.length } };
-  return { inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order" };
+  if (hap?.changed) return { inputs: hap.inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: orderLabelOf(inputs), happenings: { used: hap.used.length, skipped: hap.skipped.length, goals: hap.goals.length } };
+  return { inputs, missing: [], people, notes, spendingSource, spendingYearly, setupMonthly, figureMonthly, health, retireBy, ssYearly: ss.householdYearly, otherLeft: other.left, orderLabel: orderLabelOf(inputs) };
 }
 
+/** The plan's order in words: the fifth order's label, one of the four's, or "in a custom order". */
+const orderLabelOf = (inputs) => (inputs.withdrawalSplit === WITHDRAWAL_SHARE.key ? WITHDRAWAL_SHARE.label : WITHDRAWAL_ORDERS[orderKey(inputs.withdrawalOrder)]?.label ?? "in a custom order");
 /** The ways whose spending is the plan's own figure (the others take a share of savings, whatever the figure). */
 export const SPEND_RULES = ["fixed-real", "guardrails"];
 /** The most a month the lowest spending accepted may be (as the spending box: a slip of extra digits is refused). */

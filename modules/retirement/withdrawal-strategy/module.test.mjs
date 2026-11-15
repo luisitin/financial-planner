@@ -1016,3 +1016,24 @@ test("the rule this year: no trim is asked while Social Security is not counted 
   const g2 = compute(p, { today: T31 }).guardNow;
   assert.deepEqual([g2.act, "unsure" in g2], ["trim", false]);
 });
+
+// ---- A share from every account (Withdrawal order's fifth, gap list next 60 item 22, 2026-11-15): the first year says it ------
+test("share: where the year's money comes from, one phrase per case", async () => {
+  const { eachWords } = await import("./view.js");
+  const names = (b) => b.names;
+  assert.equal(eachWords([{ bucket: "cash", names: ["your cash savings"] }, { bucket: "taxable", names: ["Brokerage"] }, { bucket: "deferred", names: ["Ana's 401(k)", "Bo's 401(k)"] }, { bucket: "free", names: ["Bo's Roth IRA"] }], names),
+    "your cash savings first, then a share from each of Brokerage, Ana's 401(k), Bo's 401(k) and Bo's Roth IRA");
+  assert.equal(eachWords([{ bucket: "taxable", names: ["Brokerage"] }, { bucket: "deferred", names: ["IRA"] }], names), "a share from each of Brokerage and IRA");
+  // one kind of account after cash: the order's own words say it
+  assert.equal(eachWords([{ bucket: "cash", names: ["Checking"] }, { bucket: "deferred", names: ["IRA"] }], names), null);
+  // the family on a share from every account, in 2055: cash first, then a share from each
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const p = migrate(familyPlan("2026-11-15")); p.retirement.withdrawalSplit = "proportional";
+  assert.equal(firstYear(p, { today: "2026-11-15" }).split, true);
+  assert.equal("split" in firstYear(migrate(familyPlan("2026-11-15")), { today: "2026-11-15" }), false);
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js"), { render } = await import("./view.js");
+  const root = new FakeElement("main");
+  render(root, { ui, fmt: { ...fmt, today: () => "2026-11-15" }, plan: p, route: { group: "retirement", id: "withdrawal-strategy", rest: [], query: {} }, module: { group: "retirement", id: "withdrawal-strategy" }, store: { get: () => p, update() {} } });
+  assert.ok(root.textContent.includes("Take it from Chase checking and Ally savings first, then a share from each of Brokerage, Ana's 401(k), Bo's old 401(k) and Bo's Roth IRA. Amounts are in today's dollars."), root.textContent.slice(0, 600));
+});

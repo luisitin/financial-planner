@@ -420,7 +420,8 @@ export function compute(plan, params = {}) {
  *   fromSavings = everything taken out that year (the required withdrawal included); extra = fromSavings - need, the part of a
  *   required withdrawal not needed for spending (the engine puts it back into the taxable account).
  *   buckets: where it comes from, in the order the engine takes it (cash first, then the plan's withdrawal order), with the
- *   names of the accounts of that kind.
+ *   names of the accounts of that kind. split: true when the plan takes a share from every account (after cash, each pays its
+ *   share; Withdrawal order's fifth, gap list next 60 item 22); absent otherwise.
  * Round 4, 2026-11-02: the page showed four "first year" spending figures and never an amount to take out.
  */
 export function firstYear(plan, params = {}) {
@@ -452,5 +453,7 @@ export function firstYear(plan, params = {}) {
     year: r.year, thisYear: r.year === todayYear, ages: r.ages, spending, health: real(r.eventSpending), healthAdded: healthAdded(p.health), income, sources,
     fromSavings, need, required: real(r.rmd), requiredTax, extra: Math.max(0, fromSavings - need), taxes, other: real(r.eventOut - r.eventSpending), short: real(r.shortfall), buckets,
     affordable: p.affordable, verdict: p.verdict, shortAge: p.shortAge ?? null,
+    // a share from every account (Withdrawal order's fifth): the accounts after cash each pay their share (only when the plan says so)
+    ...(p.inputs.withdrawalSplit ? { split: true } : {}),
   };
 }

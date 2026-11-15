@@ -22,6 +22,18 @@ let ownPending = null;
 /** "a", "a and b", "a, b and c" */
 const list = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+/**
+ * Where the year's money comes from on a plan that takes a share from every account (one phrase per case; module.test.mjs reads
+ * each), or null when fewer than two kinds of account after cash pay (the plain order's words say it then). namesOf(bucket): the
+ * names of its accounts (or the kind's words), one list for all of them.
+ *   cash and two or more  -> "your cash savings first, then a share from each of Brokerage, Ana's 401(k), Bo's 401(k) and Bo's Roth IRA"
+ *   two or more           -> "a share from each of Brokerage and IRA"
+ */
+export function eachWords(buckets, namesOf) {
+  const cash = buckets.find((b) => b.bucket === "cash"), shared = buckets.filter((b) => b.bucket !== "cash");
+  if (shared.length < 2) return null;
+  return `${cash ? `${list(namesOf(cash))} first, then ` : ""}a share from each of ${list(shared.flatMap(namesOf))}`;
+}
 /** "One. Two." -> ["One.", "Two."] */
 const sentences = (t) => String(t).split(/(?<=\.) (?=[A-Z])/);
 
@@ -86,8 +98,11 @@ export function render(root, ctx) {
       const dfr = fy.required >= 0.5 ? fy.buckets.find((b) => b.bucket === "deferred") : null;
       // the rest in the engine's order (the required amount first, then cash, investments, more pre-tax money, the Roth)
       const rest = dfr ? fy.buckets.filter((b) => b.bucket !== "deferred" || b.amount > fy.required + 0.5) : [];
-      const restWords = rest.length === 1 && rest[0] === dfr ? " The rest comes from there too." : rest.length ? ` The rest from ${rest.map((b, i) => (b === dfr && i > 0 ? `more from ${from(b)}` : from(b))).join(", then ")}.` : "";
+      // a share from every account (Withdrawal order's fifth): after cash, the accounts each pay their share, said as such
+      const each = fy.split ? eachWords(fy.buckets, (b) => (b.accounts.length ? b.accounts.map(acct) : [KIND[b.bucket]])) : null;
+      const restWords = each ? ` The rest from ${each}.` : rest.length === 1 && rest[0] === dfr ? " The rest comes from there too." : rest.length ? ` The rest from ${rest.map((b, i) => (b === dfr && i > 0 ? `more from ${from(b)}` : from(b))).join(", then ")}.` : "";
       if (dfr) out.push({ small: `About ${money(fy.required)} of it must come from ${from(dfr)}: the law requires it.${restWords}${dollars}` });
+      else if (each) out.push({ small: `Take it from ${each}.${dollars}` });
       else if (a) out.push({ small: `Take it from ${from(a)} first${b2 ? `, then ${from(b2)}` : ""}${c3 ? `, then ${from(c3)}` : ""}.${dollars}` });
     }
     return out;

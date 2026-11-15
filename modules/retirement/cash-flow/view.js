@@ -9,7 +9,9 @@ const state = { real: true, from: "retirement" };
 // the plan's own withdrawal order, not a fixed one (stress test 2026-11-11: the key named one order whatever Withdrawal order chose)
 // the same names as Which account to draw from first: taxable, pre-tax, Roth (review of the cash-flow key)
 const PART = { taxable: "taxable savings", deferred: "pre-tax accounts (taxed as it comes out)", free: "Roth (tax-free)" };
-export function orderSaid(order) {
+export function orderSaid(order, split = null) {
+  // a share from every account (Withdrawal order's fifth, `retirement.withdrawalSplit`; gap list, next 60, item 22)
+  if (split === "proportional") return "Money comes out of cash first, then a share from every account, by what each holds.";
   const parts = (order ?? []).map((k) => PART[k]).filter(Boolean);
   return parts.length ? `Money comes out of cash first, then ${parts.join(", then ")}.` : "Money comes out of cash first, then in the order set on Withdrawal order.";
 }
@@ -50,7 +52,7 @@ export function render(root, ctx) {
       { key: "taxes", label: "Tax", align: "right", render: (r) => money(r.out.taxes) },
       { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall ? "bad" : "" }, money(r.end.total)) },
     ], rows), tailRow ? ui.h("p", { class: "bad small", style: { margin: "10px 0 0" } }, `${tailRow.first} to ${tailRow.last}: nothing left; about ${money(tailRow.short)} short every year.`) : null),
-    ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `Left: every retirement account together at the end of that year. ${orderSaid(d.order)}`),
+    ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `Left: every retirement account together at the end of that year. ${orderSaid(d.order, d.split)}`),
     ui.h("ul", { class: "records only-narrow" }, rows.map((r) => ui.h("li", {},
       // the bold figure says what it is (stress test 2026-11-11, RB4: "$450,880" with its meaning 3,000 px below)
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall ? "bad" : ""}` }, `${money(r.end.total)} left`)),

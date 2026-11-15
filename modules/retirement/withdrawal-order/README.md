@@ -4,16 +4,18 @@
 **Purpose:** Which account to draw from first (taxable, pre-tax or Roth) and what each order costs in lifetime tax and spending.
 
 ## Inputs
-Everything the Projection page reads; `retirement.withdrawalOrder` (the plan's order, after cash; set here with one tap). The comparison always runs through the federal brackets so the tax timing shows, whatever the projection's tax setting.
+Everything the Projection page reads; `retirement.withdrawalOrder` (the plan's order, after cash; set here with one tap); `retirement.withdrawalSplit` ("proportional": a share from every account, the fifth order; set here with one tap, taken off by any other order's). The comparison always runs through the federal brackets so the tax timing shows, whatever the projection's tax setting.
 
 ## Outputs
-`options[]` (four orders: taxable first; pre-tax first; pre-tax, Roth, taxable; Roth first): `success`, `failYear`, `endBalanceReal`, `endAfterTaxReal`, `endTaxRate`, `taxesReal`, `rmdReal`, `current`, `best`; `best`, `gainVsWorst`, `taxSpread`, `bracketsOn`, `notes`.
+`options[]` (four orders: taxable first; pre-tax first; pre-tax, Roth, taxable; Roth first): `success`, `failYear`, `endBalanceReal`, `endAfterTaxReal`, `endTaxRate`, `taxesReal`, `rmdReal`, `current`, `best`; `best`, `gainVsWorst`, `taxSpread`, `bracketsOn`, `notes` (the four's, as the golden key holds them); `share` (the fifth order, the same figures, `key`/`split` "proportional"); `five: { best, gainVsWorst, taxSpread, allFail }` (the ranking over all five, which the page shows). `chooseOrder(draft, option, { withRates })` is what "Use this order" writes.
 
 ## Formulas
-`project()` once per order with `withdrawalOrder` and `tax: { mode: "brackets" }`. Orders are ranked by what is left at the end after the tax still owed on pre-tax money (`endAfterTaxReal`: cash + taxable + Roth + pre-tax x (1 - the last year's bracket)); a plan that runs out ranks by how late it does.
+`project()` once per order with `withdrawalOrder` and `tax: { mode: "brackets" }`, and once more with `withdrawalSplit: "proportional"`. Orders are ranked by what is left at the end after the tax still owed on pre-tax money (`endAfterTaxReal`: cash + taxable + Roth + pre-tax x (1 - the last year's bracket)); a plan that runs out ranks by how late it does; a tie goes to the first listed, so the share is "best" only when it leaves more than all four.
+
+A share from every account (`core/math/retirement.js`, `withdrawalSplit`): at the start of each year w_b = balance_b / (taxable + pre-tax + Roth). After everyday cash and any required withdrawal, each draw A the year needs (spending, health cover, one-off costs and the tax, grossed up in the same loop as for an order) is split take_b = min(balance_b, A x w_b / the sum of w over the accounts that still hold money); what an emptied account could not pay is shared again among the others by the same weights (at most three rounds), and an account that held nothing at the start of the year (money that came in during it, a home sold) pays last, in the plan's own order. Example (module test): $600,000 taxable, $300,000 pre-tax, $100,000 Roth and $50,000 to take, no tax: $30,000, $15,000 and $5,000; with a flat 20% on pre-tax money, W = 50,000 / (1 - 0.2 x 0.3) = $53,191.49, split 60/30/10. Source: the arithmetic of a split in proportion; no outside figure is used, so nothing here needs a source with a date. ProjectionLab and RightCapital offer the same kind of order (the gap map, C8); their documentation could not be read this session (the network reaches www.irs.gov and the package registries only).
 
 ## Edge cases
-Cash always goes first. When the projection uses the flat rate the order changes nothing there; a note says so. Proportional or bracket-filling mixes are the Roth conversions page's job.
+Cash always goes first, also for the share. When the projection uses the flat rate the order changes nothing there; a note says so. Bracket-filling mixes are the Roth conversions page's job.
 
 ## Tests
 `tests/tax-pages.test.mjs`, `module.test.mjs`.
@@ -67,7 +69,54 @@ the remaining pre-tax balance. Ties retain the first listed option. Money is
 rounded to cents only for federal tax and final CSV outputs; rates have six places.
 
 ## Ideas / not yet
-- A proportional order; the step-up in basis on taxable money left to heirs.
+- The step-up in basis on taxable money left to heirs.
+- One search over the order, Roth conversions and gain harvesting together (gap list, next 60, item 23).
+
+## A share from every account (2026-11-15, gap list next 60, item 22)
+A fifth order beside the four: after cash, every account pays its share of what the year needs, by what it held at the start
+of the year, so pre-tax, taxable and Roth money go down together (formula above). For the family plan (`qa/fixtures/family-plan.mjs`)
+it leaves $840,251 after tax, $1,203 more than pre-tax first ($839,048), with $174,093 of tax over the plan; for the near-retirement
+household (qa/households 09) it pays $41,853 of tax over the plan against $57,950 for pre-tax first, and leaves $762 less.
+
+What the page shows (the simple-first conversion of this page, opt spec C14, done here as the gap spec's section 3.1 asks; C14
+skips this page):
+- First: the headline, ranked over five orders, one sentence (`heroWords`, one per case; module test "the hero") and the one
+  filled button. The sentence names the order once (in the headline) and says what it leaves against yours: "This order leaves
+  about $840,251 at the end, after tax and in today's dollars: $3,707 more than yours." (the two figures as shown, so the
+  difference checks by hand); "Your order leaves ... The worst order leaves $18,123 less." when yours is the best; "...; yours
+  runs out in 2061." when yours runs out. The tax over the plan and the figure before tax are in each row (critics of 2026-11-15,
+  P2: the hero said the order's name twice and four figures). The flat-rate notice as before. Card "The five orders": the best
+  order's row and yours (when they differ), then "3 more orders" (`rest()`, kind "more"; "4 more orders" when yours is the best).
+  The best order's row has no "Use this order": the hero's button is its one way in (P4: it was offered twice).
+- A plan already on the best order with the flat tax rate: the headline is "Your order is the best one at the real tax rates"
+  (the order changes nothing yet), and "Work out tax at the real rates" is the page's one filled button; beside the hero's own
+  "Use ..." it stays outlined (P1: after choosing the best order, the page said "the best one for this plan" and had no filled
+  button left).
+- "How this is worked out" (the parts card): the hero's line on the method (moved word for word), one paragraph on the share
+  order, and "Why it matters" (moved word for word). First view: 495 words and 21 figures before, 180 and 10 after (the family).
+- Every "Use ..." confirms itself in green and offers "Put it back" (the kit's `ui.undoable`: only what that tap changed comes
+  back, with `undoneWords` when something was changed since); the line stays until the next change. Before this, the green line
+  went after four seconds and there was no way back: the brief asked for "confirm and Undo" on the page's existing button, which
+  had none, so the way back is now on every choice here.
+
+Builder's choices:
+- Not a fifth entry of `WITHDRAWAL_ORDERS` (its four are what the golden key, the tax pages' tests and `orderKey` read): a field of
+  its own, `retirement.withdrawalSplit`, so a plan without it is the very same plan. The order in `withdrawalOrder` is kept with
+  the share: it is the order for money that comes in during a year to an account that held nothing at its start, and what a later
+  tap on another order replaces. The share's figures here are run with the plan's own order for that, so they are what the plan
+  runs once it is saved.
+- The weights are the balances at the start of the year (the brief's words), not at the moment money comes out: a required
+  withdrawal comes out of pre-tax money first, as in every order (the law requires it), and the rest is shared by those weights.
+- Ties go to the four, so the headline never moves to the share for a plan where it makes no difference (the retired couple).
+- The rows' notes start with a capital now (they began in lower case under the order's name).
+Readers that name the order say it: Will the money last?'s "What goes into this" and Plan summary through `orderLabel`
+("A share from every account"); Cash flow in retirement ("Money comes out of cash first, then a share from every account, by what
+each holds."); How much to take out's first-year answer ("Take it from Checking first, then a share from each of Brokerage,
+Ana's 401(k) and Bo's Roth IRA.").
+Tests: `module.test.mjs` (the split, cash first, the tax gross-up, an account that runs dry, money in to an empty account, a
+required withdrawal first; the five-way ranking and its tie; the tap and Put it back; each sentence; S11), and
+`tests/withdrawal-ways-invariance.test.mjs` (every figure of a plan without the field is byte for byte what 154a597 gave, over 44
+invented plans).
 
 ## Batch 5b (2026-11-06): compared on the same spending every year
 The owner's answer, 2026-11-06: "You can do as you please. Just make sure a layman can easily understand and use the page". The share, years-left and guardrail ways now spend guaranteed income on top of their

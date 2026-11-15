@@ -142,6 +142,11 @@ export function strategyWords(key, guard = null) {
  *   guard: { cut, raise, upper, lower } | undefined   // the guardrail rule's four numbers (guardRule: 0.1, 0.1, 1.2, 0.8 when
  *     absent): trim by `cut` above `upper` x rate, raise by `raise` under `lower` x rate.
  *   withdrawalOrder: ["cash", "taxable", "deferred", "free"] (default; cash is always first),
+ *   withdrawalSplit: "proportional" | undefined   // a share from every account (gap list, next 60, item 22; 2026-11-15): after
+ *     cash and any required withdrawal, what the year still needs is shared among taxable, deferred and free by what each held at
+ *     the start of the year (w_b = balance_b / their sum): take_b = min(balance_b, A x w_b / the sum of w over the accounts that
+ *     still hold money), what one cannot pay shared again among the others, and an account that held nothing at the start of the
+ *     year paying last, in `withdrawalOrder`. Tax is worked out as for an order. Absent: the order, and every figure as before.
  *   tax: { mode: "flat" } (rates.taxRate on pre-tax withdrawals, the default) |
  *        { mode: "brackets", filingStatus, paramsFor: (year) => federal params, gainShare (part of a taxable withdrawal that is gain, 0.5),
  *          dividendYield (yearly qualified dividends on the taxable bucket, 0.02), itemized }; income lines with kind "social" go through the benefits worksheet,
@@ -214,7 +219,12 @@ export function project(inputs, options = {}) {
   let totalEarlyTax = 0;
   const eventsIn = new Map();
   for (const e of I.events ?? []) { if (!eventsIn.has(e.year)) eventsIn.set(e.year, []); eventsIn.get(e.year).push(e); }
+  // a share from every account: each invested account's weight is what it holds at the start of the year
+  const split = I.withdrawalSplit === "proportional";
+  const SHARED = ["taxable", "deferred", "free"];
+  let weight = null;
   for (let year = I.startYear, i = 0; year <= I.endYear; year++, i++) {
+    if (split) weight = { taxable: Math.max(0, buckets.taxable), deferred: Math.max(0, buckets.deferred), free: Math.max(0, buckets.free) };
     const ages = people.map((p) => year - p.birthYear);
     const retired = year >= I.retireYear;
     const step = seq?.[i] ?? null;
@@ -375,13 +385,31 @@ export function project(inputs, options = {}) {
     const fixedWant = () => (retired
       ? (I.incomePaysTaxFirst === true ? Math.max(0, spending + eventSpending + taxes - income) + other : need + taxes)
       : other + Math.max(0, eventSpending + tMonth - (income - incomeNew)) + Math.max(0, taxes - tInc));
+    // a share from every account (`withdrawalSplit`): cash first, as in every order; then each invested account its share of what
+    // is left to take, by its weight at the start of the year; what an emptied one could not pay is shared among the others; an
+    // account with no weight pays last, in the plan's order. Returns what it took.
+    const takeShared = (want) => {
+      let got = 0;
+      const pay = (b, amount) => { const take = Math.min(amount, buckets[b]); if (take > 0) { buckets[b] -= take; withdrawn[b] += take; got += take; } };
+      if (buckets.cash > 0) pay("cash", want);
+      for (let round = 0; round < 3 && want - got > tol; round++) {
+        const live = SHARED.filter((b) => buckets[b] > 0 && weight[b] > 0);
+        const sum = live.reduce((t, b) => t + weight[b], 0);
+        if (!(sum > 0)) break;
+        const left = want - got;
+        for (const b of live) pay(b, (left * weight[b]) / sum);
+      }
+      for (const b of order) { if (want - got <= tol) break; if (b !== "cash" && buckets[b] > 0) pay(b, want - got); }
+      return got;
+    };
     const settle = () => {
       for (let round = 0; round < 60; round++) {
         taxes = taxFor();
         const want = (drawMode ? wantTotal() : fixedWant()) - netOut;
         if (want <= tol) { shortfall = 0; return; }
         let got = 0;
-        for (const b of order) {
+        if (split) got = takeShared(want);
+        else for (const b of order) {
           if (got >= want - tol) break;
           if (buckets[b] <= 0) continue;
           const take = Math.min(want - got, buckets[b]);
@@ -507,7 +535,7 @@ export function project(inputs, options = {}) {
   // what is left, valued after the tax still owed on pre-tax money (at the last year's bracket, or the flat rate): the fair way to compare orders and conversions
   const endRate = brackets ? (last?.taxInfo?.bracketRate ?? flatRate) : flatRate;
   const endAfterTax = last ? last.balances.cash + last.balances.taxable + last.balances.free + last.balances.deferred * (1 - endRate) : 0;
-  return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order, ...(totalEarlyTax > 0 ? { totalEarlyTax } : {}) };
+  return { rows, success, failYear, failAge, endBalance: last?.total ?? 0, endBalanceReal: last?.totalReal ?? 0, endAfterTax, endAfterTaxReal: last ? endAfterTax / last.priceLevel : 0, endTaxRate: endRate, totalWithdrawn, totalTaxes, totalConverted, years: rows.length, strategy, taxMode: brackets ? "brackets" : "flat", withdrawalOrder: order, ...(split ? { withdrawalSplit: "proportional" } : {}), ...(totalEarlyTax > 0 ? { totalEarlyTax } : {}) };
 }
 
 /**
