@@ -4,7 +4,7 @@
 **Purpose:** What you hold in each investment account, what it is worth and what you paid; type it in or import the brokerage's positions file.
 
 ## Inputs
-`holdings` (`[{ id, accountId, symbol, name, shares, price, priceAsOf, costBasis, assetClass ("" = worked out), expenseRatio, yield, lots }]`), `accounts` (the invested types: brokerage, 401(k), IRA, Roth, HSA, 529, crypto), `data/funds.js` (about 100 common funds: class, expense ratio, typical yield, the split of balanced funds).
+`holdings` (`[{ id, accountId, symbol, name, shares, price, priceAsOf, costBasis, assetClass ("" = worked out), expenseRatio, yield, lots, paysEvery? }]`; `paysEvery`: how often it pays, "How often it pays" under More details, read by Dividends' Month by month, written only when chosen), `accounts` (the invested types: brokerage, 401(k), IRA, Roth, HSA, 529, crypto), `data/funds.js` (about 100 common funds: class, expense ratio, typical yield, the split of balanced funds).
 
 ## Outputs
 `compute()`: `items[]` (each holding enriched: value = shares x price or the cost when unpriced, class and `mix` (a target-date or balanced fund is split into US/international/bonds), expense ratio, yield, yearly fee and income, gain, account and tax bucket), `total`, `costTotal`, `gain`, `byAccount[]` (value against the Net worth balance), `byClass[]`, `stockShare`, `classifiedShare`, `unknown`, `unpriced`, `warnings`. Also `classify(symbol, name, year, ownClass)`, `targetDateMix(targetYear, thisYear)`, `parsePositions(text)` (Fidelity, Schwab, Vanguard and similar exports: finds the symbol/name/quantity/price/value/cost/account columns, drops totals and pending rows, treats the sweep line as cash), `mergePositions(holdings, rows, accountId)`.

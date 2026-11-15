@@ -11,7 +11,7 @@ export default {
   status: "usable",
   phase: 7,
   enabledByDefault: true,
-  needs: ["holdings"],
+  needs: ["holdings", "accounts", "expenses", "transactions", "categories"],
   writes: [],
   heavy: false,
   purpose: "The dividends and interest your holdings pay each year, by fund and by account, and what they cover of your spending.",

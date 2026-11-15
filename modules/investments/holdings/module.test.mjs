@@ -108,3 +108,30 @@ test("S11: after a save only the saved part changes: an import keeps the importe
   assert.deepEqual(after.partsOf().map((x) => [x.id, x.open]), [["import", false]]);
   assert.match(after.text(), /VXUS added to Brokerage\./);
 });
+
+test("How often it pays (gap next-60 #8): saved only when chosen, taken off when set back to usual, said in the green line", async () => {
+  const p = INV.investmentsPlan();
+  const r = await page(p, { rest: [], query: { edit: "h1" } });   // VTI
+  const sel = r.root.querySelector("form").querySelector('[name="paysEvery"]');
+  assert.ok(sel.closest("details"), "under More details (optional)");
+  assert.deepEqual(sel.querySelectorAll("option").map((o) => r.textOf(o)), ["As usual for its kind", "Every month", "Every 3 months", "Twice a year", "Once a year"]);
+  fill(r.root.querySelector("form"), { paysEvery: "year" });
+  const saved = r.saved.at(-1).holdings.find((h) => h.id === "h1");
+  assert.equal(saved.paysEvery, "year");
+  const shown = await page(r.saved.at(-1));
+  assert.match(shown.text(), /VTI saved\. Dividends now counts it as paying once a year\./);
+  // set back to usual: the field goes, the record is what it was
+  const back = await page(r.saved.at(-1), { rest: [], query: { edit: "h1" } });
+  assert.equal(back.root.querySelector("form").querySelector('[name="paysEvery"]').value, "year");
+  fill(back.root.querySelector("form"), { paysEvery: "" });
+  const again = back.saved.at(-1).holdings.find((h) => h.id === "h1");
+  assert.ok(!("paysEvery" in again));
+  const before = p.holdings.find((h) => h.id === "h1");
+  assert.deepEqual(Object.keys(again).sort(), Object.keys(before).sort());
+  const words = await page(back.saved.at(-1));
+  assert.match(words.text(), /VTI saved\. Dividends now counts it as paying as usual for its kind\./);
+  // saved unchanged: no word about it
+  const same = await page(INV.investmentsPlan(), { rest: [], query: { edit: "h2" } });
+  fill(same.root.querySelector("form"), {});
+  assert.doesNotMatch((await page(same.saved.at(-1))).text(), /Dividends now counts/);
+});

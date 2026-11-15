@@ -6,7 +6,10 @@
 import { compute, parsePositions, mergePositions, CLASS_OPTIONS, ASSET_CLASSES } from "./compute.js";
 import { costFromLots } from "../tax-lots/compute.js";
 import { part } from "../../../core/ui/more.js";
+import { PAYS } from "../dividends/compute.js";
 
+/** How often a holding pays, in the green line's words ("" = as usual for its kind). */
+export const PAYS_WORDS = { "": "as usual for its kind", month: "every month", quarter: "every 3 months", half: "twice a year", year: "once a year" };
 /** The importer's title (pinned in qa/first-view-lib.mjs PINNED_TITLES: the opt spec's own words for this page). */
 export const IMPORT_TITLE = "Import a positions file";
 
@@ -42,6 +45,9 @@ export function render(root, ctx) {
     { key: "assetClass", label: "Kind of investment (US stocks, bonds ...)", type: "select", more: true, options: [{ value: "", label: "Work it out from the symbol" }, ...CLASS_OPTIONS.filter((o) => o.value !== "unknown")] },
     { key: "expenseRatio", label: "Expense ratio", type: "percent", min: 0, max: 5, more: true, help: "yearly fund fee; leave blank to use the table for common funds" },
     { key: "yield", label: "Yield", type: "percent", min: 0, max: 20, more: true, help: "dividends and interest a year; leave blank to use a typical figure" },
+    // how often it pays: Dividends' "Month by month" spreads the year by it (gap next-60 #8); left as usual, by its kind
+    { key: "paysEvery", label: "How often it pays", type: "select", more: true, options: [{ value: "", label: "As usual for its kind" }, { value: "month", label: "Every month" }, { value: "quarter", label: "Every 3 months" }, { value: "half", label: "Twice a year" }, { value: "year", label: "Once a year" }],
+      help: "left as usual, we count bond funds and cash as paying every month and the rest every 3 months; the fund's own page says which" },
   ];
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.hasData ? `${money(d.total)} invested` : "What you hold"),
@@ -84,6 +90,9 @@ export function render(root, ctx) {
       // fewer shares than its lots hold would leave Tax lots counting purchases the fund no longer has
       if (editing && !oneLot && inLots > 0 && (v.shares ?? 0) < inLots - 1e-6) { return held(`${fmt.num(inLots, 3)} shares of ${editing.symbol} are in lots on Tax lots. Remove or change those lots first, or type at least ${fmt.num(inLots, 3)}.`); }
       const clean = { accountId: v.accountId, symbol: v.symbol.trim().toUpperCase(), name: v.name.trim(), shares: v.shares ?? 0, price: v.price ?? null, priceAsOf: v.price !== null ? fmt.today() : null, costBasis: v.costBasis ?? null, assetClass: v.assetClass || "", expenseRatio: v.expenseRatio ?? null, yield: v.yield ?? null };
+      // optional, written only when chosen (left as usual: the record is what it was before this box existed)
+      const pays = Object.prototype.hasOwnProperty.call(PAYS, v.paysEvery ?? "") ? v.paysEvery : "";
+      if (pays) clean.paysEvery = pays;
       if (!clean.symbol) return false;
       const id = editing?.id ?? ui.uid();
       lastAccountId = clean.accountId;
@@ -94,8 +103,10 @@ export function render(root, ctx) {
       const more = !!oneLot && newShares > oldShares + 1e-9;   // the extra shares' purchase is not known: say where to add it
       const sharesWord = (n) => `${fmt.num(n, 8)} share${Math.abs(n - 1) < 1e-12 ? "" : "s"}`;
       pending = editing ? `${clean.symbol} saved.${more ? ` The other ${sharesWord(newShares - oldShares)} ${Math.abs(newShares - oldShares - 1) < 1e-12 ? "is" : "are"} in no purchase yet: on Tax lots, add when you bought them and what they cost, and "What you paid in all" goes up by that cost.` : ""}${follow ? ` Its purchase${oneLot.date ? ` on ${fmt.date(oneLot.date)}` : ""} now has ${sharesWord(fewer ? newShares : oldShares)}, cost ${fmt.money(costTo ?? (Number(oneLot.cost) || 0), cur)}.` : ""}${editing && !oneLot && newShares > (Number(editing.shares) || 0) + 1e-9 && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(editing.costBasis) || 0)) < 0.005 ? ` If you bought more, add what the new shares cost to "What you paid in all", so the gain stays right.` : ""}${editing && newShares < (Number(editing.shares) || 0) - 1e-9 && costTo === null && clean.costBasis !== null && Math.abs(clean.costBasis - (Number(editing.costBasis) || 0)) < 0.005 ? ` If you sold some, lower "What you paid in all" by what those shares cost, so the gain stays right.` : ""}` : `${clean.symbol} added to ${nameOfAccount(clean.accountId)}.`;
+      // how often it pays changes no figure here: the green line says where it shows (Dividends' Month by month)
+      if (pays !== (Object.prototype.hasOwnProperty.call(PAYS, editing?.paysEvery ?? "") ? editing.paysEvery : "")) pending += ` Dividends now counts it as paying ${PAYS_WORDS[pays]}.`;
       editId = null; showId = id;
-      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) { p.holdings[i] = { ...p.holdings[i], ...clean }; if (follow) { const old = Number(oneLot.shares) || 0; p.holdings[i].lots = (p.holdings[i].lots ?? []).map((l) => l.id === oneLot.id ? { ...l, shares: fewer ? newShares : l.shares, cost: costTo ?? l.cost } : l); } } } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
+      store.update((p) => { p.holdings = p.holdings ?? []; if (editing) { const i = p.holdings.findIndex((h) => h.id === editing.id); if (i >= 0) { p.holdings[i] = { ...p.holdings[i], ...clean }; if (!pays) delete p.holdings[i].paysEvery; if (follow) { const old = Number(oneLot.shares) || 0; p.holdings[i].lots = (p.holdings[i].lots ?? []).map((l) => l.id === oneLot.id ? { ...l, shares: fewer ? newShares : l.shares, cost: costTo ?? l.cost } : l); } } } else p.holdings.push({ id, lots: [], ...clean }); syncCrypto(p, fmt.today(), editing); });
     }, { submitLabel: editing ? "Save changes" : "Add holding", resetAfter: !editing,
       // a holding with no kind yet is tapped to pick one ("pick a class"): its box is in view, not folded away
       moreOpen: editing && classify0(editing) === "unknown" ? true : undefined, onCancel: editing ? () => { editId = null; showId = editing.id; redraw(); } : d.hasData ? () => { showForm = false; drawForm(); } : null });
