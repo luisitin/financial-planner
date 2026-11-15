@@ -28,7 +28,7 @@
   "estate/gifting": {"plan":{"boxes":6},"empty":{"words":130,"figs":3,"boxes":6}},
   "estate/inheritance": {"empty":{"words":130}},
   "estate/legacy": {"plan":{"boxes":3}},
-  "goals/education": {"plan":{"words":190,"figs":14},"empty":{"figs":3}},
+  "goals/education": {"plan":{"words":180,"figs":14},"empty":{"figs":3}},
   "goals/goals": {"plan":{"figs":21}},
   "goals/house": {"plan":{"words":300,"figs":22,"boxes":5},"empty":{"words":220,"figs":12}},
   "goals/prioritizer": {"plan":{"figs":15}},

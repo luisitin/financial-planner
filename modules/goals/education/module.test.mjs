@@ -402,13 +402,13 @@ test("C9 (critic e9 F6, F7) the cost box, its gray figure and its line show only
 test("C9 S11 (R17): saving a child's college with the cost left empty saves no figure, and only that part stays open", async () => {
   const a = await drawEdu(customBlank());
   const before = openParts(a.root);
-  assert.deepEqual(before, { "college-p-cy": false, growth: false });
+  assert.deepEqual(before, { "college-p-cy": false, state: false, growth: false });
   a.root.querySelector('[name="yearly"]').closest("form").dispatch("submit");
   assert.equal(a.saved.length, 1);
   assert.equal(a.saved[0].whatIfs.college["p-cy"].yearly, null, "our figure is never written");
   assert.equal(a.saved[0].guesses, undefined);
   const b = await drawEdu(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { "college-p-cy": true, growth: false }, "the part just saved stays open; no other moves");
+  assert.deepEqual(openParts(b.root), { "college-p-cy": true, state: false, growth: false }, "the part just saved stays open; no other moves");
   assert.match(b.textOf(b.root), /college saved\./);
   // the growth row: saving it opens only itself
   const c = await drawEdu(familyPlan(T13));
@@ -416,7 +416,7 @@ test("C9 S11 (R17): saving a child's college with the cost left empty saves no f
   c.root.querySelector('[name="growth"]').closest("form").dispatch("submit");
   assert.equal(c.saved[0].whatIfs.college.growth, 0.05);
   const e = await drawEdu(c.saved[0]);
-  assert.deepEqual(openParts(e.root), { "college-p-cy": false, growth: true });
+  assert.deepEqual(openParts(e.root), { "college-p-cy": false, state: false, growth: true });
   assert.match(e.textOf(e.root.querySelectorAll("details").find((x) => x.dataset.part === "growth")), /At 5\.0% a year, a public in-state year \(\$25,850 in 2025-26\) would cost about \$\d/);
 });
 
@@ -426,4 +426,127 @@ test("C9 the growth row's sentence: what the rate does to the first child still 
   const d = compute(familyPlan(T13), { today: T13 });
   assert.equal(growthExample(d, money), `At 4.0% a year, a public in-state year ($25850 in 2025-26) would cost about $${Math.round(25850 * Math.pow(1.04, 2038 - 2026) / 10) * 10} in 2038, when Cy starts.`);
   assert.equal(growthExample({ growth: 0.05, costYear: 2025, children: [{ started: true }] }, money), "The plan assumes 5.0% a year for college prices.");
+});
+
+// ---------------------------------------------------------------- gap list, next 60, item 3: your state's tax break (map U4)
+import { stateBreak, STATE_EXAMPLE } from "./compute.js";
+import { stateSentence, stateCounted, stateRateHelp, rateWords, rateText, STATE_CHECK, stateSaved, stateStatus } from "./view.js";
+const money10 = (n) => `$${(Math.round(n / 10) * 10).toLocaleString("en-US")}`;   // the page's own rounding (shownAmount)
+/** The family, moved to Colorado (a flat 4.4% on the State tax page), with what they typed in the state row. */
+const inColorado = (college = {}) => { const p = familyPlan(T13); p.household.state = "CO"; p.whatIfs = { college }; return p; };
+const partOf = (root, id) => root.querySelectorAll("details").find((x) => x.dataset.part === id);
+
+test("state break: no child still to start (empty plan, every child in college) draws no row", () => {
+  assert.equal(stateBreak(emptyPlan(), { today: T13 }), null);
+  assert.equal(stateBreak(inCollege(), { today: T8 }), null);
+});
+test("state break: a state with no income tax on pay says so, whatever is typed for the deduction (Texas)", () => {
+  for (const college of [{}, { stateDeduction: 5000 }]) {
+    const p = familyPlan(T13); p.whatIfs = { college };
+    const s = stateBreak(p, { today: T13 });
+    assert.deepEqual([s.case, s.name, s.rate, s.rateFrom, s.yearly], ["none", "Texas", 0, "none", null]);
+    assert.equal(stateSentence(s, money10), "Texas has no state income tax on pay, so 529 money brings no state tax break there.");
+    assert.equal(stateCounted(s, money10), null);
+    assert.equal(stateRateHelp(s), "Left empty, we count 0%: Texas has no state income tax on pay.");
+  }
+  // a rate typed here wins even there (a move, or a plan whose state is out of date)
+  const p = familyPlan(T13); p.whatIfs = { college: { stateDeduction: 2000, stateRate: 0.05 } };
+  const s = stateBreak(p, { today: T13 });
+  assert.deepEqual([s.case, s.rate, s.rateFrom], ["full", 0.05, "yours"]);
+  near(s.yearly, 2000 * 0.05);
+});
+test("state break by hand: Colorado 4.4%, $3,000 a year going in (Cy's goal, $250 a month), 12 years to 2038", () => {
+  // the deduction above what goes in: only what goes in comes off (capped)
+  const a = stateBreak(inColorado({ stateDeduction: 5000 }), { today: T13 });
+  assert.deepEqual([a.case, a.code, a.rate, a.rateFrom, a.put, a.counted, a.years, a.last], ["capped", "CO", 0.044, "flat", 3000, 3000, 12, { name: "Cy", startYear: 2038 }]);
+  near(a.yearly, 3000 * 0.044); near(a.total, 3000 * 0.044 * 12);   // $132 a year, $1,584 in all
+  assert.equal(stateSentence(a, money10), "About $130 a year less state tax on the $3,000 a year you put in now, $1,580 in all by the time Cy starts college in 2038.");
+  assert.equal(stateCounted(a, money10), "Counted: $3,000 a year off your income at 4.4%, Colorado's flat rate on the State tax page, each year until Cy starts college in 2038.");
+  assert.equal(stateRateHelp(a), "Left empty, we count 4.4%: Colorado's flat rate on the State tax page.");
+  // the deduction under what goes in: all of it (full)
+  const b = stateBreak(inColorado({ stateDeduction: 2000 }), { today: T13 });
+  assert.equal(b.case, "full"); near(b.yearly, 88); near(b.total, 88 * 12);
+  assert.equal(stateSentence(b, money10), "About $90 a year less state tax, $1,060 in all by the time Cy starts college in 2038.");
+  // nothing going in yet: if they put the deduction in (assumed)
+  const p = inColorado({ stateDeduction: 5000 }); p.goals.find((g) => g.id === "g-col").monthly = 0;
+  const c = stateBreak(p, { today: T13 });
+  assert.deepEqual([c.case, c.put, c.counted], ["assumed", 0, 5000]); near(c.yearly, 220); near(c.total, 2640);
+  assert.equal(stateSentence(c, money10), "Nothing goes into a 529 yet. Putting in $5,000 a year would take about $220 a year off your state tax, $2,640 in all by the time Cy starts college in 2038.");
+});
+test("state break: two children, the older one starting first: from then on only the younger one's saving comes off", () => {
+  const p = inColorado({ stateDeduction: 4000 });
+  p.household.people.push({ id: "p-bo", name: "Bo", role: "dependent", birthDate: "2016-04-04" });   // college from 2034
+  p.goals.push({ id: "g-bo", name: "Bo's college", icon: "🎓", target: 60000, targetDate: "2034-08-15", priority: 2, saved: 0, fundedBy: [], monthly: 100, rate: null, inflates: true });
+  const s = stateBreak(p, { today: T13 });
+  // 2026 to 2033: 12 x (250 + 100) = 4,200 a year goes in, 4,000 counts; 2034 to 2037: Cy's 3,000 alone
+  assert.deepEqual([s.case, s.put, s.counted, s.years, s.last.name], ["full", 4200, 4000, 12, "Cy"]);
+  near(s.total, (4000 * 8 + 3000 * 4) * 0.044);
+});
+test("critic q4 P1, P2: the state row's status says what it holds while shut; its green line is short and names the figure", () => {
+  // Texas (the family): no income tax on pay, said in two words in the shut row
+  assert.equal(stateStatus(stateBreak(familyPlan(T13), { today: T13 })), "Texas: none");
+  assert.equal(stateStatus(stateBreak(inColorado(), { today: T13 })), "", "nothing typed: statusOf says not set yet");
+  const a = stateBreak(inColorado({ stateDeduction: 5000 }), { today: T13 });
+  assert.equal(stateSaved(a, money10), "About $130 a year less state tax.");
+  assert.equal(stateSaved(stateBreak(inColorado({ stateDeduction: 0 }), { today: T13 }), money10), "", "no figure: Saved. alone, the sentence is under it");
+});
+test("state break: asks for what it lacks, and 0 typed says there is no break", () => {
+  const ask = stateBreak(inColorado(), { today: T13 });
+  assert.equal(ask.case, "ask");
+  assert.equal(stateSentence(ask, money10), "Type below how much a year your state lets you take off your income for 529 money: we work out what it saves.");
+  // a state with graduated rates and nothing typed on the State tax page: no rate to count (Georgia)
+  const ga = inColorado({ stateDeduction: 4000 }); ga.household.state = "GA";
+  const r = stateBreak(ga, { today: T13 });
+  assert.deepEqual([r.case, r.rate, r.page.rate], ["rate", null, null]);
+  assert.equal(stateSentence(r, money10), "Type your state's tax rate below to see what that saves.");
+  assert.equal(stateRateHelp(r), "Your state's rate on your top dollars, for example 5%.");
+  for (const college of [{ stateDeduction: 0 }, { stateDeduction: 4000, stateRate: 0 }]) {
+    const z = stateBreak(inColorado(college), { today: T13 });
+    assert.equal(z.case, "zero", JSON.stringify(college));
+    assert.equal(stateSentence(z, money10), "With nothing taken off or a 0% rate, 529 money brings no state tax break.");
+  }
+});
+test("state break: the rate's words follow the State tax page (a rate typed there, last year's share), and rates read as people write them", () => {
+  const typedThere = inColorado({ stateDeduction: 2000 }); typedThere.taxes = { ...(typedThere.taxes ?? {}), state: { rate: 0.05 } };
+  const a = stateBreak(typedThere, { today: T13 });
+  assert.deepEqual([a.rate, a.rateFrom], [0.05, "typed"]);
+  assert.equal(rateWords(a), "your rate on the State tax page");
+  const s = stateBreak(inColorado({ stateDeduction: 2000 }), { today: T13, stateTax: { rate: 0.0307, method: "prior", name: "Pennsylvania", code: "PA" } });
+  assert.equal(rateWords(s), "what your state took last year as a share of income, on the State tax page");
+  assert.deepEqual([rateText(0.044), rateText(0.0495), rateText(0.06), rateText(0.0307)], ["4.4%", "4.95%", "6%", "3.07%"]);
+  assert.equal(STATE_EXAMPLE, 5000);
+});
+
+test("state break, the page S11: one quiet row, nothing new in the first view; the state clause moved into it; Save names the answer", async () => {
+  const { fullSelectors } = await import("../../../qa/fixtures/fake-dom.mjs");
+  fullSelectors();
+  await drawEdu(familyPlan(T13));   // (a confirmation an earlier test left is said once)
+  const a = await drawEdu(inColorado());
+  const row = partOf(a.root, "state");
+  assert.ok(row && !row.hasAttribute("open"), "a shut row");
+  assert.equal(a.textOf(row.querySelector(".fold-title")), "Your state's tax break");
+  assert.equal(row.querySelector(".fold-status") ?? null, null, "no status until something is typed");
+  // the long bullet is short now; its clause is inside the row (moved, not deleted)
+  assert.ok(a.root.querySelectorAll("li").some((li) => a.textOf(li) === "A 529 plan grows tax-free when spent on college."));
+  assert.ok(a.textOf(row.querySelector(".fold-body")).includes(STATE_CHECK));
+  // the help gives the example in words; the box shows no gray figure
+  const box = a.root.querySelector('[name="stateDeduction"]');
+  assert.equal(box.getAttribute("placeholder") ?? "", "");
+  assert.ok(a.textOf(box.closest("label")).includes("For example $5,000. Your state's 529 plan says how much"));
+  // Save: only this row opens, and its green line names the new answer
+  box.value = "5,000";
+  box.closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  assert.deepEqual([a.saved[0].whatIfs.college.stateDeduction, a.saved[0].whatIfs.college.stateRate], [5000, null]);
+  const b = await drawEdu(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { "college-p-cy": false, state: true, growth: false });
+  // the green line names the new figure in a few words; the full sentence is right under it, once (critic q4 P2)
+  const said = partOf(b.root, "state").querySelector(".notice");
+  assert.equal(b.textOf(said), "Saved. About $130 a year less state tax.");
+  assert.ok(b.textOf(partOf(b.root, "state")).includes("About $130 a year less state tax on the $3,000 a year you put in now, $1,580 in all by the time Cy starts college in 2038."));
+  assert.ok(b.textOf(partOf(b.root, "state").querySelector("summary")).includes("1 set by you"));
+  // children all in college: no row, and the bullet keeps its clause
+  const c = await drawEdu(inCollege());
+  assert.equal(partOf(c.root, "state"), undefined);
+  assert.ok(c.root.querySelectorAll("li").some((li) => c.textOf(li).includes("many states take contributions off state income tax")));
 });

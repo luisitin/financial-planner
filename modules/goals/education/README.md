@@ -131,3 +131,57 @@ one sentence of what the rate does ("At 4.0% a year, a public in-state year ($25
 2038, when Cy starts.", `growthExample`, so the row is worth a tap, R14); the row just saved stays open (R17, test "S11"). No
 hand-written `<details>` remain. Kept as it was on purpose: the top card's growth sentence (moving it pulled the "Good to know"
 list up into the first screen, which the browser check counts) and the row's two-line title (a one-line title did the same). The College Board figures were read from reports citing them (see Data), so the gray figure carries that caveat.
+
+## Your state's tax break (gap list, next 60, item 3; map U4; 2026-11-15)
+One quiet row in "Good to know", **"Your state's tax break"** (kind `item`, like "How fast prices rise" beside it), shown
+while a child is still to start college. Shut, it says nothing until something is typed ("1 set by you"). The first view
+gains its four title words and loses fifteen: the bullet "A 529 plan grows tax-free when spent on college, and many states
+take contributions off state income tax: check your state's plan first." is now "A 529 plan grows tax-free when spent on
+college.", and its clause is inside the row ("Many states take money put into a 529 off state income tax: check your
+state's plan first, it says how much."); with no row (every child in college) the bullet keeps it. The family's first view:
+190 words to 179 (the counts file's entry lowered to 180), figures 14 as before.
+
+Open, it holds the answer's one sentence, what was counted, that clause, and two boxes with one Save:
+- "Taken off your income a year" (`whatIfs.college.stateDeduction`): **the person's own figure only.** No state's figure is
+  claimed on this page: states differ (a deduction, a credit, a deduction only for their own plan, or nothing) and none was
+  read at a state's own site for this build. The help line gives an example in words, "For example $5,000.", never as a
+  gray figure (gray means counted on this app), and `STATE_EXAMPLE` is never counted.
+- "Your state's tax rate" (`whatIfs.college.stateRate`): left empty, the State tax page's rate (its `compute()`, imported
+  read-only from `modules/taxes/state`): a rate typed there, last year's state tax as a share of income, the state's flat
+  rate (13 states, its README's sources: Tax Foundation 2026 and each state's schedule), or 0 in the nine states with no
+  income tax on pay; a graduated state with nothing typed there has no rate, so the row asks for one ("for example 5%").
+  The help line says what an empty box counts ("Left empty, we count 4.4%: Colorado's flat rate on the State tax page.").
+
+`stateBreak(plan, { today, d?, stateTax? })` (pure; `compute()` is not changed):
+- years: each calendar year from this one to the year before the last child still to start begins college (at least one).
+- put_y = 12 x the goal's monthly for each such child who has not started by y; counted_y = min(deduction, put_y); when
+  nothing goes in at all this year, the deduction itself, said as "if you put it in" (case "assumed").
+- yearly = counted (this year) x rate; total = sum over the years of counted_y x rate. Nominal dollars, as the state's
+  deduction is; not discounted.
+- The year college starts is not counted (saving that year stops in August): a builder's choice, on the careful side.
+- The rate is applied to the whole deduction: right for a flat rate; with a graduated state's top rate typed, it is the tax
+  on the last dollars, which is what a deduction takes off.
+
+One sentence per case (`stateSentence`, view.js; each has a module test):
+| case | when | sentence (the family moved to Colorado, $250 a month going in) |
+|---|---|---|
+| none | no state income tax on pay, nothing typed here | "Texas has no state income tax on pay, so 529 money brings no state tax break there." |
+| ask | no deduction typed | "Type below how much a year your state lets you take off your income for 529 money: we work out what it saves." |
+| rate | deduction typed, no rate known | "Type your state's tax rate below to see what that saves." |
+| zero | 0 typed for either | "With nothing taken off or a 0% rate, 529 money brings no state tax break." |
+| full | what goes in a year is at least the deduction | ($2,000) "About $90 a year less state tax, $1,060 in all by the time Cy starts college in 2038." |
+| capped | something goes in, less than the deduction | ($5,000) "About $130 a year less state tax on the $3,000 a year you put in now, $1,580 in all by the time Cy starts college in 2038." |
+| assumed | nothing goes in yet | "Nothing goes into a 529 yet. Putting in $5,000 a year would take about $220 a year off your state tax, $2,640 in all by the time Cy starts college in 2038." |
+
+By hand (Colorado 4.4%, $5,000 typed, $3,000 a year going in): 3,000 x 0.044 = $132 a year; x 12 years (2026 to 2037) =
+$1,584 (shown to the $10, as this page shows every figure: $130 and $1,580). Two children (Bo from 2034 at $100 a month
+and Cy at $250, $4,000 typed): 2026 to 2033 4,000 a year counts, 2034 to 2037 3,000: (32,000 + 12,000) x 0.044 = $1,936.
+Save keeps the row open and says, inside it, "Saved." and the new figure in a few words, "Saved. About $130 a year less
+state tax." (`stateSaved`; just "Saved." when the case has no figure), with the full sentence right under it, once (R7,
+R17, critic q4 P2; test "state break, the page S11").
+Figures typed by hand: only a number, or a string that reads as one, is a figure; `true`, `[5000]` or an object stored by
+hand reads as not typed (critic q4 M5: `Number(true)` is 1, a 100% rate). This applies to all four fields.
+Left as is (critic q4 M3, severity 1): this calendar year counts a full year of what goes in even when only weeks are
+left, and the year college starts counts nothing (for the family on 2026-11-13: 144 months counted against 141 left,
+about 2% more); the total is said as "about", and a deduction is a whole year's figure.
+Tests: module.test.mjs "state break", "critic q4 M5", "critic q4 P1, P2".

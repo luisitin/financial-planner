@@ -9,6 +9,7 @@ import { planReturn } from "../../insurance/term-vs-permanent/compute.js";
 import { monthsBetween } from "../../../core/math/dates.js";
 import { taxView } from "../../taxes/federal/known.js";
 import { estimate } from "../../../core/estimate/engine.js";
+import { compute as stateTaxOf } from "../../taxes/state/compute.js";
 
 /** A year of college in 2025-26, published prices: tuition and fees plus room and board (College Board, Trends in College Pricing and Student Aid 2025). */
 export const COSTS = {
@@ -201,3 +202,54 @@ export const estimators = {
     },
   },
 };
+
+// ---------------------------------------------------------------- what-ifs one tap away (gap list, next 60, items 3 and 4)
+// New functions only: compute() above is not changed by them, and the fields they read (whatIfs.college.stateDeduction,
+// stateRate, loanRate, schoolYearly) are read nowhere else, so with nothing typed every page reads what it read before.
+/** A figure the person typed, or null (empty, missing, not a number, or not a number or a string at all: a true, an array
+ * or an object in hand-edited data is not a figure, though Number(true) is 1 and Number([5000]) is 5000). */
+const typedOf = (v) => ((typeof v !== "number" && typeof v !== "string") || String(v).trim() === "" || !Number.isFinite(Number(v)) ? null : Number(v));
+/** The children still to start college, with months of saving left (a child already in college has no saving years). */
+const toStart = (d) => d.children.filter((c) => !c.started && c.monthsLeft > 0);
+/** The example the state box's help line gives ("for example $5,000"): said in words only, never counted, never gray. */
+export const STATE_EXAMPLE = 5000;
+
+/**
+ * Your state's tax break on 529 money put in (map U4). The person types how much a year their state lets them take off
+ * their income for it (no state's own figure is claimed: README "Your state's tax break"); the rate is the one typed here,
+ * else the State tax page's (`modules/taxes/state` compute, read only: a rate typed there, last year's share, the flat
+ * rate, or 0 in a state with no income tax on pay), else asked for.
+ * Each calendar year y from this one to the year before the last child still to start begins college (at least this one):
+ *   put_y = 12 x the monthly going in for each child who has not started by y (their goal's monthly)
+ *   counted_y = min(deduction, put_y); when nothing goes in now at all, the deduction itself ("assumed": if you put it in)
+ *   yearly = counted_this year x rate; total = sum of counted_y x rate
+ * -> null (no child still to start) | { case: "none" | "ask" | "rate" | "zero" | "full" | "capped" | "assumed", name, code,
+ *   rate, rateFrom ("yours" | "typed" | "prior" | "flat" | "none" | null), page: { rate, method } (the State tax page's),
+ *   deduction, put (this year's), counted, yearly, total, years, last: { name, startYear } }
+ * params.d: this page's compute() (worked out again when absent); params.stateTax: the State tax page's answer (tests).
+ */
+export function stateBreak(plan, { today = null, d = null, stateTax } = {}) {
+  const dd = d ?? compute(plan, { today });
+  const kids = toStart(dd);
+  if (!kids.length) return null;
+  const s = plan.whatIfs?.college ?? {};
+  let st = stateTax;
+  if (st === undefined) { try { st = stateTaxOf(plan, { today }); } catch { st = null; } }
+  const page = { rate: Number.isFinite(st?.rate) ? st.rate : null, method: st?.method ?? "unknown" };
+  const year = today ? Number(String(today).slice(0, 4)) : COST_YEAR + 1;
+  const deduction = typedOf(s.stateDeduction) === null ? null : Math.max(0, typedOf(s.stateDeduction));
+  const mine = typedOf(s.stateRate);
+  const rate = mine !== null ? Math.max(0, mine) : page.rate;
+  const rateFrom = mine !== null ? "yours" : page.rate !== null ? page.method : null;
+  const last = kids.reduce((a, c) => (c.startYear > a.startYear ? c : a));
+  const years = Math.max(1, last.startYear - year);
+  const putIn = (y) => kids.filter((c) => y === year || y < c.startYear).reduce((t, c) => t + 12 * (Number(c.monthly) || 0), 0);
+  const put = putIn(year);
+  const base = { name: st?.name ?? "", code: st?.code ?? "", rate, rateFrom, page, deduction, put, years, last: { name: last.name, startYear: last.startYear } };
+  const kase = rateFrom === "none" && rate === 0 ? "none" : deduction === null ? "ask" : rate === null ? "rate" : deduction === 0 || rate === 0 ? "zero" : put <= 0 ? "assumed" : put < deduction ? "capped" : "full";
+  if (["none", "ask", "rate", "zero"].includes(kase)) return { case: kase, ...base, counted: null, yearly: null, total: null };
+  const countedIn = (y) => (put <= 0 ? deduction : Math.min(deduction, putIn(y)));
+  let total = 0;
+  for (let y = year; y < year + years; y++) total += countedIn(y) * rate;
+  return { case: kase, ...base, counted: countedIn(year), yearly: countedIn(year) * rate, total };
+}

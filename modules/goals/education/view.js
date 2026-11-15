@@ -1,7 +1,7 @@
 // modules/goals/education/view.js -- DOM only. Each child's college: what it would cost when they get
 // there, what is set aside, the monthly saving that covers the share you choose, and how much today's
 // saving covers; the kind of college and the share per child in a fold; a button to set the goal.
-import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount, previewsOf } from "./compute.js";
+import { compute, COSTS, DEFAULTS, DEFAULT_GROWTH, shownAmount, previewsOf, stateBreak, STATE_EXAMPLE } from "./compute.js";
 import { previewText } from "../house/compute.js";
 import { part } from "../../../core/ui/more.js";
 
@@ -35,6 +35,52 @@ const KIND_WORDS = { public: "public", private: "private", custom: "your own cos
 /** The line in a child's card while an empty "A cost I enter" box counts our gray figure. */
 export const PREVIEW_LINE = "The yearly cost is our guess for now: a public in-state year. Put yours in under Type of college and share to cover.";
 
+/** A rate as people write it: 4.4%, 4.95%, 6% (two decimals at most, no trailing zeros). */
+export const rateText = (x) => `${Number((x * 100).toFixed(2))}%`;
+/** Where the state rate comes from, in words (the State tax page's method, or the person's own). */
+export function rateWords(s) {
+  const name = s.name || "your state";
+  return s.rateFrom === "yours" ? "your rate" : s.rateFrom === "typed" ? "your rate on the State tax page"
+    : s.rateFrom === "flat" ? `${name}'s flat rate on the State tax page` : s.rateFrom === "prior" ? "what your state took last year as a share of income, on the State tax page"
+    : s.rateFrom === "none" ? `${name} has no state income tax on pay` : "";
+}
+/** The state row's sentence, one written out for each case (stateBreak's `case`). Pure. */
+export function stateSentence(s, money) {
+  const by = `by the time ${s.last.name} starts college in ${s.last.startYear}`;
+  switch (s.case) {
+    case "none": return `${s.name || "Your state"} has no state income tax on pay, so 529 money brings no state tax break there.`;
+    case "ask": return "Type below how much a year your state lets you take off your income for 529 money: we work out what it saves.";
+    case "rate": return "Type your state's tax rate below to see what that saves.";
+    case "zero": return "With nothing taken off or a 0% rate, 529 money brings no state tax break.";
+    case "full": return `About ${money(s.yearly)} a year less state tax, ${money(s.total)} in all ${by}.`;
+    case "capped": return `About ${money(s.yearly)} a year less state tax on the ${money(s.put)} a year you put in now, ${money(s.total)} in all ${by}.`;
+    case "assumed": return `Nothing goes into a 529 yet. Putting in ${money(s.deduction)} a year would take about ${money(s.yearly)} a year off your state tax, ${money(s.total)} in all ${by}.`;
+    default: return "";
+  }
+}
+/** What the state row counted, under its sentence (only when it has an answer). Pure. */
+export function stateCounted(s, money) {
+  if (s.yearly === null) return null;
+  return `Counted: ${money(s.counted)} a year off your income at ${rateText(s.rate)}, ${rateWords(s)}, each year until ${s.last.name} starts college in ${s.last.startYear}.`;
+}
+/** The state row's green line after Save (R7, critic q4 P2): the new figure only; the full sentence is right under it. Pure. */
+export function stateSaved(s, money) {
+  return s.yearly === null ? "" : `About ${money(s.yearly)} a year less state tax.`;
+}
+/** The state row's status while shut (critic q4 P1): "Texas: none" in a state with no income tax on pay; "not set yet"
+ * comes from statusOf when nothing is typed. Pure. */
+export function stateStatus(s) {
+  return s.case === "none" ? `${s.name || "your state"}: none` : "";
+}
+/** The state rate box's help: what an empty box counts. Pure. */
+export function stateRateHelp(s) {
+  const p = s.page;
+  if (p.rate === null) return "Your state's rate on your top dollars, for example 5%.";
+  return `Left empty, we count ${rateText(p.rate)}: ${rateWords({ ...s, rateFrom: p.method })}.`;
+}
+/** The sentence that moved from "Good to know" into the state row (it stays in the list when there is no row). */
+export const STATE_CHECK = "Many states take money put into a 529 off state income tax: check your state's plan first, it says how much.";
+
 export function render(page, ctx) {
   const { ui, fmt, plan, store } = ctx;
   const cur = plan.meta.currency;
@@ -48,7 +94,9 @@ export function render(page, ctx) {
   const root = ui.h("div", { class: "ed2-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   const said = pending; pending = null;
-  if (said) { const n = ui.notice("ok", said.text); root.append(n); setTimeout(() => n.remove(), 4000); }
+  if (said?.text) { const n = ui.notice("ok", said.text); root.append(n); setTimeout(() => n.remove(), 4000); }
+  // a save inside one of the rows of "Good to know" is said inside that row, where the Save was tapped, naming the new answer (R7)
+  const savedHere = (id, text) => { if (said?.part !== id || said.text) return null; const n = ui.notice("ok", text ? `Saved. ${text}` : "Saved."); setTimeout(() => n.remove(), 4000); return n; };
   const rises = `College prices have risen faster than prices in general; the plan assumes ${(d.growth * 100).toFixed(1)}% a year.`;
 
   root.append(ui.h("section", { class: d.children.length ? "card" : "card accent hero" },
@@ -142,8 +190,26 @@ export function render(page, ctx) {
 
   const gr = plan.whatIfs?.college?.growth;
   const growthSet = gr !== null && gr !== undefined && gr !== "" && Number.isFinite(Number(gr));
+  const given = (v) => v !== null && v !== undefined && v !== "" && Number.isFinite(Number(v));
+  const w = plan.whatIfs?.college ?? {};
+  // Your state's tax break (gap list, next 60, item 3): a row only while a child is still to start college; the deduction is
+  // the person's own figure (no state's figure is claimed), the rate the State tax page's unless typed here
+  const tb = d.children.length ? stateBreak(plan, { today: fmt.today(), d }) : null;
+  const stateRow = tb && part(ctx, { id: "state", kind: "item", title: "Your state's tax break", set: [w.stateDeduction, w.stateRate].filter(given).length, open: said?.part === "state", holds: ["stateDeduction", "stateRate"], body: () => [
+    savedHere("state", stateSaved(tb, money)),
+    ui.h("p", {}, stateSentence(tb, money)),
+    stateCounted(tb, money) ? ui.h("p", { class: "ed2-d" }, stateCounted(tb, money)) : null,
+    ui.h("p", { class: "ed2-d" }, STATE_CHECK),
+    ui.form([
+      { key: "stateDeduction", label: "Taken off your income a year", type: "money", min: 0, help: `For example ${money(STATE_EXAMPLE)}. Your state's 529 plan says how much; some states give a credit instead, some nothing.` },
+      { key: "stateRate", label: "Your state's tax rate", type: "percent", min: 0, max: 20, placeholder: "", help: stateRateHelp(tb) },
+    ], { stateDeduction: w.stateDeduction ?? null, stateRate: w.stateRate ?? null }, (v) => {
+      pending = { part: "state" };
+      store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.college = { ...(p.whatIfs.college ?? {}), stateDeduction: v.stateDeduction ?? null, stateRate: v.stateRate ?? null }; });
+    }, { submitLabel: "Save" })] });
   if (d.children.length) root.append(ui.card("Good to know", ui.h("ul", {},
-    ui.h("li", {}, "A 529 plan grows tax-free when spent on college, and many states take contributions off state income tax: check your state's plan first."),
+    // the state clause lives in its row when there is one (moved, never deleted)
+    ui.h("li", {}, tb ? "A 529 plan grows tax-free when spent on college." : "A 529 plan grows tax-free when spent on college, and many states take contributions off state income tax: check your state's plan first."),
     ui.h("li", {}, "Grandparents and others can give five years of gifts to a 529 at once (Gifting)."),
     ui.h("li", {}, "Up to $35,000 left in a 529 can move to the child's Roth IRA over the years, if the 529 is 15 years old."),
     ui.h("li", {}, "Retirement first: there are loans for college, not for retirement."),
@@ -151,7 +217,7 @@ export function render(page, ctx) {
     d.aotc ? ui.h("li", {}, `The American Opportunity tax credit takes up to ${money(d.aotc.perStudent)} a year off your tax for each student in the first four years of college (Form 8863)${d.aotc.status === "partial" ? "; at your income it is smaller, and it ends at " + money(d.aotc.range[1]) : ""}.`) : null),
     // how fast prices rise: its box, with what the rate does to the first child's first year, one quiet row (its title as
     // before; an item part with its own name: the page's one row about all the children, beside one row per child)
-    ui.h("div", { class: "folds" }, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
+    ui.h("div", { class: "folds" }, stateRow || null, part(ctx, { id: "growth", kind: "item", title: "How fast prices rise", says: `${(d.growth * 100).toFixed(1)}% a year`, set: growthSet, open: said?.part === "growth", holds: ["growth"], body: [
       ui.h("p", { class: "ed2-d" }, growthExample(d, money)),
       ui.form([{ key: "growth", label: "How much college prices rise each year", type: "percent", min: 0, max: 15, placeholder: "", help: `Left empty, we count ${(DEFAULT_GROWTH * 100).toFixed(0)}% a year.` }], { growth: plan.whatIfs?.college?.growth ?? null }, (v) => {
         pending = { text: "Saved.", part: "growth" };
