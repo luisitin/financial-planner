@@ -2,14 +2,19 @@
 // it, buy new or lease over the same years, the cheapest marked; the comparison's inputs in "The figures" (five boxes, the
 // rest under "More details (optional)"); each car's details behind an outlined "Change its details", a new car behind
 // "+ Add another car" (open while there is none). An empty new-car loan rate box shows our guess in gray (smart guesses C9,
-// K3): counted in the comparison while it stays empty, never saved; opening the page writes nothing.
-import { compute, DEFAULTS } from "./compute.js";
+// K3): counted in the comparison while it stays empty, never saved; opening the page writes nothing. Beside "The figures", one
+// more quiet row, "Electric or gas for your miles": each car's yearly running cost for the miles driven, and the years the
+// cheaper one takes to make up a higher price (whatIfs.vehicles.ev; no federal credit is left to count).
+import { compute, DEFAULTS, EV_KEYS, evOrGas, evLine, evHelp, evBasis, FEDERAL_LINE, EV_NOTE } from "./compute.js";
 import { previewText } from "../../goals/house/compute.js";
 import { parts, links } from "../../../core/ui/more.js";
 
 let pending = null;   // the confirmation shown on the next render
 let worked = false;
 const WORKED = Symbol("worked");   // "Compare" was tapped: the green line says the new answer, and "The figures" stays open (R7, R17)
+let evWorked = false;   // "Work it out" was tapped: its green line names the new answer inside its part, which stays open (R7, R17)
+/** The part's title (pinned in qa/first-view-lib.mjs PINNED_TITLES: a comparison a person looks for by name). */
+export const EV_TITLE = "Electric or gas for your miles";
 
 const STYLE = `
 .vh-root .vh-lines { list-style: none; margin: 0; padding: 0; }
@@ -47,6 +52,7 @@ export function render(page, ctx) {
   }
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
   const keepOpen = worked; worked = false;
+  const evSaved = evWorked; evWorked = false;
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "What your cars cost"),
@@ -82,7 +88,7 @@ export function render(page, ctx) {
     // its details open in place under an outlined button (a tap, not a fold); Cancel or a save shuts them again
     root.append(ui.card(`${c.name}${d.cars.length > 1 && c.year.perMile !== null ? ` · ${fmt.money(c.year.perMile, cur, "en-US", 2)} a mile` : ""}`,
       ui.h("ul", { class: "vh-lines" }, [...c.year.lines.map((l) => ui.h("li", {}, ui.h("span", {}, l.label), ui.h("span", {}, money(l.amount)))), ui.h("li", {}, ui.h("span", {}, "A year"), ui.h("span", {}, money(c.year.total)))]),
-      ui.h("p", { class: "vh-d" }, `Worth ${money(c.value)}${c.loan ? `, ${money(c.loan.balance)} still owed on ${c.loan.name}` : ""}. The value it loses is a real cost even though no bill comes: it shows when you sell.`),
+      ui.h("p", { class: "vh-d" }, `Worth ${money(c.value)}${c.loan ? `, ${money(c.loan.balance)} still owed on ${c.loan.name}` : ""}. The value it loses is a real cost though no bill comes: it shows when you sell.`),
       opensUnder("Change its details", (shut) => carForm(c, shut))));
   }
 
@@ -97,9 +103,9 @@ export function render(page, ctx) {
       ui.h("div", { class: "vh-head" }, ui.h("span", {}, o.label), ui.h("span", {}, `${money(o.monthly)} a month`)),
       ui.h("div", { class: "vh-d" }, o.id === "lease" && cmp.leaseCredit > 0.5
         ? `${money(o.out + cmp.leaseCredit)} paid over ${cmp.years} years, less the ${money(cmp.leaseCredit)} your car brings in: ${money(o.cost)} in all. ${o.terms} lease${o.terms === 1 ? "" : "s"} of ${d.inputs.leaseMonths} months; nothing owned at the end.`
-        : `${money(o.out)} paid over ${cmp.years} years${o.back > 0.5 ? `, less ${money(o.back)} it is worth at the end${o.id === "keep" && o.owedAtEnd > 0.5 ? ` after the ${money(o.owedAtEnd)} still owed on its loan` : ""}` : o.id === "keep" && o.owedAtEnd > 0.5 ? `, with ${money(o.owedAtEnd)} still owed on its loan at the end, more than it is worth` : ""}: ${money(o.cost)} in all.${o.id === "keep" ? ` Upkeep is counted rising ${Math.round(d.inputs.upkeepRise * 100)}% a year as it ages; fuel, insurance and registration at today's prices.` : o.id === "buy" ? `${cmp.financed > 0.5 ? ` ${money(cmp.newPayment)} a month on ${money(cmp.financed)} borrowed for ${d.inputs.newTermMonths} months${rateWords}${o.owedAtEnd > 0 ? `; ${money(o.owedAtEnd)} still owed at the end` : ""}.` : ` Nothing to borrow: your car${d.inputs.newDown > 0 ? " and the cash down" : ""} cover the price${cmp.cashBack > 0.5 ? `, with ${money(cmp.cashBack)} back to you (counted above)` : ""}.`} A new car's running costs, upkeep too, at today's prices.` : ` ${o.terms} lease${o.terms === 1 ? "" : "s"} of ${d.inputs.leaseMonths} months; nothing owned at the end.`}`)))),
+        : `${money(o.out)} paid over ${cmp.years} years${o.back > 0.5 ? `, less ${money(o.back)} it is worth at the end${o.id === "keep" && o.owedAtEnd > 0.5 ? ` after the ${money(o.owedAtEnd)} still owed on its loan` : ""}` : o.id === "keep" && o.owedAtEnd > 0.5 ? `, with ${money(o.owedAtEnd)} still owed on its loan at the end, more than it is worth` : ""}: ${money(o.cost)} in all.${o.id === "keep" ? ` Upkeep is counted rising ${Math.round(d.inputs.upkeepRise * 100)}% a year as it ages; fuel, insurance and registration at today's prices.` : o.id === "buy" ? `${cmp.financed > 0.5 ? ` ${money(cmp.newPayment)} a month on ${money(cmp.financed)} borrowed for ${d.inputs.newTermMonths} months${rateWords}${o.owedAtEnd > 0 ? `; ${money(o.owedAtEnd)} still owed at the end` : ""}.` : ` Nothing to borrow: your car${d.inputs.newDown > 0 ? " and the cash down" : ""} cover the price${cmp.cashBack > 0.5 ? `, with ${money(cmp.cashBack)} back to you (counted above)` : ""}.`} A new car's running costs at today's prices.` : ` ${o.terms} lease${o.terms === 1 ? "" : "s"} of ${d.inputs.leaseMonths} months; nothing owned at the end.`}`)))),
     cmp.tradeIn < 0 ? ui.h("p", { class: "vh-d" }, `It is worth ${money(-cmp.tradeIn)} less than its loan: trading it in means paying that first (counted above), or rolling it into the new loan.`) : null,
-    ui.h("p", {}, best.id === "keep" ? `Keeping it is cheapest by ${money(Math.min(...cmp.options.filter((o) => o.id !== "keep").map((o) => o.cost)) - keep.cost)}. Replace it when repairs start to cost more than the value it is losing, or when it is no longer safe.` : `${best.label} is cheapest, by ${money(keep.cost - best.cost)} against keeping it.`)));
+    ui.h("p", {}, best.id === "keep" ? `Keeping it is cheapest by ${money(Math.min(...cmp.options.filter((o) => o.id !== "keep").map((o) => o.cost)) - keep.cost)}. Replace it when repairs cost more than the value it loses, or when it is no longer safe.` : `${best.label} is cheapest, by ${money(keep.cost - best.cost)} against keeping it.`)));
 
   // The figures: the new car and the lease. The rate box with our guess is empty with the gray figure; a box with no guess is
   // empty and its help says what an empty box counts (no example sits in a box)
@@ -129,7 +135,12 @@ export function render(page, ctx) {
     store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.vehicles = { ...(p.whatIfs.vehicles ?? {}), ...Object.fromEntries(fields.map((f) => [f.key, v[f.key] ?? null])) }; });
   }, { submitLabel: "Compare" });
   // the status names the new car's price only once the person typed it: beside "our guess" the stated $35,000 would read as ours
-  root.append(ui.h("div", {}, parts(ctx, { id: "figures", kind: "figures", says: blank("newPrice") ? "" : money(d.inputs.newPrice), guess: shown.size, open: keepOpen || undefined, holds: fields.map((f) => f.key), body: form })));
+  // electric or gas: a row of the same card, shut until tapped; its status says only what the person typed (no figure: the
+  // first view keeps its count)
+  const ev = evOrGas(plan, d);
+  root.append(ui.h("div", {}, parts(ctx,
+    { id: "figures", kind: "figures", says: blank("newPrice") ? "" : money(d.inputs.newPrice), guess: shown.size, open: keepOpen || undefined, holds: fields.map((f) => f.key), body: form },
+    { id: "ev", kind: "own", title: EV_TITLE, set: ev.set, open: evSaved || undefined, holds: [...EV_KEYS], body: () => evBody(ev, evSaved) })));
 
   // another car: behind an outlined button while the list has cars (docs/OPTIONAL.md R20)
   root.append(ui.card(null, opensUnder("+ Add another car", (shut) => carForm(null, shut))));
@@ -137,6 +148,43 @@ export function render(page, ctx) {
     { href: "#/goals/vehicle", ask: "How to save for a car?" },
     { href: "#/insurance/property", ask: "Is the car insured enough?" },
   ])));
+
+  // "Electric or gas for your miles": the answer (one sentence per case), each car's year, the federal line, the boxes (five
+  // first, the rest under "More details (optional)"; an empty box saves null and its help says what it counts), and what is
+  // left out. "Work it out" saves only whatIfs.vehicles.ev; the green line inside the part names the new answer.
+  function evBody(r, saved) {
+    const h = ui.h, money2 = (n) => fmt.money(n, cur, "en-US", 2);
+    const rec = (title, total, energy, words) => h("li", {},
+      h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, title), h("span", { class: "rec-value" }, `${money(total)} a year`)),
+      h("div", { class: "rec-sub" }, `${words} ${money(energy)}, upkeep ${money(total - energy)}`));
+    const s0 = plan.whatIfs?.vehicles?.ev ?? {};
+    const kept = (k) => (s0[k] === null || s0[k] === undefined || s0[k] === "" || !Number.isFinite(Number(s0[k])) ? null : Number(s0[k]));
+    const f = [
+      { key: "priceGap", label: "How much more the electric car costs to buy", type: "money", min: 0 },
+      { key: "stateCredit", label: "State credit or rebate", type: "money", min: 0 },
+      { key: "miles", label: "Miles a year", type: "number", min: 0, step: "1" },
+      { key: "gasPrice", label: "Gas price a gallon", type: "money", min: 0, step: "0.01" },
+      { key: "kwhPrice", label: "Electricity price per kilowatt-hour (kWh)", type: "money", min: 0, step: "0.01" },
+      { key: "mpg", label: "Gas car's miles per gallon", type: "number", min: 1, max: 150, more: true },
+      { key: "kwh100", label: "Electric car's kilowatt-hours (kWh) per 100 miles", type: "number", min: 1, max: 100, more: true },
+      { key: "gasUpkeep", label: "Gas car's upkeep a year", type: "money", min: 0, more: true },
+      { key: "evUpkeep", label: "Electric car's upkeep a year", type: "money", min: 0, more: true },
+    ].map((x) => ({ ...x, help: evHelp(x.key, r, { money, money2 }) }));
+    const evForm = ui.form(f, Object.fromEntries(EV_KEYS.map((k) => [k, kept(k)])), (v) => {
+      evWorked = true;
+      // only the calculator's own figures: the cars and The figures are left as they are; an empty box saves null
+      store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.vehicles = { ...(p.whatIfs.vehicles ?? {}), ev: Object.fromEntries(EV_KEYS.map((k) => [k, v[k] ?? null])) }; });
+    }, { submitLabel: "Work it out" });
+    return [
+      // just saved: the green line is the answer (R7); otherwise the answer as a plain sentence
+      saved ? ui.notice("ok", `Saved. ${evLine(r, money)}`) : h("p", {}, evLine(r, money)),
+      h("ul", { class: "records" }, [rec("A new gas car", r.gas.total, r.gas.energy, "gas"), rec("A new electric car", r.ev.total, r.ev.energy, "charging")]),
+      h("p", { class: "vh-d" }, evBasis(r)),
+      h("p", { class: "vh-d" }, FEDERAL_LINE),
+      evForm,
+      h("p", { class: "vh-d" }, EV_NOTE),
+    ];
+  }
 
   // a car's details (stored as a property entry linked to its vehicle account): the boxes most cars need first, the rest
   // under "More details (optional)"; an empty box saves nothing and counts the figure its help line names

@@ -145,3 +145,156 @@ export const estimators = {
     },
   },
 };
+
+// ---------------------------------------------------------------- "Electric or gas for your miles" (gap list, next 60, item 56; map V9)
+// A calculator one tap away: what a gas car and an electric car each cost a year to run for the miles you drive, and how many
+// years the cheaper running cost takes to make up a higher price. Its figures live in whatIfs.vehicles.ev (a calculator's,
+// never counted in the plan); compute() above never reads them, so its output is the same with or without them.
+
+/** The boxes, in the form's order (the first five show; the rest are under "More details (optional)"). */
+export const EV_KEYS = Object.freeze(["priceGap", "stateCredit", "miles", "gasPrice", "kwhPrice", "mpg", "kwh100", "gasUpkeep", "evUpkeep"]);
+/**
+ * The labelled examples an empty box counts when the plan has no figure of its own (each said in its box's help as "an
+ * example"): the page's own figures for a car's gas price ($3.50 a gallon), a new car's miles per gallon (32) and upkeep
+ * ($500 a year), and the charging figures the page counts for an electric car (0.3 kWh a mile = 30 per 100 miles, $0.17 a
+ * kWh). The electric car's upkeep is the same $500: no source was read for a difference, so the example favours neither.
+ */
+export const EV_EXAMPLES = Object.freeze({ gasPrice: DEFAULTS.car.fuelPrice, kwhPrice: 0.17, mpg: DEFAULTS.compare.newMpg, kwh100: 30, gasUpkeep: DEFAULTS.compare.newMaintenanceYear, evUpkeep: DEFAULTS.compare.newMaintenanceYear });
+/**
+ * The federal credits, read at irs.gov on 2026-11-15: "Credits for new clean vehicles purchased in 2023 or after" and "Used clean
+ * vehicle credit" (both "Page Last Reviewed or Updated: 13-Jul-2026"): not available for vehicles acquired after Sept. 30, 2025
+ * (acquired: a binding written contract and a payment by then); "Alternative fuel vehicle refueling property credit" (26-May-2026):
+ * a home charger only when placed in service from January 1, 2023, to June 30, 2026. None is counted (README).
+ */
+export const FEDERAL_EV = Object.freeze({ carsAcquiredBy: "2025-09-30", chargersInServiceBy: "2026-06-30", read: "2026-11-15" });
+export const FEDERAL_LINE = "Federal tax credits for electric cars ended for cars bought after September 30, 2025, and for home chargers put in after June 30, 2026, so none is counted.";
+export const EV_NOTE = "Counts fuel or charging and upkeep at today's prices, in today's dollars; insurance and the value each car loses are left out. Information, not advice.";
+/** More years than this to make up a price reads "in more than 30 years". */
+export const PAYBACK_MAX = 30;
+
+/** A year of running each: energy (miles / mpg x gas price; miles x kWh per 100 / 100 x electricity price) plus upkeep; saving = gas - electric. */
+export function running({ miles, gasPrice, mpg, kwhPrice, kwh100, gasUpkeep, evUpkeep }) {
+  const gasEnergy = mpg > 0 ? (miles / mpg) * gasPrice : 0;
+  const evEnergy = miles * (kwh100 / 100) * kwhPrice;
+  const gas = { energy: gasEnergy, upkeep: gasUpkeep, total: gasEnergy + gasUpkeep };
+  const ev = { energy: evEnergy, upkeep: evUpkeep, total: evEnergy + evUpkeep };
+  return { gas, ev, saving: gas.total - ev.total };
+}
+
+/**
+ * payback({ saving, priceGap, stateCredit }) -> { net (what more the electric car costs after the credit; null while no price
+ * is typed), years (null when nothing is made up), case }. The federal credit is $0 (FEDERAL_EV).
+ * case: "same" (running costs within $1) | "ev-ask" (electric cheaper to run, no price typed) | "ev-back" (it costs more:
+ * years = net / saving) | "ev-now" (it costs no more) | "gas" (gas cheaper to run, the electric car no cheaper to buy) |
+ * "gas-back" (the electric car cheaper to buy: the gas car makes that up in -net / -saving years).
+ */
+export function payback({ saving, priceGap = null, stateCredit = 0 }) {
+  const net = priceGap === null || priceGap === undefined ? null : priceGap - (stateCredit || 0);
+  if (Math.abs(saving) < 1) return { net, years: null, case: "same" };
+  if (saving > 0) {
+    if (net === null) return { net, years: null, case: "ev-ask" };
+    return net > 0 ? { net, years: net / saving, case: "ev-back" } : { net, years: null, case: "ev-now" };
+  }
+  return net !== null && net < 0 ? { net, years: net / saving, case: "gas-back" } : { net, years: null, case: "gas" };
+}
+
+/**
+ * evOrGas(plan, d) -> { inputs, from, set, car (the name), differs, gas, ev, saving, net, years, case }, for d = compute(plan) (ready).
+ * Each box: what the person typed here (whatIfs.vehicles.ev), else the plan's own figure, else a labelled example; `from[key]`
+ * says which ("typed" | "car" (the compared car's own) | "page" (the 12,000 miles the page counts for it) | "figures" (the new
+ * car's miles per gallon in The figures) | "example" | "none" (the price: unknown; the state credit: $0)). `set`: boxes typed.
+ * `differs`: the new car of the compared car's own kind (gas, or electric when it is) costs $1 or more a year more or less in
+ * fuel or charging, or in upkeep, than that car's own card above says (the basis line then says why: these are new cars).
+ */
+export function evOrGas(plan, d) {
+  const s = plan?.whatIfs?.vehicles?.ev && typeof plan.whatIfs.vehicles.ev === "object" ? plan.whatIfs.vehicles.ev : {};
+  const car = d.cars.find((c) => (c.accountId ?? c.id) === d.chosen) ?? d.cars[0];
+  const e = car?.details ?? {};
+  const pos = (v) => { const n = num(v, null); return n !== null && n > 0 ? n : null; };
+  const zeroOk = (v) => { const n = num(v, null); return n !== null && n >= 0 ? n : null; };
+  const typedOf = { priceGap: num(s.priceGap, null), stateCredit: zeroOk(s.stateCredit), miles: zeroOk(s.miles), gasPrice: zeroOk(s.gasPrice), kwhPrice: zeroOk(s.kwhPrice), mpg: pos(s.mpg), kwh100: pos(s.kwh100), gasUpkeep: zeroOk(s.gasUpkeep), evUpkeep: zeroOk(s.evUpkeep) };
+  const plain = !e.electric, w = plan?.whatIfs?.vehicles ?? {};
+  const own = {
+    miles: zeroOk(e.milesYear) !== null ? [zeroOk(e.milesYear), "car"] : [DEFAULTS.car.milesYear, "page"],
+    gasPrice: plain && zeroOk(e.fuelPrice) !== null ? [zeroOk(e.fuelPrice), "car"] : [EV_EXAMPLES.gasPrice, "example"],
+    kwhPrice: !plain && zeroOk(e.kwhPrice) !== null ? [zeroOk(e.kwhPrice), "car"] : [EV_EXAMPLES.kwhPrice, "example"],
+    mpg: pos(w.newMpg) !== null ? [pos(w.newMpg), "figures"] : [EV_EXAMPLES.mpg, "example"],
+    kwh100: !plain && pos(e.kwhPerMile) !== null ? [pos(e.kwhPerMile) * 100, "car"] : [EV_EXAMPLES.kwh100, "example"],
+    gasUpkeep: [EV_EXAMPLES.gasUpkeep, "example"],
+    evUpkeep: [EV_EXAMPLES.evUpkeep, "example"],
+    priceGap: [null, "none"],
+    stateCredit: [0, "none"],
+  };
+  const inputs = {}, from = {}, fallback = {};
+  for (const k of EV_KEYS) { fallback[k] = own[k][0]; if (typedOf[k] !== null) { inputs[k] = typedOf[k]; from[k] = "typed"; } else { [inputs[k], from[k]] = own[k]; } }
+  const r = running(inputs);
+  const p = payback({ saving: r.saving, priceGap: inputs.priceGap, stateCredit: inputs.stateCredit });
+  const fellBack = Object.fromEntries(EV_KEYS.map((k) => [k, own[k][1]]));
+  const card = Object.fromEntries((car?.year?.lines ?? []).map((l) => [l.key, l.amount]));
+  const same = plain ? r.gas : r.ev;
+  const differs = !!car && (Math.abs((card.fuel ?? 0) - same.energy) >= 1 || Math.abs((card.maintenance ?? 0) - same.upkeep) >= 1);
+  return { inputs, from, fallback, fellBack, set: EV_KEYS.filter((k) => from[k] === "typed").length, car: car?.name ?? "your car", differs, ...r, ...p };
+}
+
+/** "within a year" | "in about 7.1 years" (one decimal under 10, whole from 10) | "in more than 30 years". */
+export function yearsPhrase(y) {
+  if (!(y >= 1)) return "within a year";
+  if (y > PAYBACK_MAX) return `in more than ${PAYBACK_MAX} years`;
+  const n = y < 10 ? Number(y.toFixed(1)) : Math.round(y);
+  return `in about ${n} year${n === 1 ? "" : "s"}`;
+}
+/** The answer, one written sentence per case (docs/OPTIONAL.md R5). `money` writes an amount ("$5,000"). */
+export function evLine(r, money) {
+  const s = money(Math.abs(r.saving));
+  switch (r.case) {
+    case "ev-back": return `The electric car costs ${s} a year less to run, so it makes up the ${money(r.net)} more it costs ${yearsPhrase(r.years)}.`;
+    case "ev-now": return `The electric car costs ${s} a year less to run and no more to buy, so it is cheaper from the start.`;
+    case "ev-ask": return `The electric car costs ${s} a year less to run. Type how much more it costs to buy to see how long it takes to make that up.`;
+    case "gas": return `At these prices the gas car costs ${s} a year less to run, so an electric car that costs more to buy never makes that up.`;
+    case "gas-back": return `The electric car costs ${money(-r.net)} less to buy, and the gas car makes that up ${yearsPhrase(r.years)} with its ${s} a year lower running cost.`;
+    default: return `At these prices both cost about ${money(r.gas.total)} a year to run, so the one that costs less to buy costs less overall.`;
+  }
+}
+/** A car's name as the help and the basis line say it: "your Family car"; "Bo's truck" (a name that says whose already); "your car". */
+export function carPhrase(name) {
+  const n = String(name ?? "").trim();
+  if (!n || /^(a |an |your )?car$/i.test(n)) return "your car";
+  if (/^(the|my|our|your|his|her|their)\s/i.test(n) || /['\u2019]s\b/.test(n)) return n;
+  return `your ${n}`;
+}
+/**
+ * The line under the two cars: they are new cars, driven the compared car's miles ("like your Family car"; "like yours" for a
+ * car with no name of its own) or the miles typed, that they are not that car's own costs when they differ (`differs`), and
+ * whether an example stands in for a box left empty. One written sentence per case (docs/OPTIONAL.md R5).
+ */
+export function evBasis(r) {
+  const m = Number(r.inputs.miles).toLocaleString("en-US"), car = carPhrase(r.car);
+  const like = car === "your car" ? "yours" : car;
+  const some = ["gasPrice", "kwhPrice", "mpg", "kwh100", "gasUpkeep", "evUpkeep"].some((k) => r.from[k] === "example");
+  const kase = `${r.from.miles === "typed" ? "typed" : r.differs ? "car-differs" : "car"}${some ? "-examples" : ""}`;
+  switch (kase) {
+    case "car-differs-examples": return `Both are new cars driven ${m} miles a year, like ${like}. They are not your own car's costs. Boxes you leave empty use examples: type yours to replace them.`;
+    case "car-differs": return `Both are new cars driven ${m} miles a year, like ${like}. They are not your own car's costs.`;
+    case "car-examples": return `Both are new cars driven ${m} miles a year, like ${like}. Boxes you leave empty use examples: type yours to replace them.`;
+    case "car": return `Both are new cars driven ${m} miles a year, like ${like}.`;
+    case "typed-examples": return `Both are new cars driven ${m} miles a year. Boxes you leave empty use examples: type yours to replace them.`;
+    default: return `Both are new cars driven ${m} miles a year.`;
+  }
+}
+/** What an empty box counts, in its help line: the plan's own figure or a labelled example. `money2` writes cents ("$0.17"). */
+export function evHelp(key, r, { money, money2 }) {
+  const v = r.fallback[key], how = r.fellBack[key], car = carPhrase(r.car);
+  const n = (x) => Number(x).toLocaleString("en-US", { maximumFractionDigits: 2 });
+  switch (key) {
+    case "priceGap": return "The difference in price, with a home charger if you need one, for example $5,000. Leave it empty if you do not know yet.";
+    case "stateCredit": return "Some states and power companies pay part of an electric car's price, for example $1,000. Left empty, we count none.";
+    case "miles": return how === "car" ? `Left empty, we count the ${n(v)} miles you typed for ${car}.` : `Left empty, we count the ${n(v)} miles used for ${car}.`;
+    case "gasPrice": return how === "car" ? `Left empty, we count the ${money2(v)} you typed for ${car}.` : `Left empty, we count ${money2(v)}, an example: type what you pay.`;
+    case "kwhPrice": return how === "car" ? `On your power bill. Left empty, we count the ${money2(v)} you typed for ${car}.` : `On your power bill. Left empty, we count ${money2(v)}, an example: type what you pay.`;
+    case "mpg": return how === "figures" ? `Left empty, we count ${n(v)}, the new car's in The figures.` : `Left empty, we count ${n(v)}, an example: a new car's fuel economy label has its own.`;
+    case "kwh100": return how === "car" ? `Left empty, we count the ${n(v)} you typed for ${car}.` : `Left empty, we count ${n(v)}, an example: a new car's fuel economy label has its own.`;
+    case "gasUpkeep": return `Left empty, we count ${money(v)} a year, an example.`;
+    case "evUpkeep": return `Left empty, we count ${money(v)} a year, an example, the same as gas.`;
+    default: return "";
+  }
+}

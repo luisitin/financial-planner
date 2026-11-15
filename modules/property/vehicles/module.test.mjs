@@ -177,7 +177,7 @@ test("C9 the page: the empty rate box shows our gray figure, the comparison coun
   assert.match(t, /Left empty, we count \$35,000\./);
   const line = root.querySelectorAll("div").find((x) => /borrowed for 60 months at 7\.2% \(our guess\)\./.test(textOf(x)));
   assert.ok(line && outsideShut(line), "the comparison says the rate is our guess, outside any fold (R9 #5)");
-  assert.deepEqual(openParts(root), { figures: false }, "a list page: the comparison's figures wait folded");
+  assert.deepEqual(openParts(root), { figures: false, ev: false }, "a list page: the comparison's figures wait folded");
   assert.equal(statusText(root, textOf), "our guess", "the shut part names no price beside \"our guess\": the stated $35,000 is not ours");
   assert.equal(root.querySelectorAll("details").filter((x) => !x.dataset.part && !x.className.includes("form-more")).length, 0, "no fold by hand (R10)");
 });
@@ -192,13 +192,13 @@ test("C9 S11 (R17): Compare with the rate left empty saves no guess, and only Th
   assert.equal(a.saved[0].guesses, undefined, "no guess entry either");
   assert.deepEqual(a.saved[0].property, a.plan.property, "the cars are untouched");
   const b = await drawCars(a.saved[0]);
-  assert.deepEqual(openParts(b.root), { figures: true }, "the part just saved stays open, no other moves");
+  assert.deepEqual(openParts(b.root), { figures: true, ev: false }, "the part just saved stays open, no other moves");
   assert.match(b.textOf(b.root), /Saved\. Cheapest over 5 years: keep it, \$\d+ a month\./);
   assert.equal(boxOf(b.root, "newRate").getAttribute("placeholder"), "7.2", "reopened: still empty and gray");
   assert.equal(boxOf(b.root, "newPrice").value, "30,000");
   assert.equal(statusText(b.root, b.textOf), "our guess · $30,000", "a price the person typed is named");
   const c = await drawCars(a.saved[0]);
-  assert.deepEqual(openParts(c.root), { figures: false }, "the next visit opens on the answer, the figures folded");
+  assert.deepEqual(openParts(c.root), { figures: false, ev: false }, "the next visit opens on the answer, the figures folded");
   boxOf(c.root, "newRate").value = "5.9";
   boxOf(c.root, "newRate").closest("form").dispatch("submit");
   assert.equal(c.saved[0].whatIfs.vehicles.newRate, 0.059);
@@ -259,4 +259,208 @@ test("no car yet: the add form is open at five boxes; a car with no value is ref
   assert.equal(saved.length, 1);
   const car = saved[0].property.find((x) => x.kind === "vehicle");
   assert.deepEqual([car.name, car.value, car.milesYear], ["Hatchback", 8000, null]);
+});
+
+// ---- "Electric or gas for your miles" (gap list, next 60, item 56; map V9): running costs, the years to make up a price, the credits
+import { EV_KEYS, EV_EXAMPLES, FEDERAL_EV, FEDERAL_LINE, EV_NOTE, PAYBACK_MAX, running, payback, evOrGas, yearsPhrase, evLine, evHelp, evBasis, carPhrase } from "./compute.js";
+const $ = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const $2 = (n) => `$${Number(n).toFixed(2)}`;
+const T15 = "2026-11-15";
+const withEv = (ev, plan = renterDebtPlan()) => { const p = structuredClone(plan); p.whatIfs = { ...(p.whatIfs ?? {}), vehicles: { ...(p.whatIfs?.vehicles ?? {}), ev } }; return p; };
+const evOf = (p) => evOrGas(p, compute(p, { today: T15 }));
+
+test("running costs by hand: 12,000 miles at 32 miles a gallon and $3.50 against 30 kWh per 100 miles at $0.17, $500 of upkeep each", () => {
+  const r = running({ miles: 12000, gasPrice: 3.5, mpg: 32, kwhPrice: 0.17, kwh100: 30, gasUpkeep: 500, evUpkeep: 500 });
+  near(r.gas.energy, 12000 / 32 * 3.5); near(r.gas.energy, 1312.5);
+  near(r.ev.energy, 12000 * 0.30 * 0.17); near(r.ev.energy, 612);
+  near(r.gas.total, 1812.5); near(r.ev.total, 1112); near(r.saving, 700.5);
+  // the payback: $5,000 more, less a $1,000 state credit, at $700.50 a year
+  const p = payback({ saving: r.saving, priceGap: 5000, stateCredit: 1000 });
+  assert.equal(p.case, "ev-back"); assert.equal(p.net, 4000); near(p.years, 4000 / 700.5, 1e-12);
+  assert.equal(yearsPhrase(p.years), "in about 5.7 years");
+  // no federal credit is counted: the net price is the price less the state's credit only
+  assert.equal(payback({ saving: 700.5, priceGap: 5000 }).net, 5000);
+});
+
+test("the federal credits: ended for cars bought after September 30, 2025 and home chargers put in after June 30, 2026 (irs.gov, read 2026-11-15)", () => {
+  assert.deepEqual({ ...FEDERAL_EV }, { carsAcquiredBy: "2025-09-30", chargersInServiceBy: "2026-06-30", read: "2026-11-15" });
+  assert.equal(FEDERAL_LINE, "Federal tax credits for electric cars ended for cars bought after September 30, 2025, and for home chargers put in after June 30, 2026, so none is counted.");
+  assert.equal(EV_NOTE, "Counts fuel or charging and upkeep at today's prices, in today's dollars; insurance and the value each car loses are left out. Information, not advice.");
+});
+
+test("every case of the answer, one written sentence each, and the years in words", () => {
+  const r0 = running({ miles: 12000, gasPrice: 3.5, mpg: 32, kwhPrice: 0.17, kwh100: 30, gasUpkeep: 500, evUpkeep: 500 });
+  const say = (r, price, credit = 0) => { const p = payback({ saving: r.saving, priceGap: price, stateCredit: credit }); return [p.case, evLine({ ...r, ...p }, $)]; };
+  assert.deepEqual(say(r0, 5000), ["ev-back", "The electric car costs $701 a year less to run, so it makes up the $5,000 more it costs in about 7.1 years."]);
+  assert.deepEqual(say(r0, 3000, 3000), ["ev-now", "The electric car costs $701 a year less to run and no more to buy, so it is cheaper from the start."]);
+  assert.deepEqual(say(r0, null), ["ev-ask", "The electric car costs $701 a year less to run. Type how much more it costs to buy to see how long it takes to make that up."]);
+  const dearPower = running({ miles: 8000, gasPrice: 3, mpg: 40, kwhPrice: 0.45, kwh100: 35, gasUpkeep: 500, evUpkeep: 500 });   // gas 600, charging 1,260
+  near(dearPower.saving, 600 - 1260);
+  assert.deepEqual(say(dearPower, 4000), ["gas", "At these prices the gas car costs $660 a year less to run, so an electric car that costs more to buy never makes that up."]);
+  assert.deepEqual(say(dearPower, null), ["gas", "At these prices the gas car costs $660 a year less to run, so an electric car that costs more to buy never makes that up."]);
+  assert.deepEqual(say(dearPower, 1000, 3000), ["gas-back", "The electric car costs $2,000 less to buy, and the gas car makes that up in about 3 years with its $660 a year lower running cost."]);
+  const even = running({ miles: 10000, gasPrice: 3, mpg: 30, kwhPrice: 0.2, kwh100: 50, gasUpkeep: 500, evUpkeep: 500 });   // 1,000 and 1,000
+  assert.deepEqual(say(even, 4000), ["same", "At these prices both cost about $1,500 a year to run, so the one that costs less to buy costs less overall."]);
+  assert.equal(yearsPhrase(0.4), "within a year");
+  assert.equal(yearsPhrase(1), "in about 1 year");
+  assert.equal(yearsPhrase(12.6), "in about 13 years");
+  assert.equal(yearsPhrase(30), "in about 30 years");
+  assert.equal(yearsPhrase(30.2), `in more than ${PAYBACK_MAX} years`);
+  assert.deepEqual(say(r0, 700), ["ev-back", "The electric car costs $701 a year less to run, so it makes up the $700 more it costs within a year."]);
+  assert.deepEqual(say(r0, 30000), ["ev-back", "The electric car costs $701 a year less to run, so it makes up the $30,000 more it costs in more than 30 years."]);
+});
+
+test("each box counts what was typed here, else the plan's own figure, else a labelled example, and its help says which", () => {
+  // Riley's car with nothing typed: the 12,000 miles the page counts, and the examples
+  const blank = evOf(renterDebtPlan());
+  assert.deepEqual(blank.inputs, { priceGap: null, stateCredit: 0, miles: 12000, gasPrice: 3.5, kwhPrice: 0.17, mpg: 32, kwh100: 30, gasUpkeep: 500, evUpkeep: 500 });
+  assert.deepEqual(blank.from, { priceGap: "none", stateCredit: "none", miles: "page", gasPrice: "example", kwhPrice: "example", mpg: "example", kwh100: "example", gasUpkeep: "example", evUpkeep: "example" });
+  assert.equal(blank.set, 0); assert.equal(blank.case, "ev-ask"); assert.deepEqual(EV_KEYS, ["priceGap", "stateCredit", "miles", "gasPrice", "kwhPrice", "mpg", "kwh100", "gasUpkeep", "evUpkeep"]);
+  assert.deepEqual({ ...EV_EXAMPLES }, { gasPrice: DEFAULTS.car.fuelPrice, kwhPrice: 0.17, mpg: DEFAULTS.compare.newMpg, kwh100: 30, gasUpkeep: DEFAULTS.compare.newMaintenanceYear, evUpkeep: DEFAULTS.compare.newMaintenanceYear });
+  const help = (r, k) => evHelp(k, r, { money: $, money2: $2 });
+  assert.equal(help(blank, "miles"), "Left empty, we count the 12,000 miles used for your car.");
+  assert.equal(help(blank, "gasPrice"), "Left empty, we count $3.50, an example: type what you pay.");
+  assert.equal(help(blank, "kwhPrice"), "On your power bill. Left empty, we count $0.17, an example: type what you pay.");
+  assert.equal(help(blank, "mpg"), "Left empty, we count 32, an example: a new car's fuel economy label has its own.");
+  assert.equal(help(blank, "kwh100"), "Left empty, we count 30, an example: a new car's fuel economy label has its own.");
+  assert.equal(help(blank, "gasUpkeep"), "Left empty, we count $500 a year, an example.");
+  assert.equal(help(blank, "evUpkeep"), "Left empty, we count $500 a year, an example, the same as gas.");
+  assert.equal(help(blank, "priceGap"), "The difference in price, with a home charger if you need one, for example $5,000. Leave it empty if you do not know yet.");
+  assert.equal(evBasis(blank), "Both are new cars driven 12,000 miles a year, like yours. They are not your own car's costs. Boxes you leave empty use examples: type yours to replace them.");
+  assert.equal(evBasis(evOf(withEv({ gasPrice: 3.2, kwhPrice: 0.15, mpg: 30, kwh100: 28, gasUpkeep: 700, evUpkeep: 400, miles: 9500 }))), "Both are new cars driven 9,500 miles a year.", "no example left: the plain line");
+  assert.equal(help(blank, "stateCredit"), "Some states and power companies pay part of an electric car's price, for example $1,000. Left empty, we count none.");
+  // the family's sedan with its own miles and gas price, and the new car's miles per gallon typed in The figures
+  const p = withCar(); p.whatIfs = { vehicles: { newMpg: 36 } };
+  const own = evOf(p);
+  assert.deepEqual([own.inputs.miles, own.from.miles, own.inputs.gasPrice, own.from.gasPrice, own.inputs.mpg, own.from.mpg], [11000, "car", 3.4, "car", 36, "figures"]);
+  assert.equal(help(own, "miles"), "Left empty, we count the 11,000 miles you typed for your Sedan.");
+  assert.equal(help(own, "gasPrice"), "Left empty, we count the $3.40 you typed for your Sedan.");
+  assert.equal(help(own, "mpg"), "Left empty, we count 36, the new car's in The figures.");
+  // an electric car's own charging figures
+  const e = withCar(); e.property[0] = { ...e.property[0], electric: true, kwhPerMile: 0.28, kwhPrice: 0.21 };
+  const evCar = evOf(e);
+  assert.deepEqual([evCar.inputs.kwh100, evCar.from.kwh100, evCar.inputs.kwhPrice, evCar.from.kwhPrice, evCar.from.gasPrice], [28.000000000000004, "car", 0.21, "car", "example"]);
+  assert.equal(help(evCar, "kwhPrice"), "On your power bill. Left empty, we count the $0.21 you typed for your Sedan.");
+  assert.equal(help(evCar, "kwh100"), "Left empty, we count the 28 you typed for your Sedan.");
+  // typed here wins; a 0 mpg or 0 kWh is not a figure (the boxes allow 1 and up); a typed 0 credit is the person's
+  const typed = evOf(withEv({ priceGap: 6000, stateCredit: 0, miles: 15000, gasPrice: 3.1, kwhPrice: 0.14, mpg: 0, kwh100: null, gasUpkeep: 800, evUpkeep: 400 }));
+  assert.deepEqual(typed.inputs, { priceGap: 6000, stateCredit: 0, miles: 15000, gasPrice: 3.1, kwhPrice: 0.14, mpg: 32, kwh100: 30, gasUpkeep: 800, evUpkeep: 400 });
+  assert.equal(typed.set, 7);
+  const r = running(typed.inputs);
+  near(r.gas.total, 15000 / 32 * 3.1 + 800); near(r.ev.total, 15000 * 0.3 * 0.14 + 400);
+  near(typed.years, 6000 / (r.gas.total - r.ev.total), 1e-12);
+});
+
+test("gap next-60 #56 invariance: over the four fixture plans and the invented households, compute() is byte-identical with the electric figures typed or not", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const plans = [["family", familyPlan(T15)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan(T15)], ["empty", emptyPlan()], ["withCar", withCar()], ...ARCHETYPES.map((a) => [a.id, a.build()])];
+  assert.ok(plans.length >= 19);
+  let cars = 0;
+  const EV = { priceGap: 6000, stateCredit: 1000, miles: 15000, gasPrice: 3.1, kwhPrice: 0.14, mpg: 30, kwh100: 28, gasUpkeep: 800, evUpkeep: 400 };
+  for (const [name, p0] of plans) {
+    const p = migrate(structuredClone(p0));
+    const a = compute(p, { today: T15 });
+    assert.equal(JSON.stringify(compute(withEv(EV, p), { today: T15 })), JSON.stringify(a), `${name}: typed`);
+    assert.equal(JSON.stringify(compute(withEv(Object.fromEntries(EV_KEYS.map((k) => [k, null])), p), { today: T15 })), JSON.stringify(a), `${name}: saved empty`);
+    if (a.ready) { cars++; const r = evOrGas(p, a); assert.equal(r.set, 0, name); assert.ok(Number.isFinite(r.saving), name); }
+  }
+  assert.ok(cars >= 10, `${cars} households with a car`);
+});
+
+const partOf = (root, id) => root.querySelectorAll("details").find((x) => x.dataset.part === id);
+test("the page: one quiet row beside The figures, shut, no status until something is typed; opening writes nothing", async () => {
+  const { root, saved, textOf } = await drawCars(renterDebtPlan());
+  const ev = partOf(root, "ev");
+  assert.ok(ev);
+  assert.equal(textOf(ev.querySelector(".fold-title")).trim(), "Electric or gas for your miles");
+  assert.equal(ev.querySelector(".fold-status"), null);
+  assert.equal(ev.hasAttribute("open"), false);
+  assert.equal(saved.length, 0);
+  const t = textOf(ev);
+  assert.match(t, /The electric car costs \$701 a year less to run\. Type how much more it costs to buy to see how long it takes to make that up\./);
+  assert.match(t, /A new gas car \$1,813 a year gas \$1,313, upkeep \$500/);
+  assert.match(t, /A new electric car \$1,112 a year charging \$612, upkeep \$500/);
+  assert.match(t, /Both are new cars driven 12,000 miles a year, like yours\. They are not your own car's costs\. Boxes you leave empty use examples: type yours to replace them\./);
+  assert.ok(t.includes(FEDERAL_LINE)); assert.ok(t.includes(EV_NOTE));
+  const form = boxOf(ev, "priceGap").closest("form");
+  const shown = form.all().filter((x) => x.tagName === "INPUT" && !x.closest(".form-more")).map((x) => x.getAttribute("name"));
+  assert.deepEqual(shown, ["priceGap", "stateCredit", "miles", "gasPrice", "kwhPrice"], "five boxes first (the form budget)");
+  for (const k of EV_KEYS) assert.equal(boxOf(ev, k).value ?? "", "", `${k}: no example in a box`);
+  assert.equal(form.all().filter((x) => x.hasAttribute?.("required")).length, 0, "a shut part holds no required box");
+});
+
+test("S11 (R17): Work it out saves only whatIfs.vehicles.ev, keeps only that part open, and the green line is the new answer", async () => {
+  const a = await drawCars(renterDebtPlan());
+  const ev = partOf(a.root, "ev");
+  boxOf(ev, "priceGap").value = "5000"; boxOf(ev, "stateCredit").value = "1000";
+  boxOf(ev, "priceGap").closest("form").dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  assert.deepEqual(a.saved[0].whatIfs.vehicles, { ev: { priceGap: 5000, stateCredit: 1000, miles: null, gasPrice: null, kwhPrice: null, mpg: null, kwh100: null, gasUpkeep: null, evUpkeep: null } }, "an empty box saves null; The figures' keys are not written");
+  assert.deepEqual(a.saved[0].property, a.plan.property); assert.deepEqual(a.saved[0].accounts, a.plan.accounts);
+  assert.deepEqual(compute(a.saved[0], { today: T14 }), compute(a.plan, { today: T14 }), "the page's own answers do not move");
+  const b = await drawCars(a.saved[0]);
+  assert.deepEqual(openParts(b.root), { figures: false, ev: true }, "the part just saved stays open, no other moves");
+  const t = b.textOf(partOf(b.root, "ev"));
+  assert.match(t, /Saved\. The electric car costs \$701 a year less to run, so it makes up the \$4,000 more it costs in about 5\.7 years\./);
+  assert.equal((t.match(/makes up the \$4,000/g) ?? []).length, 1, "the answer once, as the green line");
+  assert.equal(b.textOf(partOf(b.root, "ev").querySelector(".fold-status")).trim(), "2 set by you");
+  assert.equal(boxOf(partOf(b.root, "ev"), "priceGap").value, "5,000");
+  const c = await drawCars(a.saved[0]);
+  assert.deepEqual(openParts(c.root), { figures: false, ev: false }, "the next visit opens shut");
+  // The figures' Compare keeps the electric figures
+  boxOf(c.root, "newPrice").value = "31000";
+  boxOf(c.root, "newPrice").closest("form").dispatch("submit");
+  assert.deepEqual(c.saved[0].whatIfs.vehicles.ev, a.saved[0].whatIfs.vehicles.ev);
+  assert.equal(c.saved[0].whatIfs.vehicles.newPrice, 31000);
+});
+
+// ---- s3 fix (critics' findings P2, P3, P5)
+test("s3 fix P2, P3: the line under the two cars names the car whose miles they use and says why they are not its card's figures", async () => {
+  const { demoHousehold } = await import("../../../qa/fixtures/demo-household.mjs");
+  const demo = migrate(demoHousehold(T15));
+  const d = compute(demo, { today: T15 });
+  assert.deepEqual(d.cars.map((c) => c.name), ["Family car", "Bo's truck"]);
+  const card = Object.fromEntries(d.cars[0].year.lines.map((l) => [l.key, Math.round(l.amount)]));
+  assert.deepEqual([card.fuel, card.maintenance], [1500, 900], "the Family car's own card: 12,000 / 28 x $3.50 and $900");
+  const r = evOrGas(demo, d);
+  assert.equal(r.car, "Family car", "the car The figures compares (the first)");
+  assert.deepEqual([Math.round(r.gas.energy), r.gas.upkeep], [1313, 500], "a new gas car: 12,000 / 32 x $3.50 and $500");
+  assert.equal(r.differs, true);
+  assert.equal(evBasis(r), "Both are new cars driven 12,000 miles a year, like your Family car. They are not your own car's costs. Boxes you leave empty use examples: type yours to replace them.");
+  assert.equal(evHelp("miles", r, { money: $, money2: $2 }), "Left empty, we count the 12,000 miles used for your Family car.");
+  // Compare for the truck: it is named instead
+  const truck = structuredClone(demo); truck.whatIfs = { ...(truck.whatIfs ?? {}), vehicles: { ...(truck.whatIfs?.vehicles ?? {}), car: d.cars[1].accountId ?? d.cars[1].id } };
+  const rt = evOrGas(truck, compute(truck, { today: T15 }));
+  assert.equal(rt.car, "Bo's truck");
+  assert.match(evBasis(rt), /^Both are new cars driven 12,000 miles a year, like Bo's truck\. They are not your own car's costs\./);
+  // a car whose card matches a new gas car (32 miles a gallon, $500 upkeep): nothing to explain
+  const p = withCar(); p.property[0] = { ...p.property[0], mpg: 32, maintenanceYear: 500 };
+  const same = evOf(p);
+  assert.equal(same.differs, false);
+  assert.equal(evBasis(same), "Both are new cars driven 11,000 miles a year, like your Sedan. Boxes you leave empty use examples: type yours to replace them.");
+  // every box typed but the miles (the miles per gallon too: left empty it is an example, s3 fix round 2 F4): no example left
+  const allTyped = evOf(withEv({ gasUpkeep: 500, evUpkeep: 500, kwhPrice: 0.15, kwh100: 30, mpg: 32 }, p));
+  assert.equal(allTyped.from.mpg, "typed"); assert.equal(allTyped.differs, false);
+  assert.equal(evBasis(allTyped), "Both are new cars driven 11,000 miles a year, like your Sedan.");
+  assert.equal(evOf(withEv({ gasUpkeep: 500, evUpkeep: 500, kwhPrice: 0.15, kwh100: 30 }, p)).from.mpg, "example", "the mpg box left empty is an example");
+  assert.equal(evBasis(evOf(withEv({ miles: 15000 }, p))), "Both are new cars driven 15,000 miles a year. Boxes you leave empty use examples: type yours to replace them.");
+  // an electric car is compared with a new electric car's charging and upkeep
+  const e = withCar(); e.property[0] = { ...e.property[0], electric: true, kwhPerMile: 0.3, kwhPrice: 0.17, maintenanceYear: 500 };
+  assert.equal(evOf(e).differs, false, "its own charging figures and $500 upkeep: the same as the new electric car");
+  assert.deepEqual(["Family car", "Bo's truck", "Car", "car", "", "The Subaru", "Honda Civic"].map(carPhrase),
+    ["your Family car", "Bo's truck", "your car", "your car", "your car", "The Subaru", "your Honda Civic"]);
+});
+
+test("s3 fix round 2 P2: the line under the two cars says it in plain words, every case, never \"card\"", () => {
+  const p = withCar(); p.property[0] = { ...p.property[0], mpg: 32, maintenanceYear: 500 };
+  const all = { gasUpkeep: 500, evUpkeep: 500, kwhPrice: 0.15, kwh100: 30, mpg: 32 };
+  const cases = [
+    [evOf(renterDebtPlan()), "Both are new cars driven 12,000 miles a year, like yours. They are not your own car's costs. Boxes you leave empty use examples: type yours to replace them."],
+    [evOf(withEv({ ...all, gasPrice: 3.5 })), "Both are new cars driven 12,000 miles a year, like yours. They are not your own car's costs."],
+    [evOf(p), "Both are new cars driven 11,000 miles a year, like your Sedan. Boxes you leave empty use examples: type yours to replace them."],
+    [evOf(withEv(all, p)), "Both are new cars driven 11,000 miles a year, like your Sedan."],
+    [evOf(withEv({ miles: 15000 }, p)), "Both are new cars driven 15,000 miles a year. Boxes you leave empty use examples: type yours to replace them."],
+    [evOf(withEv({ ...all, miles: 15000 }, p)), "Both are new cars driven 15,000 miles a year."],
+  ];
+  for (const [r, words] of cases) { assert.equal(evBasis(r), words); assert.doesNotMatch(evBasis(r), /card|figures on/); }
 });

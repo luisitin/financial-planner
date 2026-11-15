@@ -318,6 +318,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Mix by account",                // investments/allocation (opt spec 6.1, C17): the hand-written fold's title kept through the helper; each account's own mix, not "N more accounts" (it lists every account)
   "Gain on each holding since you bought it", // investments/performance (gap list, next 60, item 48; was "Which holdings drove it", which read as what drove the stretch measured, critic P2): each holding's gain since bought, best and worst; not "N more holdings" (it lists every holding, with its share of the whole)
   "Work done on the home",         // property/home (gap list, next 60, item 56): the person's own dated list of jobs and their costs, a record a person looks for by name; not our guess overridden, so not "Set my own numbers"
+  "Electric or gas for your miles", // property/vehicles (gap list, next 60, item 56): the two cars' running costs for the person's miles and the years to make up the price, a comparison a person looks for by name; not our guess overridden
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;
 const STATE_WORDS = /\b(set|guess|guesses|guessed|fix|filled)\b/i;
