@@ -8,6 +8,7 @@ import { compute as computeHoldings } from "../holdings/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { allLines, isTransfer, tagsOf } from "../../transactions/ledger/compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
+import { money } from "../../../core/format.js";
 
 /**
  * compute(plan, { today, calendar }) -> {
@@ -31,11 +32,27 @@ export function compute(plan, params = {}) {
   const notes = [];
   const unknownCount = items.filter((x) => !x.known).length;
   if (unknownCount) notes.push(`${unknownCount} holding${unknownCount === 1 ? " has" : "s have"} no yield on file; type one on the Holdings page (the fund page or the last year's distributions divided by the price).`);
-  if (taxable > 0) notes.push(`${Math.round(taxable).toLocaleString("en-US")} of it lands in taxable accounts and is taxed every year even when reinvested; type the qualified part on the Federal estimate page (about ${Math.round(qualifiedGuess).toLocaleString("en-US")} looks qualified) and the rest as other income taxed at regular rates.`);
+  // under 50 cents rounds to $0 in the money format: no note (a critic's M4: "$0 of it lands in taxable accounts")
+  if (taxable >= 0.5) notes.push(taxNote(taxable, qualifiedGuess, plan.meta?.currency ?? "USD"));
   const out = { ready: h.hasData, total, monthly: total / 12, yieldOverall: h.total > 0 ? total / h.total : 0, items, byAccount, taxable, sheltered: total - taxable, coversShare: expensesMonthly > 0 ? total / 12 / expensesMonthly : null, expensesMonthly, qualifiedGuess, unknownCount, notes, portfolio: h.total };
   // (one key more, only when asked: every other page that reads this compute gets the same bytes as before)
   if (params.calendar) out.calendar = calendarOf(plan, h, out, params.today ?? null);
   return out;
+}
+
+/**
+ * The tax note (one sentence per case, each with a test), in the app's own money format (fix round r2: it printed "3,604" and
+ * "about 0", with no currency sign, so Hide amounts could not cover them either), and in plain words (a person critic: "the
+ * qualified part" was jargon; the kind is said, and the Federal estimate page's two boxes are named as it labels them):
+ *   some taxed lower -> "$3,604 of it lands in taxable accounts and is taxed every year, even when reinvested. About $1,044 looks like the kind taxed at a lower rate: on the Federal estimate page, type that under “Qualified dividends” and the rest under “Other income taxed at regular rates”."
+ *   none (under $0.50) -> "$346 of it lands in taxable accounts and is taxed every year, even when reinvested. None of it looks like the kind taxed at a lower rate: on the Federal estimate page, type it under “Other income taxed at regular rates”."
+ * Called only for a taxable amount of 50 cents or more.
+ */
+export function taxNote(taxable, qualified, currency = "USD") {
+  const lands = `${money(taxable, currency)} of it lands in taxable accounts and is taxed every year, even when reinvested.`;
+  return qualified >= 0.5
+    ? `${lands} About ${money(qualified, currency)} looks like the kind taxed at a lower rate: on the Federal estimate page, type that under \u201cQualified dividends\u201d and the rest under \u201cOther income taxed at regular rates\u201d.`
+    : `${lands} None of it looks like the kind taxed at a lower rate: on the Federal estimate page, type it under \u201cOther income taxed at regular rates\u201d.`;
 }
 
 // ---------------------------------------------------------------- month by month (gap next-60 #8; README "Month by month")

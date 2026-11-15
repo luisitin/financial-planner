@@ -77,6 +77,26 @@ Income = value x yield. Yields are typical figures by class for the funds in the
 - The title is pinned in `qa/first-view-lib.mjs` PINNED_TITLES (the brief's own words, a calendar a person looks for
   by name). The page saves nothing (S11 in `module.test.mjs`).
 
+## The tax note in the app's money format (fix round r2, claude-b, 2026-11-15)
+An earlier critic found the note printing amounts with no currency sign. Reproduced on Sam and Lee
+(`qa/fixtures/investments-plan.mjs`): "3,604 of it lands in taxable accounts ... (about 1,044 looks qualified)"; and on the
+held plan, with nothing qualified, "(about 0 looks qualified)". Without the sign the figures read as counts, and Hide
+amounts (`core/format.js maskAmounts`, which needs the sign) left them showing.
+- `taxNote(taxable, qualified, currency)` in compute.js writes the note with `core/format.js money` in the plan's currency
+  (as `cashflow/expenses` does), one sentence per case, in plain words (a person critic of the fix found "the qualified part"
+  still jargon on the first view, so the note says the kind and names the Federal estimate page's two boxes as that page
+  labels them, in quotes): "$3,604 of it lands in taxable accounts and is taxed every year, even when reinvested. About
+  $1,044 looks like the kind taxed at a lower rate: on the Federal estimate page, type that under “Qualified dividends” and
+  the rest under “Other income taxed at regular rates”." and, under 50 cents taxed lower, "$346 of it lands ... None of it
+  looks like the kind taxed at a lower rate: on the Federal estimate page, type it under “Other income taxed at regular
+  rates”." A test reads the two labels from `taxes/federal/view.js`, so a renamed box is caught.
+- Under 50 cents in taxable accounts there is no note: the money format rounds it to "$0" (a money critic's M4; before, the
+  same rounding printed "0").
+- Every other sentence on the page already used `fmt.money`; a module test opens every part and finds no figure with a
+  thousands comma that lacks its sign.
+- Invariance: every key of the output but `notes` is unchanged; the note says the same two figures, rounded as before
+  (module test "r2 invariance", and a scratch run against ab3bdde over every household in the builder's log).
+
 ## Invariance
 `compute(plan, { today })` without `calendar` gives byte for byte what it gave at 154a597 (the module test checks the
 keys and that `calendar: true` adds only `calendar`; a scratch run compared every household and fixture plan with a

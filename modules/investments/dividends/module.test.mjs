@@ -320,3 +320,72 @@ test("a holding's own Yield and paysEvery reach the row; holdings compute is not
   near(c.months.reduce((s, m) => s + m.amount, 0), 14267 + 900);
   near(c.quarter, 3140.0833333 + 225);
 });
+
+// ---------------------------------------------------------------- fix round r2: the tax note in the app's money format
+// The note printed "3,604 of it lands in taxable accounts ... (about 1,044 looks qualified)" and, with nothing qualified,
+// "(about 0 looks qualified)": no currency sign, so it read as a count and Hide amounts (core/format.js maskAmounts, which
+// needs the sign) could not cover it.
+test("r2: the tax note, one sentence per case, in the app's money format and the plan's currency", async () => {
+  const { taxNote } = await import("./compute.js");
+  const { money, maskAmounts } = await import("../../../core/format.js");
+  assert.equal(taxNote(3604.3, 1044.4), "$3,604 of it lands in taxable accounts and is taxed every year, even when reinvested. About $1,044 looks like the kind taxed at a lower rate: on the Federal estimate page, type that under \u201cQualified dividends\u201d and the rest under \u201cOther income taxed at regular rates\u201d.");
+  assert.equal(taxNote(346.2, 0), "$346 of it lands in taxable accounts and is taxed every year, even when reinvested. None of it looks like the kind taxed at a lower rate: on the Federal estimate page, type it under \u201cOther income taxed at regular rates\u201d.");
+  assert.equal(taxNote(346.2, 0.49), taxNote(346.2, 0), "under 50 cents is none");
+  assert.match(taxNote(1200, 500, "EUR"), new RegExp(`^${money(1200, "EUR").replace(/[.$]/g, "\\$&")} of it lands .*About ${money(500, "EUR").replace(/[.$]/g, "\\$&")} looks like the kind`));
+  // plain words (a person critic's P2): "qualified" only as the Federal estimate page's own box name, in quotes
+  for (const n of [taxNote(3604.3, 1044.4), taxNote(346.2, 0)]) assert.doesNotMatch(n.replace(/\u201cQualified dividends\u201d/, ""), /qualified/i);
+  // the boxes named are the Federal estimate page's own labels
+  const fed = await import("node:fs").then((fs) => fs.readFileSync(new URL("../../taxes/federal/view.js", import.meta.url), "utf8"));
+  assert.ok(fed.includes('label: "Qualified dividends"') && fed.includes('label: "Other income taxed at regular rates"'));
+  assert.doesNotMatch(maskAmounts(taxNote(3604.3, 1044.4)), /\d,\d{3}/, "Hide amounts covers both figures now");
+  // the page's own figures: Sam and Lee (qa/fixtures/investments-plan.mjs), $3,604 in the brokerage, $1,044 of it from VTI
+  const d = compute(investmentsPlan(), { today: T });
+  assert.equal(d.notes.at(-1), taxNote(d.taxable, d.qualifiedGuess));
+  assert.match(d.notes.at(-1), /^\$3,604 of it lands .*About \$1,044 looks like the kind taxed at a lower rate/);
+  const { heldPlan } = await import("../../../qa/fixtures/held-plan.mjs");
+  assert.match(compute(migrate(heldPlan()), { today: T }).notes.at(-1), /^\$346 of it lands .*None of it looks like the kind/);
+  // under 50 cents in taxable accounts rounds to $0: no note (a critic's M4)
+  const tiny = investmentsPlan(); const hd = compute(tiny, { today: T });
+  assert.ok(hd.taxable >= 0.5);
+  for (const x of tiny.holdings) x.shares = x.shares * (0.3 / hd.taxable);
+  const t3 = compute(tiny, { today: T });
+  assert.ok(t3.taxable > 0 && t3.taxable < 0.5, String(t3.taxable));
+  assert.ok(!t3.notes.some((n) => /lands in taxable/.test(n)), "no \"$0 of it lands\"");
+  const p = investmentsPlan(); p.meta = { ...(p.meta ?? {}), currency: "EUR" };
+  assert.equal(compute(p, { today: T }).notes.at(-1), taxNote(d.taxable, d.qualifiedGuess, "EUR"));
+});
+
+test("r2: no amount on the page without its currency sign, the note, the tiles, the rows and Month by month open", async () => {
+  const { heldPlan } = await import("../../../qa/fixtures/held-plan.mjs");
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  for (const plan of [investmentsPlan(), migrate(heldPlan())]) {
+    const r = await draw(plan);
+    for (const x of r.root.querySelectorAll("details")) x.setAttribute("open", "");
+    const text = textOf(r.root).replace(/​/g, "");
+    // a figure of four digits or more with a thousands comma, not after a currency sign (counts and years have no comma)
+    const bare = [...text.matchAll(/(?<![$\d,.€])\d{1,3}(?:,\d{3})+/g)].map((m) => m[0]);
+    assert.deepEqual(bare, [], `bare amounts: ${bare.join(", ")}`);
+    assert.ok(!/about 0 looks/.test(text));
+  }
+});
+
+test("r2 invariance: every key but notes is what it was; the note says the same two figures, now with their sign", async () => {
+  const { money } = await import("../../../core/format.js");
+  let noted = 0;
+  for (const p of await everyPlan()) {
+    const d = compute(p, { today: T });
+    assert.deepEqual(Object.keys(d), KEYS_154A597);
+    const before = d.notes.slice(0, d.taxable >= 0.5 ? -1 : undefined);
+    if (d.taxable >= 0.5) {
+      noted++;
+      const now = d.notes.at(-1), cur = p.meta?.currency ?? "USD";
+      // the figures of before (Math.round of each), now with their sign; nothing taxed lower is said in words
+      assert.ok(now.startsWith(`${money(d.taxable, cur)} of it lands in taxable accounts`), now);
+      assert.equal(money(d.taxable, cur).replace(/\D/g, ""), String(Math.round(d.taxable)));
+      if (d.qualifiedGuess >= 0.5) { assert.ok(now.includes(`About ${money(d.qualifiedGuess, cur)} looks like`), now); assert.equal(money(d.qualifiedGuess, cur).replace(/\D/g, ""), String(Math.round(d.qualifiedGuess))); }
+      else assert.match(now, /None of it looks like the kind/);
+    }
+    assert.ok(before.every((n) => !/lands in taxable/.test(n)), "the other notes are as they were");
+  }
+  assert.ok(noted >= 2, `${noted} households with a taxable note`);
+});
