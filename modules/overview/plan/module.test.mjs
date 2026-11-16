@@ -523,3 +523,22 @@ test("L12: 'What would help' opens the numbers the answer rests on, and says 'a 
   assert.equal(smallChangesHelp({ affordable: 84000, spendingYearly: 100000 }), false);
   assert.equal(smallChangesHelp(null), false, "not known: check first");
 });
+
+// ---- z1 fix round, critic P2: an answer that leaves Social Security out gives a way to add it
+test("z1 fix P2: the retirement row that leaves Sam's Social Security out has 'Add it' under it, to the Social Security page", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const T = "2026-11-16";
+  const row = (p) => compute(p, { today: T }).groups.flatMap((g) => g.rows).find((x) => x.key === "retire");
+  assert.deepEqual(row(retiredCouplePlan(T)).add, { words: "Add it", href: "#/retirement/social-security" });
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  assert.equal("add" in row(typed), false, "a checked answer: nothing to add, and the row as before");
+  const drawn = (p0) => { const p = migrate(structuredClone(p0)), root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => T }, plan: p, modules: new Map(), features: { enabled: () => true }, isReady: () => true, store: { get: () => p, update() {} } }); return root.querySelectorAll("a").filter((a) => a.getAttribute("href") === "#/retirement/social-security"); };
+  const adds = drawn(retiredCouplePlan(T));
+  assert.deepEqual(adds.map((a) => textOf(a)), ["Add it ›"]);
+  assert.match(textOf(adds[0].parentNode), /Sam's Social Security is not counted yet\. › Add it ›$/, "under the row whose sentence says it is not counted");
+  assert.deepEqual(drawn(typed), []);
+});

@@ -19,6 +19,7 @@ const STYLE = `
 .qk-root .qk-search { width: 100%; margin-top: 12px; }
 .qk-root .qk-answers .row-link .t { font-weight: 700; font-size: var(--fs-md); }
 .qk-root .qk-answers .qk-q { display: block; color: var(--text); font-weight: 600; margin-bottom: 2px; }
+.qk-root .qk-answers .qk-add { display: inline-flex; align-items: center; min-height: 44px; margin: -8px 0 2px 56px; font-weight: 600; font-size: var(--fs-sm); }
 .qk-root .qk-last h2 { margin: 0 0 10px; }
 .qk-root .qk-last .form > .qk-pick, .qk-root .qk-last .form > .fold { grid-column: 1 / -1; }
 .qk-root .qk-last .chips { margin-bottom: 0; }
@@ -69,7 +70,10 @@ export function render(root, ctx) {
       h("ul", { class: "page-list qk-answers" }, d.answers.map((a) => h("li", {}, h("a", { href: a.href, class: "row-link" },
         h("span", { class: "ic", "aria-hidden": "true" }, a.icon),
         h("span", { class: "body" }, h("div", { class: "t" }, a.headline), h("div", { class: "d" }, h("span", { class: "qk-q" }, a.title), a.line)),
-        h("span", { class: "qk-chev", "aria-hidden": "true" }, "›"))))),
+        h("span", { class: "qk-chev", "aria-hidden": "true" }, "›")),
+        // (an answer that stands without the Social Security not in yet ends "Sam's Social Security is not counted yet.": a way to
+        // add it, under the row, which opens Will the money last?; z1 fix round, critic P2)
+        a.withoutSs ? h("a", { class: "qk-add", href: "#/retirement/social-security" }, "Add it ›") : null))),
     ] : null));
 
   // 2. "Will my savings last?": three boxes, answered here. The line under it says what it leaves out and where the plan

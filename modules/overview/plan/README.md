@@ -136,3 +136,18 @@ words, imports, and the A-to-B walk in pure code (taps from an empty plan to thi
   gap is big, so check the numbers the answer rests on first: one may be off. Then see what would help." (Morgan, phone
   households: 24%; Jamie 72%; Robin 99% gets the first).
 - `words.js` exports `SMALL_CHANGES_AT` (0.85), `fitRatio` and `smallChangesHelp` for the Dashboard's retirement row.
+
+## One retirement answer (z1, 2026-11-16; tests `tests/one-answer.test.mjs`)
+
+The "Will the money last?" row quotes Quick answers' `answerFor("retire")`, which now gives the answer that stands without the
+Social Security not in yet (overview/setup `lastsWithoutSs`, the one rule). No change in this module's code: for Ruth and Sam
+(the invented retired couple, Sam with no figure) the row read "Not yet. Not worked out yet: needs Social Security for Sam."
+(open, so the head said the plan was not finished) and now reads "The money lasts. You plan to spend $33,360 a year. If
+markets do as well as average, your plan can pay for $85,416 a year; less after a run of bad years. Sam's Social Security is
+not counted yet." (green; "In short" may name "the money lasts"). Short without it, the row
+keeps asking for Social Security, as before.
+
+Fix round (critic P2): that row now carries `add: { words: "Add it", href: "#/retirement/social-security" }` while the answer
+leaves a figure out (Quick answers' `withoutSs`; no `add` key at all otherwise, so every other row is as it was), and the view
+draws "Add it ›" under the row, outside its link, 44 px tall: the sentence said the figure was not counted but the row only
+opened Will the money last?.

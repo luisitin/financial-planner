@@ -20,6 +20,8 @@ import { compute as projection, savingsUnknown, retirementKnown } from "../modul
 import { standing, lastsWithoutSs, ssMissingFor, ssLeftOutWords, ssLeftOutLine, retireTileWords, retireGuessAsk, orphanSsLine } from "../modules/overview/setup/compute.js";
 import { retireRow } from "../modules/overview/dashboard/compute.js";
 import { compute as alerts } from "../modules/overview/alerts/compute.js";
+import { compute as yourPlan } from "../modules/overview/plan/compute.js";
+import { compute as quick, answerFor } from "../modules/overview/quick/compute.js";
 import { markGuess } from "../core/estimate/index.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -65,6 +67,20 @@ function rowSays(r) {
   if (r.open) return /Social Security/.test(r.s) ? "asks-ss" : "asks";
   return r.v === "On track" ? "lasts" : r.v === "Tight" ? "tight" : "short";
 }
+/** Your plan's "Will the money last?" row (it quotes Quick answers' answerFor). */
+function planSays(d) {
+  const r = (d.groups ?? []).flatMap((g) => g.rows).find((x) => x.key === "retire");
+  if (!r) return "none";
+  if (r.status === "open") return /Social Security/.test(r.needs ?? "") ? "asks-ss" : "asks";
+  if (r.value === "Not known yet") return "unknown";
+  return r.value === "The money lasts" ? "lasts" : r.value === "It lasts, just" ? "tight" : /^Runs out/.test(r.value) ? "short" : `? ${r.value}`;
+}
+/** Quick answers: "Will my money last?" under "answers" (with the plan's answer) or under "needs your numbers first". */
+function quickSays(d) {
+  const a = d.answers.find((x) => x.guide === "retire");
+  if (!a) return d.needsFirst.some((x) => x.guide === "retire") ? "asks" : "none";
+  return a.verdict === "unknown" ? "unknown" : VERDICT[a.verdict];
+}
 /** Needs attention: its only retirement item is "Your retirement money runs out at N". */
 const attentionSays = (a) => (a.alerts.some((x) => x.id === "retire-short") ? "short" : "none");
 
@@ -72,7 +88,8 @@ const RUNS = ALL.map(({ name, plan }) => {
   const d = run(() => projection(c(plan), { today: T }));
   const st = standing(c(plan), { today: T });
   return { name, plan, d, st, page: pageSays(d), missing: ssMissingFor(plan).length > 0, known: retirementKnown(plan, T), stands: lastsWithoutSs(plan, { today: T }),
-    says: { "Get started": tileSays(st), Dashboard: rowSays(retireRow(st, { plan: c(plan), today: T })), "Needs attention": attentionSays(alerts(c(plan), { today: T })) } };
+    says: { "Get started": tileSays(st), Dashboard: rowSays(retireRow(st, { plan: c(plan), today: T })), "Needs attention": attentionSays(alerts(c(plan), { today: T })),
+      "Your plan": planSays(yourPlan(c(plan), { today: T })), "Quick answers": quickSays(quick(c(plan), { today: T })) } };
 });
 const RC = RUNS.find((r) => r.name === "fixture retired-couple-plan.mjs:retiredCouplePlan");
 
@@ -94,7 +111,7 @@ test("every page agrees with Will the money last?, for every household", () => {
       }
       if (r.page === "lasts" && (r.known || r.stands)) { assert.equal(said, "lasts", at); continue; }
       // short or only just lasting while Social Security is missing: the missing figure could change it, so every page asks for it
-      if (r.missing && !r.known) { assert.ok(said === "asks-ss" || said === "asks", at); assert.ok(!["lasts", "tight", "short"].includes(said), at); continue; }
+      if (r.missing && !r.known) { assert.ok(said === "asks-ss" || said === "asks" || (where === "Your plan" && said === "none"), at); assert.ok(!["lasts", "tight", "short"].includes(said), at); continue; }
       if (r.page === "asks") { assert.ok(said === "asks" || said === "asks-ss", at); continue; }
       if (r.page === "unknown") { assert.ok(!["lasts", "tight", "short"].includes(said), at); continue; }
       // checked and short or tight: the same verdict
@@ -144,7 +161,7 @@ test("an answer that stands stays: a Social Security figure typed for whoever it
   assert.equal(projection(typedFor(p, ["p-ruth", "p-sam"], 100), { today: T }).verdict, "short", "the trap: a typed figure drops the Income line");
   assert.equal(orphanSsLine(p, T), true);
   assert.equal(lastsWithoutSs(p, { today: T }), null);
-  assert.equal(standing(c(p), { today: T }).withoutSs, undefined);
+  assert.deepEqual([standing(c(p), { today: T }).withoutSs, answerFor("retire", c(p), { today: T })], [undefined, null]);
   // the same line given to a child, or to someone no longer in the household: the same
   const kid = c(p); kid.household.people.push({ id: "p-kid", name: "Kim", role: "dependent", birthDate: "2015-01-01" }); kid.income.find((x) => x.id === "i-ss").personId = "p-kid";
   assert.equal(lastsWithoutSs(kid, { today: T }), null);
@@ -180,8 +197,8 @@ test("whose Social Security, in the pages' words, and the sentence they add", ()
   assert.equal(ssMissingFor(both).length, 2); assert.equal(ssLeftOutWords(both), "your Social Security");
   // one adult on their own (14-unusual-structures: Grace)
   assert.equal(RUNS.find((r) => r.name === "14-unusual-structures/base").st.withoutSs, "your Social Security");
-  assert.equal(ssLeftOutLine("Sam's Social Security"), "Sam's Social Security is not counted yet; the money lasts even without it.");
-  assert.equal(ssLeftOutLine("your Social Security"), "Your Social Security is not counted yet; the money lasts even without it.");
+  assert.equal(ssLeftOutLine("Sam's Social Security"), "Sam's Social Security is not counted yet.");
+  assert.equal(ssLeftOutLine("your Social Security"), "Your Social Security is not counted yet.");
 });
 
 test("Get started's Retirement tile, one sentence per case", () => {
@@ -205,11 +222,28 @@ test("Get started's Retirement tile, one sentence per case", () => {
   assert.equal(retireRow(sg, { plan: g, today: T }).s, "Partly our guesses of your spending, without Sam's Social Security");
 });
 
-test("Ruth and Sam, by name: Get started and the Dashboard say what Will the money last? says", () => {
+test("Your plan and Quick answers quote the answer that stands, with the sentence that says whose Social Security it leaves out", () => {
+  const a = answerFor("retire", retiredCouplePlan(T), { today: T });
+  assert.deepEqual([a.headline, a.verdict, a.status, a.withoutSs], ["The money lasts", "on track", "ok", "Sam's Social Security"]);
+  assert.equal(a.line, "You plan to spend $33,360 a year. If markets do as well as average, your plan can pay for $85,416 a year; less after a run of bad years (see the Will the money last? page). Sam's Social Security is not counted yet.");
+  const row = yourPlan(retiredCouplePlan(T), { today: T }).groups.flatMap((g) => g.rows).find((x) => x.key === "retire");
+  assert.deepEqual([row.value, row.status, row.short], ["The money lasts", "ok", "the money lasts"]);
+  assert.equal(row.line, "You plan to spend $33,360 a year. If markets do as well as average, your plan can pay for $85,416 a year; less after a run of bad years. Sam's Social Security is not counted yet.");
+  // a checked plan's answer has no such sentence and no withoutSs (the same answer, Sam's typed)
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  const b = answerFor("retire", typed, { today: T });
+  assert.equal(b.withoutSs, undefined); assert.doesNotMatch(b.line, /not counted yet/);
+  // short without it: no answer, the guide's own line (needs your numbers first)
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  assert.equal(answerFor("retire", high, { today: T }), null);
+  assert.ok(quick(high, { today: T }).needsFirst.some((x) => x.guide === "retire"));
+});
+
+test("Ruth and Sam, by name: every page says what Will the money last? says", () => {
   assert.equal(RC.page, "lasts");
-  assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none" });
+  assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none", "Your plan": "lasts", "Quick answers": "lasts" });
   assert.deepEqual(retireRow(RC.st, { plan: c(RC.plan), today: T }), { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" });
   // a single adult short without Social Security: every page keeps asking, as the page's notice asks first
   const one = RUNS.find((r) => r.name === "01-single-adult/base");
-  assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard], ["short", "asks-ss", "asks-ss"]);
+  assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard, one.says["Your plan"], one.says["Quick answers"]], ["short", "asks-ss", "asks-ss", "asks-ss", "asks"]);
 });

@@ -1162,7 +1162,7 @@ Dashboard's row, this page's done screen, Your plan's figures) gets the answer f
 The words, one sentence per case:
 - `ssLeftOutWords(plan)` (moved from the Dashboard): "Sam's Social Security" (one adult of two or more, not the person
   themself), else "your Social Security".
-- `ssLeftOutLine(words)`: "Sam's Social Security is not counted yet; the money lasts even without it." (Your plan, Quick
+- `ssLeftOutLine(words)`: "Sam's Social Security is not counted yet." (Your plan, Quick
   answers, the Timeline and Health score add it to their answer.)
 - `retireTileWords(st)`, the line under the done screen's Retirement tile: "If nothing changes." /
   "If nothing changes, even without Sam's Social Security."; resting on our guesses, `retireGuessAsk(st).words`

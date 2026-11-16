@@ -2752,8 +2752,8 @@ export function orphanSsLine(plan, today = null) {
   const ids = new Set(adults(plan).map((p) => p.id));
   return L(plan, "income").some((x) => x?.type === "social" && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)) && !ids.has(x.personId));
 }
-/** The sentence a page adds to an answer that leaves it out: "Sam's Social Security is not counted yet; the money lasts even without it." */
-export const ssLeftOutLine = (words) => `${String(words).charAt(0).toUpperCase()}${String(words).slice(1)} is not counted yet; the money lasts even without it.`;
+/** The sentence a page adds to an answer that leaves it out: "Sam's Social Security is not counted yet." */
+export const ssLeftOutLine = (words) => `${String(words).charAt(0).toUpperCase()}${String(words).slice(1)} is not counted yet.`;
 /**
  * lastsWithoutSs(plan, { today, proj }) -> { proj, ids, words } | null: the one rule (z1, 2026-11-16) for a retirement answer that
  * does not wait for the Social Security not in yet. Will the money last? already counts no Social Security for an adult with no

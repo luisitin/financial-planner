@@ -7,6 +7,7 @@
 //   hint     optional: what the bar on that page says after the question (default "Type your own numbers below.")
 
 import { compute as projection, retirementKnown, healthAdded, savingsUnknown, nothingSaved } from "../../retirement/projection/compute.js";
+import { lastsWithoutSs, ssLeftOutLine } from "../setup/compute.js";
 import { compute as payoff } from "../../debt/payoff/compute.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { compute as estimatedOf } from "../../taxes/estimated/compute.js";
@@ -54,10 +55,14 @@ export function answerFor(guide, plan, params = {}) {
   const cur = plan.meta?.currency ?? "USD";
   const m = (n) => fmtMoney(n, cur);
   if (guide === "retire") {
-    // no verdict before Social Security is known for each adult (the Dashboard's rule): the guide's own line shows instead
-    if (!retirementKnown(plan, params.today ?? null)) return null;
-    const d = projection(plan, params);
+    // no verdict before Social Security is known for each adult (the Dashboard's rule): the guide's own line shows instead,
+    // unless that is the only gap and Will the money last? says the money lasts even without it (overview/setup lastsWithoutSs,
+    // the one rule; z1): then its answer stands, saying whose Social Security it leaves out
+    const without = retirementKnown(plan, params.today ?? null) ? null : lastsWithoutSs(plan, { today: params.today ?? null });
+    if (!retirementKnown(plan, params.today ?? null) && !without) return null;
+    const d = without ? without.proj : projection(plan, params);
     if (!d.ready || !d.verdict) return null;
+    const left = without ? ` ${ssLeftOutLine(without.words)}` : "";
     // no retirement savings on file: not "runs out", only "not known yet" (Your plan asks for what you own)
     // told rather than untold (whole-app sweep x3, 2026-11-16): an empty 401(k) on file or "None" in Get started is "nothing saved"
     if (savingsUnknown(d)) return { headline: "We don't know yet", line: nothingSaved(plan) ? "Nothing is saved for retirement, so we can't say whether the money will last yet." : "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see.", status: "calm", verdict: "unknown", shortAge: null };
@@ -65,10 +70,12 @@ export function answerFor(guide, plan, params = {}) {
       headline: d.verdict === "on track" ? "The money lasts" : d.verdict === "tight" ? "It lasts, just" : `Runs out in ${d.shortYear}`,
       // the carried figure is markets doing exactly as well as average (about a 4 in 10 chance); Will the money last? gives the
       // figure that lasts in 9 of 10 markets, too slow to work out on every page this line shows on (round 5, 2026-11-02)
-      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health insurance" : ""} the money runs out at age ${d.shortAge}, even if markets do as well as average.` : `You plan to spend ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health insurance" : ""}. If markets do as well as average, your plan can pay for ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year; less after a run of bad years (see the Will the money last? page).`,
+      line: d.verdict === "short" ? `At ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health insurance" : ""} the money runs out at age ${d.shortAge}, even if markets do as well as average.` : `You plan to spend ${m(d.spendingYearly)} a year${healthAdded(d.health) ? " plus health insurance" : ""}. If markets do as well as average, your plan can pay for ${d.verdict === "tight" ? "about " : ""}${m(d.affordable)} a year; less after a run of bad years (see the Will the money last? page).${left}`,
       status: d.verdict === "on track" ? "ok" : "warn",
       // quoted for Your plan (overview/plan): the same projection's verdict and the age the money runs out (null when it lasts)
       verdict: d.verdict, shortAge: d.shortAge ?? null,
+      // (only for an answer that stands without the Social Security not in yet: whose it leaves out, "Sam's Social Security")
+      ...(without ? { withoutSs: without.words } : {}),
     };
   }
   if (guide === "debt") {

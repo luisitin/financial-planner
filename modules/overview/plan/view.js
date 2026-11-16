@@ -36,6 +36,7 @@ const STYLE = `
 .pl-root .pl-v { flex: none; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; max-width: 40%; }
 .pl-root .pl-v.open { font-weight: 600; color: var(--text-2); }
 .pl-root .pl-chev { flex: none; color: var(--text-2); font-size: 20px; line-height: 1; }
+.pl-root .pl-rows a.pl-add { display: inline-flex; min-height: 44px; padding: 0 0 0 24px; margin-top: -8px; border-top: 0; font-weight: 600; font-size: var(--fs-sm); color: var(--accent-ink); }
 .pl-root ol.pl-moves { list-style: none; margin: 0; padding: 0; }
 .pl-root ol.pl-moves li + li a { border-top: 1px solid var(--line); }
 .pl-root ol.pl-moves a { display: flex; gap: 12px; align-items: center; min-height: 56px; padding: 8px 2px; color: var(--text); text-decoration: none; }
@@ -120,7 +121,10 @@ export function render(root, ctx) {
       ui.h("span", { class: `pl-dot ${dot}`, "aria-hidden": "true" }),
       ui.h("span", { class: "pl-k", "aria-hidden": "true" }, r.label, ui.h("span", { class: "pl-s" }, sentence), r.note ? ui.h("span", { class: "pl-n" }, r.note) : null),
       r.value && !long ? ui.h("span", { class: `pl-v${open ? " open" : ""}`, "aria-hidden": "true" }, r.value) : null,
-      ui.h("span", { class: "pl-chev", "aria-hidden": "true" }, "›")));
+      ui.h("span", { class: "pl-chev", "aria-hidden": "true" }, "›")),
+    // (a row that leaves a figure out says so, and how to add it, under the row: "Sam's Social Security is not counted yet." /
+    // "Add it ›"; plan/compute.js retire, z1 fix round P2)
+    r.add ? ui.h("a", { class: "pl-add", href: r.add.href }, `${r.add.words} ›`) : null);
   };
   for (const g of d.groups) wrap.append(ui.h("section", { class: "card", "aria-labelledby": `pl-g-${g.title.length}` },
     ui.h("h2", { id: `pl-g-${g.title.length}` }, g.title), ui.h("ul", { class: "pl-rows" }, g.rows.map(rowLink))));

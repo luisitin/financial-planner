@@ -10,6 +10,10 @@
 //   - the Stress tests' job loss, for the same plans (fix round, critic F3: it takes Paycheck's take-home too): the Stress tests
 //     without that one shock ("but the job loss", the count of shocks passed included) are what they were for every plan.
 //
+// z1 (2026-11-16): for the three plans whose retirement answer now stands without the Social Security not in yet (overview/setup
+// lastsWithoutSs: the retired couple, 08-retired, 14-unusual-structures), the digests of the pages that now give that answer were
+// rewritten from a PRINT run after the change, those entries only; tests/one-answer-invariance.test.mjs holds the same pages to
+// commit e223a42 outside that answer, and tests/one-answer.test.mjs says what they now say.
 // To write the digests down again (from the code before a deliberate change): PRINT=1 node --test tests/sweep-x3-invariance.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";

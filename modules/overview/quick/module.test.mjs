@@ -524,3 +524,32 @@ test("seen while looking (g12 fix): a year of your own reads \"Yours: 1 year\", 
   assert.equal(on(1), "Yours: 1 year");
   assert.equal(on(28), "Yours: 28 years");
 });
+
+test("z1: Will my money last? gives the answer that stands without the Social Security not in yet, and says whose it leaves out", async () => {
+  const { answerFor, compute } = await import("./compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  // Ruth and Sam: Sam has no Social Security figure; the money lasts without it
+  const a = answerFor("retire", retiredCouplePlan(T), { today: T });
+  assert.equal(a.headline, "The money lasts");
+  assert.equal(a.withoutSs, "Sam's Social Security");
+  assert.match(a.line, /\(see the Will the money last\? page\)\. Sam's Social Security is not counted yet\.$/);
+  const d = compute(retiredCouplePlan(T), { today: T });
+  assert.ok(d.answers.some((x) => x.guide === "retire") && !d.needsFirst.some((x) => x.guide === "retire"));
+  // short without it: no answer, the guide gathers it first
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  assert.equal(answerFor("retire", high, { today: T }), null);
+  // Sam's figure typed: the checked answer, with no such sentence
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  const b = answerFor("retire", typed, { today: T });
+  assert.equal(b.headline, "The money lasts"); assert.equal(b.withoutSs, undefined); assert.doesNotMatch(b.line, /not counted yet/);
+  // drawn (fix round, critic P2): the answer's row opens Will the money last?, and under it one way to add the figure it leaves
+  // out, to the Social Security page; a checked answer has none
+  const toSs = (root) => all(root).filter((e) => e.tagName === "A" && e.getAttribute("href") === "#/retirement/social-security");
+  const s = page(retiredCouplePlan(T), { today: T }), adds = toSs(s.root);
+  assert.deepEqual(adds.map((a) => textOf(a)), ["Add it ›"]);
+  const li = adds[0].parentNode;
+  assert.match(textOf(li), /Sam's Social Security is not counted yet\. › Add it ›$/);
+  assert.equal(li.childNodes[0].getAttribute("href"), "#/retirement/projection?from=quick", "the row itself still opens the answer's page");
+  assert.deepEqual(toSs(page(typed, { today: T }).root), []);
+});

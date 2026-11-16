@@ -219,3 +219,22 @@ a year of your own reads "Yours: 1 year", not "1 years".
 
 **Not yet.** Social Security, a pension, taxes, and spending less after a bad year belong to the whole plan (Will the money
 last?); this page points there instead of growing those boxes.
+
+## One retirement answer (z1, 2026-11-16; tests `tests/one-answer.test.mjs`)
+
+`answerFor("retire")` held its answer back until every adult's Social Security was in (`retirementKnown`). It now asks the one
+rule every overview page asks, overview/setup `lastsWithoutSs` (its README, "One retirement answer"): when Social Security is the
+only gap and Will the money last? says the money lasts even counting the missing figure as none, the answer is that page's
+own (the projection the rule returns), with `withoutSs` ("Sam's Social Security") and one more sentence on the line,
+`ssLeftOutLine`: "Sam's Social Security is not counted yet." Short or only just lasting
+without it, `answerFor` returns null as before and "Will my money last?" stays under "needs your numbers first".
+
+Ruth and Sam (the invented retired couple, Sam with no figure): "Will my money last?" moved from "needs your numbers first" to
+the answers, "The money lasts: You plan to spend $33,360 a year. If markets do as well as average, your plan can pay for
+$85,416 a year; less after a run of bad years (see the Will the money last? page). Sam's Social Security is not counted yet." Your plan quotes the same answer (below its own README). Every other household's page is
+byte for byte what it was (`tests/one-answer-invariance.test.mjs`).
+
+Fix round (critic P2): the row said the figure was not counted but gave no way to add it (the whole row opens Will the money
+last?). Under the row, one more link, "Add it ›", opens the Social Security page, only while the answer leaves a figure out
+(`withoutSs`); it sits outside the row's link (a link inside a link is not allowed) and is 44 px tall. Ruth and Sam's first
+view: 417 words to 419 (the page's entry is 420).

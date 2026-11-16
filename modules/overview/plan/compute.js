@@ -168,7 +168,9 @@ const ROW = {
     // the page's sentence, without its "(Will the money last? shows how much less)" pointer: that is a page title, not plain words
     const base = String(a.line).replace(/\s*\([^()]*(?:shows how much less|see the Will the money last\? page)\)/, "");
     const line = g ? `${base} ${retireGuessAsk(st).line}` : base;
-    return { value, line, status: g ? "calm" : a.verdict === "on track" ? "ok" : a.verdict === "tight" ? "warn" : "bad", short, guessed: g, mostlyGuessed: g, figure: a.headline };
+    // (an answer that stands without the Social Security not in yet, whose line ends "Sam's Social Security is not counted yet.":
+    // a way to add it beside the row, which opens Will the money last?; z1 fix round, critic P2)
+    return { value, line, status: g ? "calm" : a.verdict === "on track" ? "ok" : a.verdict === "tight" ? "warn" : "bad", short, guessed: g, mostlyGuessed: g, figure: a.headline, ...(a.withoutSs ? { add: { words: "Add it", href: "#/retirement/social-security" } } : {}) };
   },
   "fix-retire"(S) {
     // no retirement savings on file: there is nothing to improve yet, so the way forward is to add them (path review UX 2)
@@ -258,7 +260,7 @@ export function compute(plan, params = {}) {
     // a row that rests mostly on guesses is never red or amber
     if (b.mostlyGuessed && (b.status === "warn" || b.status === "bad")) b = { ...b, status: "calm" };
     // (a row may open somewhere else than its page: the left-over waiting on our pay guess opens the pay question)
-    return { key: r.key, label: r.name, group: r.group, value: b.value ?? null, line: b.line, short: b.short ?? null, status: b.status, guessed: !!b.guessed, href: b.href ?? `#/${r.page}?from=plan`, figure: b.figure ?? null, note: b.note ?? null, needs: b.needs ?? null, fixHref: b.fixHref ?? null };
+    return { key: r.key, label: r.name, group: r.group, value: b.value ?? null, line: b.line, short: b.short ?? null, status: b.status, guessed: !!b.guessed, href: b.href ?? `#/${r.page}?from=plan`, figure: b.figure ?? null, note: b.note ?? null, needs: b.needs ?? null, fixHref: b.fixHref ?? null, ...(b.add ? { add: b.add } : {}) };
   });
   const groups = GROUP_TITLES.map((title, gi) => ({ title, rows: rows.filter((r) => r.group === gi) })).filter((g) => g.rows.length);
   // "In short": the worst answers first (red, then amber, then green), at most three, each in its own words
