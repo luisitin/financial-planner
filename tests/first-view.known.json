@@ -64,7 +64,6 @@
   "reports/export": {"empty":{"words":330}},
   "retirement/annuities": {"plan":{"boxes":6},"empty":{"words":130}},
   "retirement/buckets": {"plan":{"words":290,"figs":20},"empty":{"words":110}},
-  "retirement/contributions": {"plan":{"filled":2}},
   "retirement/healthcare": {"empty":{"words":130}},
   "retirement/longevity": {"plan":{"words":250,"figs":15,"boxes":4}},
   "retirement/medicare": {"plan":{"words":390,"figs":23},"empty":{"words":110,"figs":2}},

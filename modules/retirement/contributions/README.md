@@ -385,3 +385,10 @@ Tests: module.test.mjs "C11" (rowMatch against usualMatchAt; each reason for non
 following the amount and a typed figure ending it; the add form's gray figure, help, save, entry, green line and row word; a
 typed match and a typed 0; an IRA; a second row of Ana's; the help's word count; "C11 r1": a guess at $0 or at the typed
 formula coming back to the usual match when the reason ends, and the help promising a guess only where one will come).
+
+## One filled button under an answer card (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+With nothing going in yet and an answer card on top ("Start it at 3%", "Yes: add your 401(k)", "Put in 6%"...), the card's
+button is the page's filled one; the empty add form, whose "Add contribution" was a second filled button on the same first view
+(Riley, 24, the renter), now waits behind an outlined "+ Add a contribution", and the card's "Type my own amount" opens it filled
+in as before (its Cancel folds it back). With no card, the empty form stays open as before. The counts file entry (2 filled
+buttons) is gone: the page is within its budget.

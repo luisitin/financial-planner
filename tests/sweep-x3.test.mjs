@@ -329,3 +329,13 @@ test("Money calendar: with the paydays card asking, its 'Show my paydays' is the
   const e = await drawn("household/calendar", migrate({}));
   assert.deepEqual(e.filled, ["Add it"]);
 });
+
+test("What you save for retirement: with the answer card's 'Start it at 3%' filled, the empty add form waits behind '+ Add a contribution'; 'Type my own amount' still opens it", async () => {
+  const r = await drawn("retirement/contributions", rd());
+  assert.deepEqual(r.filled, ["Start it at 3%"]);
+  assert.match(r.text, /\+ Add a contribution/);
+  assert.doesNotMatch(r.text, /Add contribution/);
+  r.root.all().find((e) => e.tagName === "BUTTON" && textOf(e).trim() === "Type my own amount").click();
+  assert.match(textOf(r.root), /Filled in with 3% of pay/, "the form opens, filled in");
+  assert.match(textOf(r.root), /Add contribution/);
+});

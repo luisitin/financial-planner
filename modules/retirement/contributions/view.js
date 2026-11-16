@@ -434,7 +434,11 @@ export function render(root, ctx) {
   ));
 
   const formHost = ui.h("div");
-  let showForm = !d.hasData || !!prefill;
+  // the empty add form stays open only while no answer card above holds the page's filled button ("Start it at 3%", "Yes: add your
+  // 401(k)"...): with one, it waits behind an outlined "+ Add a contribution", and the card's "Type my own amount" opens it
+  // (whole-app sweep x3, 2026-11-16: "Start it at 3%" and "Add contribution" both filled on one first view)
+  const offered = ask.length > 0;
+  let showForm = (!d.hasData && !offered) || !!prefill;
   // "When do you pay the tax on it?" on a row at work (spec part C, L6): the answer for the row being edited, kept while the form
   // is open (a tap on a chip changes the boxes' words, not the boxes). `taxOpen`: the three answers are showing; until then it
   // is one quiet line (review 2026-11-12, P10: every edit of a row at work opened with three chips, a rule of thumb and a
@@ -443,7 +447,7 @@ export function render(root, ctx) {
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!accounts.length) return;
-    if (!showForm && !editing) { formHost.append(ui.button("+ Add another contribution", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
+    if (!showForm && !editing) { formHost.append(ui.button(d.hasData ? "+ Add another contribution" : "+ Add a contribution", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
     // a new contribution starts on a retirement account, not a brokerage one
     const firstRetirement = accounts.find((a) => BUCKET_OF[a.type] !== "taxable" && BUCKET_OF[a.type] !== "cash" && !a.formerJob) ?? accounts.find((a) => BUCKET_OF[a.type] !== "cash") ?? accounts[0];
     // a row whose figures are still our guess opens with them grey (placeholders), not typed (follow-up F4)
@@ -558,7 +562,7 @@ export function render(root, ctx) {
           if (saidNoMatch && !hasMatch(p, gPid)) p.retirement.workPlans = { ...(p.retirement.workPlans ?? {}), [gPid]: { ...(p.retirement.workPlans?.[gPid] ?? {}), match: false } };
         });
         editing = null; prefill = null; prefillNote = null; landing = null;
-      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; noteAt = null; landing = null; showForm = !d.hasData; drawForm(); } : null }),
+      }, { submitLabel: editing ? "Save changes" : "Add contribution", resetAfter: !editing, onCancel: (editing || d.hasData || prefill || offered) ? () => { editing = null; prefill = null; prefillNote = null; editNote = null; noteAt = null; landing = null; showForm = !d.hasData && !offered; drawForm(); } : null }),
       editing ? ui.h("p", { class: "ct-remove", style: { marginTop: "12px" } }, ui.button("Remove this contribution", () => { const id = editing.id; editing = null; landing = null; pending = "Contribution removed."; update((p) => { p.retirement.contributions = (p.retirement.contributions ?? []).filter((c) => c.id !== id); if (p.retirement.leftover?.rowId === id) delete p.retirement.leftover; }); }, { class: "danger" })) : null,
     ));
     const form = formHost.querySelector("form");
