@@ -6,6 +6,11 @@
 import { compute, carefulAgeSteps, ruleWords, plannedStopWords, otherEndWords } from "./compute.js";
 import { whenWorked, keyOf, slot, RULE_WORDS, leftWords, chanceWords, BAD_RUN } from "../careful.js";
 import { parts } from "../../../core/ui/more.js";
+import { unknownHero } from "../needs.js";
+import { unknownWords } from "../projection/compute.js";
+
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "when you could stop working";
 
 /** The two quiet rows at the foot, pinned in qa/first-view-lib.mjs: the rule of thumb (its title fixed, the "25 times" in its
  * status) and the years at each saving rate (gap next-60 #53). */
@@ -138,6 +143,23 @@ export function render(root, ctx) {
     return;
   }
 
+  // the rule of thumb, folded and said as a comparison (shown at the same weight, or with its own headline, it reads as a
+  // rival answer): why it differs, in one line, then its figures. A quiet row of the helper's (core/ui/more.js; it was a
+  // hand-written fold titled "The 25-times rule, a quick check · for comparison": the title is fixed now and the "25 times" is
+  // its status), then the years at each saving rate
+  const rulePart = { id: "rule", kind: "more", title: RULE_TITLE, says: `${times} times spending`, body: () => [
+    ui.h("p", { class: "fi-rule" }, ruleWords(times, d.healthAdded)),
+    ui.h("p", {}, `${d.progress >= 1 ? "By this rule you have enough already. " : d.yearsToFi !== null ? `By this rule: about ${d.yearsToFi} year${d.yearsToFi === 1 ? "" : "s"}. ` : ""}${ruleLede}`), progress, statRow(), ui.h("h3", {}, "What moves it"), moveList(),
+    ladderLine(),
+  ] };
+  // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last? (whole-app sweep x3,
+  // 2026-11-16: "Even working to 75, the money runs short" beside its "We don't know yet"); the 25-times rule stays one quiet row
+  if (d.unknown && !w.retired) {
+    host.append(unknownHero(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { title: "Financial independence" }));
+    host.append(ui.h("div", {}, parts(ctx, rulePart, ladderPart())));
+    return;
+  }
+
   // the answer from the plan: the earliest age to stop with the money lasting to the end, Social Security counted. Two ages:
   // the one at which it lasts even in a bad run of years (worked out after the page is drawn: careful.js) leads; the one at which it
   // lasts if markets do exactly as well as average every year (goal seek's) follows, named as such (round 5 review: 58 read
@@ -257,14 +279,5 @@ export function render(root, ctx) {
   ].filter(Boolean));
   host.append(hero);
 
-  // the rule of thumb, folded and said as a comparison (shown at the same weight, or with its own headline, it reads as a
-  // rival answer): why it differs, in one line, then its figures. A quiet row of the helper's (core/ui/more.js; it was a
-  // hand-written fold titled "The 25-times rule, a quick check · for comparison": the title is fixed now and the "25 times" is
-  // its status), then the years at each saving rate
-  const rulePart = { id: "rule", kind: "more", title: RULE_TITLE, says: `${times} times spending`, body: () => [
-    ui.h("p", { class: "fi-rule" }, ruleWords(times, d.healthAdded)),
-    ui.h("p", {}, `${d.progress >= 1 ? "By this rule you have enough already. " : d.yearsToFi !== null ? `By this rule: about ${d.yearsToFi} year${d.yearsToFi === 1 ? "" : "s"}. ` : ""}${ruleLede}`), progress, statRow(), ui.h("h3", {}, "What moves it"), moveList(),
-    ladderLine(),
-  ] };
   host.append(ui.h("div", {}, parts(ctx, rulePart, ladderPart())));
 }

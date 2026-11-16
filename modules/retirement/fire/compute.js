@@ -6,7 +6,7 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeContributions } from "../contributions/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
-import { buildInputs, healthAdded, workingNow, withStops, STOP_NOW_FROM_AGE } from "../projection/compute.js";
+import { buildInputs, healthAdded, workingNow, withStops, STOP_NOW_FROM_AGE, retirementUnknown } from "../projection/compute.js";
 import { realRate } from "../../../core/math/finance.js";
 import { project, lifelongSpending } from "../../../core/math/retirement.js";
 import { earliestRetireAge } from "../../scenarios/goal-seek/compute.js";
@@ -148,6 +148,9 @@ export function compute(plan, params = {}) {
     withIncome: params.withIncome === false ? null : withCareful(plan, today, params.careful === true),
   };
   if (ladder) out.ladder = ladder;
+  // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "Even working to 75, the
+  // money runs short" (whole-app sweep x3, 2026-11-16); absent for every other plan, and when the plan's own answer is not asked
+  if (out.withIncome) { const unknown = retirementUnknown(plan, { today }); if (unknown) out.unknown = unknown; }
   return out;
 }
 

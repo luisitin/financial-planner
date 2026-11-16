@@ -409,3 +409,12 @@ year, own }] }` (`LADDER_RATES` = 10% to 70%); without it compute() is what it a
 **Builder chose:** the brief's "pay after tax" is "take-home pay", the page's own word beside "Saving a year"; the rule of thumb's
 title moved to "A quick rule of thumb" with "25 times spending" as its status (a part's title must be fixed; R25); the page
 saves nothing (S11 test).
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page said
+"Even working to 75, the money runs short" on the same plan (Riley, 24, an empty Work 401(k)). `compute` now adds `unknown: {
+nothingSaved }` (projection `retirementUnknown`, the projection's own rule) only when that holds and the plan's own answer
+(`withIncome`) is worked out, and the page then shows, under its title, the projection's sentence with this page's question
+("when you could stop working", `UNKNOWN_WHAT`) and one filled link, "Add what you own ›". The 25-times rule stays its one
+quiet row below (it is a rule of thumb on spending, not an answer from the plan). For every other plan the result is the same
+as before (absent field; the invariance test compares it with ce79d70 over the invented households).

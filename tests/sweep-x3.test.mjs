@@ -130,3 +130,13 @@ test("Order of returns: nothing saved -> the page's own we-can't-say-yet sentenc
   assert.match(f.text, /Same years, three orders/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("Financial independence: nothing saved -> the page's own we-can't-say-yet sentence, no 'Even working to 75, the money runs short'; the 25-times rule stays one quiet row", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/retirement/fire/view.js");
+  await saysUnknown("retirement/fire", UNKNOWN_WHAT, { title: "Financial independence" });
+  const r = await drawn("retirement/fire", rd());
+  assert.match(r.text, /The 25-times rule|25 times spending/);
+  const f = await drawn("retirement/fire", fam());
+  assert.doesNotMatch(f.text, /can't say/);
+  assert.match(f.text, /could stop work|would need to work until|Working out when/);
+});
