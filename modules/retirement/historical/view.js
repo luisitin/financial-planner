@@ -5,7 +5,8 @@
 // sentence per case, the chart, then the rest as quiet rows of one card (core/ui/more.js): "N more numbers" (the two tiles and the
 // hardest starts, moved), "Never run the savings down" (the rate that never touches the starting money, new), "How this is
 // worked out" (what the page does and where the data comes from, moved). Nothing was deleted.
-import { needButtons } from "../needs.js";
+import { needButtons, unknownBody } from "../needs.js";
+import { unknownWords } from "../projection/compute.js";
 import { lineChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { needsWords } from "../../../core/words.js";
@@ -19,6 +20,8 @@ export const GROWTH_TITLE = "Never run the savings down";
  * 30 years; 9.6% at most, a single year all in stocks: checked over 1 to 60 years at 0% to 100% in stocks, README). */
 export const FAR_RATE = 0.25;
 const SINCE = 1928;
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "how your plan would have done in past markets";
 
 /**
  * answerFor(d) -> { key, value, label, lede }: the answer (one ui.stat with its words, R3) and the one sentence under it for each
@@ -97,6 +100,9 @@ export function render(root, ctx) {
       answer.append(ui.h("p", {}, d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers."), needButtons(ui, d?.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")));
       return;
     }
+    // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
+    // (whole-app sweep x3, 2026-11-16: "0 of 27 ... the money ran out from every start year" beside its "We don't know yet")
+    if (d.unknown) { answer.append(...unknownBody(ui, unknownWords(d.unknown, UNKNOWN_WHAT))); return; }
     const a = answerFor(d);
     answer.append(ui.stat(a.label, a.value), ui.h("p", {}, a.lede));
     // the chart stays on the first view (opt spec 6.1)

@@ -82,3 +82,25 @@ test("Goal seek and What matters most say the same words as the twelve pages (on
     }
   }
 });
+
+// ---- each page, drawn for Riley (nothing saved) and Sam (nothing said), and for the family (the answer as before) --------------
+async function saysUnknown(key, what, { title = null } = {}) {
+  for (const [who, plan, words] of [["renterDebt", rd(), unknownWords({ nothingSaved: true }, what)], ["sam", sam(), unknownWords({ nothingSaved: false }, what)]]) {
+    const r = await drawn(key, plan);
+    assert.ok(r.text.includes(words), `${key} for ${who}: the page's own "we can't say yet" sentence\n${r.text.slice(0, 600)}`);
+    assert.doesNotMatch(r.text, RUNS_OUT, `${key} for ${who}: never "runs out" beside Will the money last?'s "We don't know yet"`);
+    assert.ok(r.filled.includes("Add what you own ›"), `${key} for ${who}: the way on is the one filled link (${r.filled})`);
+    assert.equal(r.filled.length, 1, `${key} for ${who}: one filled button (${r.filled})`);
+    if (title) assert.ok(r.text.includes(title), `${key}: its title stays`);
+  }
+}
+
+test("If history repeated: nothing saved -> the page's own we-can't-say-yet sentence, no '0 of 27'; the family's answer unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/retirement/historical/view.js");
+  await saysUnknown("retirement/historical", UNKNOWN_WHAT, { title: "If history repeated itself" });
+  const r = await drawn("retirement/historical", rd());
+  assert.doesNotMatch(r.text, /0 of 27|nothing left to chart/);
+  const f = await drawn("retirement/historical", fam());
+  assert.match(f.text, /start years since 1928 in which the money lasts to the end/);
+  assert.doesNotMatch(f.text, /can't say/);
+});

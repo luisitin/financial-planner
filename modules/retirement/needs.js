@@ -29,6 +29,9 @@ export function needButtons(ui, missing) {
  * the money last?, Goal seek and What matters most show it (whole-app sweep x3, 2026-11-16: twelve pages said "runs out at 65").
  */
 export function unknownHero(ui, words, { title = "We don't know yet" } = {}) {
-  return ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, title), ui.h("p", { class: "lede" }, words),
-    ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")));
+  return ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, title), ...unknownBody(ui, words));
+}
+/** The hero's inside alone (the sentence and the link), for a page whose hero is already drawn while its answer is worked out. */
+export function unknownBody(ui, words) {
+  return [ui.h("p", { class: "lede" }, words), ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›"))];
 }

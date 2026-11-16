@@ -3,7 +3,7 @@
 // figures): if you had started this exact plan in 1929, in 1966, in 2000... how would it have
 // gone? Only start years with enough history for the whole plan are used.
 import { project, affordableSpending } from "../../../core/math/retirement.js";
-import { buildInputs } from "../projection/compute.js";
+import { buildInputs, retirementUnknown } from "../projection/compute.js";
 import { RETURNS } from "./data/returns.js";
 
 /** The plan's horizon replayed from every possible start year. */
@@ -111,5 +111,9 @@ export function compute(plan, params = {}) {
     verdict: successRate >= 0.9 ? "strong" : successRate >= 0.75 ? "fair" : "weak",
   };
   if (params.perpetual === true) out.perpetual = perpetualOf(b.inputs);
+  // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "ran out from every start
+  // year" (whole-app sweep x3, 2026-11-16); absent for every other plan
+  const unknown = retirementUnknown(plan, { today: params.today ?? null });
+  if (unknown) out.unknown = unknown;
   return out;
 }
