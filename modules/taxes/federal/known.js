@@ -6,6 +6,8 @@
 //   4. rentals after their costs, interest and depreciation, through the passive-loss rules (Rental analysis)
 //   5. the traditional IRA deduction cut by the income limits for someone covered at work (IRC 219(g))
 //   6. student loan interest (IRC 221)
+//   7. the alternative minimum tax, last, on everything the others left (minimum-tax.js; gap list, next 60, item 29): only
+//      when it applies or an incentive-option spread is typed, else the inputs go through untouched
 // Each step takes the inputs the one before left and gives back new inputs and a line saying what it did. The year's tax
 // every tax page uses (Withholding check's yearTax, Estimated payments, Quick answers, Needs attention) is this one's total.
 // The order is the law's: the rentals' allowance is worked on modified AGI before the IRA and student loan deductions
@@ -27,6 +29,7 @@ import { iraDeduction, coveredAtWork } from "../../investments/limits/compute.js
 import { compute as computeLiabilities } from "../../balance/liabilities/compute.js";
 import { yearOfPayments } from "../../../core/math/finance.js";
 import { studentLoanFor } from "./data/adjustments.js";
+import { minimumTaxStep } from "./minimum-tax.js";
 import * as W from "../../../core/words.js";
 
 const n = (v) => Number(v) || 0;
@@ -264,10 +267,12 @@ export const STOCK_PAY_NAME = /\b(?:rsus?|restricted stock|stock|equity|shares?|
 export function stockStep({ plan, fed, inputs, params = {} }) {
   const today = params.today ?? null;
   const eq = plan.equity ?? {};
-  const rsus = (eq.grants ?? []).filter((g) => g.kind !== "option" && n(g.shares) > 0);
+  const rsus = (eq.grants ?? []).filter((g) => g && g.kind !== "option" && n(g.shares) > 0);   // an empty row (null) is skipped, as hasIsoGrants does
   if (!rsus.length) return { inputs, line: null, note: null, stock: null };
   let es = null;
-  try { es = computeEmployerStock(plan, { today }); } catch { es = null; }
+  // Employer stock reads every row: without the empty ones (critic t1 M3), the plan itself when there is none
+  const kept = (eq.grants ?? []).some((g) => !g) ? { ...plan, equity: { ...eq, grants: eq.grants.filter(Boolean) } } : plan;
+  try { es = computeEmployerStock(kept, { today }); } catch { es = null; }
   if (!es?.ready || !(es.price > 0)) return { inputs, line: null, note: rsus.length ? "Stock units on Equity compensation are not counted: type today's share price there." : null, stock: null };
   const year = fed.year;
   const vests = es.grants.filter((g) => g.kind === "rsu").flatMap((g) => g.schedule.filter((e) => Number(e.date.slice(0, 4)) === year).map((e) => ({ date: e.date, grant: g.name, shares: e.shares, value: e.shares * es.price })));
@@ -535,7 +540,7 @@ export function loanStep({ plan, fed, inputs, params = {} }) {
 
 // ---- the page's figures ---------------------------------------------------------------------------------------------------
 
-const STEPS = [withdrawalStep, stockStep, businessStep, rentalStep, iraStep, loanStep, qbiStep];
+const STEPS = [withdrawalStep, stockStep, businessStep, rentalStep, iraStep, loanStep, qbiStep, minimumTaxStep];
 
 /**
  * known(plan, params, fed?) -> {

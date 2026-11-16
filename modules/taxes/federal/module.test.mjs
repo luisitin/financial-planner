@@ -1772,3 +1772,245 @@ test("C11 itemized on the page: the boxes' help and the sentence inside the part
   assert.equal(link.getAttribute("href"), "#/taxes/federal?show=mortgageInterest");
   assert.equal(textOf(link), "Type them under Itemized deductions ›");
 });
+
+// ---- the alternative minimum tax for everyone (gap list, next 60, item 29; README "The other way the tax is worked out
+// (minimum tax)"). Hand calculations on the 2026 tables: Rev. Proc. 2025-32 sections 3.01 and 4.10, the 2026 draft Form 6251.
+const MT_DAY = "2026-11-16";
+const { paramsFor, minimumTaxOn, minimumTax } = await import("../../../core/math/tax.js");
+const { FEDERAL } = await import("./data/federal.js");
+const { AMT: AMT_TABLE, amtTableFor } = await import("./data/amt.js");
+const MTX = await import("./minimum-tax.js");
+const { known: knownOf } = await import("./known.js");
+const P26 = paramsFor(FEDERAL, 2026), A26 = amtTableFor(2026);
+/** A return worked three ways: the usual tax, the minimum tax's figures on it, and the tax with the minimum tax counted. */
+const amtOf = (inputs, opts = {}, P = P26, A = A26) => { const r = federalTax(inputs, P); return { r, m: minimumTaxOn(r, A, opts, P), w: federalTax({ ...inputs, amt: { table: A, ...opts } }, P) }; };
+/** A plan for one adult (or two filing jointly) with pay and, optionally, a typed spread, itemized boxes and sales. */
+function mtPlan({ status = "single", pay = [150000], spread = null, itemized = null, gains = null, born = "1980-04-01", equity = null } = {}) {
+  const p = emptyPlan();
+  p.household.filingStatus = status;
+  p.household.people = pay.map((_, i) => ({ id: `m${i}`, name: i === 0 ? "Me" : "Bo", role: i === 0 ? "self" : "partner", birthDate: born }));
+  p.income = pay.map((amount, i) => ({ id: `pay${i}`, name: "Pay", type: "salary", personId: `m${i}`, amount, period: "annual", growth: 0, taxable: true }));
+  if (spread !== null) { p.taxes.thisYear.isoSpread = spread; p.taxes.thisYear.isoSpreadYear = 2026; }   // typed for 2026, the year MT_DAY works out
+  if (itemized) p.taxes.itemized = itemized;
+  if (gains) p.taxes.gains = gains;
+  if (equity) p.equity = equity;
+  return p;
+}
+const mtK = (p) => knownOf(p, { today: MT_DAY });
+
+test("minimum tax: the 2026 figures are Rev. Proc. 2025-32's, 2024's Rev. Proc. 2023-34's; the complete phase-outs they print follow", () => {
+  assert.deepEqual(A26.exemption, { single: 90100, head_of_household: 90100, married_joint: 140200, qualifying_surviving: 140200, married_separate: 70100 });
+  assert.deepEqual(A26.phaseOutStart, { single: 500000, head_of_household: 500000, married_joint: 1000000, qualifying_surviving: 1000000, married_separate: 500000 });
+  assert.deepEqual(A26.rate28From, { all: 244500, married_separate: 122250 });
+  assert.equal(A26.phaseOutRate, 0.5, "the 2025 law's 50 cents a dollar (25 before 2026)");
+  const gone = (A, s) => A.phaseOutStart[s] + A.exemption[s] / A.phaseOutRate;
+  assert.deepEqual([gone(A26, "single"), gone(A26, "married_joint"), gone(A26, "married_separate")], [680200, 1280400, 640200]);
+  const A24 = amtTableFor(2024), A25 = amtTableFor(2025);
+  assert.deepEqual([A24.exemption.single, A24.exemption.married_joint, A24.exemption.married_separate, A24.rate28From.all, A24.rate28From.married_separate, A24.phaseOutRate], [85700, 133300, 66650, 232600, 116300, 0.25]);
+  assert.deepEqual([gone(A24, "single"), gone(A24, "married_joint"), gone(A24, "married_separate")], [952150, 1751900, 875950]);
+  assert.deepEqual([gone(A25, "single"), gone(A25, "married_joint"), gone(A25, "married_separate")], [978750, 1800700, 900350]);
+  assert.equal(amtTableFor(2027), AMT_TABLE[2026], "a year past the table keeps the last one"); assert.equal(amtTableFor(2023), AMT_TABLE[2024]);
+});
+
+test("minimum tax, well under the exemption: single, $60,000 of pay, the standard deduction: no minimum tax, and the page's figures are as before", () => {
+  const { r, m, w } = amtOf({ filingStatus: "single", wages: 60000 });
+  assert.equal(r.taxableIncome, 43900);                    // 60,000 - 16,100
+  assert.equal(m.amti, 60000);                             // 43,900 + the standard deduction added back
+  assert.deepEqual([m.exemption, m.excess, m.tentative, m.amt], [90100, 0, 0, 0]);
+  assert.equal(w.totalTax, r.totalTax);
+  const p = mtPlan({ pay: [60000] }), k = mtK(p), s = MTX.summary(p, k);
+  assert.equal(k.inputs.amt, undefined, "nothing put on the return"); assert.equal(k.result.minimumTax, undefined);
+  assert.equal(s.case, "under");
+  assert.equal(MTX.sentence(s), "The minimum tax does not apply: the income it counts, $60,000, is under the $90,100 it leaves untaxed.");
+  assert.deepEqual(MTX.rowsOf(s), [], "the sentence says it all");
+  assert.equal(MTX.pushSentence(s), ""); assert.equal(MTX.howSays(s), null);
+});
+
+test("minimum tax, a high-income single person: $150,000 of pay and a $1,000,000 long-term gain lose the whole exemption", () => {
+  const { r, m, w } = amtOf({ filingStatus: "single", wages: 150000, qualifiedIncome: 1000000, investmentIncome: 1000000 });
+  // usual way: 24,734 on the 133,900 of pay (1,240 + 4,560 + 12,166 + 24% of 28,200), the gain at 15% to 545,500 and 20% above
+  assert.equal(r.incomeTax, 24734 + 0.15 * (545500 - 133900) + 0.2 * (1133900 - 545500));   // 204,154
+  assert.equal(m.amti, 1150000);
+  assert.equal(m.exemption, 0, "gone past $680,200");
+  // Part III: 26% of the 150,000 that is not the gain, the gain at its own rates (179,420): less than 26%/28% on it all
+  assert.equal(m.tentative, 0.26 * 150000 + 61740 + 117680);   // 218,420
+  assert.ok(m.tentative < 0.26 * 244500 + 0.28 * (1150000 - 244500));
+  assert.equal(Math.round(m.amt), 14266);
+  assert.equal(Math.round(w.totalTax - r.totalTax), 14266, "the tax counts it");
+  // the same household on the page: the sale typed on Capital gains
+  const p = mtPlan({ pay: [150000], gains: [{ id: "g1", name: "Shares", proceeds: 1100000, basis: 100000, held: "long" }] });
+  const k = mtK(p), s = MTX.summary(p, k);
+  assert.equal(s.case, "applies"); assert.equal(Math.round(s.amt), 14266); assert.equal(s.push, "income");
+  assert.equal(Math.round(k.result.minimumTax.amt), 14266);
+  assert.equal(MTX.sentence(s), "The minimum tax adds $14,266 to your tax: worked out this other way, the tax is $218,420, more than the $204,154 worked out the usual way.");
+  assert.equal(MTX.pushSentence(s), "It comes mostly from income over $500,000, which takes away $90,100 of the $90,100 this tax leaves untaxed.");
+  assert.equal(MTX.howSays(s), "minimum tax $14,266");
+});
+
+test("minimum tax, the exemption shrinks by 50 cents a dollar from 2026 (25 cents before) and a separate return adds back past $640,200", () => {
+  const at = (amti, A, status = "single") => minimumTaxOn({ filingStatus: status, agi: amti, deduction: { amount: 0, standard: 0, used: "itemized", itemizedLimit: 0, senior: 0, qbi: 0 }, income: { qualified: 0 }, ordinaryTaxable: amti, incomeTax: 0 }, A, { salt: 0 }, P26);
+  assert.equal(at(600000, A26).exemption, 90100 - 0.5 * 100000);          // 40,100
+  assert.equal(at(700000, amtTableFor(2025)).exemption, 88100 - 0.25 * 73650);   // 69,687.50
+  assert.equal(at(1100000, A26, "married_joint").exemption, 140200 - 0.5 * 100000);
+  // filing separately: past 640,200 half the excess is added, at most 70,100 (the 2026 draft Instructions for Form 6251, Line 4)
+  assert.equal(at(660200, A26, "married_separate").amti, 670200, "the instructions' own example");
+  assert.equal(at(900000, A26, "married_separate").amti, 970100);
+  assert.equal(at(660200, A26, "married_separate").exemption, 0);
+  // 26% up to 244,500 of the excess, 28% above (122,250 filing separately)
+  assert.equal(at(600000, A26).tentative, 0.26 * 244500 + 0.28 * (600000 - 40100 - 244500));
+});
+
+test("minimum tax, a couple with large state taxes itemized: $300,000 of pay, $45,000 of state and property tax (capped at $40,400), $40,000 of mortgage interest", () => {
+  const p = mtPlan({ status: "married_joint", pay: [150000, 150000], itemized: { propertyTax: 15000, stateTax: 30000, mortgageInterest: 40000 } });
+  const k = mtK(p), s = MTX.summary(p, k);
+  assert.equal(k.result.deduction.used, "itemized"); assert.equal(k.result.taxableIncome, 300000 - 80400);
+  assert.equal(k.result.incomeTax, 2480 + 9120 + 24332 + 0.24 * (219600 - 211400));   // 37,900
+  assert.equal(s.addBackKind, "salt"); assert.equal(s.addBack, 40400);
+  assert.equal(s.amti, 260000); assert.equal(s.exemption, 140200); assert.equal(s.excess, 119800);
+  assert.equal(s.tentative, 0.26 * 119800);                                            // 31,148
+  assert.equal(s.case, "below"); assert.equal(k.inputs.amt, undefined, "under the usual tax: nothing put on the return");
+  assert.equal(MTX.sentence(s), "The minimum tax does not apply: worked out this other way, the tax would be $31,148, less than the $37,900 worked out the usual way.");
+  assert.deepEqual(MTX.rowsOf(s).map((x) => [x.label, Math.round(x.amount), x.sub]), [
+    ["Taxable income", 219600, "worked out the usual way"],
+    ["State and local taxes added back", 40400, "this tax does not allow it"],
+    ["Income this tax counts", 260000, ""],
+    ["Left untaxed", -140200, "$140,200 for a married couple filing together"],
+    ["Tax worked out this other way", 31148, "26% up to $244,500 of what is left, 28% above"],
+    ["Tax worked out the usual way", 37900, "the income tax above, before credits"],
+    ["Minimum tax", 0, "none: the usual way is no less"],
+  ]);
+});
+
+test("minimum tax, an option exercise: $150,000 of pay and a $100,000 spread typed: $16,840 more, in the year's tax and the walk", () => {
+  const { r, m } = amtOf({ filingStatus: "single", wages: 150000 }, { preference: 100000 });
+  assert.equal(r.incomeTax, 24734);
+  assert.equal(m.amti, 133900 + 16100 + 100000); assert.equal(m.excess, 250000 - 90100);
+  assert.equal(m.tentative, 0.26 * 159900); assert.equal(Math.round(m.amt), 16840);
+  const p = mtPlan({ pay: [150000], spread: 100000 }), k = mtK(p), s = MTX.summary(p, k);
+  assert.deepEqual(k.inputs.amt, { table: A26, salt: 0, preference: 100000 });
+  assert.equal(Math.round(k.total), 41574, "24,734 + 16,840");
+  const row = k.steps.find((x) => x.label === "Alternative minimum tax");
+  assert.equal(Math.round(row.amount), 16840); assert.equal(row.sub, "the tax worked out the other way, $41,574, less the $24,734 above");
+  assert.ok(k.steps.findIndex((x) => x.label === "Alternative minimum tax") === k.steps.findIndex((x) => x.label === "Income tax") + 1, "right after the income tax (Form 1040 line 17)");
+  assert.equal(s.case, "applies"); assert.equal(s.push, "options");
+  assert.equal(MTX.pushSentence(s), "It comes mostly from the $100,000 spread on the incentive stock options you exercised, which only this tax counts.");
+  assert.deepEqual(MTX.rowsOf(s).map((x) => x.label), ["Taxable income", "Standard deduction added back", "Incentive stock options", "Income this tax counts", "Left untaxed", "Tax worked out this other way", "Tax worked out the usual way", "Minimum tax"]);
+  assert.equal(MTX.rowsOf(s).at(-1).sub, "the first less the second: added to your tax");
+  // the next dollar costs the minimum tax's 26%, not the 24% bracket
+  assert.ok(Math.abs(k.nextDollar - 0.26) < 1e-9, `${k.nextDollar}`);
+  // Withholding check, Estimated payments and Quick answers read the same year's tax
+  return import("../withholding/compute.js").then(({ yearTax }) => assert.equal(Math.round(yearTax(p, compute(p, { today: MT_DAY }), { today: MT_DAY }).total), 41574));
+});
+
+test("minimum tax, credits come off the usual tax and the minimum tax together (Form 1040 line 18): a couple with two children and an exercise", () => {
+  const { r, w } = amtOf({ filingStatus: "married_joint", wages: 60000, dependentsUnder17: 2 }, { preference: 150000 });
+  // usual way: 2,840 of tax, 2,840 of the 4,400 child tax credit used, 1,560 of it back as a refund: -1,560
+  assert.equal(r.incomeTax, 2840); assert.equal(r.totalTax, -1560);
+  // the other way: 26% of (210,000 - 140,200) = 18,148, so line 18 is 18,148 and the whole 4,400 comes off it, nothing refunded
+  assert.equal(w.minimumTax.tentative, 18148); assert.equal(w.minimumTax.amt, 18148 - 2840);
+  assert.equal(w.credits.childTaxCredit, 4400); assert.equal(w.credits.refundable, 0);
+  assert.equal(w.totalTax, 18148 - 4400);
+});
+
+test("minimum tax: the deduction for people 65 and over is added back (Form 6251 line 1a, 2025 and the 2026 draft)", () => {
+  // single, 66, an $80,000 pension, a $60,000 spread: standard 16,100 + 2,050; the senior deduction 6,000 less 6% of 5,000 = 5,700
+  const { r, m } = amtOf({ filingStatus: "single", otherOrdinary: 80000, ages65plus: 1 }, { preference: 60000 });
+  assert.equal(r.deduction.senior, 5700); assert.equal(r.taxableIncome, 56150); assert.equal(r.incomeTax, 7065);
+  assert.equal(m.senior, 5700); assert.equal(m.amti, 56150 + 18150 + 5700 + 60000);
+  assert.equal(Math.round(m.amt), 5909);
+  assert.deepEqual(MTX.rowsOf({ ...m, case: "applies", push: "options", line1b: 56150, qualified: 0 }).map((x) => x.label).slice(0, 4), ["Taxable income", "Standard deduction added back", "Deduction for 65 and over added back", "Incentive stock options"]);
+});
+
+test("minimum tax, filing separately: each return its own exemption; the spread on the return of the adult Equity compensation names", () => {
+  const p = mtPlan({ status: "married_separate", pay: [150000, 50000], spread: 100000, equity: { symbol: "", grants: [], personId: "m1" } });
+  const k = mtK(p), s = MTX.summary(p, k);
+  const bo = s.returns.find((x) => x.personId === "m1"), me = s.returns.find((x) => x.personId === "m0");
+  // Bo: 33,900 taxed, 3,820 the usual way; 150,000 counted, 70,100 untaxed: 26% of 79,900 = 20,774
+  assert.equal(bo.regular, 3820); assert.equal(bo.amti, 150000); assert.equal(bo.tentative, 0.26 * 79900); assert.equal(Math.round(bo.amt), 16954);
+  // Me: 24,734 the usual way, 20,774 the other: none
+  assert.equal(me.regular, 24734); assert.equal(me.amt, 0);
+  assert.equal(s.case, "separate-one"); assert.equal(Math.round(s.amt), 16954);
+  assert.equal(Math.round(k.result.minimumTax.amt), 16954); assert.equal(k.result.minimumTax.separate, true);
+  assert.equal(MTX.sentence(s), "The minimum tax adds $16,954 to your tax: worked out this other way, Bo's return's tax is $20,774, more than the $3,820 worked out the usual way.");
+  assert.equal(MTX.pushSentence(s), "It comes mostly from the $100,000 spread on the incentive stock options you exercised, which only this tax counts.");
+  assert.deepEqual(MTX.returnRows(s).map((x) => [x.label, Math.round(x.amount)]), [["Your minimum tax", 0], ["Bo's minimum tax", 16954]]);
+  assert.equal(k.steps.find((x) => x.label === "Alternative minimum tax").sub, "on each return, the tax worked out the other way less the income tax above, when it is more");
+});
+
+test("minimum tax: a typed spread counts only for the year it was typed for (critic t1 M1, M2)", async () => {
+  const p = mtPlan({ pay: [150000], spread: 100000 });
+  // the same plan worked out on the last day of 2026 and the second of 2027: the 2026 spread is not 2027's
+  const dec = knownOf(p, { today: "2026-12-31" }), jan = knownOf(p, { today: "2027-01-02" });
+  assert.equal(Math.round(dec.result.minimumTax.amt), 16840);
+  assert.equal(jan.year, 2027); assert.equal(jan.result.minimumTax, undefined, "2027: no spread, no minimum tax");
+  assert.equal(jan.inputs.amt, undefined, "nothing put on the 2027 return");
+  // finishing the 2026 return in February 2027 (the year set to 2026): it counts again
+  const back = structuredClone(p); back.taxes.year = 2026;
+  assert.equal(Math.round(knownOf(back, { today: "2027-02-10" }).result.minimumTax.amt), 16840);
+  // a figure saved without its year counts for none
+  const bare = structuredClone(p); delete bare.taxes.thisYear.isoSpreadYear;
+  assert.equal(MTX.isoSpreadOf(bare, 2026), 0); assert.equal(mtK(bare).result.minimumTax, undefined);
+  assert.equal(MTX.isoSpreadOf(p, 2026), 100000); assert.equal(MTX.isoSpreadOf(p, 2027), 0);
+  // Equity compensation's units vesting next year are worked on next year's return, without this year's spread: the family
+  // with one grant of units at $50; a 2026 spread of 300,000 moves 2026's tax on the units (11,910 to 15,060), not 2027's (6,810)
+  const eq = await import("../../career/equity/compute.js");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const DAY = "2026-10-30";
+  const RSU = { id: "r", kind: "rsu", name: "New hire units", granted: "2025-01-15", vestStart: "2025-01-15", shares: 2400, vestMonths: 48, cliffMonths: 12, every: 3 };
+  const units = (spread) => { const f = familyPlan(DAY); f.equity = { symbol: "A", price: 50, priceAsOf: DAY, personId: "p-ana", grants: [RSU], espp: [] };
+    if (spread) { f.taxes.thisYear = { ...(f.taxes.thisYear ?? {}), isoSpread: spread, isoSpreadYear: 2026 }; } return f; };
+  const fed = (plan) => eq.compute(plan, { today: DAY }).rsuYears.map((y) => [y.year, Math.round(y.tax.federal)]);
+  assert.deepEqual(fed(units(0)), [[2026, 11910], [2027, 6810]]);
+  assert.deepEqual(fed(units(300000)), [[2026, 15060], [2027, 6810]]);
+});
+
+test("known(): an empty row (null) among Equity compensation's grants is skipped, not a crash (critic t1 M3)", () => {
+  const RSU = { id: "r", kind: "rsu", name: "Units", granted: "2025-01-15", vestStart: "2025-01-15", shares: 2400, vestMonths: 48, cliffMonths: 12, every: 3 };
+  const withGrants = (grants) => { const p = mtPlan({ pay: [100000] }); p.equity = { symbol: "A", price: 50, priceAsOf: MT_DAY, personId: "m0", grants }; return p; };
+  const none = mtK(withGrants([])), one = mtK(withGrants([RSU]));
+  assert.equal(mtK(withGrants([null])).total, none.total);
+  const k = mtK(withGrants([null, RSU]));
+  assert.equal(k.total, one.total); assert.equal(k.stock.value, 52500, "the units vesting in 2026: 1,050 at $50");
+  assert.deepEqual(k.notes, one.notes, "no word about a missing share price");
+});
+
+test("minimum tax: one written sentence per case, and one per figure that pushes it", () => {
+  const b = { amti: 260000, exemption: 140200, exemptionFull: 140200, tentative: 31148, regular: 37900, amt: 0, addBack: 40400, senior: 6000, preference: 100000, phaseOutStart: 500000 };
+  assert.equal(MTX.sentence({ ...b, case: "even", tentative: 37900.2 }), "The minimum tax does not apply: worked out this other way, the tax would be $37,900, the same as worked out the usual way.");
+  assert.equal(MTX.sentence({ ...b, case: "separate-none" }), "The minimum tax does not apply to either return: worked out this other way, each return's tax is no more than the usual way.");
+  assert.equal(MTX.sentence({ ...b, case: "separate-both", amt: 9000 }), "The minimum tax adds $9,000 to your tax: worked out this other way, each return's tax is more than the usual way.");
+  assert.equal(MTX.sentence({ ...b, case: "separate-one", amt: 900, name: "Me" }), "The minimum tax adds $900 to your tax: worked out this other way, your return's tax is $31,148, more than the $37,900 worked out the usual way.");
+  assert.equal(MTX.sentence(null), "");
+  const a = { ...b, amt: 2000, exemption: 15100, exemptionFull: 90100 };
+  assert.equal(MTX.pushSentence({ ...a, push: "salt" }), "It comes mostly from the $40,400 of state and local taxes you deduct, which this tax does not allow.");
+  assert.equal(MTX.pushSentence({ ...a, push: "income" }), "It comes mostly from income over $500,000, which takes away $75,000 of the $90,100 this tax leaves untaxed.");
+  assert.equal(MTX.pushSentence({ ...a, push: "standard", addBack: 16100 }), "It comes mostly from the $16,100 standard deduction, which this tax does not allow.");
+  assert.equal(MTX.pushSentence({ ...a, push: "senior" }), "It comes mostly from the $6,000 deduction for people 65 and over, which this tax does not allow.");
+  assert.equal(MTX.pushSentence({ ...a, push: null }), "", "no one figure makes most of it");
+  assert.equal(MTX.pushSentence({ ...a, amt: 0, push: "options" }), "", "nothing to push when it does not apply");
+  assert.equal(MTX.howSays({ amt: 123456 }), "minimum tax $123,456"); assert.equal(MTX.howSays({ amt: 1234567 }), "with a minimum tax");
+  assert.ok(MTX.howSays({ amt: 999999 }).length <= 20);
+  const iso = mtPlan({ equity: { grants: [{ id: "i", kind: "option", optionType: "iso", shares: 100 }] } });
+  assert.equal(MTX.optionsLine(iso), "Exercised incentive stock options this year and kept the shares? Type the spread under Figures the plan cannot see. Equity compensation shows how much you can exercise before this tax starts.");
+  iso.taxes.thisYear.isoSpread = 5000; iso.taxes.thisYear.isoSpreadYear = 2026; assert.equal(MTX.optionsLine(iso, 2026), "", "typed: nothing to say");
+  assert.equal(MTX.optionsLine(mtPlan()), "", "no incentive options: nothing to say");
+  // a smaller spread stays under the usual tax: no push to name, and nothing is said about one
+  const p = mtPlan({ pay: [150000], spread: 20000 }), s = MTX.summary(p, mtK(p));
+  assert.equal(s.case, "below"); assert.equal(s.push, null);
+});
+
+test("minimum tax: Equity compensation's amt() is the shared arithmetic, and its room counts a spread already typed this year", async () => {
+  const eq = await import("../../career/equity/compute.js");
+  for (const inputs of [{ filingStatus: "single", wages: 150000 }, { filingStatus: "married_joint", wages: 300000, itemized: 80400 }, { filingStatus: "married_separate", wages: 700000 }])
+    for (const preference of [0, 50000, 250000]) assert.deepEqual(eq.amt(inputs, P26, A26, { preference, salt: inputs.itemized ? 40400 : 0 }), minimumTax(inputs, P26, A26, { preference, salt: inputs.itemized ? 40400 : 0 }));
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const ISO = { id: "i", kind: "option", optionType: "iso", name: "Incentive options", granted: "2023-03-01", vestStart: "2023-03-01", shares: 4000, strike: 20, vestMonths: 48, cliffMonths: 12, every: 3 };
+  const withIso = () => { const p = familyPlan(MT_DAY); p.equity = { symbol: "ACME", price: 50, priceAsOf: MT_DAY, personId: "p-ana", grants: [ISO], espp: [] }; return p; };
+  const before = eq.compute(withIso(), { today: MT_DAY }).isoRoom;
+  const typed = withIso(); typed.taxes.thisYear.isoSpread = 30000; typed.taxes.thisYear.isoSpreadYear = 2026;
+  const after = eq.compute(typed, { today: MT_DAY }).isoRoom;
+  assert.ok(before > 30000, `${before}`);
+  assert.ok(Math.abs(after - (before - 30000)) <= 2, `${before} -> ${after}: the 30,000 already used`);
+  assert.equal(MTX.optionsLine(withIso()), "Exercised incentive stock options this year and kept the shares? Type the spread under Figures the plan cannot see. Equity compensation shows how much you can exercise before this tax starts.");
+});
+

@@ -4,7 +4,7 @@
 **Purpose:** This year's federal income tax from what the plan knows and what you type: the bill or refund, your effective and marginal rates.
 
 ## Inputs
-`household` (filing status, people's birth dates for the age allowance and dependents), `income` (pay, bonuses, pensions, Social Security, self-employment, rent, "other"; items marked not taxable are skipped), `retirement.contributions` (pre-tax 401(k) money comes off wages up to the limit; IRA and HSA contributions are adjustments up to theirs), `taxes.thisYear` (figures the plan cannot see: a wages override, IRA and 401(k) withdrawals this year (`iraWithdrawals`, round 8: blank = the plan's required withdrawal), other ordinary income, qualified dividends, tax-exempt interest, a Social Security override, other adjustments, withheld, other payments), `taxes.itemized`, `taxes.gains` (from the Capital gains page), `taxes.estimated.paid`, `taxes.year` (null = this year), `taxes.dependentsUnder17` / `otherDependents` / `blind` (null = counted from People), `taxes.hsa` (`contribution`, `employer`, `coverage`, `coveredId`, `fsa`: the HSA and FSA page), `expenses` (care for a child, for the child and dependent care credit), `whatIfs.benefits[adultId].dcfsaElect` / `planYear` (the child care account chosen on Benefits elections). The page's figures (`known.js`, round 8) also read `property` (rentals), `equity` (stock units), `debts` (student loans), the Self-employment page's expenses and the Required withdrawals page.
+`household` (filing status, people's birth dates for the age allowance and dependents), `income` (pay, bonuses, pensions, Social Security, self-employment, rent, "other"; items marked not taxable are skipped), `retirement.contributions` (pre-tax 401(k) money comes off wages up to the limit; IRA and HSA contributions are adjustments up to theirs), `taxes.thisYear` (figures the plan cannot see: a wages override, IRA and 401(k) withdrawals this year (`iraWithdrawals`, round 8: blank = the plan's required withdrawal), other ordinary income, qualified dividends, tax-exempt interest, a Social Security override, other adjustments, withheld, other payments, `isoSpread`: the spread on incentive stock options exercised this year and kept, read only by the minimum tax), `taxes.itemized`, `taxes.gains` (from the Capital gains page), `taxes.estimated.paid`, `taxes.year` (null = this year), `taxes.dependentsUnder17` / `otherDependents` / `blind` (null = counted from People), `taxes.hsa` (`contribution`, `employer`, `coverage`, `coveredId`, `fsa`: the HSA and FSA page), `expenses` (care for a child, for the child and dependent care credit), `whatIfs.benefits[adultId].dcfsaElect` / `planYear` (the child care account chosen on Benefits elections). The page's figures (`known.js`, round 8) also read `property` (rentals), `equity` (stock units), `debts` (student loans), the Self-employment page's expenses and the Required withdrawals page.
 
 ## Outputs
 `taxInputs()` (shared by every tax page): `year`, `params` (the year's table, indexed past the last one), `filingStatus`, `inputs` for `federalTax`, `sources[]` (each figure and where it came from), `itemized` (total after caps, lines), `people` (ages65plus, dependents), `gains` (netted), `pretax401k` (the 401(k) money taken off wages), `k401` (`people[]`: id, name, age, pay, compensation, pretax, roth, limit, catchUp, excluded, inIncome; `excluded`, `inIncome`, `year`), `ira` (`people[]`: traditional, limit, deductible; `deductible`, `over`), `fsa` (election, limit, excluded, over, `offWages`: what came off wages, 0 when wages are typed), `hsa` (`picture`: `hsaPicture` of `retirement/contributions`; `payroll`, `employer`, `excess`, `deducted`: the adjustment, `employerTaxed`: employer money over the limit added to wages), `payTotal`, `wagesTyped`, `wagesPlan` (the wages the Income page implies, the account's money off by the one rule even when box 1 is typed: Budget's yearTaxes), `care` (last; `expenses`, `persons`, `benefits`, `earnedLow` as passed to the engine in `inputs.care` when there is care and a child to count, plus `lines` (the care counted), `expensesAll` / `linesAll` (all the care paid in the year), `kids`, `turning13` ([{ id, name, until }]), `undated`, `elected`, `later` (accounts chosen for another plan year), `benefitLimit`, `offWages` (the account money taken off wages: excluded + forfeited), `forfeited`, `taxedAsPay`, `account` (`careAccountRule`), `earnedPeople` ([{ id, name, pay, wages, business, earned, typed, elected, excluded, forfeited, taxedAsPay }]), `joint`, `spouseUnknown`, `filerId`, `wagesTyped`; null for a year without the figures). `careAccountRule`, `careAccount(plan, { year, today })` and `careInputsWith(ti, changes, elections)`: the child care account's one rule and its what-ifs (see the care section). `ratePct(x)`: a rate as the page shows it. `compute()` adds `result` (`federalTax`: income, taxable Social Security, AGI, deduction used, taxable income, ordinary and gains tax, credits, NIIT, additional Medicare, total, effective rate, bracket, room, balance), `marginal` (the true cost of the next 1,000), `nextDollar` (what the page shows: over whole steps of the child care credit when it counts, else `marginal`), `careFalls`, `careSets` ("covers" | "falls" | null) and `nextDollarNoCare`, `steps[]` (the walk from income to tax), `years`, `isIndexed`.
@@ -343,13 +343,13 @@ The review of the first build (`r8/b1/review-money.md`, `review-ux.md`) found ni
   - Stock pay is said in "shares".
 
 ## Edge cases
-Not modelled: AMT, the earned income and education credits, state tax, the FICA wage base on the additional Medicare tax, stock option exercises and ESPP sales (not on file), a pension at work as "covered" for the IRA deduction, withdrawals before the required age other than the projection's draw (type them). `compute().result` alone (the answer keys') still taxes a business at its gross and leaves out its self-employment tax and 20% deduction (with a note); the page and every tax page use `known()`, which counts them. The child and dependent care credit leaves out a disabled spouse or dependent, a student or disabled spouse's deemed income, the separate filer who lived apart (treated as unmarried, 21(e)(4)), care paid this year for last year (line 9b), a child care account typed on the Paycheck page only, and a self-employed person's dependent care deduction (line 24); a raise on Salary keeps the plan's lower earner (only matters when that earner makes under 6,000). See its section. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
+Not modelled: the rarer parts of the alternative minimum tax (see its section), the earned income and education credits, state tax, the FICA wage base on the additional Medicare tax, stock option exercises and ESPP sales (not on file), a pension at work as "covered" for the IRA deduction, withdrawals before the required age other than the projection's draw (type them). `compute().result` alone (the answer keys') still taxes a business at its gross and leaves out its self-employment tax and 20% deduction (with a note); the page and every tax page use `known()`, which counts them. The child and dependent care credit leaves out a disabled spouse or dependent, a student or disabled spouse's deemed income, the separate filer who lived apart (treated as unmarried, 21(e)(4)), care paid this year for last year (line 9b), a child care account typed on the Paycheck page only, and a self-employed person's dependent care deduction (line 24); a raise on Salary keeps the plan's lower earner (only matters when that earner makes under 6,000). See its section. Ages use the age reached in the tax year. Dependents without a birth date count as under 17.
 
 ## Tests
 `tests/tax.test.mjs` (the engine on hand-worked 2025 cases; the care credit's three worked examples for 2025 and 2026, both 2026 rate columns and the 2025 table row by row, the limit after benefits, the earned-income cap, the tax limit and the order before the child credit, a separate return), `tests/tax-pages.test.mjs` (this page on `qa/fixtures/tax-plan.mjs`), `module.test.mjs` (also the care credit from the plan: the single parent's walk, the family's care in the year and the lower earner, which lines are care and which are not, who counts and the 13th birthday, a joint return with one adult, a separate return, the child care account off wages and the credit (example B) and its plan year, the account's one rule by hand (money lost beyond the care: Jo with 1,800 of care; the reviewer's case #1 and case #76; the family filing separately with 3,750 each; two accounts on a joint return; a spouse with no pay), `careAccount`, each spouse's account on a separate return, the next dollar over whole steps and its reason, the 14-year-old's care line, one rounding for the rate, `careInputsWith` and its `wagesChange`). `tests/golden-federal.test.mjs`: 12,000 invented returns for 2024 to 2026 (`tests/golden/taxes/federal-<year>.csv`), worked independently from the IRS figures in `tests/golden/taxes/RULES.md` (Rev. Procs. 2023-34, 2024-40, 2025-32; Pub. L. 119-21), each within $1. All 12,000 agree since 2026-10-30 (F-029 fixed the seven causes the key found; RULES.md section 11 keeps a worked example of each). A future disagreement goes into `tests/golden/taxes/federal-todo.json` by cause and runs as a `todo` test.
 
 ## Ideas / not yet
-- State tax (PolicyEngine as a local service), AMT for stock-option years, a "compare with last year's return" line-by-line check.
+- State tax (PolicyEngine as a local service), a "compare with last year's return" line-by-line check, the minimum tax credit carried to later years (Form 8801).
 
 ## Review 2026-11-06
 - **Two returns card: the business owner's own return.** A return with a business shows its own income, taxable income,
@@ -598,3 +598,92 @@ Tests: module.test.mjs "C11 withheld" (the gray figure equals what is counted, t
 typed, with no pay or a year ahead; the box, its words, the status, Save empty; the first view's words) and "C11 itemized"
 (each sentence; nothing counted; a typed box never replaced; the Pub. 936 line and filing separately; the hint only from
 $100, never folded, and its link).
+
+## The other way the tax is worked out (minimum tax) (2026-11-16, gap list, next 60, item 29; map D8)
+
+**What the person gets.** The year's tax counts the alternative minimum tax for everyone, not only on Equity compensation's
+what-if of exercising options: the year's tax (and so the April answer, Withholding check, Estimated payments, Quick
+answers, Needs attention and the tax report) includes it when it applies, and the walk gains a row "Alternative minimum
+tax" after "Income tax" (Form 1040 line 17). The spread on incentive stock options exercised this year is read from
+`taxes.thisYear.isoSpread`.
+
+**Formulas** (`core/math/tax.js` `minimumTaxOn`, `minimumTax`; the step `minimum-tax.js` `minimumTaxStep`, known.js's last):
+- AMT income (Form 6251 line 4) = AGI - the deductions taken - the 20% business deduction (line 1b, may be below zero)
+  + the standard deduction (line 2a: Form 1040 line 12e only; the 2026 charity deduction for people who do not itemize is line
+  12f and stays deducted) or, itemizing, the state and local taxes deducted (Schedule A line 7) less the section 68 limit
+  (which does not apply to the AMT, IRC 56(b)(1)(F)) + the deduction for people 65 and over (line 1a: "treated as a personal
+  exemption that is added back") + the incentive-option spread (line 2i).
+- Filing separately, past $640,200 half the excess is added, at most $70,100 (2026 draft instructions, Line 4).
+- Exemption (line 5) = $90,100 single or head of household, $140,200 joint or surviving spouse, $70,100 separate, less 50%
+  of the AMT income over $500,000 / $1,000,000 / $500,000, at least 0 (gone at $680,200 / $1,280,400 / $640,200). 2025:
+  $88,100 / $137,000 / $68,500 from $626,350 / $1,252,700 / $626,350 at 25%; 2024: $85,700 / $133,300 / $66,650 from
+  $609,350 / $1,218,700 / $609,350 at 25%.
+- Tentative minimum tax (line 7) = 26% of the excess up to $244,500 ($122,250 separate; 2025 $239,100, 2024 $232,600),
+  28% above; with qualified dividends or long-term gains, Part III keeps them at their own rates stacked on the usual
+  ordinary taxable income, never more than the flat figure.
+- AMT (line 11) = tentative - the usual income tax (line 10), at least 0. It is added before the credits: Form 1040 line 18
+  = line 16 + line 17, and the care credit's and the child tax credit's limits start from line 18 (so a family with an
+  exercise uses the whole child tax credit against it).
+- The push: the figure whose removal takes the most off the minimum tax (at least 50 cents), among the spread, the state and
+  local taxes, the exemption lost to the phase-out, the standard deduction and the 65-and-over deduction.
+- A year past the last table keeps the last table's figures (not raised for inflation); a year before the first takes 2024's.
+
+**Sources, each read at irs.gov on 2026-11-16:**
+- Rev. Proc. 2025-32, https://www.irs.gov/pub/irs-drop/rp-25-32.pdf, section 4.10 (2026 exemption amounts, the 28% line, the
+  phase-out thresholds and complete phase-outs) and section 2.07 (P.L. 119-21 section 70107).
+- Rev. Proc. 2024-40, https://www.irs.gov/pub/irs-drop/rp-24-40.pdf, section 3.11 (2025; matches Equity compensation's table).
+- Rev. Proc. 2023-34, https://www.irs.gov/pub/irs-drop/rp-23-34.pdf, section 3.11 (2024).
+- Instructions for Form 6251 (2025), https://www.irs.gov/pub/irs-pdf/i6251.pdf (dated January 8, 2026): the senior deduction
+  added back, Line 1, Line 2a, Line 2i.
+- Draft 2026 Form 6251, https://www.irs.gov/pub/irs-dft/f6251--dft.pdf (created May 26, 2026), and its draft instructions,
+  https://www.irs.gov/pub/irs-dft/i6251--dft.pdf: "increases the phaseout amounts from 25% to 50%", the Exemption Worksheet
+  ("Multiply line 4 by 50%"), Line 4 (the separate-return add-back), line 1a (Schedule 1-A line 43). Drafts: the final form
+  may differ; check again when it is out.
+- Draft 2026 Form 1040, https://www.irs.gov/pub/irs-dft/f1040--dft.pdf: lines 12e and 12f, 16 to 18.
+- Could not be read: the statute itself (P.L. 119-21, IRC 55 and 56 as amended): the law sites refuse automated reads, so the
+  rules are taken from the IRS's own words above.
+
+**Decisions where the brief and the code differed.**
+- The brief says to take "the incentive-option spread from career/equity when there is one". The plan records no exercise:
+  Equity compensation's figures are "if you exercise every vested one now", a what-if, and counting it in this year's own
+  estimate would add a tax nobody owes. So the spread is one box the person types; Equity compensation reads it back (its
+  room before the minimum tax is what is left after it), and the minimum tax's section points there when the plan has
+  incentive options and no spread is typed.
+- The spread is kept with its year (`taxes.thisYear.isoSpreadYear`, the tax year the page worked out when it was saved) and
+  counts only on a return for that year (`isoSpreadOf(plan, year)`; critic t1 M1, M2). Without it a 2026 spread went on
+  adding tax after New Year (16,840 on 2026-12-31, 17,181 on 2027-01-02 from the same stale figure), and on every other
+  year another page works out by copying the plan with a new `taxes.year` (Equity compensation's next year: the family's
+  2027 units read 8,610 of federal tax with a 2026 spread of 300,000, 6,810 without; Withholding check's and Forecast's
+  other years the same). A spread saved without its year counts for none. Set the year back to 2026 under "Year and
+  people" in 2027 and it counts again (finishing last year's return). Tests: "a typed spread counts only for the year it was
+  typed for".
+- `known()` skips an empty row (null) among Equity compensation's grants (critic t1 M3: `stockStep` read `null.kind` and
+  threw, before this design too), and hands Employer stock the rows without it.
+- One arithmetic: Equity compensation's `amt()` now calls `core/math/tax.js minimumTax` (the Federal estimate importing
+  career/equity would close an import cycle through known.js). The one change to its figures: the deduction for 65 and over
+  is added back, as Form 6251 has it since 2025 (no golden row and no invented household has someone 65 or over with
+  incentive options, so nothing it showed moves).
+- The 2024 table is the Federal estimate's own (`data/amt.js`, beside Equity compensation's 2025 and 2026, which it re-uses).
+- The step puts `amt` on the return only when the minimum tax is 50 cents or more or a spread is typed, so a plan that owes
+  none keeps the very same inputs object, and the next dollar's cost, every tax page and every figure are as before. With it
+  on, the next dollar costs the minimum tax's rate (26%, 28%, or 39% / 42% while the exemption shrinks).
+- Under the 2026 caps the state and local taxes alone (at most $40,400) cannot bring the minimum tax for a single person or
+  a couple on pay alone (the 22% and 24% brackets stay above 26% of what is left after the exemption); it comes with an
+  exercise, a big long-term gain that takes the exemption away, or a separate return. The "couple with large state taxes"
+  test shows this.
+
+**Left out**: interest on some local government bonds (private-activity bonds), depreciation and
+other business items, net operating losses, the foreign tax credit, the credit for minimum tax paid in earlier years (Form
+8801), a child under the kiddie tax's exemption limit.
+
+**Tests** (`module.test.mjs`, "minimum tax: ..."): the tables against the revenue procedures and their complete
+phase-outs; by hand on the 2026 tables: single $60,000 (none, the "under" sentence); $150,000 of pay and a $1,000,000
+long-term gain (204,154 the usual way, 218,420 the other, $14,266, pushed by income); the 50% and 25% phase-outs and the
+separate-return add-back (the instructions' own $660,200 example); a couple with $300,000 of pay and $45,000 of state and
+property tax itemized (31,148 against 37,900: none, every row); $150,000 and a $100,000 spread ($16,840, the walk's row, the
+next dollar at 26%, Withholding check's year tax $41,574); two children and an exercise (line 18 and the child tax credit);
+the 65-and-over add-back; separate returns (Bo's $16,954); every sentence and push sentence; Equity compensation's `amt()`
+equal to the shared one and its room less a typed spread. `tests/minimum-tax-invariance.test.mjs`: over every invented plan, none owes it, `known()` and every
+compute that reaches the step (66 modules) are byte for byte the code before (`MINIMUM_TAX.on = false`). At build time, against
+a worktree at 7d9ca39: every module's compute on the 33 base plans and 37 tax pages on 1,419 household variants, none
+different (system/audit and system/backups stamp the time and differ between any two runs).

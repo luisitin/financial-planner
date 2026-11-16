@@ -10,7 +10,8 @@
 // capital loss of up to 3,000 against any income, the taxation of Social Security benefits (the IRS
 // worksheet), the net investment income tax, the additional Medicare tax on wages, the child tax
 // credit with its phase-out and refundable part, the child and dependent care credit (careCredit below). Married filing
-// separately with `inputs.separate` is worked as two returns, one per spouse, and added up (separateTax). Not modelled: AMT,
+// separately with `inputs.separate` is worked as two returns, one per spouse, and added up (separateTax). The alternative
+// minimum tax only when `inputs.amt` asks for it (minimumTaxOn below; the Federal estimate's own return). Not modelled:
 // the earned income credit, education credits (the 20% business deduction and self-employment tax come from the pages
 // that pass them in: qbiDeduction here, the 15.3% on the Self-employment page).
 
@@ -190,7 +191,10 @@ export function careCredit(care, agi, status, params) {
  *   qbiDeduction (the 20% business deduction before its taxable-income limit, IRC 199A: taken after AGI, at most 20% of
  *   taxable income less net capital gain), qbiMinimum (the floor on it for an active business, IRC 199A(i); default 0),
  *   care (the child and dependent care credit: { expenses, persons, benefits, earnedLow }, see careCredit; absent = none),
- *   withheld, paid (estimated payments)
+ *   withheld, paid (estimated payments),
+ *   amt (optional: { table (the year's AMT figures: exemption, phaseOutStart, phaseOutRate, rate28From), salt (the state and
+ *   local taxes deducted on Schedule A), preference (the incentive-option spread) }: the alternative minimum tax is worked out
+ *   (minimumTaxOn) and added before the credits, Form 1040 line 17; absent = none, and the result is what it always was)
  * }
  */
 export function federalTax(inputs, params) {
@@ -248,9 +252,15 @@ export function federalTax(inputs, params) {
   // after 2021) and nothing carries forward. The child tax credit's own limit then counts it (Schedule 8812 Credit Limit
   // Worksheet A: line 18 less Schedule 3 lines 1 to 6, the care credit being line 2), so a care credit can turn some of the
   // child credit into its refundable part.
+  // the alternative minimum tax, only when asked for (`inputs.amt`): the part of the tax worked out the other way that is
+  // over the regular tax (Form 6251 line 11), added before the credits (Form 1040 line 17; line 18 = 16 + 17), so the care
+  // credit and the child tax credit are limited by the two together (Form 2441's and Schedule 8812's credit limit
+  // worksheets start from line 18; IRC 26(a))
+  const minimumTax = inputs.amt && inputs.amt.table ? minimumTaxOn({ filingStatus: status, agi, deduction: { amount: deduction, standard: std, itemizedLimit, senior, used: useItemized ? "itemized" : "standard", qbi }, income: { qualified }, ordinaryTaxable, incomeTax }, inputs.amt.table, { salt: inputs.amt.salt, preference: inputs.amt.preference }, params) : null;
+  const taxBeforeCredits = minimumTax ? incomeTax + minimumTax.amt : incomeTax;
   const care = careCredit(inputs.care, agi, status, params);
-  const careCreditAmount = care ? Math.min(care.tentative, incomeTax) : 0;
-  const taxAfterCare = incomeTax - careCreditAmount;
+  const careCreditAmount = care ? Math.min(care.tentative, taxBeforeCredits) : 0;
+  const taxAfterCare = taxBeforeCredits - careCreditAmount;
   // credits: child tax credit, phased out $50 per $1,000 (or part) of income over the threshold; the refundable part needs earned income
   let childTaxCredit = 0, refundable = 0;
   const kids = Math.max(0, Math.round(Number(inputs.dependentsUnder17) || 0)), others = Math.max(0, Math.round(Number(inputs.otherDependents) || 0));
@@ -288,7 +298,61 @@ export function federalTax(inputs, params) {
     bracketRate: ord.bracketRate, roomInBracket: ord.roomInBracket, nextRate: ord.nextRate,
     withheld, paid, balance: money(totalTax - withheld - paid),
   };
+  if (minimumTax) out.minimumTax = minimumTax;   // only when asked for: a result without it keeps the shape it had
   return out;
+}
+
+/**
+ * minimumTaxOn(r, A, { preference, salt }, params) -> the alternative minimum tax (Form 6251) on a return worked by
+ * federalTax (`r`: its filingStatus, agi, deduction, income.qualified, ordinaryTaxable, incomeTax), with `A` the year's
+ * figures ({ exemption, phaseOutStart, phaseOutRate, rate28From }, by filing status). Moved here from Equity compensation
+ * (its amt() now calls minimumTax below), so the Federal estimate and Equity compensation work it one way.
+ *   AMT income (line 4) = AGI less the deductions taken and the 20% business deduction (line 1b, which may be below zero),
+ *     + the standard deduction (not allowed for the AMT, IRC 56(b)(1)(E); line 2a) or, itemizing, the state and local taxes
+ *     deducted (56(b)(1)(A)(ii)) less the limit on itemized deductions, which does not apply to the AMT (56(b)(1)(F)),
+ *     + the deduction for people 65 and over (line 1a: "treated as a personal exemption that is added back", Instructions for
+ *     Form 6251, 2025 and the 2026 draft), + the incentive-option spread (56(b)(3); line 2i).
+ *   Filing separately, past the point where the exemption is gone the phase-out rate times the excess is added, at most the
+ *     exemption (IRC 55(d); the 2026 draft instructions, Line 4: over 640,200, 50% of the excess, at most 70,100).
+ *   Exemption (line 5) = the full amount less `phaseOutRate` x (AMT income - the start), at least 0.
+ *   Tentative (line 7) = 26% of the excess up to the 28% line, 28% above; qualified dividends and long-term gains keep
+ *     their own rates (Part III, stacked on the regular ordinary taxable income), never more than the flat figure.
+ *   AMT (line 11) = tentative - the regular income tax (line 10), at least 0.
+ * -> { status, amti, exemptionFull, exemption, excess, line28, tentative, regular, amt, addBack, addBackKind ("standard" |
+ *    "salt"), senior, preference, phaseOutStart, phaseOutRate }
+ */
+export function minimumTaxOn(r, A, { preference = 0, salt = 0 } = {}, params) {
+  const status = A.exemption[r.filingStatus] !== undefined ? r.filingStatus : "single";
+  const standard = r.deduction.used === "standard";
+  const addBack = standard ? r.deduction.standard : (Number(salt) || 0) - (r.deduction.itemizedLimit ?? 0);
+  const senior = Number(r.deduction.senior) || 0;
+  const pref = Number(preference) || 0;
+  let amti = r.agi - r.deduction.amount - (r.deduction.qbi ?? 0) + addBack + senior + pref;   // line 4; below zero means none
+  if (status === "married_separate") {
+    const ex = A.exemption.married_separate, gone = A.phaseOutStart.married_separate + ex / A.phaseOutRate;
+    if (amti > gone) amti += Math.min(A.phaseOutRate * (amti - gone), ex);
+  }
+  const exemptionFull = A.exemption[status];
+  const exemption = Math.max(0, exemptionFull - A.phaseOutRate * Math.max(0, amti - A.phaseOutStart[status]));
+  const excess = Math.max(0, amti - exemption);
+  const line = status === "married_separate" ? A.rate28From.married_separate : A.rate28From.all;
+  const flat = (x) => 0.26 * Math.min(x, line) + 0.28 * Math.max(0, x - line);
+  const q = Math.min(r.income.qualified, excess);
+  const tentative = q > 0 ? Math.min(flat(excess), flat(excess - q) + taxOnQualified(r.ordinaryTaxable, q, status, params).tax) : flat(excess);
+  return { status, amti, exemptionFull, exemption, excess, line28: line, tentative, regular: r.incomeTax, amt: Math.max(0, tentative - r.incomeTax),
+    addBack, addBackKind: standard ? "standard" : "salt", senior, preference: pref, phaseOutStart: A.phaseOutStart[status], phaseOutRate: A.phaseOutRate };
+}
+
+/**
+ * minimumTax(inputs, params, A, { preference, salt }) -> minimumTaxOn's figures for the return `inputs` gives (worked on
+ * the return without its own minimum tax: the regular tax is line 10). When `inputs.amt` is there (the Federal estimate's
+ * own return), its spread is already part of the year and is added to `preference`, and its state and local taxes stand
+ * in for a `salt` not given. Equity compensation's amt() is this.
+ */
+export function minimumTax(inputs, params, A, { preference = 0, salt } = {}) {
+  const own = inputs?.amt ?? null;
+  const r = federalTax(own ? { ...inputs, amt: undefined } : inputs, params);
+  return minimumTaxOn(r, A, { preference: (Number(own?.preference) || 0) + (Number(preference) || 0), salt: salt ?? own?.salt ?? 0 }, params);
 }
 
 /** The amounts of `inputs` that add up across two separate returns (the others, such as ages and dependents, belong to one). */
@@ -316,6 +380,9 @@ function separateTax(inputs, params) {
   const sum = (f) => results.reduce((s, r) => s + (Number(f(r)) || 0), 0);
   const me = results[target];
   const gross = sum((r) => r.income.gross), totalTax = money(sum((r) => r.totalTax));
+  // the alternative minimum tax: each return its own (each part's `amt`); the household's is the two added up, only when a
+  // part asked for it, so a result without it keeps the shape it had
+  const amtParts = results.some((r) => r.minimumTax) ? { minimumTax: { amt: sum((r) => r.minimumTax?.amt), tentative: sum((r) => r.minimumTax?.tentative), regular: sum((r) => r.incomeTax), amti: sum((r) => r.minimumTax?.amti), separate: true } } : {};
   return {
     year: params.year ?? null, filingStatus: "married_separate",
     income: Object.fromEntries(Object.keys(me.income).map((k) => [k, sum((r) => r.income[k])])),
@@ -329,6 +396,7 @@ function separateTax(inputs, params) {
     bracketRate: me.bracketRate, roomInBracket: me.roomInBracket, nextRate: me.nextRate,
     withheld: sum((r) => r.withheld), paid: sum((r) => r.paid), balance: money(sum((r) => r.balance)),
     separate: results.map((r, i) => ({ ...r, personId: parts[i].personId ?? null, name: parts[i].name ?? null })), separateTo: parts[target].personId ?? null,
+    ...amtParts,
   };
 }
 

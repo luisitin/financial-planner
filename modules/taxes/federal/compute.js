@@ -809,6 +809,9 @@ export function walk(r, b, nextDollar) {
   if (r.deduction.senior > 0) steps.push({ label: "Senior deduction", amount: -r.deduction.senior, sub: "$6,000 a person 65 or over, tax years 2025 to 2028, less as income rises" });
   steps.push({ label: "Taxable income", amount: r.taxableIncome, sub: r.qualifiedTaxable > 0 ? `${fmtInt(r.ordinaryTaxable)} at regular rates, ${fmtInt(r.qualifiedTaxable)} at the gains rates` : "" });
   steps.push({ label: "Income tax", amount: r.incomeTax, sub: r.qualifiedTax > 0 ? `${fmtInt(r.ordinaryTax)} at the tax rates, ${fmtInt(r.qualifiedTax)} on dividends and gains` : "at the tax rates" });
+  // the alternative minimum tax, when the page's own return counts it (known.js, minimum-tax.js): Form 1040 line 17
+  const mt = r.minimumTax;
+  if (mt && mt.amt >= 0.5) steps.push({ label: "Alternative minimum tax", amount: mt.amt, sub: mt.separate ? "on each return, the tax worked out the other way less the income tax above, when it is more" : `the tax worked out the other way, ${fmtInt(mt.tentative)}, less the ${fmtInt(mt.regular)} above` });
   if (r.credits.childTaxCredit > 0 || r.credits.refundable > 0) steps.push({ label: "Child tax credit", amount: -(r.credits.childTaxCredit + r.credits.refundable), sub: r.credits.refundable > 0 ? `${fmtInt(r.credits.refundable)} of it comes back as a refund` : `${b.people.dependentsUnder17} under 17` });
   if (r.credits.careCredit > 0 && r.credits.care) steps.push({ label: "Child and dependent care credit", amount: -r.credits.careCredit, sub: careSub(r.credits.care, b.care) });
   // no credit where one could be expected: the walk says why at 0, so a missing row is not a puzzle (an account that uses up

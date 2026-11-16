@@ -94,6 +94,6 @@ export function render(page, ctx) {
     else if (r.ready) sheet.append(section(ui, "Tax in retirement",
       ui.h("p", {}, `Over ${r.years === 1 ? "1 retirement year" : `${r.years} retirement years`} the plan pays about ${big(r.total)} of federal tax in today's dollars${r.years === 1 ? "" : `, ${big(r.average)} a year on average`}${r.peak && r.years > 1 ? `; the most in ${r.peak.year} (${big(r.peak.taxes)}${r.peak.why ? `, ${r.peak.why}` : ""})` : ""}.${r.bracketsOn ? "" : ` The plan itself uses a flat rate (which would charge ${big(r.flatTaxes)}); these figures run the same years through the real brackets.`}`),
       rtable(ui, [{ label: "Bracket", get: (b) => pct(b.rate, 0) }, { label: "Years in it", num: true, get: (b) => String(b.years) }], r.byBracket)));
-    sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. An estimate of federal income tax from the plan's figures, not a return: state tax, the alternative minimum tax and some credits are not included. Check with the return you file.`));
+    sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. An estimate of federal income tax from the plan's figures, not a return: state tax, some credits and, after this year, the alternative minimum tax are not included. Check with the return you file.`));
   });
 }
