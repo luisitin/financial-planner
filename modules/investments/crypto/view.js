@@ -4,12 +4,14 @@
 // knowing; adding a coin (open while there are none, else behind "+ Add another coin"); then one quiet card of
 // optional parts (core/ui/more.js; docs/OPTIONAL.md): "Which coins count as sold" (a sale of some of a coin worked three
 // ways, and the way your exchange counts, saved with Undo) and "Sales for your tax return" (record a coin sale, the year's
-// coin sales as Form 8949 lines, a CSV and a printout for a tax preparer); then "More on this".
+// coin sales as Form 8949 lines, a CSV and a printout for a tax preparer, and a file for tax software, TXF); then "More on
+// this".
 import { shareText } from "../tax-lots/compute.js";
 import { orderValue } from "../tax-lots/sell.js";
 import { compute, COINS, FALLS, SHARE } from "./compute.js";
 import { coinOrders, coinsOf, hasWays, methodOf, methodSaid, methodUndone, waysSentence, wayLine, washNote, unitsText, coinsText, METHODS, METHOD_TITLES, METHOD_SHORT, METHOD_CHIPS,
   recordable, planSale, applySale, removeSale, coinSales, coinSalesSentence, elsewhereSentence, recordedSentence, moneyNote, costNote, costMissing, lineText, recordWay, removeAsk, removedSaid, UNDONE_SALE, form8949Csv, dayText, FORM_NOTE, FORM_SCREEN } from "./sales.js";
+import { txfFile, txfOffer, txfStats, txfName, txfSaid, txfFailed, TXF_FORM_SCREEN, TXF_SCREEN, TXF_SEPARATE } from "./txf.js";
 import { parts, choice, links } from "../../../core/ui/more.js";
 import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
 
@@ -267,8 +269,15 @@ export function render(page, ctx) {
           store.update((p) => { removeSale(p, s.id, today); });
         }, { class: "secondary small" }))))));
       const say = ui.h("div", { "aria-live": "polite" }), sheetHost = ui.h("div");
-      out.push(ui.h("p", { class: "muted small" }, FORM_SCREEN), say,
-        ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(cs, say), { class: "secondary" }), ui.button("Print this list", () => printList(cs, sheetHost), { class: "secondary" })),
+      // the file for tax software beside the spreadsheet (txf.js): the sentence above names all three ways, the one thing to
+      // know first is under them; filing separately with sales of both of you (or in neither name), the list's own sentence
+      // and the one that says why there is no file. The green line after a tap lands right under the buttons, so they do not
+      // move under the thumb.
+      const offer = txfOffer(cs);
+      out.push(ui.h("p", { class: "muted small" }, offer.ok ? TXF_FORM_SCREEN : FORM_SCREEN),
+        ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(cs, say), { class: "secondary" }), ui.button("Print this list", () => printList(cs, sheetHost), { class: "secondary" }),
+          offer.ok ? ui.button("Save for tax software", () => saveTxf(cs, say), { class: "secondary" }) : null),
+        say, ui.h("p", { class: "muted small" }, offer.ok ? TXF_SCREEN : TXF_SEPARATE),
         sheetHost);
     }
     // the form: open while no sale is recorded, else behind "+ Record another sale" (R20)
@@ -319,6 +328,18 @@ export function render(page, ctx) {
       setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch { /* gone */ } }, 5000);
       say.replaceChildren?.(ui.notice("ok", `${name} is downloading. Open it with Excel, Numbers or Google Sheets, or send it to your tax preparer.`));
     } catch (e) { say.replaceChildren?.(ui.notice("error", `The file could not be made: ${e.message}. Reload the page and try again.`)); }
+  }
+  // the file for tax software (txf.js; made on this phone, nothing sent anywhere; nothing saved): its green line says what is
+  // left to type in the program
+  function saveTxf(cs, say) {
+    const name = txfName(cs);
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([txfFile(cs, { today })], { type: "application/octet-stream" }));
+      a.download = name; a.click();
+      setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch { /* gone */ } }, 5000);
+      say.replaceChildren?.(ui.notice("ok", txfSaid(name, txfStats(cs))));
+    } catch (e) { say.replaceChildren?.(ui.notice("error", txfFailed(e.message))); }
   }
   // the printout: the report kit's sheet, drawn on the tap and shown only by the printer (scoped to this page's own class)
   function printList(cs, host) {

@@ -746,10 +746,10 @@ test("S11: Sales for your tax return: Record the sale writes it, names it in gre
     const t = P.textOf(P.part("sales"));
     assert.match(t, /Recorded: 0\.15 BTC sold Oct 3, 2026 for \$14,100, oldest first: a gain of \$7,100 \(\+\$200 short-term, \+\$6,900 long-term\)\. It is now in this year's gains for your tax estimate\. The \$14,100 you got is not added to any account here: add it to the account it went to\. Undo/);
     assert.match(t, /Your 2026 coin sales: a short-term gain of \$200 and a long-term gain of \$6,900\. 0\.15 BTC · Oct 3, 2026 \+\$7,100 sold for \$14,100, cost \$7,000 0\.1 bought Mar 1, 2023: sold for \$9,400, cost \$2,500, \+\$6,900 long-term 0\.05 bought Dec 1, 2025: sold for \$4,700, cost \$4,500, \+\$200 short-term Remove this sale/);
-    assert.match(t, /For your tax preparer: print this list \(the printout also says where each line goes on the form\) or save it as a spreadsheet\. It is not a filing\. Save as a spreadsheet/);
+    assert.match(t, /For your tax preparer or your tax program: print this list \(the printout also says where each line goes on the form\) or save it as a spreadsheet or as a file for tax software\. It is not a filing\. Save as a spreadsheet/);
     assert.ok(!/Part I|G to L|adjustment/.test(t), "the form's details are on the printout, not on the phone (P2)");
     const buttons = P.part("sales").all().filter((e) => e.tagName === "BUTTON" && e.getAttribute("type") !== "submit");
-    assert.deepEqual(buttons.map((b) => [P.textOf(b), String(b.className)]), [["Undo", "secondary"], ["Remove this sale", "secondary small"], ["Save as a spreadsheet (CSV)", "secondary"], ["Print this list", "secondary"], ["+ Record another sale", "secondary"]], "all outlined: the page keeps no second filled button");
+    assert.deepEqual(buttons.map((b) => [P.textOf(b), String(b.className)]), [["Undo", "secondary"], ["Remove this sale", "secondary small"], ["Save as a spreadsheet (CSV)", "secondary"], ["Print this list", "secondary"], ["Save for tax software", "secondary"], ["+ Record another sale", "secondary"]], "all outlined: the page keeps no second filled button");
     // the headline follows the coins left: 0.1 BTC at 100,000
     assert.match(P.text(), /\$10,​?000 Crypto/);
     // Undo takes it back
@@ -881,4 +881,293 @@ test("invariance: the `coin` object on a recorded sale's rows changes no figure 
   const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith(".js") ? [path.join(dir, e.name)] : []));
   const readers = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core"))].filter((f) => !f.includes(`${path.sep}crypto${path.sep}`) && /\.coin\??\.(sale|sold|acquired|units|holding|lot)\b/.test(fs.readFileSync(f, "utf8")));
   assert.deepEqual(readers, []);
+});
+
+// =============================================================================================================================
+// Invariance of the file for tax software (gap list, next 60, item 51): digests written at a491122, before the TXF existed
+// (`PRINT=1 node --test modules/investments/crypto/module.test.mjs` writes them again; only do that on the old code). Over
+// every qa fixture plan, every invented household, the phone households, the empty plan and four plans with coin sales
+// recorded: Crypto's compute, the year's coin sales, the existing spreadsheet, the ways to count, Tax lots' compute, its
+// year's sales and its spreadsheet; and both pages as drawn, for every plan with no coin sale recorded (nothing new shows).
+// =============================================================================================================================
+test("invariance: the file for tax software changes no figure, no spreadsheet and, with no coin sale, no page (digests from a491122)", async () => {
+  const fs = await import("node:fs"); const path = await import("node:path"); const nodeCrypto = await import("node:crypto");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const TL = await import("../tax-lots/compute.js");
+  const TS = await import("../tax-lots/sell.js");
+  const { render: renderCrypto } = await import("./view.js");
+  const { render: renderLots } = await import("../tax-lots/view.js");
+  FakeElement.prototype.getBoundingClientRect ??= () => ({ top: 100, bottom: 140 });
+  const file = new URL("./invariance.json", import.meta.url);
+  const digest = (x) => nodeCrypto.createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+  const plans = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push([`fixture ${f}:${name}`, fn(T2)]);
+  }
+  for (const a of ARCHETYPES) plans.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") plans.push([`phone ${name}`, fn()]);
+  plans.push(["empty plan", emptyPlan()]);
+  // four plans with coin sales recorded: two sales (short and long); a purchase with no date sold; a cost not on file; filing separately
+  const two = wallet(); S.applySale(two, S.planSale(two, sell(0.15, 14100, "2026-10-03"), { today: T2 }), "s1", T2); S.applySale(two, S.planSale(two, sell(0.05, 4000, "2026-11-02"), { today: T2 }), "s2", T2);
+  const undated = wallet(); undated.holdings[0].lots.unshift({ id: "l0", date: null, shares: 0.02, cost: 300 }); undated.holdings[0].shares = 0.27; undated.holdings[0].costBasis = 17300;
+  S.applySale(undated, S.planSale(undated, sell(0.05, 5000, "2026-10-03"), { today: T2 }), "s1", T2);
+  const noCost = wallet(); noCost.holdings[0].shares = 0.3; noCost.holdings[0].costBasis = null;
+  S.applySale(noCost, S.planSale(noCost, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const apart = wallet(); apart.household.people.push({ id: "a2", name: "Adult 2", role: "partner", birthDate: "1981-01-01" }); apart.household.filingStatus = "married_separate"; apart.accounts[0].ownerId = "a1";
+  S.applySale(apart, S.planSale(apart, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  plans.push(["coins: two sales", two], ["coins: no date", undated], ["coins: no cost", noCost], ["coins: filing separately", apart], ["coins: none sold", wallet()]);
+  const drawn = (render, p, group, id) => {
+    const root = new FakeElement("main");
+    try {
+      render(root, { ui, fmt: { ...fmt, today: () => T2 }, plan: p, route: { group, id, rest: [], query: {} }, module: { group, id }, store: { get: () => p, update: () => {} }, redraw: () => {} });
+      return textOf(root);
+    } catch (e) { return `THROW ${e.message}`; }
+  };
+  const safe = (f) => { try { return f(); } catch (e) { return `THROW ${e.message}`; } };
+  const now = { today: T2, plans: {} };
+  for (const [name, raw] of plans) {
+    const p = migrate(structuredClone(raw));
+    const cs = safe(() => S.coinSales(p, { today: T2 })), ys = safe(() => TS.yearSales(p, { today: T2 }));
+    const row = {
+      crypto: digest(safe(() => compute(p, { today: T2 }))), coinSales: digest(cs), csv: digest(safe(() => S.form8949Csv(cs, p))),
+      coinOrders: digest(safe(() => S.coinOrders(p, { today: T2 }))), taxLots: digest(safe(() => TL.compute(p, { today: T2 }))),
+      yearSales: digest(ys), salesCsv: digest(safe(() => TS.salesCsv(ys, p))),
+    };
+    if (!(cs?.count > 0)) { row.cryptoPage = digest(drawn(renderCrypto, structuredClone(p), "investments", "crypto")); row.taxLotsPage = digest(drawn(renderLots, structuredClone(p), "investments", "tax-lots")); }
+    now.plans[name] = row;
+  }
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at a491122, before the file for tax software (TXF); module.test.mjs says how to write them again", ...now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.deepEqual(Object.keys(now.plans), Object.keys(was.plans), "the same plans");
+  for (const name of Object.keys(was.plans)) assert.deepEqual(now.plans[name], was.plans[name], name);
+});
+
+// =============================================================================================================================
+// A file for tax software (gap list, next 60, item 51; txf.js): the year's coin sales in the Tax Exchange Format, version 042
+// (README "A file for tax software (TXF)": GnuCash's txf.scm and taxtxf.scm, txf-generator 1.0.0, read 2026-11-16)
+// =============================================================================================================================
+const X = await import("./txf.js");
+/** Two sales, one Form 8949 line each: 0.1 BTC (the 2023 purchase, held over a year) for 9,400 on Oct 3, a long-term gain;
+ *  then 0.05 BTC (from the Dec 1, 2025 purchase at 90,000 a coin, cost 4,500) for 4,000 on Nov 2, a short-term loss. */
+function twoSales() {
+  const p = wallet();
+  S.applySale(p, S.planSale(p, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  S.applySale(p, S.planSale(p, sell(0.05, 4000, "2026-11-02"), { today: T2 }), "s2", T2);
+  return p;
+}
+
+test("TXF: the exact bytes of a two-sale file (a long-term gain, a short-term loss) against a hand-written one", () => {
+  const cs = S.coinSales(twoSales(), { today: T2 });
+  assert.deepEqual(cs.lines.map((l) => [l.description, l.term, l.cost, l.proceeds, l.gain]), [["0.1 BTC", "long", 2500, 9400, 6900], ["0.05 BTC", "short", 4500, 4000, -500]]);
+  const want = "V042\r\nAPlanner\r\nD11/16/2026\r\n^\r\n"
+    + "TD\r\nN714\r\nC1\r\nL1\r\nP0.1 BTC\r\nD03/01/2023\r\nD10/03/2026\r\n$2500.00\r\n$9400.00\r\n^\r\n"
+    + "TD\r\nN712\r\nC1\r\nL1\r\nP0.05 BTC\r\nD12/01/2025\r\nD11/02/2026\r\n$4500.00\r\n$4000.00\r\n^\r\n";
+  const got = X.txfFile(cs, { today: T2 });
+  assert.equal(got, want);
+  const bytes = Buffer.from(got, "latin1");
+  assert.ok(bytes.every((b) => b < 0x80), "plain ASCII");
+  assert.equal(got.split("\r\n").length - 1, 4 + 2 * 10, "a four-line header and ten lines a sale, each ended by CR LF");
+  assert.ok(!/(^|[^\r])\n/.test(got), "no bare line feed");
+  assert.equal(X.txfName(cs), "coin-sales-2026.txf");
+});
+
+test("TXF: a sale of each term gets its code (N712 short-term, Form 8949 box C; N714 long-term, box F); a loss is written as it is", () => {
+  assert.deepEqual(X.TXF_CODES, { short: "N712", long: "N714" });
+  const line = { description: "0.05 BTC", acquired: "2025-12-01", sold: "2026-11-02", cost: 4500, proceeds: 4000, gain: -500, term: "short" };
+  assert.deepEqual(X.txfRecord(line), ["TD", "N712", "C1", "L1", "P0.05 BTC", "D12/01/2025", "D11/02/2026", "$4500.00", "$4000.00", "^"]);
+  assert.deepEqual(X.txfRecord({ ...line, term: "long", acquired: "2023-03-01" }).slice(1, 7), ["N714", "C1", "L1", "P0.05 BTC", "D03/01/2023", "D11/02/2026"]);
+  // the record carries the cost and what was got, never the gain: the program works the loss out (-500 here)
+  assert.deepEqual(X.txfRecord(line).filter((x) => x.startsWith("$")), ["$4500.00", "$4000.00"], "the cost, then what was got; no sign and no gain");
+  // the same day sold and bought: a short-term sale with no gain
+  assert.deepEqual(X.txfRecord({ ...line, acquired: "2026-11-02", cost: 4000 }).slice(5, 9), ["D11/02/2026", "D11/02/2026", "$4000.00", "$4000.00"]);
+});
+
+test("TXF: a purchase with no date on file is a bare D; one with no cost on file comes in at $0; the green line says what to type (one sentence per case)", () => {
+  const p = wallet(); p.holdings[0].lots.unshift({ id: "l0", date: null, shares: 0.02, cost: 300 }); p.holdings[0].shares = 0.27; p.holdings[0].costBasis = 17300;
+  S.applySale(p, S.planSale(p, sell(0.05, 5000, "2026-10-03"), { today: T2 }), "s1", T2);
+  const cs = S.coinSales(p, { today: T2 });
+  assert.deepEqual(cs.lines.map((l) => [l.description, l.acquired, l.term, l.cost, l.proceeds]), [["0.02 BTC", null, "long", 300, 2000], ["0.03 BTC", "2023-03-01", "long", 750, 3000]]);
+  const recs = cs.lines.map(X.txfRecord);
+  assert.deepEqual(recs[0], ["TD", "N714", "C1", "L1", "P0.02 BTC", "D", "D10/03/2026", "$300.00", "$2000.00", "^"], "no date bought: a bare D (a purchase with no date counts long-term, as the page counts it)");
+  assert.equal(recs[1][5], "D03/01/2023");
+  assert.deepEqual(X.txfStats(cs), { lines: 2, noDate: 1, noSold: 0, noCost: 0 });
+  assert.match(X.txfFile(cs, { today: T2 }), /\r\nP0\.02 BTC\r\nD\r\nD10\/03\/2026\r\n\$300\.00\r\n\$2000\.00\r\n\^\r\n/);
+  // what was paid not on file: $0.00, as the spreadsheet counts it
+  const q = wallet(); q.holdings[0].shares = 0.3; q.holdings[0].costBasis = null;   // 0.05 BTC with no purchase and no cost
+  S.applySale(q, S.planSale(q, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const cq = S.coinSales(q, { today: T2 });
+  assert.deepEqual(cq.lines.map((l) => [l.description, l.acquired, l.noCost, X.txfRecord(l)[7]]), [["0.05 BTC", null, true, "$0.00"], ["0.05 BTC", "2023-03-01", false, "$1250.00"]]);
+  assert.deepEqual(X.txfStats(cq), { lines: 2, noDate: 1, noSold: 0, noCost: 1 });
+  // the green line: the file, then one sentence for each thing left to type
+  const said = (st) => X.txfSaid("coin-sales-2026.txf", st);
+  const BASE = "coin-sales-2026.txf is downloading. Import it into your tax program, then check that each sale is filed as crypto, not as stocks.";
+  assert.equal(said({ lines: 2, noDate: 0, noCost: 0 }), BASE);
+  assert.equal(said(X.txfStats(cs)), `${BASE} One line has no purchase date on file: type it there.`);
+  assert.equal(said({ noDate: 3 }), `${BASE} 3 lines have no purchase date on file: type them there.`);
+  assert.equal(said({ noCost: 1 }), `${BASE} One line has no cost on file and comes in at $0: type what you paid there.`);
+  assert.equal(said({ noCost: 2 }), `${BASE} 2 lines have no cost on file and come in at $0: type what you paid there.`);
+  assert.equal(said(X.txfStats(cq)), `${BASE} One line has no purchase date on file: type it there. One line has no cost on file and comes in at $0: type what you paid there.`);
+  assert.equal(said({ noSold: 1 }), `${BASE} One line has a date sold that is not on the calendar: type the right one there.`);
+  assert.equal(said({ noSold: 2 }), `${BASE} 2 lines have a date sold that is not on the calendar: type the right ones there.`);
+  // P4: no format name in the instruction beyond what a program's menu may show
+  assert.ok(!/importing a TXF file|\(TXF\)/.test(BASE));
+  // round 2, P3: short (six lines at 390 px before): the part before what is left to type is at most 22 words
+  assert.ok(BASE.split(/\s+/).length <= 22, `${BASE.split(/\s+/).length} words`);
+  assert.equal(X.txfFailed("no room"), "The file could not be made: no room. Reload the page and try again.");
+});
+
+test("TXF: the text and the money as the format carries them (one plain line; dollars to the cent, no commas)", () => {
+  assert.equal(X.txfText("0.1 BTC"), "0.1 BTC");
+  assert.equal(X.txfText("1,234.5 ÉTH"), "1,234.5 ETH", "accents dropped; commas kept");
+  assert.equal(X.txfText("0.1 X\r\nY\tZ\u0007"), "0.1 X Y Z", "a line break or a control character would end the line: a space");
+  assert.equal(X.txfText("0.1 🚀COIN"), "0.1 COIN", "outside plain ASCII: dropped");
+  assert.equal(X.txfText("  0.1   BTC  "), "0.1 BTC"); assert.equal(X.txfText(null), "");
+  assert.equal(X.txfMoney(9400), "$9400.00"); assert.equal(X.txfMoney(1234567.891), "$1234567.89"); assert.equal(X.txfMoney(11.705), "$11.71");
+  assert.equal(X.txfMoney(0), "$0.00"); assert.equal(X.txfMoney(-0.001), "$0.00"); assert.equal(X.txfMoney(null), "$0.00");
+  // the header's day: today, as the form writes a day; no today, an empty D
+  assert.ok(X.txfFile({ lines: [] }, { today: "2027-01-05" }).startsWith("V042\r\nAPlanner\r\nD01/05/2027\r\n^\r\n"));
+  assert.equal(X.txfFile({ lines: [] }), "V042\r\nAPlanner\r\nD\r\n^\r\n");
+});
+
+test("TXF: offered with a line; filing separately only when every line is one person's (one sentence why not)", () => {
+  const line = (personId) => ({ description: "0.1 BTC", acquired: "2023-03-01", sold: "2026-10-03", cost: 2500, proceeds: 9400, term: "long", personId });
+  assert.deepEqual(X.txfOffer({ lines: [] }), { ok: false, why: "none" });
+  assert.deepEqual(X.txfOffer(null), { ok: false, why: "none" });
+  assert.deepEqual(X.txfOffer({ separate: false, lines: [line(null), line("a1"), line("a2")] }), { ok: true, why: null }, "one return: every line");
+  assert.deepEqual(X.txfOffer({ separate: true, lines: [line("a1"), line("a1")] }), { ok: true, why: null }, "filing separately, all one person's");
+  assert.deepEqual(X.txfOffer({ separate: true, lines: [line("a1"), line("a2")] }), { ok: false, why: "separate" });
+  assert.deepEqual(X.txfOffer({ separate: true, lines: [line(null)] }), { ok: false, why: "separate" }, "a sale in neither name is split between the returns");
+  assert.equal(X.TXF_SEPARATE, "Filing separately, each of you reports your own sales, and a file for tax software would put them all on one return: split them between you from the spreadsheet or the printout.");
+});
+
+test("TXF, filing separately (P1): the sentence promises nothing the spreadsheet lacks, in both cases it is shown (sales in two names; a sale in neither name)", () => {
+  // a sale in neither name (a joint wallet): the spreadsheet has no "Whose" column, so the sentence may not say it has one
+  const r = wallet(); r.household.people.push({ id: "a2", name: "Adult 2", role: "partner", birthDate: "1981-01-01" }); r.household.filingStatus = "married_separate";
+  S.applySale(r, S.planSale(r, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const neither = S.coinSales(r, { today: T2 });
+  assert.deepEqual(neither.lines.map((l) => l.personId), [null]);
+  assert.deepEqual(X.txfOffer(neither), { ok: false, why: "separate" });
+  assert.equal(S.form8949Csv(neither, r).split("\r\n")[0], "What was sold,Date bought,Date sold,Sold for,Cost,Gain or loss,Short or long term", "no Whose column");
+  assert.ok(!/whose|column/i.test(X.TXF_SEPARATE), "no promise of a column the spreadsheet may not have");
+  // sales in two names: the spreadsheet says whose; the same sentence is still true
+  const two = structuredClone(r); two.taxes.gains[0].personId = "a1";
+  two.taxes.gains.push({ ...structuredClone(two.taxes.gains[0]), id: "s9-1", personId: "a2", coin: { ...two.taxes.gains[0].coin, sale: "s9" } });
+  const named = S.coinSales(two, { today: T2 });
+  assert.deepEqual(X.txfOffer(named), { ok: false, why: "separate" });
+  assert.match(S.form8949Csv(named, two).split("\r\n")[0], /,Whose$/);
+  assert.match(X.TXF_SEPARATE, /split them between you from the spreadsheet or the printout\.$/);
+});
+
+test("TXF, a hand-edited plan (F1, F3): a day not on the calendar is never written as a date; a coin with no symbol never reads undefined", async () => {
+  const p = wallet();
+  S.applySale(p, S.planSale(p, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  S.applySale(p, S.planSale(p, sell(0.05, 4000, "2026-11-02"), { today: T2 }), "s2", T2);
+  // F1: a day bought of 2026-13-45 (it has the shape of a day, not a day) and a day sold of 2026-02-31
+  p.taxes.gains[0].coin.acquired = "2026-13-45";
+  p.taxes.gains[1].coin.sold = "2026-02-31";
+  const cs = S.coinSales(p, { today: T2 });
+  const bad = cs.lines.find((l) => l.id === p.taxes.gains[0].id), late = cs.lines.find((l) => l.id === p.taxes.gains[1].id);
+  assert.equal(bad.acquired, null, "a day bought not on the calendar is a day not on file");
+  assert.equal(X.txfRecord(bad)[5], "D", "a bare D, as for any purchase with no date");
+  assert.equal(X.txfRecord(late)[6], "D", "a day sold not on the calendar: a bare D, never 02/31/2026");
+  const file = X.txfFile(cs, { today: T2 });
+  assert.ok(!/13\/45\/2026|02\/31\/2026/.test(file), "no impossible day in the file");
+  for (const d of file.split("\r\n").filter((x) => /^D./.test(x))) assert.ok(X.txfDay(`${d.slice(7, 11)}-${d.slice(1, 3)}-${d.slice(4, 6)}`), `${d} is a day on the calendar`);
+  assert.deepEqual(X.txfStats(cs), { lines: 2, noDate: 1, noSold: 1, noCost: 0 });
+  assert.equal(X.txfSaid("f.txf", X.txfStats(cs)), "f.txf is downloading. Import it into your tax program, then check that each sale is filed as crypto, not as stocks. One line has no purchase date on file: type it there. One line has a date sold that is not on the calendar: type the right one there.");
+  assert.match(S.form8949Csv(cs, p), /\r\n0\.1 BTC,unknown,10\/03\/2026,/, "the spreadsheet says unknown, as for any purchase with no date");
+  assert.equal(X.txfDay("2026-13-45"), ""); assert.equal(X.txfDay("2026-02-31"), ""); assert.equal(X.txfDay(null), ""); assert.equal(X.txfDay("2028-02-29"), "02/29/2028");
+  // F3: a coin row with no symbol (or a blank one): "coin", in the list, the spreadsheet and the file
+  const q = structuredClone(p); q.taxes.gains[0].coin.acquired = "2023-03-01"; q.taxes.gains[1].coin.sold = "2026-11-02";
+  delete q.taxes.gains[0].coin.symbol; q.taxes.gains[1].coin.symbol = "  ";
+  const cq = S.coinSales(q, { today: T2 });
+  assert.deepEqual(cq.lines.map((l) => [l.description, l.symbol]), [["0.1 coin", "coin"], ["0.05 coin", "coin"]]);
+  const all = X.txfFile(cq, { today: T2 }) + S.form8949Csv(cq, q);
+  assert.ok(!/undefined|null|NaN/.test(all), "never undefined in the file or the spreadsheet");
+  assert.match(X.txfFile(cq, { today: T2 }), /\r\nP0\.1 coin\r\n/);
+  const P = await page(q);
+  assert.ok(!/undefined|NaN|Invalid Date/.test(P.textOf(P.open("sales"))), "nor on the screen");
+});
+
+test("TXF (F2): a purchase with no date stays in the file with every other field, so no sale can go missing from it: one record per spreadsheet row, in its order", () => {
+  const p = wallet(); p.holdings[0].lots.unshift({ id: "l0", date: null, shares: 0.02, cost: 300 }); p.holdings[0].shares = 0.27; p.holdings[0].costBasis = 17300;
+  S.applySale(p, S.planSale(p, sell(0.05, 5000, "2026-10-03"), { today: T2 }), "s1", T2);
+  S.applySale(p, S.planSale(p, sell(0.05, 4000, "2026-11-02"), { today: T2 }), "s2", T2);
+  const cs = S.coinSales(p, { today: T2 });
+  const recs = X.txfFile(cs, { today: T2 }).split("\r\n^\r\n").slice(1).filter(Boolean).map((r) => r.split("\r\n"));
+  const rows = S.form8949Csv(cs, p).trim().split("\r\n").slice(1).map((r) => r.split(","));
+  assert.equal(recs.length, rows.length, "one record per line of the spreadsheet");
+  assert.deepEqual(recs.map((r) => [r[4], r[6], r[7], r[8]]), rows.map((r) => [`P${r[0]}`, `D${r[2]}`, `$${r[4]}`, `$${r[3]}`]), "each with its day sold, cost and what was got");
+  assert.deepEqual(recs.map((r) => r[5]), rows.map((r) => (r[1] === "unknown" ? "D" : `D${r[1]}`)), "the day bought, or a bare D where the spreadsheet says unknown");
+  assert.ok(recs.some((r) => r[5] === "D"));
+});
+
+test("TXF: the words under the buttons, before a tap, are one short sentence: the double count first (P2); the rest is said after the tap", () => {
+  // Instructions for Form 8949 (2025): "Do not use box C [F] to report digital asset transactions. Use box I [L]." -- the file
+  // cannot say I or L, so the check that the program files them as crypto is in the green line, where it is done
+  assert.equal(X.TXF_SCREEN, "If your tax program already has these sales from the yearly form your exchange sends (Form 1099-DA), skip the file for tax software: each sale would count twice.");
+  assert.match(X.TXF_SCREEN, /the yearly form your exchange sends \(Form 1099-DA\)/, "round 2, P2: the form is placed in plain words before its number");
+  assert.ok(X.TXF_SCREEN.split(/\s+/).length <= 30, "at most 30 words before a tap (it was about 70)");
+  assert.ok(!/G to L|Part I|N71\d|V042|TXF|\.txf|TaxCut/.test(X.TXF_SCREEN), "the format's name and codes, and the form's letters, stay in the README");
+  assert.match(X.txfSaid("f.txf"), /filed as crypto, not as stocks\./, "the check for coins is in the green line after the tap");
+  // round 2, P1: above the buttons, the list's own sentence naming the third way too, and nothing else changed in it
+  assert.equal(X.TXF_FORM_SCREEN, S.FORM_SCREEN.replace("For your tax preparer:", "For your tax preparer or your tax program:").replace("or save it as a spreadsheet.", "or save it as a spreadsheet or as a file for tax software."));
+  assert.notEqual(X.TXF_FORM_SCREEN, S.FORM_SCREEN);
+});
+
+test("TXF, round 2 (F4): a coin symbol with nothing the format can carry reads \"coin\", never a bare number", () => {
+  const p = wallet();
+  S.applySale(p, S.planSale(p, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const rec = (sym) => { const q = structuredClone(p); q.taxes.gains[0].coin.symbol = sym; const cs = S.coinSales(q, { today: T2 }); return [X.txfRecord(cs.lines[0])[4], S.form8949Csv(cs, q).split("\r\n")[1].split(",")[0]]; };
+  assert.deepEqual(rec("\u20bf"), ["P0.1 coin", "0.1 \u20bf"], "only a sign outside ASCII: \"coin\" in the file; the spreadsheet keeps the sign");
+  assert.deepEqual(rec("\u30d3\u30c3\u30c8"), ["P0.1 coin", "0.1 \u30d3\u30c3\u30c8"]);
+  assert.deepEqual(rec("\u00c9TH"), ["P0.1 ETH", "0.1 \u00c9TH"], "a symbol with letters the format carries keeps them");
+  assert.deepEqual(rec("BTC"), ["P0.1 BTC", "0.1 BTC"], "a plain symbol as it was");
+  assert.equal(X.txfWhat({ description: "0.1 BTC" }), "0.1 BTC", "a line with no symbol field: its words as they are");
+  for (const sym of ["\u20bf", "  ", "\u{1F680}"]) assert.doesNotMatch(X.txfWhat({ description: `0.1 ${sym}`, symbol: sym }), /^0\.1$/);
+});
+
+test("TXF on the page: beside the spreadsheet, outlined; the tap downloads the exact file, says the green line and saves nothing; filing separately with two owners, the sentence instead", async () => {
+  const P = await page(twoSales());
+  const sales = P.open("sales");
+  // round 2, P1: the sentence above the buttons names all three (the third had no lead-in)
+  assert.match(P.textOf(sales), /or save it as a spreadsheet or as a file for tax software\. It is not a filing\. Save as a spreadsheet \(CSV\) Print this list Save for tax software If your tax program already has these sales from the yearly form your exchange sends \(Form 1099-DA\), skip the file for tax software: each sale would count twice\./);
+  const btn = P.button("Save for tax software", sales);
+  assert.equal(String(btn.className), "secondary");
+  const blobs = [], made = [];
+  const hadUrl = globalThis.URL.createObjectURL, hadMake = globalThis.document.createElement;
+  globalThis.URL.createObjectURL = (b) => { blobs.push(b); return "blob:x"; };
+  globalThis.URL.revokeObjectURL ??= () => {};
+  globalThis.document.createElement = function (tag) { const e = hadMake.call(this, tag); if (String(tag).toLowerCase() === "a") made.push(e); return e; };
+  try { btn.click(); } finally { globalThis.URL.createObjectURL = hadUrl; globalThis.document.createElement = hadMake; }
+  assert.equal(blobs.length, 1); assert.equal(made.at(-1).download, "coin-sales-2026.txf");
+  assert.equal(await blobs[0].text(), X.txfFile(S.coinSales(twoSales(), { today: T2 }), { today: T2 }));
+  // P5: the green line lands right under the buttons (the buttons do not move under the thumb), above the sentence
+  assert.match(P.textOf(sales), /Print this list Save for tax software coin-sales-2026\.txf is downloading\. Import it into your tax program, then check that each sale is filed as crypto, not as stocks\. If your tax program already has/);
+  const kids = [...btn.parentNode.parentNode.childNodes];
+  assert.ok(kids.indexOf(kids.find((e) => e.all?.().some((x) => String(x.className).includes("notice")))) === kids.indexOf(btn.parentNode) + 1, "the green line's host follows the buttons' row");
+  assert.equal(P.saved.length, 0, "the file changes nothing in the plan");
+  // filing separately, sales in two names: no file, the sentence why
+  const r = wallet(); r.household.people.push({ id: "a2", name: "Adult 2", role: "partner", birthDate: "1981-01-01" }); r.household.filingStatus = "married_separate"; r.accounts[0].ownerId = "a1";
+  S.applySale(r, S.planSale(r, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const Q = await page(r);
+  const one = Q.open("sales");
+  assert.ok(Q.button("Save for tax software", one), "filing separately, every line one person's: the file is offered");
+  const g = Q.plan.taxes.gains.find((x) => x.coin);
+  const two = structuredClone(Q.plan); two.taxes.gains.push({ ...structuredClone(g), id: "s9-1", personId: "a2", coin: { ...g.coin, sale: "s9" } });
+  const R = await page(two);
+  const sep = R.open("sales");
+  assert.ok(!R.button("Save for tax software", sep));
+  assert.match(R.textOf(sep), /Print this list Filing separately, each of you reports your own sales, and a file for tax software would put them all on one return: split them between you from the spreadsheet or the printout\./);
+  assert.ok(R.textOf(sep).includes(S.FORM_SCREEN) && !R.textOf(sep).includes(X.TXF_FORM_SCREEN), "no file offered: the list's own sentence, two ways");
+  // no coin sale: no file, no words about it
+  const N = await page(wallet());
+  assert.ok(!/\.txf|TXF|tax software/.test(N.textOf(N.open("sales"))));
 });

@@ -20,7 +20,8 @@
 `{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, returns, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount }`.
 
 `sales.js` (pure, called by the view beside `compute()`, which it does not change): `coinsOf`, `coinOrders`, `methodOf`
-and the sentences, below.
+and the sentences, below. `txf.js` (pure, the same): the year's coin sales as a file for tax software, "A file for tax
+software (TXF)" below.
 
 ## Formulas
 - Kind (`cryptoKind`): a bitcoin or ether fund (`FUNDS`) is a fund wherever it is held, a crypto account included; any other
@@ -265,7 +266,11 @@ gives the list its lines, and it keeps one place for each sale: the rows are Cap
 - **The lines** (`coinSales`): the rows with a `coin` sold in the Federal estimate's year, one line each (Form 8949 asks for
   each transaction on its own row, and short- and long-term on separate Parts even when one sale took both); the figures
   are the rows' as they stand on Capital gains. Grouped by sale on screen, newest first; one line per row in the CSV and
-  the printout. Coin sales dated in another year are counted and named (`elsewhereSentence`).
+  the printout. Coin sales dated in another year are counted and named (`elsewhereSentence`). A hand-edited row is read
+  safely (gap item 51's review, 2026-11-16): a coin with no symbol, or a blank one, reads "coin" ("0.1 coin", never "0.1
+  undefined"), and a day bought that has the shape of a day but is not on the calendar (2026-13-45; `realDay`) is a day not
+  on file, as on the screen ("bought on a day not on file"), in the spreadsheet ("unknown") and in the file for tax software
+  (a bare D). Test: "TXF, a hand-edited plan (F1, F3) ...".
 - **Form 8949's columns** (Instructions for Form 8949 (2025), read 2026-11-16): (a) "For a digital asset, include the full
   name or an abbreviated symbol of the digital asset and the exact units sold" = "0.1 BTC" (units to eight places); (b) the
   date acquired; (c) the date sold; (d) proceeds; (e) cost; (h) gain or loss; short-term on Part I, long-term on Part II;
@@ -299,6 +304,130 @@ Builder's choices: one row per purchase taken (not "VARIOUS"), so each line has 
 match the 1099-DA; a coin sale is recorded for the Federal estimate's year only (its rows are that year's sales); the money
 from a sale is left to the person to put in an account, since the page cannot know where it went; a bitcoin fund's sale is
 not recorded here (its broker sends a 1099-B and it goes on Capital gains, with Tax lots' list).
+
+## A file for tax software (TXF) (gap list, next 60, item 51; `txf.js`)
+
+What the person gets: inside "Sales for your tax return", beside "Save as a spreadsheet (CSV)" and "Print this list", a third
+outlined button, **"Save for tax software"**: the same Form 8949 lines (`coinSales`) as a file some tax programs bring in,
+so the coin sales need not be typed again. The sentence above the buttons names all three ways (`TXF_FORM_SCREEN`: "For
+your tax preparer or your tax program: print this list (...) or save it as a spreadsheet or as a file for tax software. It is
+not a filing."; filing separately with no file, the list's own `FORM_SCREEN`). Under the buttons, one short sentence
+(`TXF_SCREEN`), the one thing to know before the tap: if the program already has these sales from the yearly form the
+exchange sends (Form 1099-DA), skip the file, or each sale counts twice. The rest is said where it is done, in the green line
+after the tap (`txfSaid`), which lands right under the buttons (they do not move under the thumb): the file's name, "Import
+it into your tax program, then check that each sale is filed as crypto, not as stocks." (the format has no place for coins),
+then what is left to type there (a purchase date, a cost not on file). The format's name stays off the button; which programs are known to read the file is
+here, not on the phone (simple first: the person who has the program finds its import). Nothing changes in the plan (no
+field, no save); the file is made on the phone. Crypto's first view is unchanged (the part is shut by default; `node
+qa/first-view-node.mjs investments/crypto`: 104/0/6/0/1/0 before and after).
+
+Worked example (module test "TXF: the exact bytes ..."): the single adult above sells 0.1 BTC (the Mar 1, 2023 purchase,
+cost $2,500) for $9,400 on Oct 3, 2026, and 0.05 BTC (from the Dec 1, 2025 purchase, cost $4,500) for $4,000 on Nov 2, 2026.
+The file, each line ending in a carriage return and a line feed:
+```
+V042 / APlanner / D11/16/2026 / ^
+TD / N714 / C1 / L1 / P0.1 BTC / D03/01/2023 / D10/03/2026 / $2500.00 / $9400.00 / ^
+TD / N712 / C1 / L1 / P0.05 BTC / D12/01/2025 / D11/02/2026 / $4500.00 / $4000.00 / ^
+```
+(the long-term gain of $6,900 and the short-term loss of $500 are for the program to work out: the record carries the cost and
+what was got, as Form 8949's columns (e) and (d)).
+
+**The format, and where it was read (2026-11-16).** Intuit's own description of version 042 ("TXF042.jsp" on
+turbotax.intuit.com, "TXF Spec of 11/30/11") could not be read: the host refuses this session's network, and GnuCash's
+source calls the link dead. What was read instead, all public, none of it code taken into this app:
+1. GnuCash, `libgnucash/tax/us/txf.scm`, stable branch (raw.githubusercontent.com/Gnucash/gnucash/stable/...; GPL, so a
+   reference for facts only): "Updated Jan 2019 to include codes for version 42"; N321 / N711 / N712 "Short Term gain/loss -
+   security" on "Form 8949 Copy A / B / C", N323 / N713 / N714 the long-term ones, each record format 5.
+2. GnuCash, `gnucash/report/reports/locale-specific/us/taxtxf.scm` (same; GPL, facts only): "exports TXF files for use by
+   TaxCut, TurboTax, etc."; "Based on TXF Spec of 11/30/11, V 042 ... the fields by format": format 5, a detail record: T, N,
+   C, L, P, D, D, $, $, $ (GnuCash marks it "Spec unclear, unverified" and does not write it); the header "V042", "A" and the
+   program, "D" and today as %m/%d/%Y, "^"; dates %m/%d/%Y; "C" and the copy (1); "L" 1 (counted only for format 3's payers);
+   "^" ends a record; each line ends CR LF ("TurboTax seems to want these"); for a date acquired it does not have, its format
+   4 record writes a bare "D".
+3. txf-generator 1.0.0 on npm (registry.npmjs.org; MIT, 2018): its README points to "TurboTax TXF 042" and says its file is
+   "uploaded as a supporting tax document to TurboTax"; its `sample-data/example.txf` writes, per sale, TD / N712 or N714 /
+   C / L1 / P<units> <symbol> / D<bought, mm/dd/yyyy> / D<sold> / $<cost> / $<proceeds> / ^.
+4. csv2txf (github.com/mbrukman/csv2txf, `csv2txf.py`, main branch, read 2026-11-16 via raw.githubusercontent.com; Apache
+   2.0; nothing copied, facts only): it writes the broker sales codes N321 / N323 (record format 5 in source 1, like N712 /
+   N714) as TD / N / C1 / L1 / P / D bought / D sold / $ cost / $ proceeds, and a third "$" only when the sale has an
+   adjustment ("if txn.adjustment"), then ^; the header V042 / A<program> / D<today, MM/DD/YYYY> / ^.
+Sources 2, 3 and 4 agree on the record's order (the description, the day bought, the day sold, the cost, the proceeds). The
+third "$" of format 5 (a wash sale's disallowed loss; GnuCash lists it, "Spec unclear, unverified") is left out: the
+wash-sale rule does not reach coins (above), and the two writers that do write format 5 (3 and 4) add it only for an
+adjustment. Whether a given program accepts the file could not be tried here (no tax program in this session): the page
+says to check each sale after the import, and the spreadsheet and printout are beside the button. (Gap item 51's review,
+2026-11-16, round 2: the record's two "$" fields were questioned against source 2's list; source 4 was read to settle it.)
+
+**The rules this file follows** (`txf.js`):
+- **Header**: `V042`, `APlanner` (the app's name), `D` + today as MM/DD/YYYY, `^`.
+- **One record per Form 8949 line** (`txfRecord`), in the list's order (by the day sold): `TD`, the code, `C1`, `L1`,
+  `P` + what was sold ("0.1 BTC", units to eight places, as column (a) asks), `D` + the day bought (a bare `D` when the
+  purchase has no date on file), `D` + the day sold, `$` + the cost, `$` + what was got, `^`. A line is never left out.
+- **Days** (`txfDay`): MM/DD/YYYY, and only a day on the calendar (`realDay`): a day sold that is not one (2026-02-31, only
+  in a hand-edited plan) is a bare `D` too, never "02/31/2026", and the green line says to type the right one.
+- **A purchase with no date: a bare `D`** (gap item 51's review, 2026-11-16: no program could be tried here, so this is
+  the reasoning). The format's own list of codes, as GnuCash keeps it (`txf-help.scm`), describes code N673 as "for use
+  when only the date sold and net sales amount are available and the date acquired and cost basis information is not
+  available and will be separately added in the tax software", and GnuCash writes that record with a bare `D` for the date
+  acquired (`taxtxf.scm`, format 4, "Spec clear, unverified"): an empty date acquired, left for the program, is the format's
+  own way. Leaving the line out instead would make the file "clean" but could leave a sale off the return, which is worse
+  than a blank the program shows and asks for; so the line stays, with every other field (test "TXF (F2): ... one record
+  per spreadsheet row"), and the green line says to type the date there. A program that refused the file would say so on
+  import, and the spreadsheet and printout are beside the button.
+- **Code by term**: short-term N712, long-term N714 (`TXF_CODES`): the Copy C codes, Form 8949 box C (Part I) and box F (Part
+  II), "no form from a broker". Instructions for Form 8949 (2025), irs.gov/pub/irs-pdf/i8949.pdf, read 2026-11-16: "Do not use
+  box C to report short-term digital asset transactions" ... "Use box I" (and L, not F, long-term) when no Form 1099-DA came;
+  G, H, J or K from the 1099-DA's "Applicable checkbox" when one did. Version 042 (2011) has no code for boxes G to L, so the
+  nearest is used (txf-generator's choice for coins too) and the page says to check the program files them as crypto. A
+  person whose exchange sent a 1099-DA will usually bring that in instead: the page says not to bring in both.
+- **Money**: `$`, dollars to the cent, two decimals, no thousands commas (`txfMoney`: "$9400.00"); the line's own figures,
+  exactly as the spreadsheet has them. A cost not on file is $0.00, as the spreadsheet counts it, and the green line says so.
+- **Text**: one line of plain ASCII (`txfText`): accents dropped, a line break or a control character as a space (a typed
+  symbol could otherwise end the line), any other character outside ASCII dropped, spaces squeezed. A symbol with nothing
+  left once that is done ("₿", or a name in another script) reads "coin" in the file (`txfWhat`: "P0.1 coin", never a bare
+  "P0.1"), as a line with no symbol does; the screen and the spreadsheet keep the symbol as typed.
+- **Lines** end CR LF; the file is ASCII; its name is `coin-sales-<year>.txf`; it is downloaded as
+  `application/octet-stream`, so a phone saves it rather than showing it.
+- **When it is offered** (`txfOffer`): with at least one line; filing separately, only when every line is one person's (a
+  file goes into one return, and a sale in neither name is split between the two returns, which a line cannot say); else the
+  sentence `TXF_SEPARATE` takes the button's place: split the sales between you from the spreadsheet or the printout. It does
+  not promise a "Whose" column: the spreadsheet has one only when a line names its owner (a joint wallet's sales name
+  none).
+
+**Programs.** Known to read TXF: TurboTax (GnuCash's taxtxf.scm and txf-generator's README, above) and TaxCut (GnuCash), the
+old name of H&R Block's tax program (that name change is general knowledge, not re-read this session). No list of which
+current versions accept it could be read, so the page names none and says "look for import (it may say TXF)": a program
+without it has no such menu, and the spreadsheet is beside the button.
+
+**The words** (each tested): `TXF_FORM_SCREEN` (the list's `FORM_SCREEN` naming the file too, and nothing else changed in
+it), `TXF_SCREEN` (one sentence, at most 30 words: the double count, the form placed in plain words before its number),
+`TXF_SEPARATE`, `txfSaid` (the file, import it and the check for crypto, at most 22 words; + one or several lines with no
+purchase date; + one or several with a day sold not on the calendar; + one or several with no cost on file), `txfFailed`
+(the spreadsheet's own error words).
+
+**Tests** (module.test.mjs, "TXF: ..."): the exact bytes of a two-sale file (a long-term gain, a short-term loss) against a
+hand-written one; a sale of each term and its code; a loss written as it is; a purchase with no date (a bare `D`) and a cost
+not on file ($0.00); one record per spreadsheet row, the no-date line kept (F2); a hand-edited plan: days not on the
+calendar and a coin with no symbol (F1, F3); the text and the money; when it is offered; filing separately, the sentence true
+with and without a "Whose" column (P1); the words, the one before the tap at most 30 words (P2); the page (three outlined
+buttons, the tap's file read back from the Blob, its name, the green line right under the buttons (P5), nothing saved;
+filing separately with two owners, the sentence and no button; no sale, no word of it); round 2: the sentence above the
+buttons names the file only when it is offered (P1), "the yearly form" (P2), the shorter green line (P3), a symbol with
+nothing the format carries reads "coin" (F4). **Invariance** ("invariance: the file for tax software ...", digests in `invariance.json`
+written at a491122 before the change, `PRINT=1` writes them again on old code only): over every qa fixture plan, the fourteen
+invented households, the phone households, the empty plan and five coin plans (two sales; a purchase with no date; a cost not
+on file; filing separately; none sold), Crypto's `compute`, `coinSales`, the spreadsheet (`form8949Csv`), `coinOrders`, Tax
+lots' `compute`, `yearSales` and its spreadsheet (`salesCsv`), and both pages as drawn for every plan with no coin sale: all
+equal.
+
+Builder's choices: the file is on Crypto only (Tax lots' typed sales keep no dates; its part links here when the year has a
+coin sale, and says nothing of a file otherwise); one record per Form 8949 line, as the spreadsheet; no box choice on screen
+(the format cannot say G to L, and a person with a 1099-DA brings that in instead); the header's program is "Planner"; no
+fold inside the part for the checks (parts never nest, docs/OPTIONAL.md R11): the one sentence before the tap, the rest in
+the green line after it.
+
+Not done: the wash-sale field (coins are not reached); a file per spouse when filing separately; the digital-asset boxes,
+which version 042 cannot write.
 
 ## Ideas / not yet
 - Prices fetched by the PC server from a public price feed (needs a network setting and a source).

@@ -178,7 +178,7 @@ export const recordable = (plan, today) => walletCoins(plan, today).map((x) => w
  *  recorded while the coins came off the list). */
 export const MIN_UNITS = 1e-8;
 /** A day that is on the calendar (2026-02-31 is not). */
-const realDay = (iso) => { const t = ISO.test(iso) ? new Date(`${iso}T00:00:00Z`) : null; return !!t && !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === iso; };
+export const realDay = (iso) => { const t = ISO.test(iso) ? new Date(`${iso}T00:00:00Z`) : null; return !!t && !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === iso; };
 
 /**
  * planSale(plan, { holdingId, units, proceeds, sold, picked? }, { today }) -> the sale worked out, nothing written:
@@ -320,7 +320,10 @@ export function coinSales(plan, params = {}) {
   const mine = all.filter((g) => Number(g.coin.sold.slice(0, 4)) === year);
   const lines = mine.map((g) => {
     const proceeds = cents(g.proceeds), cost = cents(g.basis), units = Number(g.coin.units) || 0;
-    return { id: g.id, sale: g.coin.sale ?? g.id, description: `${unitsText(units)} ${g.coin.symbol}`, symbol: g.coin.symbol, units, acquired: g.coin.acquired ?? null, sold: g.coin.sold, proceeds, cost, gain: cents(proceeds - cost), term: g.held === "long" ? "long" : "short", personId: g.personId ?? null, noCost: g.coin.noCost === true };
+    // a hand-edited row: a coin with no symbol reads "coin" (never "undefined"); a day bought that is not on the calendar
+    // (2026-13-45) is a day not on file, as the screen, the spreadsheet and the file for tax software then say
+    const symbol = typeof g.coin.symbol === "string" && g.coin.symbol.trim() ? g.coin.symbol : "coin";
+    return { id: g.id, sale: g.coin.sale ?? g.id, description: `${unitsText(units)} ${symbol}`, symbol, units, acquired: realDay(g.coin.acquired) ? g.coin.acquired : null, sold: g.coin.sold, proceeds, cost, gain: cents(proceeds - cost), term: g.held === "long" ? "long" : "short", personId: g.personId ?? null, noCost: g.coin.noCost === true };
   }).sort((a, b) => (a.sold < b.sold ? -1 : a.sold > b.sold ? 1 : 0));
   const bySale = new Map();
   for (const l of lines) { if (!bySale.has(l.sale)) bySale.set(l.sale, []); bySale.get(l.sale).push(l); }
