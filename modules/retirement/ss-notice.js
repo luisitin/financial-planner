@@ -6,6 +6,9 @@ import { ssMissingFor } from "../overview/setup/compute.js";
 
 let pending = null;   // the confirmation, shown on the next render (the shell re-renders after store.update)
 
+/** Does the notice show its filled "Add Social Security"? (A page passes it on as `quiet` to its own buttons: one filled button.) */
+export const ssAsks = (plan) => ssMissingFor(plan).length > 0;
+
 export function ssNotice(ctx) {
   const { ui, store, plan } = ctx;
   if (pending) { const msg = pending; pending = null; const n = ui.notice("ok", msg); setTimeout(() => n.remove(), 5000); return n; }

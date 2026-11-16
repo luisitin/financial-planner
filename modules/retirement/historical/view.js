@@ -8,7 +8,7 @@
 import { needButtons, unknownBody } from "../needs.js";
 import { unknownWords } from "../projection/compute.js";
 import { lineChart } from "../charts.js";
-import { ssNotice } from "../ss-notice.js";
+import { ssNotice, ssAsks } from "../ss-notice.js";
 import { needsWords } from "../../../core/words.js";
 import { parts } from "../../../core/ui/more.js";
 
@@ -87,7 +87,9 @@ export function growthHow(p, pct) {
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
-  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
+  const ssCard = ssNotice(ctx); if (ssCard) root.append(ssCard);   // no Social Security in the plan: say so first (ss-notice.js)
+  // its "Add Social Security" is the page's one filled button: the buttons below are outlined then (whole-app sweep x3, 2026-11-16)
+  const quiet = !!ssCard && ssAsks(plan);
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(n, cur);
   const answer = ui.h("div", {}, ui.h("p", { class: "lede", "aria-busy": "true" }, "Replaying history..."));
@@ -97,12 +99,12 @@ export function render(root, ctx) {
   ctx.computeRemote("retirement/historical", { today: fmt.today(), perpetual: true }).then((d) => {
     answer.replaceChildren();
     if (!d || !d.ready) {
-      answer.append(ui.h("p", {}, d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers."), needButtons(ui, d?.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")));
+      answer.append(ui.h("p", {}, d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers."), needButtons(ui, d?.missing, { quiet }) ?? ui.row(ui.h("a", { class: quiet ? "btn secondary" : "btn", href: "#/retirement/projection" }, "Open Will the money last?")));
       return;
     }
     // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
     // (whole-app sweep x3, 2026-11-16: "0 of 27 ... the money ran out from every start year" beside its "We don't know yet")
-    if (d.unknown) { answer.append(...unknownBody(ui, unknownWords(d.unknown, UNKNOWN_WHAT))); return; }
+    if (d.unknown) { answer.append(...unknownBody(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { quiet })); return; }
     const a = answerFor(d);
     answer.append(ui.stat(a.label, a.value), ui.h("p", {}, a.lede));
     // the chart stays on the first view (opt spec 6.1)

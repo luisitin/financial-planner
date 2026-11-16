@@ -311,3 +311,11 @@ test("Will the money last? and Quick answers: an empty 401(k) on file reads 'Not
 
 // ---- 2. one filled button per first view ----------------------------------------------------------------------------------------
 import { freelancerPlan } from "../qa/fixtures/round8-households.mjs";
+test("Chance the money lasts, If history repeated, How much to take out: with Social Security missing, its 'Add Social Security' is the one filled button; the page's own way on is outlined", async () => {
+  const p = migrate(freelancerPlan());
+  for (const key of ["retirement/monte-carlo", "retirement/historical", "retirement/withdrawal-strategy"]) {
+    const r = await drawn(key, p);
+    assert.deepEqual(r.filled, ["Add Social Security"], `${key}: ${r.filled}`);
+    assert.match(r.text, /Type what you'll spend ›/, `${key}: the way on is still there, outlined`);
+  }
+});

@@ -11,7 +11,7 @@ import { needButtons, unknownBody } from "../needs.js";
 import { rememberChance, chanceKey, whenCareful, monthlyOf, slot, busyWords, carefulChanceOf, badRunNote, inWords, linesOf, verdictOf, perHundred, CAREFUL_CHANCE, CAREFUL_CHOICES, GOOD_CHANCE, OK_CHANCE } from "../careful.js";
 import { buildInputs, healthAdded, unknownWords } from "../projection/compute.js";
 import { bandChart } from "../charts.js";
-import { ssNotice } from "../ss-notice.js";
+import { ssNotice, ssAsks } from "../ss-notice.js";
 import { needsWords, nameIn, namesIn, nameOf, verbFor } from "../../../core/words.js";
 import { parts, choice } from "../../../core/ui/more.js";
 import { runsCsv, DRAWS, drawOf, HISTORY } from "./compute.js";
@@ -58,7 +58,9 @@ export function answerFor(d, lines = { good: GOOD_CHANCE, ok: OK_CHANCE }, { try
 
 export function render(root, ctx) {
   const { ui, fmt, plan } = ctx;
-  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
+  const ssCard = ssNotice(ctx); if (ssCard) root.append(ssCard);   // no Social Security in the plan: say so first (ss-notice.js)
+  // its "Add Social Security" is the page's one filled button: the buttons below are outlined then (whole-app sweep x3, 2026-11-16)
+  const quiet = !!ssCard && ssAsks(plan);
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(n, cur);
   const said = pending; pending = null;
@@ -85,7 +87,7 @@ export function render(root, ctx) {
       // the same words as every page that cannot run yet (core/words.js needsWords; wording follow-up l001), never "...: see Will the money last?."
       const missing = d?.missing?.length ? needsWords("First, the plan needs", d.missing) : "First, the plan needs a few answers.";
       // the way on is a button to where each thing is typed, not a small link to a page that lists them again (stress test 2026-11-11, R-A9)
-      answer.append(ui.h("p", {}, missing), needButtons(ui, d?.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")));
+      answer.append(ui.h("p", {}, missing), needButtons(ui, d?.missing, { quiet }) ?? ui.row(ui.h("a", { class: quiet ? "btn secondary" : "btn", href: "#/retirement/projection" }, "Open Will the money last?")));
       return;
     }
     // kept for the visit, so Compare shows this same figure for this same plan (stress test 2026-11-11, W7); only the usual
@@ -94,7 +96,7 @@ export function render(root, ctx) {
     chances.set(chanceSlot(sentFor, way), d.successRate);
     // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
     // (whole-app sweep x3, 2026-11-16: "0 of 100 ... the money ran out in every pretend future" beside its "We don't know yet")
-    if (d.unknown) { answer.append(...unknownBody(ui, unknownWords(d.unknown, UNKNOWN_WHAT))); return; }
+    if (d.unknown) { answer.append(...unknownBody(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { quiet })); return; }
     const lines = linesOf(plan);
     const trying = way !== kept;
     const a = answerFor(d, lines, { trying });

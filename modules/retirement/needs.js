@@ -15,12 +15,14 @@ export function needAct(text) {
   return null;
 }
 
-/** needButtons(ui, missing) -> a ui.row of links, the first filled and the rest outlined, or null when none applies. */
-export function needButtons(ui, missing) {
+/** needButtons(ui, missing, { quiet }) -> a ui.row of links, the first filled and the rest outlined, or null when none applies.
+ * `quiet`: all outlined, when the page already shows a filled button above (the Social Security notice's "Add Social Security";
+ * whole-app sweep x3, 2026-11-16: two filled buttons on one first view). */
+export function needButtons(ui, missing, { quiet = false } = {}) {
   const seen = new Set();
   const acts = (missing ?? []).map(needAct).filter((a) => a && !seen.has(a.href) && seen.add(a.href));
   if (!acts.length) return null;
-  return ui.row(...acts.map((a, i) => ui.h("a", { class: i ? "btn secondary" : "btn", href: a.href }, a.label)));
+  return ui.row(...acts.map((a, i) => ui.h("a", { class: i || quiet ? "btn secondary" : "btn", href: a.href }, a.label)));
 }
 
 /**
@@ -28,10 +30,11 @@ export function needButtons(ui, missing) {
  * retirementUnknown; `words` from its unknownWords): the page's title, the one sentence, and one filled link to Net worth, as Will
  * the money last?, Goal seek and What matters most show it (whole-app sweep x3, 2026-11-16: twelve pages said "runs out at 65").
  */
-export function unknownHero(ui, words, { title = "We don't know yet" } = {}) {
-  return ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, title), ...unknownBody(ui, words));
+export function unknownHero(ui, words, { title = "We don't know yet", quiet = false } = {}) {
+  return ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, title), ...unknownBody(ui, words, { quiet }));
 }
-/** The hero's inside alone (the sentence and the link), for a page whose hero is already drawn while its answer is worked out. */
-export function unknownBody(ui, words) {
-  return [ui.h("p", { class: "lede" }, words), ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›"))];
+/** The hero's inside alone (the sentence and the link), for a page whose hero is already drawn while its answer is worked out.
+ * `quiet`: the link outlined, under the Social Security notice's filled "Add Social Security" (as Will the money last? does). */
+export function unknownBody(ui, words, { quiet = false } = {}) {
+  return [ui.h("p", { class: "lede" }, words), ui.row(ui.h("a", { class: quiet ? "btn secondary" : "btn", href: "#/balance/net-worth" }, "Add what you own ›"))];
 }

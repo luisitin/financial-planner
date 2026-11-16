@@ -5,7 +5,7 @@
 import { needButtons, unknownHero } from "../needs.js";
 import { needItem } from "../../../core/words.js";
 import { compute, firstYear, DESCRIPTIONS, wayName, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS, guardNudgeWords, guardHowWords, guardDoneWords, guardUndoneWords, applyGuardStep } from "./compute.js";
-import { ssNotice } from "../ss-notice.js";
+import { ssNotice, ssAsks } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
 import { saveSpendingFigure, FLOOR_MONTHLY_CEILING, unknownWords } from "../projection/compute.js";
@@ -43,7 +43,9 @@ const sentences = (t) => String(t).split(/(?<=\.) (?=[A-Z])/);
 const decade = (yr) => `the ${Math.floor(Number(yr) / 10) * 10}s`;
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
-  { const ss = ssNotice(ctx); if (ss) root.append(ss); }   // no Social Security in the plan: say so first (ss-notice.js)
+  const ssCard = ssNotice(ctx); if (ssCard) root.append(ssCard);   // no Social Security in the plan: say so first (ss-notice.js)
+  // its "Add Social Security" is the page's one filled button: the buttons below are outlined then (whole-app sweep x3, 2026-11-16)
+  const quiet = !!ssCard && ssAsks(plan);
   const cur = plan.meta.currency;
   const today = fmt.today();
   const d = compute(plan, { today });
@@ -51,12 +53,12 @@ export function render(root, ctx) {
   // "Use this one" tapped inside "2 more ways": that part stays open on this drawing (docs/OPTIONAL.md R17)
   const waysOpen = !!pending && typeof pending === "object" && pending.part === "ways";
   if (!d.ready) {
-    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first:"), ui.h("ul", {}, (d.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
+    root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first:"), ui.h("ul", {}, (d.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing, { quiet }) ?? ui.row(ui.h("a", { class: quiet ? "btn secondary" : "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
   // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
   // (whole-app sweep x3, 2026-11-16: "At this spending the money runs out at 65" beside its "We don't know yet")
-  if (d.unknown) { root.append(unknownHero(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { title: "How much to take out each year" })); return; }
+  if (d.unknown) { root.append(unknownHero(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { title: "How much to take out each year", quiet })); return; }
   // the plan's end age, for wording only: a run that fails in the last year has lasted to the end
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const endAge = Math.max(...adults.map((p) => Number(p.lifeExpectancy ?? plan.assumptions?.planEndAge ?? 95)), 0) || Number(plan.assumptions?.planEndAge ?? 95);

@@ -656,3 +656,9 @@ the projection's own rule) only when that holds, and the page then shows, under 
 page's question ("how much you could take out each year", `UNKNOWN_WHAT`) and one filled link, "Add what you own ›"; nothing
 else. For every other plan the result is the same as before (absent field; the invariance test compares it with ce79d70 over the
 invented households).
+
+## One filled button under the Social Security notice (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+With Social Security missing, the notice at the top (ss-notice.js) has the filled "Add Social Security"; the page's own way on
+(`needButtons`, the "we can't say yet" link, the fallback "Open Will the money last?") is then outlined (`quiet`, from
+`ssAsks(plan)`), as Will the money last? already does. The sweep found two filled buttons for the round 8 freelancer ("Add
+Social Security" and "Type what you'll spend ›"). Nothing else changes.
