@@ -88,8 +88,10 @@ export function render(page, ctx) {
   root.append(ui.h("section", { class: "card" }, ui.h("h1", {}, "Voice notes"),
     ui.h("p", { class: "lede" }, "Say or type what happened, the way you would tell a friend: \"spent 42 dollars at Corner Market yesterday\", \"my savings is at 12,400\", \"rent is due on the 1st\", \"I owe 4,000 on my Visa at 24 percent\". You check each entry, and nothing is saved until you tap Add.")));
 
-  // the note
-  const box = ui.h("textarea", { class: "vn-note", rows: 4, "aria-label": "Your note", placeholder: "Type or speak your note here", onInput: (e) => { text = e.target.value; } });
+  // the note. The page empties it itself once it has used what is typed (tidy() below), so the shell's typing memory lets a save
+  // here have the last word on it (data-page-clears, core/place.js): after the last Add the box stays empty, never "Not saved yet"
+  // with the note back in it (recheck leftover y2 (f)); with no save, a note typed before a reload still comes back
+  const box = ui.h("textarea", { class: "vn-note", rows: 4, "aria-label": "Your note", placeholder: "Type or speak your note here", "data-page-clears": "", onInput: (e) => { text = e.target.value; } });
   box.value = text;
   live = { box, redraw };
   const readBtn = ui.button(inflight ? "Reading your note…" : "Read my note", () => read());

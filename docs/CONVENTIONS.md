@@ -77,7 +77,10 @@ no "open sections" memory of their own):
   typing let go because the saved figure under it moved meanwhile, said once on its own page when it is found. Typing is
   kept in this tab only (sessionStorage, the pretend plan apart), never on System pages, never in a password, key,
   token, secret or PIN box, never in a search box (`type="search"`: a search is not "not saved"). Mark any other box
-  (or its section) that must never be kept with `data-no-keep`. These words are quiet on purpose (muted, one outlined
+  (or its section) that must never be kept with `data-no-keep`. Mark a box in no form that the page empties itself once it
+  has used what is typed (Voice notes' note box, whose Add buttons are in other cards) with `data-page-clears`: on the
+  redraw of a save anywhere on its page, what the page draws in it stands (empty, or what is left) and the typing goes
+  quietly; with no save it is kept and put back as any other. These words are quiet on purpose (muted, one outlined
   "Open it", "Undo my typing" as a text button) and show only when something was typed: a page adds no cue of its own.
 - **Notices need no timer.** A green or red notice stays until the next draw or the person's own tap; a page's
   `setTimeout(() => n.remove(), ...)` is ignored, so nothing moves by itself.

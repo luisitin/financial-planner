@@ -901,3 +901,86 @@ test("invariance: sections the page draws as before go back exactly as before (B
     moreKept.clear("all");
   }
 });
+
+// ---------------------------------------------------------------- a box the page empties itself (y2 (f), 2026-11-16)
+// Voice notes: the note box is in one card, each entry's Add in another. After the last Add the page draws the box empty (every
+// sentence was used), and the typing memory put the note back with "Not saved yet. Undo my typing". A box marked
+// data-page-clears is one the page empties itself once it has used what is typed: a save anywhere on its page lets its typing go
+// on that save's redraw, unless the page draws it the same; with no save it is kept and put back after a reload, as before.
+/** Voice notes as the page draws it: "Your note" (a box in no form) in one card, "What the app found" with an Add in another.
+ *  `mark`: the box carries data-page-clears (as ai/notes/view.js draws it). */
+function notesCard(note, { mark = true } = {}) {
+  for (const c of [...dom.root.childNodes]) c.parentNode = null;
+  dom.root.childNodes = [];
+  const box = uiH("textarea", { "aria-label": "Your note", ...(mark ? { "data-page-clears": "" } : {}) });
+  box.value = note;
+  const add = uiH("button", { type: "button" }, "Add");
+  dom.root.append(uiH("section", { class: "card" }, uiH("h2", {}, "Your note"), uiH("label", { class: "field" }, uiH("span", { class: "field-label" }, "What happened"), box)),
+    uiH("section", { class: "card vn-found" }, uiH("h2", {}, "What the app found (1)"), add));
+  return { box, add };
+}
+const NOTE = "Spent 42 dollars at Corner Market yesterday. Rent is due on the 1st.";
+const cueOn = (box) => !!box.parentNode.querySelector(".place-cue");
+test("y2 (f) a box the page empties itself: after the last Add the note box stays empty, with no 'Not saved yet' and nothing kept", async () => {
+  roomy("#/ai/notes");
+  place.visit({ v: "y2-f", n: 1 }, "#/ai/notes");
+  echoes.length = 0;
+  let n = notesCard("");
+  typeInto(n.box, NOTE); await later();
+  place.remember();
+  // "Read my note": the page draws itself again with the note in the box (no save): kept as it is
+  n = notesCard(NOTE); place._test.watch([added(dom.root.querySelector("section"))]); await later();
+  assert.equal(n.box.value, NOTE);
+  // the last entry's Add: a save, and the page draws the box empty (every sentence used)
+  tap(n.add);
+  n = savedAndRedrawn(() => notesCard(""));
+  await later();
+  assert.equal(n.box.value, "", "the box stays empty");
+  assert.equal(cueOn(n.box), false, "no 'Not saved yet'");
+  assert.deepEqual(echoes.filter((t) => /not saved|not put back/i.test(t)), [], "nothing said about typing");
+  assert.equal(place.hasTyping(), false, "nothing kept for a reload");
+  place.forgetAll();
+});
+test("y2 (f) a box the page empties itself: after an Add that leaves part of the note, what the page draws stands and nothing is said", async () => {
+  roomy("#/ai/notes");
+  place.visit({ v: "y2-f", n: 2 }, "#/ai/notes");
+  echoes.length = 0;
+  let n = notesCard("");
+  typeInto(n.box, NOTE); await later();
+  place.remember();
+  tap(n.add);
+  n = savedAndRedrawn(() => notesCard("Rent is due on the 1st."));
+  await later(); place.tell(dom.root);
+  assert.equal(n.box.value, "Rent is due on the 1st.");
+  assert.equal(cueOn(n.box), false);
+  assert.deepEqual(said(), [], "no 'was not put back' line: the page used the rest");
+  place.forgetAll();
+});
+test("y2 (f) a box the page empties itself: with no save, a reload puts the note back with 'Not saved yet', as before", async () => {
+  roomy("#/ai/notes");
+  place.visit({ v: "y2-f", n: 3 }, "#/ai/notes");
+  echoes.length = 0;
+  let n = notesCard("");
+  typeInto(n.box, NOTE); await later();
+  place.remember();
+  place.visit({ v: "y2-f", n: 3 }, "#/ai/notes");    // a reload: the page forgot its note and draws the box empty
+  n = notesCard("");
+  place.refill(dom.root); place.tell(dom.root);
+  assert.equal(n.box.value, NOTE, "put back");
+  assert.equal(cueOn(n.box), true, "with 'Not saved yet' and 'Undo my typing'");
+  place.forgetAll();
+});
+test("y2 (f) invariance: the same page without the mark keeps the typing through a save elsewhere, as before (put back, with its cue)", async () => {
+  roomy("#/ai/notes");
+  place.visit({ v: "y2-f", n: 4 }, "#/ai/notes");
+  echoes.length = 0;
+  let n = notesCard("", { mark: false });
+  typeInto(n.box, NOTE); await later();
+  place.remember();
+  tap(n.add);
+  n = savedAndRedrawn(() => notesCard("", { mark: false }));
+  await later();
+  assert.equal(n.box.value, NOTE, "put back, as at 398a01e");
+  assert.equal(cueOn(n.box), true);
+  place.forgetAll();
+});

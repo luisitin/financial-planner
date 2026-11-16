@@ -402,10 +402,16 @@ loan, $12,000 at 6%, $410 a month. Nothing reaches the plan before "Add these de
   entry's amount is the money said as paid ("Spent 45 at the dentist, owe 20 more": $45 spent at Dentist and $20 owed
   to Dentist; fix round 1, 2026-11-16: the spend was dropped); otherwise the line says to say it on its own. The
   sentence leaves the box only once every entry from it is added.
-- After an Add, the shell's typing memory (core/place.js) can put the note back in the box with "Not saved yet. Undo my
-  typing", because the Add button is in another card than the box; so it is for every kind of entry since dca545e.
-  Left for the lead: the fix is in core/place.js, or `data-no-keep` on the box (which loses a note typed before a
-  reload).
+- After an Add, the shell's typing memory (core/place.js) put the note back in the box with "Not saved yet. Undo my
+  typing", because the Add button is in another card than the box (for every kind of entry since dca545e). Fixed
+  (recheck leftover y2 (f), 2026-11-16) in core/place.js, not with `data-no-keep` (which would lose a note typed before a
+  reload): the box carries `data-page-clears`, "the page empties this box itself once it has used what is typed". On the
+  redraw of a save anywhere on the page, the box as the page draws it stands: after the last Add it is empty and stays
+  empty, with no cue; after an Add that leaves part of the note, what is left stands and nothing is said (it was "Some of
+  what you typed was not put back" at the bottom before). With no save (a reload, Back) the note typed is put back as
+  before. Tests: the mark on the box (module.test.mjs) and the four cases in tests/place.test.mjs (last Add, an Add that
+  leaves part, a reload with no save, and the same page without the mark behaving as at 398a01e); the page's words for
+  every invented household are those of 398a01e (`y2-invariance.json`, written with `PRINT_Y2=1` on that code).
 
 ## Ideas / not yet
 - Speech to text on the PC (Whisper through the server), so the sound never leaves home.

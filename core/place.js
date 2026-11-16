@@ -401,6 +401,13 @@ export function saved(changed) {
   if (!changed || !a || now() - a.at > 1500) return;
   if (a.kind === "change") { if (typeof window !== "undefined" && window.event === a.ev) { base.set(a.el, valOf(a.el)); remember(); dirty.delete(a.el); } return; }
   used = { act: a, at: now(), mark: actMark };
+  // a box the page empties itself once it has used what is typed (data-page-clears): a save anywhere on its page may have used
+  // it, wherever the button is; seen on this save's redraw (refill: `cleared`)
+  const cl = [...dirty].filter((c) => !c.form && up(c, "[data-page-clears]") && (where.get(c) ?? shownKey) === shownKey).map(keyOf);
+  if (cl.length) {
+    if (!cleared || cleared.mark !== actMark || cleared.key !== shownKey) cleared = { key: shownKey, ks: new Set(), mark: actMark };
+    for (const k of cl) cleared.ks.add(k);
+  }
   const scope = a.form ?? up(a.el, "form") ?? up(a.el, ".card, section, details, fieldset");
   if (!scope) return;
   if (isForm(scope)) { forget(scope); return; }
@@ -417,6 +424,12 @@ export function saved(changed) {
  * (refill, before any other tap or key): drawn with the typing, or with another figure (the page's rounding), the save
  * took it; drawn as before the typing, the save did not use that box, and its typing is put back as any other. */
 let covered = null;   // { key, ks: Set of box keys, mark }
+/** Boxes the page empties itself (marked data-page-clears: Voice notes' note box, whose Add buttons are in another card) that were
+ * typed in when a save happened on their page. On that save's redraw, drawn the same, the typing is kept as before; drawn otherwise
+ * (empty: every sentence used; or with what is left), that is the page's answer and the typing goes quietly: never put back with
+ * "Not saved yet", never "not put back". With no save (a reload, Back), such a box is kept and put back as any other (recheck
+ * leftover y2 (f), 2026-11-16: after every entry of a note was added, the note came back in the box with "Not saved yet"). */
+let cleared = null;   // { key, ks: Set of box keys, mark }
 // ---------------------------------------------------------------- cues: "Not saved yet"
 function undoBtn(run) { const b = document.createElement("button"); b.type = "button"; b.className = "place-undo"; b.dataset.place = "undo"; b.textContent = "Undo my typing"; b.addEventListener("click", run); return b; }
 function cueBox(c, undo) {
@@ -475,9 +488,12 @@ export function refill(root = pageRoot()) {
     $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)?.remove();
   }
   const cover = covered && covered.key === shownKey && covered.mark === actMark ? covered.ks : null;
+  const clear = cleared && cleared.key === shownKey && cleared.mark === actMark ? cleared.ks : null;
   let marked = false;
   rec.loose = rec.loose.filter((x) => {
     const c = locate(root, x.loc); if (!c || !isControl(c) || c.form || seenForms.has(c)) return true; seenForms.add(c);
+    // a box the page empties itself, on the redraw of a save: drawn otherwise than the typing, the page used it (`cleared`)
+    if (clear?.delete(x.loc.k) && !dirty.has(c) && !sameFigure(valOf(c), x.v)) { changed = true; return false; }
     // a box the save just covered, on its redraw: drawn as before the typing, the save did not use it (put back below);
     // else the save wrote its figure, and the page took it
     if (cover?.delete(x.loc.k) && !dirty.has(c) && boxVerdict(x.d, x.v, valOf(c)) !== "fill") { x.took = 1; marked = true; }
@@ -707,7 +723,7 @@ let curN = null;
 /** A new visit to a page: the shell calls it before the draw. `entry` is the router's ({ v, n }). */
 export function visit(entry, key) {
   if (entry?.v && entry.v !== visitId) loadRecords(entry.v);
-  curN = entry?.n ?? null; shownKey = key; told.clear(); holding?.("replaced"); sentForm = null; letGo = 0; letGoTitle = ""; covered = null;
+  curN = entry?.n ?? null; shownKey = key; told.clear(); holding?.("replaced"); sentForm = null; letGo = 0; letGoTitle = ""; covered = null; cleared = null;
   for (const c of [...dirty]) if (!c.isConnected) dirty.delete(c);
 }
 /** The shell is about to clear the page: the box with the cursor lets go of it quietly, so the change it fires as it goes

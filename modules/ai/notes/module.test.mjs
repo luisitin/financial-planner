@@ -1066,3 +1066,64 @@ test("the invariance corpus holds no debt sentence (so the digests above cover o
   for (const note of INV.corpus) for (const s of sentencesOf(note)) assert.equal(isDebtSentence(s), false, s);
   assert.ok(INV.corpus.length > 500);
 });
+
+// ---------------------------------------------------------------- leftovers of the rechecks (y2, 2026-11-16)
+/** Every invented household (y2 invariance, against 398a01e): the qa fixture plans, the qa/households archetypes, the phone,
+ *  round 8 and persona households, and the empty plan. */
+async function y2Plans(today) {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { migrate, emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const out = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`fixture ${f}:${name}`, fn(today)]);
+  }
+  for (const a of ARCHETYPES) out.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) out.push([`persona ${n}`, personas.finishSetup(n, personas[n](today), today)]);
+  out.push(["empty plan", blank()]);
+  return out.map(([name, p]) => [name, migrate(structuredClone(p))]);
+}
+const y2Digest = async (x) => (await import("node:crypto")).createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+const TY2 = "2026-11-16";
+/** The Voice notes page drawn in the fake DOM with the AI helper off, as the household's view draws it. */
+async function notesPage(plan) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const root = new FakeElement("main");
+  globalThis.requestAnimationFrame ??= (f) => setTimeout(f, 0);
+  render(root, { ui, fmt: { ...fmt, today: () => TY2 }, plan, route: { rest: [] }, store: { get: () => plan, update: () => {} }, view: { build: false }, live: { ai: false }, ai: { status: async () => "off", chat: async () => null } });
+  return { root, text: () => textOf(root), box: () => root.all().find((e) => e.tagName === "TEXTAREA" && e.getAttribute("aria-label") === "Your note") };
+}
+// (f) After every entry of a note was added, the shell's typing memory (core/place.js) put the note back in the box with "Not saved
+// yet": the box is in one card and Add in another, so the save did not cover it. The box says now that the page empties it itself
+// once it has used what is typed (data-page-clears, core/place.js; its tests are in tests/place.test.mjs).
+test("y2 (f) the note box is marked as one the page empties itself once it has used what is typed (core/place.js keeps it only until a save)", async () => {
+  const p = await notesPage(familyPlan(TY2));
+  assert.ok(p.box(), "the box is there");
+  assert.equal(p.box().hasAttribute("data-page-clears"), true);
+  assert.equal(p.box().hasAttribute("data-no-keep"), false, "a note typed before a reload is still put back");
+});
+// (f) invariance: the page's words are those of 398a01e for every household (only the box's mark is new). Written with
+// PRINT_Y2=1 on 398a01e's code.
+test("y2 (f) invariance: the Voice notes page's words for every household are those of 398a01e", async () => {
+  const fs = await import("node:fs");
+  const file = new URL("./y2-invariance.json", import.meta.url);
+  const now = {};
+  for (const [name, plan] of await y2Plans(TY2)) {
+    let words;
+    try { words = (await notesPage(plan)).text(); } catch (e) { words = `THROW ${e.message}`; }
+    now[name] = await y2Digest(words);
+  }
+  if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(was).length >= 45, `${Object.keys(was).length} households`);
+  assert.deepEqual(now, was);
+});
