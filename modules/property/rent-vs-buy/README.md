@@ -63,6 +63,36 @@ years, the chart, the first year a month, then "The figures" (a part: open with 
   that year: the buyer has its value less selling costs and the loan, plus investments; the renter, the investments.").
 - Mortgage insurance under 20% down, capital gains on the sale (usually excluded up to $250,000 / $500,000) and moving costs are not modelled.
 
+## Share these figures (gap list, next 60, item 33; 2026-11-16)
+One quiet tap away, at the foot of "The figures" (drawn only once a figure is typed, so never on the first view): "Only
+these figures go in the link; nothing is sent until you send it." and an outlined "Share these figures", which hands
+the link to the phone's share menu (or copies it, or shows it to copy by hand) and names what goes (fix round
+2026-11-16, critics P1 to P4): "Link copied: paste it into a message. It carries the price and the rent, nothing else.
+The other phone fills in the rest with its own figures, so its answer can differ." (all 16: "It carries the price, the
+rent and 14 more figures, nothing else."; the household's own tax choices never go, so the second sentence stays when
+they are set). The helper is `core/share-link.js` (its own rules and
+tests: `tests/share-link.test.mjs`); this page's list is `SHARE_SPEC` in `view.js`.
+
+What the link holds: `#/property/rent-vs-buy?share=` and `name:value` pairs: `price`, `rent` (rentMonthly), `down`
+(downShare), `rate`, `stay` (years, 1 to 40 whole), `term` (termYears, 5 to 40 whole), `tax`, `insurance`, `upkeep`
+(maintenanceRate), `hoa`, `buying` (buyCosts), `selling` (sellCosts), `growth` (appreciation), `rentup` (rentGrowth),
+`renters` (rentersInsurance, a year) and `invest` (investReturn); money up to 100 million (HOA, rent and renters
+insurance up to 1 million), percents 0 to 100 as typed. Never `itemize` or `marginalRate` (the household's own tax), never
+a blank box (a blank return stays "your plan's own mix" on the phone that opens it), never anything else from the plan.
+The invented example of the tests: `price:450000,rent:2400,down:15,rate:5.99,stay:8,term:30,tax:1.1,insurance:0.35,
+upkeep:1,hoa:0,buying:3,selling:6,growth:3.5,rentup:3,renters:180,invest:5`: after 8 years buying comes out $26,380
+ahead, buying pulls ahead after 6 years, and the two are even at a rent of about $2,190.
+
+Opening a link: the page is drawn from a copy of the plan with the link's figures in `whatIfs.rentVsBuy` (this phone's
+own tax choices kept), under "Figures from a shared link: nothing in your plan has changed.", "The link filled in 16
+figures on this page." and the outlined "Keep these" and "Back to my own figures". While it shows, the two tax boxes are
+not drawn and "Compare" compares for this visit only (the boxes go into the address: "Compared for this visit: after 8
+years, buying comes out ahead by $51,660. Nothing in your plan has changed." with the rent at $2,600). "Keep these" asks
+first, writes `whatIfs.rentVsBuy` once (the link's keys, blank where it has none; `itemize` and `marginalRate` as they
+were) and says "Kept. After 8 years, buying comes out ahead by $26,380." with Undo. No formula is new: the answer is
+this page's `compute()`; a percent travels x 100 and comes back / 100 exactly, money to the cent. Builder's choices as on
+House down payment (its README, "Share these figures").
+
 ## Tests
 `module.test.mjs`: the inputs and defaults, one year by hand, the itemized saving, the defaults' breakeven and the even rent, cheap and dear rents.
 C9: the rent estimator (what a renter pays now, our guess there, an owner's state figure, no state, another currency), the
@@ -70,6 +100,11 @@ contract of all five keys, invariance (no previews: no new key, the same output)
 drawn: gray figures, the answer and the line counting them, opening writes nothing, "Compare" with empty boxes saves no figure
 and no guess, S11, no guesses for another country or without `ctx.guess`; a housing row named for a mortgage is never the rent
 (F3); the empty plan's answer said as an example, "this rent" for ours (P1); the help lines (P2, P8).
+Share (item 33): the list and its round trip, the link of a sender plan full of invented names and balances holding
+none of them (nor the tax choices), the other household's answer equal to `compute()` on the link's figures with its own
+tax choices, unknown and malicious keys counted, nothing saved without Keep (Back to my own figures, Compare on a link,
+Keep refused), Keep writing the page's keys once with Undo putting the plan back, the sentences, and invariance over
+every invented household.
 
 ## Ideas / not yet
 - Prefill from the home on Accounts and the rent on Expenses; mortgage insurance; a Monte Carlo of home prices.
