@@ -10,9 +10,14 @@
 - Net worth (`balance/net-worth`); the federal estimate's inputs (`taxes/federal` `taxInputs`) for the tax rates.
 - Writes: a new holding (and a "Crypto wallet" account if there is none), a coin's price; a crypto account's balance
   is kept equal to its coins (shares × price) whenever they change here.
+- Optional (gap list, next 60, item 46): `investments.cryptoMethod` (the way the exchange counts which coins a sale takes)
+  and `whatIfs.crypto` (the question in "Which coins count as sold"); both read only by `sales.js`.
 
 ## Outputs
 `{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, returns, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount }`.
+
+`sales.js` (pure, called by the view beside `compute()`, which it does not change): `coinsOf`, `coinOrders`, `methodOf`
+and the sentences, below.
 
 ## Formulas
 - Kind (`cryptoKind`): a bitcoin or ether fund (`FUNDS`) is a fund wherever it is held, a crypto account included; any other
@@ -89,6 +94,102 @@ carryover across terms (1,000), selling everything with a fund washed by an IRA 
 purchase when banking, a lot's own wash match, a gain at 0% and nothing gained, the tax year, filing separately by owner
 (3,500 against 2,000 carried), a fund in an IRA, account balances beyond the coins. The figures in the new tests are the
 independent review's hand-worked ones (2026-10-31).
+Which coins count as sold (2026-11-16): each way's purchases, gain and tax against the hand check above, dollars to coins,
+too many, nothing or too few picked, the question kept or dropped, every sentence case, the wash-sale note at a loss only
+(and no match for a coin bought again), the coins offered, the way read with its default and its words; the page on the fake
+DOM (S11: Work it out keeps its part open and moves nothing else; the chips ask first, save, Undo; no coins, one purchase,
+"+ Add another coin" and Cancel; "More on this"); invariance with both new fields saved, every page, every household.
+
+## First view and the parts (simple first; docs/OPTIONAL.md, opt spec C17's crypto row, done in this page's gap commit)
+
+- First view, as before: the two tiles, how far it can fall, what you hold, if you sold everything today, worth knowing.
+  The add form is a card open while there are no coins ("Add a coin"), else behind one outlined "+ Add another coin" that
+  opens the form in its place (Cancel puts the button back); it was a hand-written fold, which a page that uses
+  `core/ui/more.js` may not draw (S10). "More on this" goes through `links()`, each row a question.
+- One card of quiet rows (`parts()`): "Which coins count as sold" (kind `item`), only when a coin in a crypto account has
+  two or more purchases (with one, every way sells the same coins). Its status is the way that counts ("oldest first"),
+  or "set by you" once a way is chosen with a chip; a question worked out is not a way chosen, so it leaves "oldest first"
+  (the question is kept inside). After its own save it stays open (R17), with the green line.
+
+## Which coins count as sold (gap list, next 60, item 46; `sales.js`)
+
+What the person gets: a sale of some of one coin worked three ways, each with the tax of that sale, and the way their
+exchange counts saved for the sales they record here.
+
+- **The coins offered** (`coinsOf`): holdings in a crypto account (kinds coin and stable; a bitcoin fund is Tax lots',
+  where the wash-sale match is worked), with a price above 0 and coins left. Lots as Tax lots draws them (`lotsOf`: coins no
+  typed purchase covers are one undated purchase, keyed `rest:<holding id>`). Wallet by wallet: a holding is one coin in
+  one account, so a sale only ever takes purchases of the account it is sold from, as the IRS asks from 2025 (below).
+- **The three ways** (Tax lots' `orderLots`, imported): oldest first = by purchase date, undated first, the same day in the
+  order typed; highest cost first = by cost per coin, the most first, ties oldest first; the ones you pick = the checked
+  purchases, oldest first.
+- **The pieces** (Tax lots' `takeShares`): coins taken from the purchases in that order; a piece's cost is its purchase's
+  cost per coin × the coins taken (the whole purchase's cost when all of it goes), its proceeds the price on file × the
+  coins, both in cents; gain = proceeds − cost; short- or long-term as the purchase stands today (`lotsOf`: long-term when
+  held more than a year, counted from the day after the purchase; Pub. 550, IRC 1222).
+- **The tax of each way** (Tax lots' `saleRows` and `saleTax`): the Federal estimate's total tax for today's tax year
+  (`todaysReturn`), this year's other sales included, with one sale row per term added (the account owner's return when
+  filing separately), less the total without. So a way's figure nets against the year's gains, stacks long-term gains at
+  0/15/20%, adds the 3.8% where it applies and lets a loss take at most $3,000 off other income, exactly as the Federal
+  estimate would. `least` = the cheapest way (a tie goes to the oldest first, then the highest cost); `saving` = the oldest
+  first's tax less the least's.
+- **Hand check** (module test): single, pay $100,000 in 2026 (22% on the next dollar, 15% on a long-term gain); BTC at
+  $100,000, purchases 0.1 for $2,500 (Mar 2023), 0.1 for $9,000 (Dec 2025), 0.05 for $5,500 (Jun 2026). Selling 0.1:
+  oldest first takes the 2023 purchase, +$7,500 long-term × 15% = $1,125; highest cost first takes the 0.05 at a $500 loss
+  and half the Dec 2025 purchase at a $500 gain, both short-term: no tax; the Dec 2025 purchase picked: +$1,000 × 22% =
+  $220. "Highest cost first costs least: about $1,125 less federal tax than oldest first."
+- **The wash-sale note** (`washNote`), only where a way sells at a loss: "Coins are property, not securities: as of 2026
+  the wash-sale rule does not stop you buying the same coin back at once, so the loss counts in full." IRC 1091(a) reaches
+  "stock or securities"; the Instructions for Form 8949 (2025) say "A digital asset is treated as property" (read
+  2026-11-16, https://www.irs.gov/instructions/i8949); the Instructions for Form 1099-DA (2026) put a tokenized security
+  under 1091 (read 2026-11-16, https://www.irs.gov/instructions/i1099da), which this page never offers. No wash-sale match
+  is worked for coins.
+- **The way your exchange counts** (`methodOf`, `investments.cryptoMethod`): three chips; a tap saves at once (no browser
+  question: the choice is undone in one tap, and the line on the exchange sits under the chips), says so in green
+  (`methodSaid`, which for highest cost first and the ones you pick adds "Set your exchange the same way before you sell" /
+  "Pick the same ones on the exchange when you sell") with an outlined Undo (`methodUndone`; none saved before: the field
+  goes). Absent = oldest first. The chip that is on is the saved way, else oldest first (tapping the chip already on does nothing). The
+  saved way is marked "yours" among the three, and the sales recorded on this page take purchases in that order.
+- **One sentence per case** (`waysSentence`, nine cases, each tested): too many coins; the same tax every way (adds, takes
+  off, none); oldest first least (as little as another, or by how much); highest cost first least; the ones picked least;
+  no question. Under each way, `wayLine`: Tax lots' line, except that a short- or long-term part that comes to $0 is not
+  named ("A gain of $6,500, all of it long-term, from 2 purchases.", not "(+$0 short-term, +$6,500 long-term)"). Coins are
+  counted in words as "1 coin", "0.5 coins" (`coinsText`).
+
+**What the IRS says** (the IRS's "Frequently asked questions on digital asset transactions", Part II, for sales from
+January 1, 2025, https://www.irs.gov/individuals/international-taxpayers/frequently-asked-questions-on-digital-asset-transactions,
+read 2026-11-16, and read again the same day after a review to check the FAQ numbers: FAQs 82 to 92 and 93 are the ones
+"added Dec. 15, 2025", quoted below):
+- FAQ 82 (your own wallet): "no later than the date and time of the sale ... you must identify the particular units to be
+  sold ... on your books and records".
+- FAQ 85 (at a broker, after December 31, 2025): you must "specify to the broker having custody of the units, no later than
+  the date and time of sale ... the particular units", using "the identifiers designated by your broker".
+- FAQ 88: after 2025 a standing order is allowed when "you have the standing order or instruction in place with the
+  custodial broker no later than the date and time of the sale". For 2025 only, Notice 2025-7 let it be kept on your own
+  books (https://www.irs.gov/pub/irs-drop/n-25-07.pdf, read 2026-11-16).
+- FAQ 89: a broker that offers only one method: "such method is treated as a standing order or instruction, and you may not
+  use any other method".
+- FAQ 86, 87, 92: without a specific identification, the units count "in order of time from the earliest date on which
+  units of the same digital asset in this wallet were acquired" (oldest first). Before 2025, Part I FAQ 41
+  (https://www.irs.gov/individuals/international-taxpayers/frequently-asked-questions-on-virtual-currency-transactions,
+  read 2026-11-16) said the same: "first in, first out (FIFO)".
+- Wallet by wallet: FAQs 86 and 87 count "in this wallet", FAQ 92 "held in the custody of a broker", and FAQ 93 describes
+  the "universal" or "multi-wallet" way used before 2025 as the one that ends; the final regulations' § 1.1012-1(j) apply
+  the ordering rules within one wallet or account (Notice 2025-7, section 2; Rev. Proc. 2024-28 lets unused basis be allocated to each wallet as of January 1, 2025,
+  https://www.irs.gov/pub/irs-drop/rp-24-28.pdf, read 2026-11-16). The regulation itself on ecfr.gov and the Federal
+  Register could not be read here (both refuse automated reads); it is quoted through the IRS's own notice.
+- Form 1099-DA: brokers "must report gross proceeds for transactions effected on or after Jan. 1, 2025" and "basis on
+  certain transactions effected on or after Jan. 1, 2026" (https://www.irs.gov/filing/digital-assets, read 2026-11-16); the
+  basis is required for a "covered security", a digital asset "acquired after 2025 ... in an account for which the broker
+  provided custodial services" and held there (Instructions for Form 1099-DA (2026)).
+- So the one plain line on screen (made plainer after a review): "Your exchange reports your sales to the IRS, so set the
+  same way there before you sell (its settings may call it the cost-basis method) and keep the confirmation. A sale only
+  counts the purchases in the wallet or account it is sold from."
+
+Builder's choices (where the brief left it open): one way for the household, not one per wallet (a household with two
+exchanges set two ways is rare; the IRS rule that matters per wallet, which purchases a sale can take, holds anyway);
+"The ones I pick" saved means the purchases are checked at each sale; the question in the row is asked first (as on Tax
+lots), not worked for a made-up amount.
 
 ## Ideas / not yet
 - Prices fetched by the PC server from a public price feed (needs a network setting and a source).
