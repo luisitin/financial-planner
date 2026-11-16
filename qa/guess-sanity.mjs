@@ -1111,7 +1111,7 @@ rule("sr.verdict.one-answer", "B", (H) => {
   const age = H.ageOf(H.adults[0]);
   const ok = RANK[pr.verdict] !== undefined && (pr.verdict === "short") === (pr.shortAge !== null && pr.shortAge !== undefined) && (pr.shortAge == null || (age === null || pr.shortAge >= Math.floor(age))) && (!sv || (sv.verdict === pr.verdict && (sv.shortAge ?? null) === (pr.shortAge ?? null)));
   const tl = H.ok("overview/timeline");
-  const waits = !tl?.headline || tl.headline.needsSS || tl.headline.needs;
+  const waits = !tl?.headline || tl.headline.needsSS || tl.headline.needs || tl.headline.unknown;   // the timeline waits too when nothing is saved for retirement (the projection's retirementUnknown, whole-app sweep x3)
   const tlOk = waits || (tl.headline.shortYear ?? null) === (pr.shortYear ?? null);
   return [res(ok, { verdict: pr.verdict, shortAge: pr.shortAge, savingVerdict: sv ? `${sv.verdict} ${sv.shortAge ?? ""}` : null }, "projection vs savingVerdict"), res(tlOk, { projectionShortYear: pr.shortYear ?? null, timelineShortYear: tl?.headline?.shortYear ?? null }, "timeline")];
 });
