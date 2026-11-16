@@ -993,3 +993,355 @@ test("the filter: chips only once an account has a label; a tap lists only that 
   // the labels show on the rows, quietly
   assert.match(r.textOf(r.rows().find((li) => r.textOf(li.querySelector(".rec-title")) === "Roth")), /kids retirement$/);
 });
+
+// ---- One figure or item by item (gap list, next 60, item 11; README "One figure or item by item") ---------------------------
+import * as OF from "./one-figure.js";
+import { buildInputs, compute as retirementOf } from "../../retirement/projection/compute.js";
+import { accountPerformance } from "../../investments/performance/compute.js";
+const usd2 = (n) => `${n < 0 ? "-" : ""}$${Math.abs(Math.round(n)).toLocaleString("en-US")}`;
+// the Garcia-Lee family (qa fixture) with two more savings accounts beside Ally (which a goal draws on), one with a history
+const savers = () => {
+  const p = migrate(familyPlan(T));
+  p.accounts.push({ id: "sv2", name: "Holiday fund", type: "savings", institution: "Ally", balance: 2400, asOf: "2026-10-01", ownerId: "", history: [{ date: "2026-09-01", balance: 2000 }, { date: "2026-10-01", balance: 2300 }], notes: "for December" },
+    { id: "sv3", name: "Old savings", type: "savings", institution: "Ally", balance: 800, asOf: "2026-09-01", typedOn: "2026-09-02", ownerId: "", history: [{ date: "2026-10-01", balance: 790 }] });
+  return p;
+};
+// a live page: the same route object across redraws (as the shell after a save), the store's plan moving on each update
+async function live(p0, query = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  let cur = migrate(structuredClone(p0)), updates = 0;
+  const route = { rest: [], query };
+  const store = { get: () => cur, update: (fn) => { const d = structuredClone(cur); fn(d); cur = d; updates++; } };
+  let root = null;
+  const draw = () => { root = new FakeElement("main"); render(root, { ui, fmt: { ...fmt, today: () => T }, plan: cur, route, store, modules: new Map(), computeOf: (k, prm = {}) => (k === "balance/net-worth" ? compute(cur, { today: T, ...prm }) : null) }); return api; };
+  const partEl = () => root.querySelectorAll("details").find((x) => x.dataset.part === "asOne") ?? null;
+  const api = { draw, textOf, partEl, get plan() { return cur; }, get updates() { return updates; }, get root() { return root; },
+    btn: (words, inside = root) => inside.querySelectorAll("button").find((b) => textOf(b) === words) ?? null,
+    text: () => textOf(root), partText: () => textOf(partEl()) };
+  return draw();
+}
+
+test("one figure: a kind is one kind of account of one owner, named in plain words; the mortgage, a home, a car, the HSA and college savings are never one figure", () => {
+  const p = migrate(familyPlan(T));
+  p.household.people.push({ id: "p-me", name: "Me", role: "self" });
+  assert.equal(OF.sectionKey({ type: "savings" }), "savings||0|");
+  assert.equal(OF.sectionKey({ type: "401k", ownerId: "p-ana", formerJob: true }), "401k|p-ana|1|");
+  for (const type of ["mortgage", "property", "vehicle", "hsa", "529", "other_asset", "cash_value_life", "nonsense"]) assert.equal(OF.sectionKey({ type }), null, type);
+  const name = (type, owner = "", past = 0) => OF.sectionName(p, `${type}|${owner}|${past}`);
+  assert.deepEqual([name("checking"), name("savings"), name("cash"), name("brokerage"), name("crypto"), name("credit"), name("loan"), name("student_loan"), name("other_liability")],
+    ["Checking", "Savings", "Cash", "Investments", "Crypto", "Credit cards", "Loans", "Student loans", "Other debts"]);
+  assert.deepEqual([name("401k", "p-ana"), name("401k", "p-ana", 1), name("ira", "p-bo"), name("roth", "p-me"), name("401k"), name("ira"), name("savings", "p-ana"), name("roth", "someone-gone")],
+    ["Ana's 401(k)", "Ana's 401(k), from former jobs", "Bo's traditional IRA", "My Roth", "401(k)", "Traditional IRA", "Ana's savings", "Roth"]);
+  assert.equal(OF.sectionNoun(p, "savings||0|"), "your savings accounts");
+  assert.equal(OF.sectionNoun(p, "401k|p-ana|1|"), "Ana's 401(k) accounts from former jobs");
+  // the words other pages read in a name are part of the kind: an old job's 401(k), a Roth through work, a 457 or TSP, a car loan
+  const k = (a) => OF.sectionKey(a);
+  assert.deepEqual([k({ type: "401k", name: "Old job 401(k)" }), k({ type: "401k", name: "Rollover from Acme" }), k({ type: "401k", name: "TSP" }), k({ type: "roth", name: "Roth 401(k)" }), k({ type: "roth", name: "Roth IRA" }), k({ type: "ira", name: "Prior IRA" }), k({ type: "loan", name: "Car loan" }), k({ type: "loan", name: "Loan", institution: "Ally Auto" }), k({ type: "loan", name: "Personal loan" }), k({ type: "savings", name: "Old savings" })],
+    ["401k||0|o", "401k||0|o", "401k||0|t", "roth||0|w", "roth||0|", "ira||0|o", "loan||0|c", "loan||0|c", "loan||0|", "savings||0|"]);
+  assert.deepEqual(["401k||0|o", "401k|p-ana|0|t", "roth|p-bo|0|w", "loan||0|c", "loan||0|"].map((x) => OF.sectionName(p, x)),
+    ["401(k), from former jobs", "Ana's 401(k), a 457, TSP or thrift plan", "Bo's Roth through work", "Car loans", "Loans"]);
+});
+
+test("one figure: listed with two rows or a mark; the row kept is the one marked, else Get started's, else the biggest free one; the rest join or stay on their own", () => {
+  const p = savers();
+  assert.deepEqual(OF.sectionsOf(migrate(familyPlan(T))).map((s) => s.key), [], "the family as it is: one row of each kind");
+  const [s] = OF.sectionsOf(p);
+  assert.equal(s.name, "Savings");
+  assert.deepEqual([s.count, s.total, s.together, s.keep, s.join, s.mode, s.changes], [3, 14700, 3200, "sv2", ["sv3"], "items", true]);
+  assert.deepEqual(s.held, [{ id: "a-sav", name: "Ally savings", why: "a goal draws on it" }]);
+  // Get started's row is kept before a bigger one
+  const g = savers(); g.accounts.push({ id: "setup-have-savings", name: "Savings", type: "savings", balance: 100, ownerId: "" });
+  assert.equal(OF.sectionsOf(g)[0].keep, "setup-have-savings");
+  // the row marked is kept; marked and alone (the others stay on their own) is "one"
+  const m = savers(); m.accounts.find((a) => a.id === "sv3").oneFigure = true;
+  assert.equal(OF.sectionsOf(m)[0].keep, "sv3");
+  assert.equal(OF.sectionsOf(m)[0].mode, "items", "a free row beside the mark: listed item by item");
+  const one = savers(); OF.asOne(one, "savings||0|", T);
+  const after = OF.sectionsOf(one)[0];
+  assert.deepEqual([after.mode, after.count, after.kept, after.changes], ["one", 2, 3200, true]);
+  // all: every kind with a row, for the page's own list of what was just changed
+  assert.ok(OF.sectionsOf(migrate(familyPlan(T)), { all: true }).length >= 6);
+});
+
+test("one figure: each reason a row stays on its own, one sentence each", () => {
+  const base = () => { const p = emptyPlan(); p.household.people = [{ id: "p-ana", name: "Ana", role: "self" }]; p.accounts.push({ id: "k", name: "Main", type: "checking", balance: 900 }, { id: "x", name: "Spare", type: "checking", balance: 100 }); return p; };
+  const why = (edit) => { const p = base(); edit(p); const s = OF.sectionsOf(p)[0]; return s.held.map(OF.holdWords); };
+  const cases = [
+    [(p) => { p.transactions = [{ id: "t", accountId: "x", amount: -5 }]; }, "it has bank lines in your ledger"],
+    [(p) => { p.imports = [{ id: "i", accountId: "x" }]; }, "bank files were imported into it"],
+    [(p) => { p.holdings = [{ id: "h", accountId: "x" }]; }, "it has investments listed in it"],
+    [(p) => { p.reconciliations = [{ id: "r", accountId: "x" }]; }, "its statements were checked against it"],
+    [(p) => { p.rules = [{ id: "r", accountId: "x" }]; }, "a rule files bank lines into it"],
+    [(p) => { p.importProfiles = { bank: { accountId: "x" } }; }, "a bank file layout points at it"],
+    [(p) => { p.goals = [{ id: "g", name: "Trip", fundedBy: ["x"] }]; }, "a goal draws on it"],
+    [(p) => { p.debts = [{ id: "d", accountId: "x", rate: 0.2 }]; }, "its rate and payment are on Debts"],
+    [(p) => { p.debtPlan = { customOrder: ["x"] }; }, "your debt plan puts it in its own place"],
+    [(p) => { p.property = [{ id: "h", accountId: "x" }]; }, "a home or rental is linked to it"],
+    [(p) => { p.contacts = [{ id: "c", accountIds: ["x"] }]; }, "a contact is linked to it"],
+    [(p) => { p.estate = { beneficiaries: [{ accountId: "x" }] }; }, "it has beneficiaries"],
+    [(p) => { p.retirement = { happenings: [{ kind: "move", from: "x" }] }; }, "a money move in your retirement plan uses it"],
+    [(p) => { p.whatIfs = { somePage: { account: "x" } }; }, "another page keeps something about it"],
+    [(p) => { p.guesses = { "accounts[x].balance": { v: 100, k: "account.cash", u: "total", d: "2026-11-01" } }; }, "its balance is our guess for now: type the real one first"],
+    [(p) => { p.accounts[1].labels = ["trip"]; }, "it carries labels of its own"],
+    [(p) => { p.accounts[0].id = "setup-have-checking"; p.accounts[1].id = "setup-have-checking-2"; }, "it is an answer in Get started"],
+  ];
+  for (const [edit, words] of cases) {
+    const said = why(edit);
+    assert.equal(said.length, 1, words);
+    assert.match(said[0], new RegExp(`^(Spare|Main) stays on its own: ${words.replace(/[()]/g, "\\$&")}\\.$`), words);
+  }
+  // a contribution follows the row (it is not a reason), and a guess entry the balance no longer equals is not one either
+  assert.deepEqual(why((p) => { p.retirement = { contributions: [{ id: "c", accountId: "x", amount: 100, period: "monthly" }] }; }), []);
+});
+
+test("one figure: putting together adds the balances (owed for debts, the kept row's sign), keeps the earliest date and the latest typing day, adds the histories from the first day every row has a point, and moves contributions", () => {
+  const p = savers();
+  p.retirement = { ...(p.retirement ?? {}), contributions: [...(p.retirement?.contributions ?? []), { id: "c-sv3", accountId: "sv3", amount: 50, period: "monthly" }] };
+  const r = OF.asOne(p, "savings||0|", T);
+  assert.deepEqual(r, { kept: "sv2", gone: ["sv3"], names: ["Holiday fund", "Old savings"], sum: 3200, name: "Savings" });
+  const k = p.accounts.find((a) => a.id === "sv2");
+  assert.equal(p.accounts.some((a) => a.id === "sv3"), false);
+  assert.deepEqual({ name: k.name, balance: k.balance, asOf: k.asOf, institution: k.institution, notes: k.notes, oneFigure: k.oneFigure, typedOn: k.typedOn },
+    { name: "Savings", balance: 3200, asOf: "2026-09-01", institution: "Ally", notes: "for December", oneFigure: true, typedOn: "2026-09-02" });
+  // 2026-09-01: Old savings has no figure yet, so the day is left out (review 2026-11-16 F2); 2026-10-01: 2,300 + 790
+  assert.deepEqual(k.history, [{ date: "2026-10-01", balance: 3090 }]);
+  assert.equal(p.retirement.contributions.find((c) => c.id === "c-sv3").accountId, "sv2");
+  assert.equal(p.accounts.find((a) => a.id === "a-sav").oneFigure, undefined, "the row on its own is left as it was");
+  // debts: what is owed, whatever sign was typed; the kept row's sign kept; banks that differ leave the bank blank
+  const d = emptyPlan();
+  d.accounts.push({ id: "c1", name: "Visa", type: "credit", balance: -1200, institution: "A" }, { id: "c2", name: "Store card", type: "credit", balance: 300.55, institution: "B" });
+  const rd = OF.asOne(d, "credit||0|", T);
+  assert.equal(rd.sum, 1500.55);
+  assert.deepEqual([d.accounts.length, d.accounts[0].balance, d.accounts[0].institution, d.accounts[0].name], [1, -1500.55, "", "Credit cards"]);
+  assert.equal(compute(d).liabilities, 1500.55);
+  // a kind of one row is only marked; Item by item takes the mark off and keeps the row
+  const one = emptyPlan(); one.accounts.push({ id: "s", name: "Chase savings", type: "savings", balance: 500 });
+  assert.deepEqual(OF.asOne(one, "savings||0|", T), { kept: "s", gone: [], names: ["Chase savings"], sum: 500, name: "Chase savings" });
+  assert.equal(one.accounts[0].oneFigure, true);
+  assert.equal(one.accounts[0].name, "Chase savings", "a single row keeps the name the person gave it");
+  assert.deepEqual(OF.itemize(one, "savings||0|"), { kept: "s", name: "Chase savings", sum: 500 });
+  assert.equal("oneFigure" in one.accounts[0], false);
+  assert.equal(OF.itemize(one, "savings||0|"), null, "nothing marked: nothing to do");
+  assert.equal(OF.asOne(one, "checking||0|", T), null, "no such kind");
+});
+
+test("one figure: mergedHistory adds each row's latest point on or before each day, from the first day every row has one", () => {
+  const a = { history: [{ date: "2026-01-01", balance: 10 }, { date: "2026-03-01", balance: 30 }] }, b = { history: [{ date: "2026-02-01", balance: 5 }] };
+  assert.deepEqual(OF.mergedHistory([a, b]), [{ date: "2026-02-01", balance: 15 }, { date: "2026-03-01", balance: 35 }], "January: b has no figure yet");
+  assert.deepEqual(OF.mergedHistory([a, b, {}]), [], "a row with no point at all: the history starts afresh");
+  assert.deepEqual(OF.mergedHistory([{ history: "junk" }, { history: [null, { date: 3 }] }]), []);
+  // debts: what is owed on each day, signed like the balance kept (review 2026-11-16 F4)
+  assert.deepEqual(OF.mergedHistory([{ history: [{ date: "2026-10-01", balance: -400 }] }, { history: [{ date: "2026-10-01", balance: 250 }] }], { owed: true, sign: -1 }), [{ date: "2026-10-01", balance: -650 }]);
+});
+
+test("one figure (review 2026-11-16 F2): a row saved from later on adds no false gain on Performance; F4: a debt's history is what is owed, with the balance's sign", () => {
+  const p = emptyPlan(); p.household.people = [{ id: "p1", name: "Ana", birthDate: "1985-03-01", role: "self" }];
+  p.accounts = [{ id: "a", name: "Fund A", type: "brokerage", balance: 12000, asOf: "2026-11-01", ownerId: "", history: [{ date: "2026-01-01", balance: 10000 }, { date: "2026-06-01", balance: 11000 }, { date: "2026-11-01", balance: 12000 }] },
+    { id: "b", name: "Fund B", type: "brokerage", balance: 50000, asOf: "2026-11-01", ownerId: "", history: [{ date: "2026-09-01", balance: 49000 }, { date: "2026-11-01", balance: 50000 }] }];
+  const apart = p.accounts.map((x) => accountPerformance(p, x).gain).reduce((t, g) => t + g, 0);
+  OF.asOne(p, "brokerage||0|", T);
+  assert.deepEqual(p.accounts[0].history, [{ date: "2026-09-01", balance: 60000 }, { date: "2026-11-01", balance: 62000 }]);
+  const r = accountPerformance(p, p.accounts[0]);
+  assert.deepEqual([r.start, r.end, r.gain], [60000, 62000, 2000], "the gain since both have a figure, not 52,000");
+  assert.ok(r.gain <= apart && r.twr < 0.05, `twr ${r.twr}`);
+  const d = emptyPlan();
+  d.accounts = [{ id: "c1", name: "Visa", type: "credit", balance: -500, asOf: "2026-11-01", history: [{ date: "2026-10-01", balance: -400 }] }, { id: "c2", name: "MC", type: "credit", balance: 300, asOf: "2026-11-01", history: [{ date: "2026-10-01", balance: 250 }] }];
+  OF.asOne(d, "credit||0|", T);
+  assert.deepEqual([d.accounts.length, d.accounts[0].balance, d.accounts[0].history], [1, -800, [{ date: "2026-10-01", balance: -650 }]]);
+  assert.equal(compute(d, { today: T }).liabilities, 800);
+});
+
+test("one figure (review 2026-11-16 F3): a row whose id is missing or shared stays on its own, and putting together removes only the rows that join", () => {
+  const p = emptyPlan();
+  p.accounts = [{ id: "a", name: "S1", type: "savings", balance: 100 }, { id: "a", name: "S2", type: "savings", balance: 50 }, { id: "b", name: "S3", type: "savings", balance: 10 },
+    { name: "No id", type: "savings", balance: 5 }, { id: "c", name: "S4", type: "savings", balance: 1 }, { name: "Spare checking", type: "checking", balance: 7 }];
+  const before = compute(p, { today: T }).netWorth;
+  const [s] = OF.sectionsOf(p);
+  assert.deepEqual([s.keep, s.join], ["b", ["c"]]);
+  assert.deepEqual(s.held.map(OF.holdWords), ["S1 stays on its own: the app cannot tell it apart from another account on your list.",
+    "S2 stays on its own: the app cannot tell it apart from another account on your list.", "No id stays on its own: the app cannot tell it apart from another account on your list."]);
+  OF.asOne(p, s.key, T);
+  assert.deepEqual(p.accounts.map((a) => [a.id, a.name, a.balance]), [["a", "S1", 100], ["a", "S2", 50], ["b", "Savings", 11], [undefined, "No id", 5], [undefined, "Spare checking", 7]]);
+  assert.equal(compute(p, { today: T }).netWorth, before);
+  // two rows with one id and nothing else of the kind: nothing to put together, and the part is not drawn for it
+  const q = emptyPlan(); q.accounts = [{ id: "x", name: "A", type: "savings", balance: 1 }, { id: "x", name: "B", type: "savings", balance: 2 }];
+  assert.deepEqual(OF.sectionsOf(q).map((x) => [x.keep, x.changes]), [[null, false]]);
+  assert.equal(OF.asOne(q, "savings||0|", T), null);
+  assert.equal(q.accounts.length, 2);
+});
+
+test("one figure: unmarkOnAdd takes the mark off when another account of that kind and owner is added, and says which kind", () => {
+  const p = savers(); OF.asOne(p, "savings||0|", T);
+  const added = { id: "n", name: "New savings", type: "savings", balance: 10, ownerId: "" };
+  p.accounts.push(added);
+  assert.equal(OF.unmarkOnAdd(p, added), "Savings");
+  assert.equal(p.accounts.some((a) => a.oneFigure), false);
+  assert.equal(OF.unmarkOnAdd(p, { type: "checking" }), null);
+  assert.equal(OF.unmarkOnAdd(p, { type: "property" }), null);
+});
+
+test("one figure: the words, one sentence per case", () => {
+  const p = savers();
+  const [s] = OF.sectionsOf(p);
+  assert.equal(OF.INTRO, "Keep a kind of account as one figure, typed and changed in one place, or list each account on its own. Either way your net worth counts the same, and so does every plan that reads it.");
+  assert.equal(OF.PART_TITLE, "One figure or item by item");
+  // the status
+  assert.equal(OF.statusWords([s]), "1 can be one figure");
+  assert.equal(OF.statusWords([s, { ...s, key: "x" }]), "2 can be one figure");
+  assert.equal(OF.statusWords([{ ...s, mode: "one" }, s]), "1 as one figure");
+  assert.equal(OF.statusWords([{ ...s, changes: false }]), "");
+  // the line under a kind's name: what one figure would hold when some rows stay on their own (review 2026-11-16 P1)
+  assert.equal(OF.sectionLine(s, usd2), "2 of 3 accounts can be one figure, $3,200");
+  assert.equal(OF.sectionLine({ ...s, held: [], join: ["sv3", "a-sav"] }, usd2), "3 accounts, $14,700 in all");
+  assert.equal(OF.sectionLine({ ...s, join: [] }, usd2), "3 accounts, $14,700 in all", "nothing joins: the plain line");
+  assert.equal(OF.sectionLine({ ...s, debt: true, total: 4000, held: [] }, usd2), "3 accounts, $4,000 owed in all");
+  assert.equal(OF.sectionLine({ ...s, debt: true, together: 900 }, usd2), "2 of 3 accounts can be one figure, $900 owed");
+  assert.equal(OF.sectionLine({ ...s, mode: "one", held: [], kept: 3200 }, usd2), "One figure: $3,200");
+  assert.equal(OF.sectionLine({ ...s, mode: "one", kept: 3200 }, usd2), "One figure: $3,200, with 1 more on its own");
+  assert.equal(OF.sectionLine({ ...s, mode: "one", kept: 3200, held: [1, 2] }, usd2), "One figure: $3,200, with 2 more on their own");
+  assert.equal(OF.sectionLine({ ...s, mode: "one", debt: true, held: [], kept: 900 }, usd2), "One figure: $900 owed");
+  // the question: all of them; one stays; two stay; a debt
+  const all = savers(); all.goals = [];
+  const [sa] = OF.sectionsOf(all);
+  assert.equal(OF.askWords(all, sa, usd2, 290300), "Replace Ally savings, Holiday fund and Old savings with one line, Savings: $14,700? Your net worth stays $290,300.");
+  assert.equal(OF.askWords(p, s, usd2, 290300), "Replace Holiday fund and Old savings with one line, Savings: $3,200? Ally savings stays on its own. Your net worth stays $290,300.");
+  assert.equal(OF.askWords(p, { ...s, held: [...s.held, { name: "Kids' jar" }] }, usd2, 290300), "Replace Holiday fund and Old savings with one line, Savings: $3,200? Ally savings and Kids' jar stay on their own. Your net worth stays $290,300.");
+  const d = emptyPlan(); d.accounts.push({ id: "c1", name: "Visa", type: "credit", balance: 1200 }, { id: "c2", name: "Store card", type: "credit", balance: 300 });
+  const [sd] = OF.sectionsOf(d);
+  assert.equal(OF.askWords(d, sd, usd2, -1500), "Replace Visa and Store card with one line, Credit cards: $1,500 owed? Your net worth stays -$1,500.");
+  // done; one row only marked; Item by item; Undo both ways; an add
+  assert.equal(OF.doneWords({ gone: ["sv3"], names: ["Holiday fund", "Old savings"], sum: 3200, name: "Savings" }, s, usd2, 290300), "Savings is one figure now: $3,200, in place of 2 accounts. Ally savings stays on its own. Your net worth is still $290,300.");
+  assert.equal(OF.doneWords({ gone: ["sv3"], names: ["Holiday fund", "Old savings"], sum: 3200, name: "Savings" }, { ...s, held: [...s.held, { name: "Kids' jar" }] }, usd2, 290300), "Savings is one figure now: $3,200, in place of 2 accounts. Ally savings and Kids' jar stay on their own. Your net worth is still $290,300.");
+  assert.equal(OF.doneWords({ gone: [], names: ["Chase savings"], sum: 500, name: "Chase savings" }, s, usd2, 290300), "Chase savings is one figure now: $500. Your net worth is still $290,300.");
+  assert.equal(OF.doneWords({ gone: ["c2"], names: ["Visa", "Store card"], sum: 1500, name: "Credit cards" }, sd, usd2, -1500), "Credit cards is one figure now: $1,500 owed, in place of 2 accounts. Your net worth is still -$1,500.");
+  assert.equal(OF.itemizeWords({ name: "Savings", sum: 3200 }, s, usd2), "Savings is item by item now. List each one: tap Edit on its line to rename it, then + Add another account.");
+  assert.equal(OF.undoneWords({ gone: ["sv3"], names: ["Holiday fund", "Old savings"] }, usd2, 290300), "Put back: Holiday fund and Old savings. Your net worth is still $290,300.");
+  assert.equal(OF.undoneWords({ name: "Savings" }, usd2, 290300), "Back as it was: Savings. Your net worth is still $290,300.");
+  assert.equal(OF.addWords("Savings"), "Savings is item by item again: each account is on the list.");
+  assert.equal(OF.holdWords({ name: "Ally savings", why: "a goal draws on it" }), "Ally savings stays on its own: a goal draws on it.");
+  assert.equal(OF.rowLine(p, p.accounts.find((a) => a.id === "sv2")), null, "not one figure yet: the row says nothing new");
+  OF.asOne(p, "savings||0|", T);
+  assert.equal(OF.rowLine(p, p.accounts.find((a) => a.id === "sv2")), "One figure for your savings accounts");
+});
+
+test("one figure: the totals are the same either way: Net worth's figures, the retirement plan's balances, contributions and answer", () => {
+  const close = (a, b, path = "") => {
+    if (typeof a === "number" && typeof b === "number") return assert.ok(Math.abs(a - b) <= Math.max(0.005, 1e-9 * Math.abs(a)), `${path}: ${a} != ${b}`);
+    if (a && b && typeof a === "object") { assert.deepEqual(Object.keys(a).sort(), Object.keys(b).sort(), path); for (const k of Object.keys(a)) close(a[k], b[k], `${path}.${k}`); return; }
+    assert.deepEqual(a, b, path);
+  };
+  const figs = (p) => {
+    const { history, change, count, ...nw } = compute(p, { today: T }); void history; void change; void count;   // (the number of rows is what changes)
+    const b = buildInputs(structuredClone(p), { today: T });
+    const sums = {}; for (const c of b.inputs?.contributions ?? []) sums[`${c.bucket}|${c.personIndex}`] = (sums[`${c.bucket}|${c.personIndex}`] ?? 0) + c.yearly;
+    const r = retirementOf(structuredClone(p), { today: T });
+    return { nw, balances: b.inputs?.balances, contributions: sums, answer: { verdict: r.verdict, affordable: r.affordable, coverage: r.coverage, atRetirement: r.atRetirement, atEnd: r.atEnd, rows: (r.rows ?? []).map((x) => x.total) } };
+  };
+  const p = savers();
+  p.retirement.contributions = [...(p.retirement.contributions ?? []), { id: "c-sv3", personId: "p-ana", accountId: "sv3", amount: 50, period: "monthly" }];
+  const before = figs(p);
+  const one = structuredClone(p); OF.asOne(one, "savings||0|", T);
+  close(figs(one), before, "one figure");
+  const back = structuredClone(one); OF.itemize(back, "savings||0|");
+  close(figs(back), before, "item by item again");
+  assert.equal(before.nw.byType.savings, 14700);
+});
+
+test("one figure, the page: no part while nothing can change (the family as it is; Riley's cards, each with its rate on Debts)", async () => {
+  for (const p of [migrate(familyPlan(T)), renterDebtPlan(), retiredCouplePlan(T), emptyPlan()]) {
+    const r = await live(p);
+    assert.equal(r.partEl(), null);
+    assert.doesNotMatch(r.text(), /One figure/);
+  }
+});
+
+test("one figure, the page: one quiet row, shut; One figure asks in place; Keep them changes nothing; Replace makes one row in one save, the part stays open with the green line and Undo", async () => {
+  const r = await live(savers());
+  const el = r.partEl();
+  assert.ok(el && !el.hasAttribute("open"), "drawn, and shut");
+  assert.equal(el.dataset.kind, "own");
+  assert.equal(r.textOf(el.querySelector(".fold-title")), "One figure or item by item");
+  assert.equal(r.textOf(el.querySelector(".fold-status")), "1 can be one figure");
+  const accounts = r.root.querySelectorAll("section").find((x) => r.textOf(x.querySelector("h2")) === "Accounts");
+  assert.ok(accounts.querySelectorAll("details").includes(el), "in the Accounts card, under the list");
+  assert.match(r.partText(), /Savings · 2 of 3 accounts can be one figure, \$3,200 One figure Item by item Ally savings stays on its own: a goal draws on it\./);
+  const pressed = () => ["One figure", "Item by item"].map((w) => r.btn(w, el).getAttribute("aria-pressed"));
+  assert.deepEqual(pressed(), ["false", "true"]);
+  assert.equal(el.querySelectorAll("button").filter((b) => !b.classList.contains("chip") && !b.classList.contains("secondary")).length, 0, "no filled button inside");
+  r.btn("One figure", el).click();
+  assert.match(r.partText(), /Replace Holiday fund and Old savings with one line, Savings: \$3,200\? Ally savings stays on its own\. Your net worth stays \$290,300\./);
+  assert.deepEqual(pressed(), ["true", "false"], "while it asks, the chip tapped is the one lit (review 2026-11-16 P2)");
+  assert.equal(r.updates, 0, "asking writes nothing");
+  r.btn("Keep them as they are", el).click();
+  assert.doesNotMatch(r.partText(), /Replace Holiday/);
+  assert.deepEqual(pressed(), ["false", "true"], "kept as they are: the choice as it was");
+  r.btn("One figure", el).click();
+  r.btn("Item by item", el).click();
+  assert.doesNotMatch(r.partText(), /Replace Holiday/, "the other chip while asking: the question goes");
+  assert.deepEqual([pressed(), r.updates], [["false", "true"], 0]);
+  r.btn("One figure", el).click();
+  r.btn("Replace with one line", el).click();
+  assert.equal(r.updates, 1, "one save");
+  assert.deepEqual(r.plan.accounts.filter((a) => a.type === "savings").map((a) => [a.id, a.name, a.balance]), [["a-sav", "Ally savings", 11500], ["sv2", "Savings", 3200]]);
+  r.draw();
+  const el2 = r.partEl();
+  assert.ok(el2.hasAttribute("open"), "the part saved in stays open");
+  assert.equal(r.textOf(el2.querySelector(".fold-status")), "1 as one figure");
+  assert.match(r.partText(), /^One figure or item by item 1 as one figure › Savings is one figure now: \$3,200, in place of 2 accounts\. Ally savings stays on its own\. Your net worth is still \$290,300\. Undo/);
+  assert.match(r.partText(), /Savings · One figure: \$3,200, with 1 more on its own/);
+  assert.equal(r.btn("One figure", el2).getAttribute("aria-pressed"), "true");
+  // the list says what the row is
+  assert.match(r.text(), /Savings Edit Delete Savings or money market · Ally \$3,200 One figure for your savings accounts, as of 9\/1\/2026/);
+  // Undo: every row back, said
+  r.btn("Undo", el2).click();
+  assert.equal(r.updates, 2);
+  assert.deepEqual(r.plan.accounts.filter((a) => a.type === "savings").map((a) => [a.id, a.name, a.balance]), [["a-sav", "Ally savings", 11500], ["sv2", "Holiday fund", 2400], ["sv3", "Old savings", 800]]);
+  assert.deepEqual(r.plan.accounts, migrate(savers()).accounts, "exactly as before");
+  r.draw();
+  assert.ok(r.partEl().hasAttribute("open"));
+  assert.match(r.partText(), /Put back: Holiday fund and Old savings\. Your net worth is still \$290,300\./);
+});
+
+test("one figure, the page: Item by item keeps the one row and says how to go on; adding another account of that kind lists it item by item again", async () => {
+  const p = savers(); OF.asOne(p, "savings||0|", T);
+  const r = await live(p);
+  const el = r.partEl();
+  assert.equal(r.textOf(el.querySelector(".fold-status")), "1 as one figure");
+  r.btn("Item by item", el).click();
+  assert.equal(r.updates, 1);
+  assert.equal(r.plan.accounts.find((a) => a.id === "sv2").oneFigure, undefined);
+  assert.equal(r.plan.accounts.find((a) => a.id === "sv2").balance, 3200, "the row stays: the list starts from it");
+  r.draw();
+  assert.match(r.partText(), /Savings is item by item now\. List each one: tap Edit on its line to rename it, then \+ Add another account\./);
+  assert.doesNotMatch(r.text(), /One figure for your savings/);
+  // an add of another savings account while Savings is one figure: the mark comes off, and the green line says so
+  const q = savers(); OF.asOne(q, "savings||0|", T);
+  const a = await live(q, { add: "savings" });
+  submit(a.root.querySelector("form"), { name: "Rainy day", balance: "500" });
+  assert.equal(a.updates, 1);
+  assert.equal(a.plan.accounts.some((x) => x.oneFigure), false);
+  a.draw();
+  assert.match(a.text(), /Rainy day added\. Savings is item by item again: each account is on the list\./);
+});
+
+test("one figure: a kind whose name other pages read keeps the kept row's own name, so an old job's 401(k) stays one and a car loan stays a car loan", () => {
+  const p = emptyPlan();
+  p.household.people = [{ id: "p-ana", name: "Ana", role: "self" }];
+  p.accounts.push({ id: "o1", name: "Old job 401(k)", type: "401k", ownerId: "p-ana", balance: 40000 }, { id: "o2", name: "Rollover 401(k)", type: "401k", ownerId: "p-ana", balance: 12000 },
+    { id: "w1", name: "Acme 401(k)", type: "401k", ownerId: "p-ana", balance: 90000 },
+    { id: "l1", name: "Car loan", type: "loan", balance: 9000 }, { id: "l2", name: "Truck loan", type: "loan", balance: 4000 }, { id: "l3", name: "Personal loan", type: "loan", balance: 2000 });
+  const keys = OF.sectionsOf(p).map((s) => [s.key, s.name, s.count]);
+  assert.deepEqual(keys, [["401k|p-ana|0|o", "Ana's 401(k), from former jobs", 2], ["loan||0|c", "Car loans", 2]], "the job she has now and the personal loan are kinds of their own (one row each)");
+  const r = OF.asOne(p, "401k|p-ana|0|o", T);
+  assert.equal(r.name, "Old job 401(k)");
+  assert.deepEqual(p.accounts.filter((a) => a.type === "401k").map((a) => [a.name, a.balance]), [["Old job 401(k)", 52000], ["Acme 401(k)", 90000]]);
+  assert.equal(OF.nameClass(p.accounts[0]), "o", "still read as a job she has left");
+  OF.asOne(p, "loan||0|c", T);
+  assert.deepEqual(p.accounts.filter((a) => a.type === "loan").map((a) => [a.name, a.balance]), [["Car loan", 13000], ["Personal loan", 2000]]);
+  // a kind nobody reads by name takes the kind's name
+  const q = emptyPlan(); q.accounts.push({ id: "a", name: "Chase", type: "checking", balance: 1 }, { id: "b", name: "Credit union", type: "checking", balance: 2 });
+  assert.equal(OF.asOne(q, "checking||0|", T).name, "Checking");
+});

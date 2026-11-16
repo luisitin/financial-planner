@@ -1,5 +1,5 @@
 // modules/balance/net-worth/view.js -- DOM only.
-import { ACCOUNT_TYPES, isLiability, countedBalance, typeName, balanceGuessKey, balanceGuessPath, labelTotals } from "./compute.js";
+import { ACCOUNT_TYPES, isLiability, countedBalance, typeName, balanceGuessKey, balanceGuessPath, labelTotals, compute as worthOf } from "./compute.js";
 import { labelsOf, hasLabel, labelsIn, planLabels, labelChange, labelWords, sameLabel } from "./labels.js";
 import { LABELS_FIELD, labelPicks, readLabels, labelChips } from "./labels-view.js";
 import { keepOnFile, looksLikeSlip, correctSlip, markTyped } from "../update/compute.js";
@@ -7,7 +7,8 @@ import { isGuess, clearGuess, guessAt, markGuess, applies, same } from "../../..
 import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
 import { guessTwins } from "../../overview/guesses/compute.js";
 import { snapshotOf, keepSnapshot, dropSnapshot, against, sentenceOf, statusWords, staleWords, comingOn, comingWords, savedWords, wouldKeep, tooSmall } from "./path.js";
-import { part } from "../../../core/ui/more.js";
+import { part, choice } from "../../../core/ui/more.js";
+import { sectionsOf, sectionKey, asOne, itemize, unmarkOnAdd, rowLine, statusWords as oneStatus, sectionLine, holdWords, askWords, doneWords, itemizeWords, undoneWords as oneUndone, addWords, INTRO, PART_TITLE } from "./one-figure.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -23,6 +24,10 @@ let shownLabel = null;
 //                 their history in rarely knows it then, and must not have to make one up
 // Read once per address: the shell redraws with the same route object after a save, so the form does not open again.
 let landedOn = null;
+// "One figure or item by item" (gap next-60 #11): the green line after a tap in that part ({ text, undo?, r? }), and, for this
+// visit, whether the person acted in it (it stays open, R17) and which kinds they changed (still listed with one row left)
+let oneSaid = null, oneOpen = false;
+const oneTouched = new Set();
 const ADD_AS = {
   debt: { type: "credit", title: "Add a loan or card", hint: "e.g. Visa card or Car loan", help: "Pick the kind under Type." },
   credit: { title: "Add a credit card", hint: "e.g. Visa card" },
@@ -94,6 +99,7 @@ export function render(root, ctx) {
   const cur = plan.meta.currency;
   const q = ctx.route?.query ?? {};
   const fresh = ctx.route !== landedOn; landedOn = ctx.route;
+  if (fresh) { oneOpen = false; oneTouched.clear(); }
   const asked = fresh ? addAs(q.add) : null;
   // an account added for a bank or app file on Import (the form the address opened): its name from the file, and its
   // balance can wait (gap #33)
@@ -200,7 +206,10 @@ export function render(root, ctx) {
       // a change of labels is said (gap next-60 #44); the list stays narrowed only if the record still carries that label
       const labelled = labelsNow === null ? "" : (() => { const ch = labelChange(was ? labelsOf(was) : [], labelsNow); return ch ? ` ${labelWords(ch)}` : ""; })();
       if (shownLabel && labelsNow !== null && !labelsNow.some((l) => sameLabel(l, shownLabel))) shownLabel = null;
-      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.${labelled}` : `${v.name} added.${ours}${labelled}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.${labelled}` : `${v.name || was.name} saved.${ours}${labelled}` };
+      // another account of a kind kept as one figure lists that kind item by item again (gap next-60 #11)
+      const unmark = !was ? sectionsOf(plan).find((s) => s.mode === "one" && s.key === sectionKey({ ...v, ownerId: v.ownerId ?? "" })) : null;
+      const relisted = unmark ? ` ${addWords(unmark.name)}` : "";
+      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.${labelled}${relisted}` : `${v.name} added.${ours}${labelled}${relisted}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.${labelled}` : `${v.name || was.name} saved.${ours}${labelled}` };
       const setLabels = (acc) => { if (!acc || labelsNow === null) return; if (labelsNow.length) acc.labels = labelsNow; else delete acc.labels; };
       // a mortgage balance of ours saved here becomes the person's: the tax and insurance its payment was read with stay in that
       // payment, so the payoff date does not jump (home.js escrowKept; fix round 1, 2026-11-11)
@@ -233,6 +242,7 @@ export function render(root, ctx) {
           p.accounts.push({ id, ...typed, ...(g ? { balance: g.value } : {}), history: [] });
           if (g) markGuess(p, `accounts[${id}].balance`, g, fmt.today());
           setLabels(p.accounts.at(-1));
+          if (unmark) unmarkOnAdd(p, p.accounts.at(-1));
         }
       });
       // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
@@ -318,6 +328,9 @@ export function render(root, ctx) {
   const ownLabels = labelsIn(plan.accounts);
   if (shownLabel && !ownLabels.some((l) => sameLabel(l, shownLabel))) shownLabel = null;
   const pills = (a) => labelsOf(a).map((l) => ui.h("span", { class: "pill" }, l));
+  // a row that holds its kind as one figure says so ("One figure for your savings accounts"; gap next-60 #11)
+  const kinds = sectionsOf(plan);
+  const oneLine = (a) => rowLine(plan, a, kinds);
   const rows = [...plan.accounts].filter((a) => !shownLabel || hasLabel(a, shownLabel)).sort((a, b) => Number(isLiability(a.type)) - Number(isLiability(b.type)) || Math.abs(b.balance) - Math.abs(a.balance));
   const redrawHere = () => (ctx.redraw ? ctx.redraw() : (root.replaceChildren(), render(root, ctx)));
   const filter = ownLabels.length ? ui.h("div", { dataset: { labels: "" } },
@@ -325,7 +338,7 @@ export function render(root, ctx) {
     shownLabel ? ui.h("p", { class: "small" }, labelLine(labelTotals(plan, shownLabel), (n) => fmt.money(n, cur))) : null) : null;
   // Desktop: a table. Phone: one stacked record per account (tester F-002).
   const table = ui.h("div", { class: "only-wide" }, ui.table([
-    { key: "name", label: "Account", render: (a) => (labelsOf(a).length ? ui.h("span", {}, a.name ?? "", ...pills(a)) : (a.name ?? "")) },
+    { key: "name", label: "Account", render: (a) => (labelsOf(a).length || oneLine(a) ? ui.h("span", {}, a.name ?? "", ...pills(a), oneLine(a) ? ui.h("div", { class: "muted small" }, oneLine(a)) : null) : (a.name ?? "")) },
     { key: "type", label: "Type", render: typeLabel },
     { key: "institution", label: "Bank or company" },
     { key: "balance", label: "Balance", align: "right", render: balance },
@@ -340,7 +353,7 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.name),
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
-    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : a.asOf ? `as of ${fmt.date(a.asOf)}` : "", ...pills(a)))));
+    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : oneLine(a) ? `${oneLine(a)}${a.asOf ? `, as of ${fmt.date(a.asOf)}` : ""}` : a.asOf ? `as of ${fmt.date(a.asOf)}` : "", ...pills(a)))));
   // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
   const twins = guessTwins(plan);
   if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
@@ -349,6 +362,7 @@ export function render(root, ctx) {
     empty ? null : ui.h("p", {}, ui.h("a", { href: "#/balance/update", class: "btn secondary" }, "Update all balances at once")),
     empty ? null : filter,
     empty ? null : table, empty ? null : records,
+    empty ? null : onePart(),
     formHost,
   ));
 
@@ -361,6 +375,56 @@ export function render(root, ctx) {
     h2?.scrollIntoView({ block: "start" });
     const box = formHost.querySelector(editing ? 'input[name="balance"]' : 'input[name="name"]');
     try { box?.focus({ preventScroll: true }); } catch { /* old browsers */ }
+  }
+  // "One figure or item by item" (gap next-60 #11; README): one quiet row under the list, drawn only while a kind of account can
+  // be put together into one figure or is kept as one (a kind = one kind of account of one owner: Savings, Ana's 401(k)).
+  // Inside: each such kind with its two chips; One figure asks first, in place, then replaces the rows with one (Undo);
+  // Item by item keeps the one row as the first of the list. Nothing here is drawn for a plan with nothing to choose.
+  function onePart() {
+    const money = (n) => fmt.money(n, cur);
+    const all = sectionsOf(plan, { all: true });
+    const shown = all.filter((s) => s.count >= 2 || s.mode === "one" || oneTouched.has(s.key));
+    const said = oneSaid; oneSaid = null;
+    if (!said && !shown.some((s) => s.changes || oneTouched.has(s.key))) return null;
+    const after = (dr) => worthOf(dr, { today: fmt.today() }).netWorth;
+    const act = (s, mutate, words) => {
+      oneOpen = true; oneTouched.add(s.key);
+      let r = null, nw = d.netWorth;
+      const undo = ui.undoable(store, (dr) => { r = mutate(dr); nw = after(dr); });
+      if (!r) return;
+      oneSaid = { text: words(r, nw), r, nw, undo };
+    };
+    const putTogether = (s) => act(s, (dr) => asOne(dr, s.key, fmt.today()), (r, nw) => doneWords(r, s, money, nw));
+    const toItems = (s) => act(s, (dr) => itemize(dr, s.key), (r) => itemizeWords(r));
+    // One figure asks first, in place; while it asks, its chip is the one lit (review 2026-11-16 P2: the old choice stayed lit and
+    // the tap looked lost). "Keep them as they are", or a tap on the other chip, puts the block back as it was. Nothing is written.
+    const block = (s) => {
+      const host = ui.h("div", { dataset: { kind: s.key }, style: { display: "grid", gap: "8px" } });
+      // the chip lit now keeps the focus when the block is drawn again under the finger (the tapped control is replaced)
+      const lit = () => { try { host.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true }); } catch { /* old browsers */ } };
+      const draw = (asking, focus = false) => {
+        const ask = !asking ? null : ui.h("div", { style: { display: "grid", gap: "8px" } }, ui.h("p", {}, askWords(plan, s, money, d.netWorth)),
+          ui.row(ui.button("Replace with one line", () => putTogether(s), { class: "secondary" }), ui.button("Keep them as they are", () => draw(false, true), { class: "secondary" })));
+        const pick = (v) => {
+          if (asking) return draw(false, true);      // the other chip while asking: the question goes, nothing changes
+          if (v === "items") return toItems(s);
+          if (!s.join.length) return putTogether(s);   // one row: only marked, nothing to replace
+          draw(true, true);
+        };
+        host.replaceChildren(...[   // (a native replaceChildren writes a null as the word "null": left out)
+          ui.h("p", {}, ui.h("strong", {}, s.name), ` \u00b7 ${sectionLine(s, money)}`),
+          s.changes || oneTouched.has(s.key) ? choice(ctx, { id: `one-${s.key}`, label: `${s.name}: one figure or item by item`, value: asking ? "one" : s.mode, onPick: pick,
+            presets: [{ value: "one", label: "One figure" }, { value: "items", label: "Item by item" }] }) : null,
+          ...s.held.map((h) => ui.h("p", { class: "muted small" }, holdWords(h))),
+          ask].filter(Boolean));
+        if (focus) lit();
+      };
+      draw(false);
+      return host;
+    };
+    const note = said ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (res) => { oneOpen = true; oneSaid = { text: ui.undoneWords(res, oneUndone(said.r, money, said.nw)) }; } } : {}) : null;
+    return ui.h("div", { class: "folds", style: { marginTop: "8px" } }, part(ctx, { id: "asOne", kind: "own", title: PART_TITLE, says: oneStatus(shown),
+      open: !!said || oneOpen, body: [note, ui.h("p", {}, INTRO), ...shown.map(block)] }));
   }
   // "Your earlier plan" (gap #35): one quiet row in Over time, drawn only once a path kept by "Save today's totals"
   // is six months old. It reads the plan and writes nothing; without a kept path the page is as it was. While a kept path

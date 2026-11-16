@@ -323,6 +323,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Costs you may be missing",      // career/business (gap list, next 60, item 6): the brief's "Costs people often forget to count", shortened to keep to one line at 390 px; nine costs a self-employed person often leaves out, each counted or one tap from its box, a list a person looks for by name; not how the page's answer is worked out, nor "N more ..."
   "Costs from your bank lines",    // career/business (gap list, next 60, item 6): the brief's own title; the ledger lines tied to the business added up by the page's kinds, with "Use these", a name a person looks for; not our guess overridden, so not "Set my own numbers"
   "The business",                  // career/business (opt spec 6.1, done with gap list, next 60, item 6): the opt spec's own title for the business's figures and its expenses; on the empty plan its only own part
+  "One figure or item by item",    // balance/net-worth and cashflow/income (gap list, next 60, item 11): the brief's own words; a choice per kind of account or income (two chips each, no box), so not "Set my own numbers"
   "Who gets what",                 // estate/legacy (gap list, next 60, item 15): the brief's own words; who would receive what today, as bars, a question a person asks by name (Choices to take to a lawyer's row of the same name is an item); not how the page's answer is worked out, nor "N more ..."
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;

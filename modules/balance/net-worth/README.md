@@ -313,3 +313,113 @@ the household; the words for a typed balance cleared on Edit.
 - **Tests** in `module.test.mjs`: the rules, `labelTotals` and its three sentences, the save on add and on Edit, the
   removal, the words, the 30-character refusal, the first account without the box, the chips to pick, the filter (only
   the rows and the line change, `store.update` never called, the top figure the same), the invariance.
+
+## One figure or item by item (gap list, next 60, item 11; 2026-11-16) -- `one-figure.js`
+
+A person can keep a kind of account as **one figure** (typed and changed in one place) or list it **item by item**, as
+before. Research Ux8 (Boldin, ProjectionLab: "one lump or itemize"). Get started already asks one figure per kind
+(Checking, Savings, Retirement per adult, Investments, Credit cards...); this is the way, on this page, to go from
+several rows to one and back.
+
+- **What a "kind" is (a section).** One kind of account of one owner: Savings; Checking; Ana's 401(k); Ana's 401(k), from
+  former jobs; My Roth; Credit cards. Key: `type|ownerId|formerJob|nameClass` (`sectionKey`). Offered for bank
+  accounts (checking, savings, cash), investments (brokerage, crypto), retirement accounts (401(k)/403(b), traditional
+  IRA, Roth) and cards and loans (credit card, car or personal loan, student loan, something else I owe). Never for the
+  mortgage (tied to a home), a home, a car, something else owned, the HSA, college savings (one per child) or a policy.
+  **Builder's choice, where the brief was wrong about the code:** the brief named four sections (bank accounts,
+  investments, retirement accounts, debts), but this page has no sections, and one figure across kinds or owners would
+  keep the sum and change answers: the retirement plan taxes a Roth and a 401(k) differently (`BUCKET_OF`) and reads
+  contributions by the account's kind; Emergency fund reads checking apart from savings; the tax pages and Balance
+  sheet by owner read the owner. Rows of one kind and owner are counted the same by every page, so one row with their
+  total gives every page the same answer.
+- **Names other pages read** are part of the kind (`nameClass`, the same patterns as those pages): a 401(k), IRA or Roth
+  named "old", "former", "previous", "prior" or "rollover" is from a job left (retirement/contributions `atJob`, Goal seek,
+  levers); a Roth named for a 401(k), 403(b), 457, TSP or thrift plan is one through work (contributions `limitKind`); a
+  401(k) named 457, TSP or thrift is not a 401(k) for the limits (investments/limits `NOT_401K`); a loan whose name or bank
+  says car, auto, vehicle or truck is a car loan (insurance/property). So "Old job 401(k)" and "Rollover 401(k)" go
+  together, apart from the 401(k) at the job she has now, and a car loan apart from a personal loan. Put together, a row of
+  those kinds (401(k), IRA, Roth, loans: `NAME_READ`) keeps the kept row's own name, so it is read as before; the others
+  take the kind's name ("Savings", "Credit cards"). A row named "Credit cards" is what Import calls Get started's one line
+  for every card (`isCardLump`): a card's file is not taken as its balance, which is right for one figure.
+- **First view: nothing new** unless a kind can change: two or more of its rows can go together, or it is one figure
+  now. Then one quiet row at the foot of the Accounts card, above "+ Add another account": the part "One figure or item
+  by item" (`core/ui/more.js` `part()`, kind `own`, title pinned in `qa/first-view-lib.mjs`), shut, status "1 can be one
+  figure" / "2 as one figure" (no money). None of the invented households has such a kind (their repeated kinds are
+  credit cards and student loans with their own rates on Debts, college savings, homes and cars), so no first view moved.
+- **One tap away**: one sentence ("Keep a kind of account as one figure, typed and changed in one place, or list each
+  account on its own. Either way your net worth counts the same, and so does every plan that reads it."), then per kind:
+  its name and "3 accounts, $14,700 in all", or, when some of its rows stay on their own, what one figure would hold: "2 of
+  3 accounts can be one figure, $3,200" (review 2026-11-16 P1: the line said $14,700 while the question replaced only
+  $3,200); one figure: "One figure: $3,200", "...with 1 more on its own", "...owed". Then two chips (`choice()`): **One
+  figure** / **Item by item**, and one muted sentence for each row that stays on its own.
+- **One figure** asks first, in place (no filled button): "Replace Holiday fund and Old savings with one line, Savings:
+  $3,200? Ally savings stays on its own. Your net worth stays $290,300." [Replace with one line] [Keep them as they are].
+  While it asks, the **One figure** chip is the one lit (review 2026-11-16 P2: the old choice stayed lit and the tap
+  looked lost); Keep them as they are, or a tap on Item by item, takes the question away and lights the old chip again.
+  Nothing is written until Replace. Replace is one `store.update` through `ui.undoable`; the part stays open (R17) with the
+  green line "Savings is one figure now: $3,200, in place of 2 accounts. Ally savings stays on its own. Your net worth is
+  still $290,300." (the rows that stay are named, so a "Savings" row beside "Ally savings" is no surprise) and an outlined
+  Undo, which puts every row back exactly ("Put back: Holiday fund and Old savings. Your net worth is still $290,300.").
+  A kind of one row is only marked ("Chase savings is one figure now: $500. ..."), its name kept. As with every Undo line
+  (docs/CONVENTIONS.md "Back, Forward"), the shell puts the green line back when the person looks at another page and
+  comes Back while the plan is unchanged, so the way back is not lost.
+- **Item by item** removes nothing, so it asks nothing: the one row stays as the first of the list. "Savings is item by
+  item now. List each one: tap Edit on its line to rename it, then + Add another account." (short for a phone: review
+  2026-11-16 P4). With Undo.
+- **In the list** the row that holds a kind's figure says "One figure for your savings accounts, as of 9/1/2026" (under
+  its name on a wide screen). Its Edit form is the usual one: one balance box, typed once, edited once.
+- **Adding** another account of that kind and owner here takes the mark off, and the green line says "Rainy day added.
+  Savings is item by item again: each account is on the list." (`unmarkOnAdd`). An account added on another page
+  (Update my balances, Import, Get started) leaves the mark, and the kind reads item by item because a free row now
+  stands beside it.
+
+**Which row holds the figure, and which stay on their own** (`sectionsOf`): the row marked, else Get started's own row
+(`setup-...`, so Get started's question shows the total), else the biggest; never one whose balance another page reads
+by its id. A row stays on its own, with one sentence each (`<name> stays on its own: <why>.`), when the plan keeps its
+id anywhere outside `accounts` (a scan of the plan, `pointedAt`, so a new place is never missed): it has bank lines in
+your ledger / bank files were imported into it / it has investments listed in it / its statements were checked against
+it / a rule files bank lines into it / a bank file layout points at it / a goal draws on it / its rate and payment are
+on Debts / your debt plan puts it in its own place / a home or rental is linked to it / a contact is linked to it / it
+has beneficiaries / a money move in your retirement plan uses it / another page keeps something about it; or its
+balance is our guess for now: type the real one first; or it carries labels of its own; or it is an answer in Get
+started (a second Get started row); or the app cannot tell it apart from another account on your list (its id is missing
+or another row has the same one: migrate keeps such rows, and a change by id cannot say which row it is for; review
+2026-11-16 F3, where three savings rows "a", "a", "b" put together removed all three). A contribution is no reason: it
+follows the row (same kind, same bucket). Rows are removed by which row they are, never by id.
+
+**Formulas** (all arithmetic on the person's own figures; no outside figure is used, so nothing here has a source to
+date). For the rows R put together into the kept row k (`asOne`):
+- balance(k) = Σ countedBalance(r), r ∈ R, to the cent; a debt is what is owed (|balance|), stored with k's sign.
+  Example: Holiday fund $2,400 + Old savings $800 = Savings $3,200.
+- asOf(k) = the earliest "as of" among R: the one figure is no fresher than its oldest part, so a part that was due for an
+  update still asks for one (Update balances, the stale-balance alert) until the person types the new total; the latest
+  would hide an old part. **Builder's choice** (review 2026-11-16 F5). typedOn(k) = the latest `typedOn` among R (the
+  total as it stands existed only from the day its last part was typed; Update balances' slip fix moves saved totals
+  from that day), or none when no row has one.
+- history(k), `mergedHistory`: from s = the latest of R's first point days (the first day EVERY row has a figure), over
+  the days D ≥ s on which any row has a point, h(d) = Σ b_r(d), b_r(d) = r's latest point on or before d. Days before s are
+  left out: counting a row as 0 before its first point showed that point as growth (review 2026-11-16 F2: two brokerage
+  rows, one saved from January, one only from September, read as a 520% return on Performance, which reads
+  `accounts[].history`). A row with no point at all: no day qualifies, and the history starts afresh (Save today's totals
+  adds the first point; Undo gives the old points back). For a debt each b_r(d) is what is owed, |point|, and h(d) takes the
+  kept balance's sign (F4: points -400 and +250 are $650 owed, -650, not -150). Example: Holiday fund 9/1 $2,000, 10/1
+  $2,300; Old savings 10/1 $790 -> 10/1 $3,090 (9/1 left out: Old savings had no figure then).
+- institution(k) = the one they share, else blank; notes(k) = their notes joined with " · "; owner, kind, labels as k's
+  (equal by the rules above); the name is the kind's name ("Savings", "Credit cards"), or k's own for a kind whose name
+  other pages read (401(k), IRA, Roth, loans).
+- every `retirement.contributions[].accountId` in R \ {k} becomes k.
+**Why every total stays the same**: each page adds rows, and k has the kind, owner and bucket of every row it replaces, so
+each page's sum over the kind is the same sum. Tested to the cent: `module.test.mjs` (Net worth's figures, the retirement
+plan's balances, contributions by bucket and its answer, after One figure and after Item by item again) and
+`tests/one-figure-totals.test.mjs` (every invented household, each eligible row split in two and put back together).
+
+**Data**: `accounts[].oneFigure` (optional, `true`; docs/DATA_MODEL.md). A kind is "one figure" when a row carries the mark
+and every other row of the kind stays on its own. No total reads it.
+
+**Invariance**: with no mark anywhere, Net worth's and Income's compute, Paycheck, the Federal estimate, the retirement
+inputs and projection, and the words of this page and Income are byte for byte those of a491122 over every invented
+household (`tests/one-figure-invariance.test.mjs`).
+
+**Not done**: no "Bank accounts" figure across checking and savings, and none across people (it would change answers);
+Get started is not edited (a Get started row is kept, never removed); a debt with its rate on Debts stays on its own (the
+payoff plan pays each one by its own rate and payment).
