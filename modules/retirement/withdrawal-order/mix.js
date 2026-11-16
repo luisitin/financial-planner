@@ -249,6 +249,38 @@ export function convWords(conv, rmdAge = null) {
 }
 /** A row's title: the order's own name; an order of the plan's own that is none of the five: "Your own order". */
 export const orderTitle = (order) => order.label ?? "Your own order";
+/** Until when, short, in a row's title: "until age 70"; "until age 75" (the year required withdrawals begin); with no age at
+ * hand, "until required withdrawals begin". */
+const stopShort = (untilAge, rmdAge = null) => (untilAge ? `until age ${untilAge}` : rmdAge ? `until age ${rmdAge}` : "until required withdrawals begin");
+/**
+ * rowTitle(x, rows, rmdAge) -> a listed row's title, saying what tells it from the others listed with it (recheck leftover y2 (e),
+ * 2026-11-16: two rows read "A share from every account" and differed only in the line under them). One written case each:
+ *   no other listed row with the same order            -> the order's name, as before: "Roth, then taxable, then pre-tax"
+ *   the same order, nothing moved to a Roth           -> "Taxable, then pre-tax, then Roth, with no Roth conversions"
+ *   the same order, conversions                       -> "A share from every account, with Roth conversions"
+ *     + the rate when another such row converts to another rate: " up to the 12% rate"
+ *     + the stop when another such row has the same rate and another stop: " until age 70" / " until age 75"
+ */
+export function rowTitle(x, rows = [], rmdAge = null) {
+  const tell = tellWords(x, rows, rmdAge);
+  return tell ? `${orderTitle(x.order)}, ${tell}` : orderTitle(x.order);
+}
+/**
+ * tellWords(x, rows, rmdAge) -> what rowTitle adds to the order's name, alone ("" when no other listed row shares its order):
+ * "with no Roth conversions", "with Roth conversions up to the 22% rate", ... The page shows it on its own line under the order's
+ * name, first letter upper-cased, so the name stays short (fix round, critic P3: "Taxable, then pre-tax, then Roth, with Roth
+ * conversions up to the 22% rate" wrapped to three lines beside its pill on a phone).
+ */
+export function tellWords(x, rows = [], rmdAge = null) {
+  const t = orderTitle(x.order);
+  const twins = rows.filter((y) => y !== x && orderTitle(y.order) === t);
+  if (!twins.length) return "";
+  if (!x.conv) return "with no Roth conversions";
+  const others = twins.filter((y) => y.conv);
+  const rate = others.some((y) => y.conv.fillRate !== x.conv.fillRate);
+  const stop = others.some((y) => y.conv.fillRate === x.conv.fillRate && (y.conv.untilAge ?? null) !== (x.conv.untilAge ?? null));
+  return `with Roth conversions${rate ? ` up to the ${pct(x.conv.fillRate)} rate` : ""}${stop ? ` ${stopShort(x.conv.untilAge, rmdAge)}` : ""}`;
+}
 /** The pill on the best row (critic of x2, P1: a second plain "best" under the hero's best order read as a second answer to the
  * same question): "best with conversions" when it moves money to a Roth, "best mix" when it does not. */
 export const bestWords = (x) => (x.conv ? "best with conversions" : "best mix");

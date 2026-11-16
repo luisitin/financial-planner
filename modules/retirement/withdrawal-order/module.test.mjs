@@ -631,7 +631,8 @@ test("x2 the part: one quiet row before the method; nothing runs until it opens;
   assert.ok(pt.includes(`${MIX.ROTH_WORDS}The best of the 35 mixes we tried leaves about $874,277 at the end, after tax and in today's dollars: $37,733 more than your plan as it is.`), pt);
   assert.ok(t.includes("Taxable, then pre-tax, then Rothyour plan$836,544Nothing moved to a Roth. Tax over the plan $174,664."), t);
   assert.ok(t.includes("Roth, then taxable, then pre-taxbest with conversions$874,277Money moved to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. $37,733 more left at the end; $37,674 less tax over the plan.Use this mix"), t);
-  assert.ok(t.includes("A share from every account$863,788Money moved to a Roth each year up to the 12% tax rate, until age 70. $27,244 more left at the end; $25,566 less tax over the plan."), t);
+  // two rows of the same order say which stop each has, on its own line under the order's name (recheck leftover y2 (e); fix P3)
+  assert.ok(t.includes("A share from every accountWith Roth conversions until age 70$863,788Money moved to a Roth each year up to the 12% tax rate, until age 70. $27,244 more left at the end; $25,566 less tax over the plan."), t);
   assert.equal(part.all().filter((e) => /\bpill\b/.test(e.className) && /^best/.test(e.textContent)).length, 1, "one best");
   // the method is under "How this is worked out", not between the rows and the next part (P5): what was tried, why gains at 0% are
   // not in it with its link, and on this flat-rate plan with nothing moved, that the figures use the real rates
@@ -673,9 +674,11 @@ test("x2 the part: one quiet row before the method; nothing runs until it opens;
   assert.ok(s.text().includes("Trying 35 mixes of order and Roth conversions..."));
   await VIEW.searchDone();
   assert.ok(s.text().includes("None of the 35 mixes we tried leaves more than your plan as it is."), s.text());
-  assert.ok(s.text().includes("Roth, then taxable, then pre-taxyour plan$874,277"), s.text());
-  // the five orders: Roth first is now the best for this plan, and its row no longer says "the usual worst" beside "best" (P2)
-  const roRow = s.root.all().find((e) => e.tagName === "LI" && e.textContent.startsWith("Roth, then taxable, then pre-taxbestyour plan"));
+  // a row of the same order with another stop is listed too, so the title says the stop (recheck leftover y2 (e); fix P3)
+  assert.ok(s.text().includes("Roth, then taxable, then pre-taxWith Roth conversions until age 75your plan$874,277"), s.text());
+  // the five orders: Roth first is now the best for this plan, and its row no longer says "the usual worst" beside "best" (P2); one
+  // pill, "your plan, the best", not "best" and "your plan" side by side (y2 fix round, critic P4)
+  const roRow = s.root.all().find((e) => e.tagName === "LI" && e.textContent.startsWith("Roth, then taxable, then pre-taxyour plan, the best$"));
   assert.ok(roRow, s.text().slice(0, 1200));
   assert.ok(roRow.textContent.includes("Spends the tax-free money first: usually the worst order, but the best for this plan. Left at the end after tax"), roRow.textContent);
   assert.ok(!/usual worst/.test(roRow.textContent));
@@ -692,7 +695,7 @@ test("x2 S11: Use this mix on a plan already on the real rates: only the order a
   const p0 = familyPlan(T22); p0.retirement = { ...(p0.retirement ?? {}), taxMode: "brackets" };
   const s = await drawOrder(p0);
   openMix(s); await VIEW.searchDone();
-  const share = s.root.all().filter((e) => e.tagName === "LI" && e.textContent.startsWith("A share from every account$873,681"))[0];
+  const share = s.root.all().filter((e) => e.tagName === "LI" && e.textContent.startsWith("A share from every accountWith Roth conversions until age 75$873,681"))[0];
   assert.ok(share, s.text());
   share.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this mix").click();
   assert.equal(s.p.retirement.withdrawalSplit, "proportional"); assert.deepEqual(s.p.retirement.withdrawalOrder, ["taxable", "deferred", "free"], "the order is kept");
@@ -865,4 +868,136 @@ test("x2 a change of order while the search runs: each run is made on the plan t
   for (const c of fresh.grid.cells) { const k = MIX.runKey(fresh.grid, c); assert.deepEqual(got.runs.get(k), fresh.runs.get(k), k); }
   assert.equal(fresh.grid.own.inGrid, false);
   assert.equal(got.top.key, fresh.top.key); assert.equal(got.asIs.endAfterTaxReal, fresh.asIs.endAfterTaxReal);
+});
+
+// ---------------------------------------------------------------- leftovers of the rechecks (y2, 2026-11-16)
+/** Every invented household (y2 invariance, against 398a01e): the qa fixture plans, the qa/households archetypes, the phone,
+ *  round 8 and persona households, and the empty plan. */
+async function y2Plans(today) {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { migrate, emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const out = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`fixture ${f}:${name}`, fn(today)]);
+  }
+  for (const a of ARCHETYPES) out.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) out.push([`persona ${n}`, personas.finishSetup(n, personas[n](today), today)]);
+  out.push(["empty plan", blank()]);
+  return out.map(([name, p]) => [name, migrate(structuredClone(p))]);
+}
+const y2Digest = async (x) => (await import("node:crypto")).createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+const TY2 = "2026-11-16";
+/** The rows "Try Roth conversions too" lists, as the page draws them: the plan as it is, then the best ones shown. */
+const listedRows = (r) => (r.ready && r.listed ? [r.asIs, ...r.shown] : []);
+const titled = (r, rmdAge) => listedRows(r).map((x) => MIX.rowTitle(x, listedRows(r), rmdAge));
+
+// (e) "Try Roth conversions too" listed two rows titled the same, "A share from every account", that differed only in the line
+// under them (the family), and four "Taxable, then pre-tax, then Roth" (Ruth). A title says what differs, only where two rows
+// share an order.
+test("y2 (e) the rows' titles: the order alone, or the order with what differs (conversions or none, the rate, the stop)", () => {
+  const order = (label) => ({ key: label, label });
+  const row = (label, conv = null, asIs = false) => ({ order: order(label), conv, asIs });
+  const A = "A share from every account", T = "Taxable, then pre-tax, then Roth", R = "Roth, then taxable, then pre-tax";
+  // no twin: the order's own name, as before (and "Your own order" for an order that is none of the five)
+  const single = [row(T, null, true), row(R, { fillRate: 0.12, untilAge: null })];
+  assert.deepEqual(single.map((x) => MIX.rowTitle(x, single, 75)), [T, R]);
+  const own = { order: { key: "own" }, conv: null };
+  assert.equal(MIX.rowTitle(own, [own]), "Your own order");
+  // the same rate, two stops (the family): the stop says it
+  const fam = [row(T, null, true), row(R, { fillRate: 0.12, untilAge: null }), row(A, { fillRate: 0.12, untilAge: null }), row(A, { fillRate: 0.12, untilAge: 70 })];
+  assert.deepEqual(fam.map((x) => MIX.rowTitle(x, fam, 75)), [T, R, `${A}, with Roth conversions until age 75`, `${A}, with Roth conversions until age 70`]);
+  assert.equal(MIX.rowTitle(fam[2], fam), `${A}, with Roth conversions until required withdrawals begin`, "no age at hand");
+  // three rates and none (Ruth): the rate says it, and the plan as it is says it has none
+  const ruth = [row(T, null, true), row(T, { fillRate: 0.22, untilAge: null }), row(T, { fillRate: 0.12, untilAge: null }), row(T, { fillRate: 0.1, untilAge: null })];
+  assert.deepEqual(ruth.map((x) => MIX.rowTitle(x, ruth, 73)), [`${T}, with no Roth conversions`, `${T}, with Roth conversions up to the 22% rate`, `${T}, with Roth conversions up to the 12% rate`, `${T}, with Roth conversions up to the 10% rate`]);
+  // one with conversions beside one without (Pat and Lee): "with Roth conversions" is all that differs
+  const pat = [row(T, null, true), row(T, { fillRate: 0.1, untilAge: null }), row(R, { fillRate: 0.1, untilAge: null })];
+  assert.deepEqual(pat.map((x) => MIX.rowTitle(x, pat, 75)), [`${T}, with no Roth conversions`, `${T}, with Roth conversions`, R]);
+  // two rates and two stops: each says what tells it from the others
+  const both = [row(A, { fillRate: 0.12, untilAge: null }), row(A, { fillRate: 0.12, untilAge: 70 }), row(A, { fillRate: 0.22, untilAge: null })];
+  assert.deepEqual(both.map((x) => MIX.rowTitle(x, both, 75)), [`${A}, with Roth conversions up to the 12% rate until age 75`, `${A}, with Roth conversions up to the 12% rate until age 70`, `${A}, with Roth conversions up to the 22% rate`]);
+});
+test("y2 (e) the family on the page: the two rows of a share from every account say which stop each has", async () => {
+  const r = MIX.mixes(fam(), { today: T22 });
+  const rows = listedRows(r);
+  assert.deepEqual(rows.map((x) => MIX.orderTitle(x.order)), ["Taxable, then pre-tax, then Roth", "Roth, then taxable, then pre-tax", "A share from every account", "A share from every account"], "the case the recheck found");
+  assert.deepEqual(titled(r, r.grid.rmdStartAge), ["Taxable, then pre-tax, then Roth", "Roth, then taxable, then pre-tax", "A share from every account, with Roth conversions until age 75", "A share from every account, with Roth conversions until age 70"]);
+});
+
+// (e) invariance: with nothing new typed, the mixes "Try Roth conversions too" works out are those of 398a01e for every household,
+// and a row no other listed row shares an order with keeps its title. Written with PRINT_Y2=1 on 398a01e's code.
+test("y2 (e) invariance: every household's mixes are those of 398a01e; titles change only where two listed rows share an order, and are then all different", async () => {
+  const fs = await import("node:fs");
+  const file = new URL("./y2-invariance.json", import.meta.url);
+  const now = {};
+  let twins = 0;
+  for (const [name, plan] of await y2Plans(TY2)) {
+    let r;
+    try { r = MIX.mixes(plan, { today: TY2 }); } catch (e) { now[name] = { mixes: `THROW ${e.message}`, titles: [] }; continue; }
+    const { grid, runs, ...rest } = r;
+    now[name] = { mixes: await y2Digest(JSON.parse(JSON.stringify({ grid, runs: runs ? [...runs] : null, rest: { ...rest, better: rest.better ? [...rest.better] : null } }))), titles: listedRows(r).map((x) => MIX.orderTitle(x.order)) };
+    if (process.env.PRINT_Y2) continue;
+    const t = titled(r, grid?.rmdStartAge);
+    assert.equal(new Set(t).size, t.length, `${name}: ${t.join(" | ")}`);
+    now[name].titles.forEach((was, i) => { if (now[name].titles.filter((x) => x === was).length === 1) assert.equal(t[i], was, `${name}: a row with no twin keeps its title`); else twins++; });
+  }
+  if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(was).length >= 45, `${Object.keys(was).length} households`);
+  assert.deepEqual(now, was);
+  assert.ok(twins >= 6, `${twins} rows shared an order with another`);
+});
+
+// fix round, critic P3: "Taxable, then pre-tax, then Roth, with Roth conversions up to the 22% rate" wrapped to three lines beside its
+// pill on a phone. The order's name stays short and what tells the row apart (tellWords) has its own line under it.
+test("y2 (e) fix P3: tellWords is what rowTitle adds; the page shows the order's name, then that on its own line", async () => {
+  const order = (label) => ({ key: label, label });
+  const row = (label, conv = null, asIs = false) => ({ order: order(label), conv, asIs });
+  const T = "Taxable, then pre-tax, then Roth", R = "Roth, then taxable, then pre-tax";
+  const ruth = [row(T, null, true), row(T, { fillRate: 0.22, untilAge: null }), row(R, { fillRate: 0.12, untilAge: null })];
+  assert.deepEqual(ruth.map((x) => MIX.tellWords(x, ruth, 73)), ["with no Roth conversions", "with Roth conversions", ""]);
+  for (const x of ruth) {
+    const tell = MIX.tellWords(x, ruth, 73);
+    assert.equal(MIX.rowTitle(x, ruth, 73), tell ? `${MIX.orderTitle(x.order)}, ${tell}` : MIX.orderTitle(x.order), "rowTitle is the name and the tell");
+  }
+  // the family on the page: the two rows of a share from every account each show the name, then their own line
+  const p0 = familyPlan(T22); p0.retirement = { ...(p0.retirement ?? {}), taxMode: "brackets" };
+  const s = await drawOrder(p0);
+  openMix(s); await VIEW.searchDone();
+  const tells = s.root.all().filter((e) => e.className === "mix-tell");
+  assert.deepEqual(tells.map((e) => e.textContent), ["With Roth conversions until age 75", "With Roth conversions until age 70"]);
+  for (const e of tells) {
+    assert.equal(e.style.display, "block", "its own line"); assert.equal(e.style.fontWeight, "400", "in the plain weight, under the bold name");
+    const title = e.parentNode;
+    assert.ok(/\brec-title\b/.test(title.className));
+    assert.equal(title.childNodes[0].textContent ?? title.childNodes[0].nodeValue, "A share from every account", "the order's name first, alone");
+  }
+  // a row whose order is listed once has no such line
+  const lis = mixPartOf(s).all().filter((e) => e.tagName === "LI" && /^Roth, then taxable, then pre-tax(best with conversions)?\$/.test(e.textContent));
+  assert.equal(lis.length, 1, s.text().slice(0, 600));
+  assert.equal(lis[0].all().filter((e) => e.className === "mix-tell").length, 0);
+});
+
+// fix round, critic P4: on a plan whose own order is the best, the row of the five orders showed "best" and "your plan" side by side.
+test("y2 (e) fix P4: the five orders' pills: best, your plan, or one pill when they are the same row", async () => {
+  const ui = await import("../../../core/ui/dom.js");
+  const pills = (o, best) => VIEW.orderPills(ui, o, best).map((e) => [e.className, e.textContent]);
+  assert.deepEqual(pills({ current: true }, true), [["pill ok", "your plan, the best"]]);
+  assert.deepEqual(pills({ current: false }, true), [["pill accent", "best"]]);
+  assert.deepEqual(pills({ current: true }, false), [["pill ok", "your plan"]]);
+  assert.deepEqual(pills({ current: false }, false), []);
+  // the retired couple (the critic's case): their order is the best one; its row has one pill, the hero says so
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const s = await drawOrder(retiredCouplePlan());
+  assert.match(s.text(), /^Your order is the best one/);
+  const row = s.root.all().find((e) => e.tagName === "LI" && e.textContent.startsWith("Taxable, then pre-tax, then Roth"));
+  assert.deepEqual(row.all().filter((c) => /\bpill\b/.test(c.className)).map((c) => c.textContent), ["your plan, the best"]);
 });

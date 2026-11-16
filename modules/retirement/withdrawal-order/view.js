@@ -7,7 +7,7 @@ import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
 import { compute, chooseOrder, agesIn } from "./compute.js";
 import { parts, rest } from "../../../core/ui/more.js";
-import { mixGrid, runsNeeded, runMix, rankMixes, chooseMix, MIX_TITLE, ROTH_WORDS, leadWords, moveWords, rowWords, valueWords, orderTitle, bestWords, triedWords, GAINS_WORDS, ownConverts, FLAT_MIX_WORDS, FLAT_CONV_WORDS, confirmMixWords, savedMixWords, backMixWords, busyWords } from "./mix.js";
+import { mixGrid, runsNeeded, runMix, rankMixes, chooseMix, MIX_TITLE, ROTH_WORDS, leadWords, moveWords, rowWords, valueWords, orderTitle, tellWords, bestWords, triedWords, GAINS_WORDS, ownConverts, FLAT_MIX_WORDS, FLAT_CONV_WORDS, confirmMixWords, savedMixWords, backMixWords, busyWords } from "./mix.js";
 
 let pending = null;
 let mixPending = null;   // the green line after "Use this mix" (with its Undo) or after that Undo, shown on the next draw
@@ -65,6 +65,15 @@ export function searched(plan, today) {
 /** Resolves once no runs are being worked out (tests). */
 export const searchDone = () => new Promise((resolve) => { const wait = () => (job ? setTimeout(wait, 5) : resolve()); wait(); });
 
+/**
+ * The pills on a row of the five orders: "best" (accent) on the best order, "your plan" (green) on the plan's own, and one pill,
+ * "your plan, the best" (green), when they are the same row (fix round, critic P4: "best" and "your plan" side by side read as two
+ * answers, under a hero that already says the plan's order is the best one).
+ */
+export function orderPills(ui, o, best) {
+  if (best && o.current) return [ui.h("span", { class: "pill ok" }, "your plan, the best")];
+  return [best ? ui.h("span", { class: "pill accent" }, "best") : null, o.current ? ui.h("span", { class: "pill ok" }, "your plan") : null].filter(Boolean);
+}
 /** The order said in a sentence: only its first letter lower-cased ("pre-tax, then taxable, then Roth", never "roth"). */
 const said = (o) => o.label.replace(/^./, (c) => c.toLowerCase());
 /**
@@ -246,7 +255,7 @@ export function render(root, ctx) {
     ui.row(ui.button("Work out tax at the real rates", realRates, best.current ? {} : { class: "secondary" }))));
   // the best order and yours in sight, the others one tap away (opt spec C14: "3 more orders")
   const row = (o) => ui.h("li", { style: isBest(o) && !sameYear ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
-    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.label, isBest(o) && !sameYear ? ui.h("span", { class: "pill accent" }, "best") : null, o.current ? ui.h("span", { class: "pill ok" }, "your plan") : null), ui.h("span", { class: "rec-value" }, o.success ? money(o.endAfterTaxReal) : `runs out ${o.failYear}`)),
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.label, ...orderPills(ui, o, isBest(o) && !sameYear)), ui.h("span", { class: "rec-value" }, o.success ? money(o.endAfterTaxReal) : `runs out ${o.failYear}`)),
     // "Today's dollars." only where the headline does not say it already (every order runs out); the row before "With Roth
     // conversions too" kept the page's first view at its count (gap list, next 60, item 23)
     ui.h("div", { class: "rec-sub" }, `${noteWords(o, isBest(o) && !sameYear)}. ${o.success ? `Left at the end after tax; ${money(o.endBalanceReal)} before it. ` : ""}Tax over the plan ${money(o.taxesReal)}; ${money(o.rmdReal)} of required withdrawals.${d.five.allFail ? " Today's dollars." : ""}`),
@@ -317,12 +326,19 @@ function mixPart(ctx, grid, money, open) {
     // one change; Undo takes back only what it changed (the kit's undoable)
     if (ui.undoable) pend.undo = ui.undoable(store, change); else store.update(change);
   };
-  const row = (r) => (x) => ui.h("li", {},
+  // each row's title says what tells it from the others listed (rowTitle; recheck leftover y2 (e)): the order's name, then, only
+  // where another listed row shares the order, what differs on its own line (tellWords; fix round, critic P3: one long title wrapped
+  // to three lines beside its pill)
+  const row = (r) => (x, _i, listed) => {
+    const tell = tellWords(x, listed, rmdAge);
+    return ui.h("li", {},
     ui.h("div", { class: "rec-head" },
-      ui.h("span", { class: "rec-title" }, orderTitle(x.order), x.asIs ? ui.h("span", { class: "pill ok" }, "your plan") : x === r.top && r.better.has(x.key) ? ui.h("span", { class: "pill accent" }, bestWords(x)) : null),
+      ui.h("span", { class: "rec-title" }, orderTitle(x.order), tell ? ui.h("span", { class: "mix-tell", style: { display: "block", fontWeight: "400" } }, tell.replace(/^./, (c) => c.toUpperCase())) : null,
+        x.asIs ? ui.h("span", { class: "pill ok" }, "your plan") : x === r.top && r.better.has(x.key) ? ui.h("span", { class: "pill accent" }, bestWords(x)) : null),
       ui.h("span", { class: "rec-value" }, valueWords(x, money))),
     ui.h("div", { class: "rec-sub" }, rowWords(x, r.asIs, money, rmdAge)),
     r.better.has(x.key) ? ui.h("div", { style: { marginTop: "8px" } }, ui.button("Use this mix", () => use(x), { class: "secondary" })) : null);
+  };
   const answer = (r) => [
     ui.h("p", {}, leadWords(r, money)),
     moveWords(r) ? ui.h("p", {}, moveWords(r)) : null,

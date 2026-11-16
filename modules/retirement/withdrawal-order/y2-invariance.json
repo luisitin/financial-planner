@@ -1,0 +1,285 @@
+{
+ "note": "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "mixes": "eXYQ2CucJg37pa7YbIduQM",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account",
+    "A share from every account"
+   ]
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "mixes": "OyyO_SmH96GsDwUHTjrWGh",
+   "titles": []
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "mixes": "eXYQ2CucJg37pa7YbIduQM",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account",
+    "A share from every account"
+   ]
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "mixes": "Ghc1No_BAGUHSDcqwuBOdF",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account"
+   ]
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "mixes": "VM8lEWN8xhQGyDr2d9pK__",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account"
+   ]
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "mixes": "rbNmbTvQBZ8wESRpnidXMG",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account",
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "mixes": "Nysi84k0EibpMUefuB91Xv",
+   "titles": []
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "mixes": "Nysi84k0EibpMUefuB91Xv",
+   "titles": []
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "mixes": "Uck6oAwedDImmDbAxu4THW",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "mixes": "6Hswcj8E58INKqW36dDqmf",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account",
+    "A share from every account",
+    "Roth, then taxable, then pre-tax"
+   ]
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "mixes": "OyyO_SmH96GsDwUHTjrWGh",
+   "titles": []
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "mixes": "wXR3hH2pb_JeSWRH_1by_x",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account",
+    "Pre-tax, then taxable, then Roth"
+   ]
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "mixes": "TDAna5_8e1vxW6qK-OYFRd",
+   "titles": [
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "01-single-adult/base": {
+   "mixes": "ANC7kbomFd3Gxc5hTTUg5w",
+   "titles": []
+  },
+  "02-couple-no-kids/base": {
+   "mixes": "rCOYxxj6aNhLeP717uhQ2M",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account"
+   ]
+  },
+  "03-single-parent/base": {
+   "mixes": "C0i0Vylz2J6EP72fQZazXs",
+   "titles": []
+  },
+  "04-two-parents/base": {
+   "mixes": "gUGQAzidRKbwK8Rxi6h3ZX",
+   "titles": []
+  },
+  "05-stay-at-home-parent/base": {
+   "mixes": "MygKteL006gEd8AhGP3swN",
+   "titles": []
+  },
+  "06-blended-family/base": {
+   "mixes": "NQJk7Hn7szGWsiXAzgabRF",
+   "titles": []
+  },
+  "07-multigenerational/base": {
+   "mixes": "vpYTd-ZmCrTlZcV-2z-yLD",
+   "titles": []
+  },
+  "08-retired/base": {
+   "mixes": "Uck6oAwedDImmDbAxu4THW",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "09-near-retirement/base": {
+   "mixes": "3_JwxURJjgCiPzV5Fc23_v",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account",
+    "A share from every account",
+    "Pre-tax, then taxable, then Roth"
+   ]
+  },
+  "10-student-and-starter/base": {
+   "mixes": "mP1DuKgLEFKq8t5ml9IJzn",
+   "titles": []
+  },
+  "11-self-employed/base": {
+   "mixes": "5vWvKwXAjJdrcOi2uSt7ds",
+   "titles": []
+  },
+  "12-high-net-worth/base": {
+   "mixes": "6WENAmmFxQ3xufAA-o9hPq",
+   "titles": []
+  },
+  "13-in-crisis/base": {
+   "mixes": "gbHu_ACi72uPaujTPJmcJv",
+   "titles": []
+  },
+  "14-unusual-structures/base": {
+   "mixes": "q9053jF_W0pqKirCebmAq2",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account",
+    "Pre-tax, then taxable, then Roth",
+    "A share from every account"
+   ]
+  },
+  "phone casey": {
+   "mixes": "Z0PwTkVap5lzg8Bwy7bm8z",
+   "titles": []
+  },
+  "phone danaLee": {
+   "mixes": "bx-SYLQq1WEf6Ozy3Y63Ae",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account"
+   ]
+  },
+  "phone jamie": {
+   "mixes": "ewUXKUQ_LtC-Aq4SzAaHP6",
+   "titles": []
+  },
+  "phone morgan": {
+   "mixes": "shcleg4KNL_Y3Tg-KCekuo",
+   "titles": []
+  },
+  "phone robin": {
+   "mixes": "oapDsA4RIBCad5vIQWU6qW",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account",
+    "Taxable, then pre-tax, then Roth",
+    "A share from every account"
+   ]
+  },
+  "round8 earlyRetireePlan": {
+   "mixes": "Sz6jA-DceiGGn7lZE_evbt",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account"
+   ]
+  },
+  "round8 equityPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 firstRmdPlan": {
+   "mixes": "QgR1YiAKuH0Epp6U_xVeIu",
+   "titles": [
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "round8 freelancerPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 highFreelancerPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 landlordBusinessPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 landlordPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 parentLoanPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 stockAndBusinessPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 studentLoanPlan": {
+   "mixes": "OwNLCtZaBmJuGL57dgOsih",
+   "titles": []
+  },
+  "round8 widowPlan": {
+   "mixes": "ZAufIGiKOH-j7DsboiR12Y",
+   "titles": [
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "persona sam": {
+   "mixes": "ZDlSdIKldsFA0_GLiFLC5n",
+   "titles": []
+  },
+  "persona jordan": {
+   "mixes": "SYf9wlKnVRFV6wvbXfBzoK",
+   "titles": []
+  },
+  "persona patLee": {
+   "mixes": "FIlVOgZ7BLnn8m5pWRWC0e",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Roth, then taxable, then pre-tax",
+    "A share from every account"
+   ]
+  },
+  "persona ruth": {
+   "mixes": "jgR3aTbW_CfBph_URctumv",
+   "titles": [
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth",
+    "Taxable, then pre-tax, then Roth"
+   ]
+  },
+  "empty plan": {
+   "mixes": "n5JjbtRFkiug7LFpz_oiNN",
+   "titles": []
+  }
+ }
+}

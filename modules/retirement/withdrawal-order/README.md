@@ -292,3 +292,28 @@ every order with `strategy: "fixed-real"`, so the ranking is the same whichever 
   retirement figure, often more than the order does; the green line says the order changes nothing until they are on. On a flat-rate
   plan the first card's filled button names both changes (`Use "<order>" with the real tax rates`) and its green line says every
   retirement page's figures change and how to go back; the rows' buttons set the order only.
+
+## Each row of "Try Roth conversions too" says what tells it apart (recheck leftover y2 (e), 2026-11-16)
+The rows were titled with the order alone, so the invented family saw "A share from every account" twice, differing only in the
+line under each (conversions until 75 or until 70), and Ruth saw "Taxable, then pre-tax, then Roth" four times. `rowTitle(x, rows,
+rmdAge)` (mix.js, pure) titles each listed row, one written case each:
+- no other listed row with the same order: the order's name, as before ("Roth, then taxable, then pre-tax");
+- the same order with nothing moved to a Roth: "Taxable, then pre-tax, then Roth, with no Roth conversions";
+- the same order with conversions: "..., with Roth conversions", then " up to the 22% rate" when another such row converts to another
+  rate, then " until age 70" (or "until age 75" for the year required withdrawals begin, "until required withdrawals begin" with no
+  age at hand) when another such row has the same rate and another stop.
+The family: "A share from every account, with Roth conversions until age 75" ($873,681) and "..., until age 70" ($863,788). Ruth:
+"Taxable, then pre-tax, then Roth, with no Roth conversions" (your plan), then "..., with Roth conversions up to the 22% rate",
+"... 12% rate", "... 10% rate". The line under each row, the figures, the order and "Use this mix" are unchanged. Tests: each case
+above; the family's four titles; and `y2-invariance.json` (written with `PRINT_Y2=1` on 398a01e): for every invented household the
+mixes worked out are those of 398a01e, every row with no twin keeps its title, and every list of titles has no two alike.
+
+On the page the order's name stays alone on its first line, in bold, and what tells the row apart has its own line under it, in the
+plain weight, first letter upper-cased: "Taxable, then pre-tax, then Roth" / "With Roth conversions up to the 22% rate" (`tellWords`, what `rowTitle` adds;
+fix round, critic P3: the joined title wrapped to three lines beside its pill at 390 px). "Pre-tax" stays: it is the order's own
+name, the same in the five orders above, the hero and its button, and on the other retirement pages that name the orders, so a
+change of that word is a change to all of them, not to this row.
+
+The five orders' pills (fix round, critic P4): on a plan whose own order is the best one, its row showed "best" and "your plan" side
+by side under a hero saying so; it shows one green pill, "your plan, the best" (`orderPills`). Otherwise as before: "best" (accent)
+on the best order, "your plan" (green) on the plan's own. Tests: the four pill cases, and the retired couple's row.
