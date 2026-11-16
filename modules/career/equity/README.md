@@ -152,7 +152,14 @@ The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` b
   next." Purchase-plan boxes are no longer marked required at the box (a shut row may hold no required box); a purchase
   missing a date or a price is refused at Save with the same words as before.
 - Counts (`node qa/first-view-node.mjs career/equity`): before 175 words, 12 boxes, 2 filled buttons with a plan (172, 11, 2
-  on the empty plan); after 145 words, 4 boxes, 1 filled button, 2 rows on both. Test: "S11 (R17)" and "the page drawn".
+  on the empty plan); after 115 words, 3 boxes, 1 filled button, 3 rows on both (with "Pay held for later"; 122 words and
+  4 boxes until the option price box went for units). The browser
+  check (`node qa/first-view.mjs career/equity`) first found "Add the grant" below the first screen on the empty plan (the
+  company's Save had been there before); the hero's line and two helps were cut to one line each ("Units, options and
+  purchase-plan shares from your employer: when they vest, the tax on each, what to set aside, and when selling costs
+  less."; "Units become shares as they vest; options are the right to buy at a set price."; "A lower-tax sale counts its two
+  years from this date."), and it now ends at 840 px of 844; every page budget is met there and its entry is gone. Tests:
+  "S11 (R17)" and "the page drawn".
 
 ## Pay held for later (deferred pay plans; gap list, next 60, item 30; 2026-11-16)
 A deferred pay plan from work (a nonqualified deferred compensation plan): pay the employer keeps back now and pays out

@@ -49,7 +49,7 @@ export function render(page, ctx) {
   const formError = (form, text) => { form.querySelector(".notice.error")?.remove(); form.prepend(ui.notice("error", text)); form.scrollIntoView({ block: "start" }); };
 
   if (!d.ready) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Stock from work"),
-    ui.h("p", { class: "lede" }, "Units and options from your employer, and shares bought through its purchase plan: when they vest, the tax on each and how much to set aside, when to exercise options, and when selling costs less tax."),
+    ui.h("p", { class: "lede" }, "Units, options and purchase-plan shares from your employer: when they vest, the tax on each, what to set aside, and when selling costs less."),
     ui.h("p", { class: "muted small" }, "Add each grant from your stock plan's website below; the share price comes next.")));
   for (const n of d.notes ?? []) root.append(ui.notice("info", n));
   if (d.ready && d.needsPrice) root.append(ui.notice("warn", "Type today's share price under \"The company\" below to see what your grants and shares are worth and the tax they bring."));
@@ -146,10 +146,10 @@ export function render(page, ctx) {
   // the boxes most grants need first; the name and the vesting pattern (usually the plan's usual one, prefilled) under
   // "More details (optional)" (R21)
   const grantFields = [
-    { key: "kind", label: "Kind", type: "select", options: KIND, help: "units are shares given to you as they vest; options are the right to buy at a set price, and the plan's papers say which kind" },
+    { key: "kind", label: "Kind", type: "select", options: KIND, help: "Units become shares as they vest; options are the right to buy at a set price." },
     { key: "shares", label: "Units or options granted", type: "number", min: 1, step: "1", required: true },
     { key: "strike", label: "Options: the price you pay per share", type: "money", min: 0 },
-    { key: "granted", label: "Grant date", type: "date", required: true, help: "the two years you must hold for a lower-tax (\"qualifying\") sale count from this date" },
+    { key: "granted", label: "Grant date", type: "date", required: true, help: "A lower-tax sale counts its two years from this date." },
     { key: "name", label: "Name", type: "text", placeholder: "e.g. 2026 new-hire grant", more: true },
     { key: "vestStart", label: "Vesting starts", type: "date", help: "If blank: the grant date", more: true },
     { key: "vestMonths", label: "Vests over (months)", type: "number", min: 1, max: 120, step: "1", help: `If blank: ${DEFAULT_GRANT.vestMonths}, the usual`, more: true },
