@@ -602,3 +602,25 @@ take": "Nothing is saved for retirement, so we can't say what it would take yet.
 (told nothing: "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own and we can
 answer."). The 33-word sentence it said before (with "yet" twice) was repeated word for word on twelve other pages; every page now
 says the one short form. `nothingSaved` lives in retirement/projection and is re-exported here unchanged.
+
+## The Social Security card follows the shared gate (recheck leftover y2 (c), 2026-11-16)
+For a plan with nothing saved for retirement and nothing going in, the page says "we can't say what it would take yet" (the shared
+gate, `retirementUnknown` in retirement/projection, which every page that runs the retirement plan asks), and draws no cards. The
+compute still built them, and the Social Security card's sentence ended with `claimOutcome`'s "At the $2,040 a month the plan
+spends, the money would still run out in 2067 (age 65)." (the invented Riley, 24, an empty Work 401(k)); Legacy lists the cards
+when a gift is set, so the year could reach a screen. The gate is now asked once, before that card, when the plan falls short
+(`!meets`): `unknown = retirementUnknown(plan, { today })`, and on such a plan `claimOutcome` gives the gate's own sentence with
+this card's question (`CLAIM_UNKNOWN_WHAT`, "whether the money would last"): "Nothing is saved for retirement, so we can't say
+whether the money would last yet." / "You haven't told us about retirement savings, so we can't say whether the money would last
+yet." (`unknownParts`). `noSavings` and `nothingSaved` come from the same answer (they came from `savingsUnknown` on a projection
+run at the end: the same rule, which `retirementUnknown` asks after a quick look at the plan's savings, so a plan with savings no
+longer runs the projection a second time). Nothing else changes.
+Tests: Riley's card word for word, no lever sentence of a gated plan naming a year the money runs out, the "haven't told us" case,
+a plan with $20,000 saved keeping "the money would still run out in 2068 (age 66)"; and `y2-invariance.json` (written with
+`PRINT_Y2=1` on 398a01e): for every invented household the gate's answer is the same, the whole output is the same for every plan it
+lets through, everything but the claim sentence for the plans it holds, and Legacy's output (with a $100,000 gift set) the same but
+for that sentence. Fix round, critic F2 (the quick look also asks "retirement still ahead" on the plan's inputs, `retireYear >
+startYear`, where the old gate read `atRetirement.year > startYear` off the run): the same rule, since `retireYear` is never before
+the start year (`householdRetireYear`) and `atRetirement` is the row of `retireYear`, or the start year's row when there is none; a
+test pins it for Riley retiring at 20, 23 and 24 (already past or this year: the plan is answered) and at 25 and 30 (held), each
+with the old gate's answer.

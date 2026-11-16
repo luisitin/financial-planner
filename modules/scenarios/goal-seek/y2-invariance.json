@@ -1,0 +1,293 @@
+{
+ "note": "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "full": "pT6qHtO_60erKIHPBOX-1x",
+   "stripped": "TWtlA7w6V8ofI-hXLksJrR",
+   "legacy": "-RzqY6O3r8RGOF4ja34ifa",
+   "noSavings": false
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "full": "EhmqFtHzsZuchO6HJHTyeU",
+   "stripped": "EhmqFtHzsZuchO6HJHTyeU",
+   "legacy": "X3r4q5nRvnuixqcfcjrxmF",
+   "noSavings": false
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "full": "pT6qHtO_60erKIHPBOX-1x",
+   "stripped": "TWtlA7w6V8ofI-hXLksJrR",
+   "legacy": "-RzqY6O3r8RGOF4ja34ifa",
+   "noSavings": false
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "full": "6l9l4lhUKq9GqUciZ_qxJ6",
+   "stripped": "JwC66i3Kqc6G68LIVxXQOC",
+   "legacy": "swHL3oQel5vDvqPJmAU2Fm",
+   "noSavings": false
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "full": "rwHK37oKMD1ugBi06mJ879",
+   "stripped": "a3u5NSVleAfz6XBs5pdfc3",
+   "legacy": "5QCnV8dWBc7o5O8-U5uHrJ",
+   "noSavings": false
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "full": "bt0RLeZzvg4uc_haPioNoZ",
+   "stripped": "56s3RSzFlWsFYmb6LvrIaN",
+   "legacy": "JxQlBRHBrF8X5S8t4ruxc9",
+   "noSavings": false
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "full": "next89cAPjP1F4w_yoM8-q",
+   "stripped": "wp-hgR5XGQg-WcBSTsIYWs",
+   "legacy": "P4skWgPDEu8Ncmwiliuo7t",
+   "noSavings": true
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "full": "next89cAPjP1F4w_yoM8-q",
+   "stripped": "wp-hgR5XGQg-WcBSTsIYWs",
+   "legacy": "P4skWgPDEu8Ncmwiliuo7t",
+   "noSavings": true
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "full": "nOsJOisRFjNMcdmhOY2-6z",
+   "stripped": "nOsJOisRFjNMcdmhOY2-6z",
+   "legacy": "alP4htZoIfxDdKaaOAWClY",
+   "noSavings": false
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "full": "q14rRKZ4n7jMgkbDD-EhQ7",
+   "stripped": "Cp2I0TGUr0gvkgR-mrZh7F",
+   "legacy": "2dk1mDOOuX70eYj78p9bOE",
+   "noSavings": false
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "full": "EhmqFtHzsZuchO6HJHTyeU",
+   "stripped": "EhmqFtHzsZuchO6HJHTyeU",
+   "legacy": "X3r4q5nRvnuixqcfcjrxmF",
+   "noSavings": false
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "full": "CaZ-UB-YWS9Ytr7GIdYR4-",
+   "stripped": "qKAnUZl479CE3XPUOQYSqS",
+   "legacy": "juKVIoIYNHz-3G4gU-m0li",
+   "noSavings": false
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "full": "mykvdrNhsdAfo7FJHSVJXn",
+   "stripped": "mykvdrNhsdAfo7FJHSVJXn",
+   "legacy": "3yVH4bMrgkhuJyO9QEH2uJ",
+   "noSavings": false
+  },
+  "01-single-adult/base": {
+   "full": "6WIF3SYRCkcvqWySEPQZG1",
+   "stripped": "6WIF3SYRCkcvqWySEPQZG1",
+   "legacy": "lqexwdH9IP8BCRsfjRBMbk",
+   "noSavings": false
+  },
+  "02-couple-no-kids/base": {
+   "full": "PeFryMb8ePdTejz-JNiBd-",
+   "stripped": "PeFryMb8ePdTejz-JNiBd-",
+   "legacy": "3zttZA10weneE1cCHDphzH",
+   "noSavings": false
+  },
+  "03-single-parent/base": {
+   "full": "xOY-TvWB9aMmjuZ68kEsw4",
+   "stripped": "xOY-TvWB9aMmjuZ68kEsw4",
+   "legacy": "BUii17XzY1SbRbtEa91Mi9",
+   "noSavings": false
+  },
+  "04-two-parents/base": {
+   "full": "rwqh8CApCYuHgjSYVrGEjg",
+   "stripped": "rwqh8CApCYuHgjSYVrGEjg",
+   "legacy": "uCKgvX1LTXrOYHixzOfgz7",
+   "noSavings": false
+  },
+  "05-stay-at-home-parent/base": {
+   "full": "bBvx-hub1jRWKJ7CoSzx8F",
+   "stripped": "bBvx-hub1jRWKJ7CoSzx8F",
+   "legacy": "VEDO4hlj_YtGJvBaZ7GwhH",
+   "noSavings": false
+  },
+  "06-blended-family/base": {
+   "full": "qiMDH-c4gJTyHnbl4UOmLH",
+   "stripped": "qiMDH-c4gJTyHnbl4UOmLH",
+   "legacy": "4gi0syaCmv0jfsDgywQA9M",
+   "noSavings": false
+  },
+  "07-multigenerational/base": {
+   "full": "P1eikS8Wyzj2e3E4f507ib",
+   "stripped": "P1eikS8Wyzj2e3E4f507ib",
+   "legacy": "chz-ITBMXO6h3oEQfgkj-T",
+   "noSavings": false
+  },
+  "08-retired/base": {
+   "full": "JM3XdCz7-HihgEzrFmiNkF",
+   "stripped": "JM3XdCz7-HihgEzrFmiNkF",
+   "legacy": "yntT2pFYaStA0WuUE3vhfh",
+   "noSavings": false
+  },
+  "09-near-retirement/base": {
+   "full": "sjgG9kuiA-WcV9Qwd74qcP",
+   "stripped": "sjgG9kuiA-WcV9Qwd74qcP",
+   "legacy": "QqY8DJMLE5_cIvYIEv8zaA",
+   "noSavings": false
+  },
+  "10-student-and-starter/base": {
+   "full": "lINMVil1HW75HhfAyiUbTf",
+   "stripped": "lINMVil1HW75HhfAyiUbTf",
+   "legacy": "3Nc_ZOxahDZ_X3aN7phdGO",
+   "noSavings": false
+  },
+  "11-self-employed/base": {
+   "full": "AYdlGscAGSwySEXvu78h7M",
+   "stripped": "AYdlGscAGSwySEXvu78h7M",
+   "legacy": "fZ2riDdAOwyYowChxpoMVE",
+   "noSavings": false
+  },
+  "12-high-net-worth/base": {
+   "full": "EdVsvZqMiIG4kyxF5KdAFP",
+   "stripped": "EdVsvZqMiIG4kyxF5KdAFP",
+   "legacy": "U81yrscrdrz5z05u_kfdAi",
+   "noSavings": false
+  },
+  "13-in-crisis/base": {
+   "full": "yFhd9j05kb93tfkRyVyYTv",
+   "stripped": "yFhd9j05kb93tfkRyVyYTv",
+   "legacy": "alQH43S7jM8G7Nwon3QEet",
+   "noSavings": false
+  },
+  "14-unusual-structures/base": {
+   "full": "l69IqU5JzCmi1gl7u4FeuB",
+   "stripped": "l69IqU5JzCmi1gl7u4FeuB",
+   "legacy": "tcgmAvjZ98op42vkdMOB8F",
+   "noSavings": false
+  },
+  "phone casey": {
+   "full": "IasVWB_5JtTT_qviujbQoz",
+   "stripped": "1eHWPba8agwXhNVqbyAWOK",
+   "legacy": "oxtAC7xjUWUcQSXlfq_OWW",
+   "noSavings": false
+  },
+  "phone danaLee": {
+   "full": "y4k-XfWjGXtAKKsZsfSGhw",
+   "stripped": "67Uhe-sOZEfSCWz9GSo43N",
+   "legacy": "4NCKUmkb9ZyQ92NVwAql7H",
+   "noSavings": false
+  },
+  "phone jamie": {
+   "full": "1Glp5b70FxHcaKXjh_h-7W",
+   "stripped": "2etPA9rpgTyZDQWxXXRFRX",
+   "legacy": "7q53NZPGxqjkvPsQlr737a",
+   "noSavings": false
+  },
+  "phone morgan": {
+   "full": "IiGAwduMONSBdyEReFEqW_",
+   "stripped": "NMeWFWkmjkX7t-yT3nceT2",
+   "legacy": "NXnJmwWB0qVeqA_cBRaMHD",
+   "noSavings": false
+  },
+  "phone robin": {
+   "full": "OLyIofpwkCiPi2ubEolF4Z",
+   "stripped": "33i-T_iNYen_b_WFaxloHC",
+   "legacy": "uPmNOgyTmnJEy4F22bR6hV",
+   "noSavings": false
+  },
+  "round8 earlyRetireePlan": {
+   "full": "xu3z09N9vveNsIuFJEYmin",
+   "stripped": "xu3z09N9vveNsIuFJEYmin",
+   "legacy": "4IvAg7zkmHfuf6TIzlkT2f",
+   "noSavings": false
+  },
+  "round8 equityPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 firstRmdPlan": {
+   "full": "F8PFZ0fjLvefG23-7Lp9Ud",
+   "stripped": "F8PFZ0fjLvefG23-7Lp9Ud",
+   "legacy": "7BuOtueWS-SRKuAOEa32-0",
+   "noSavings": false
+  },
+  "round8 freelancerPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 highFreelancerPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 landlordBusinessPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 landlordPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 parentLoanPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 stockAndBusinessPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 studentLoanPlan": {
+   "full": "Ax2dr_wOD18RlsmfuVqjtB",
+   "stripped": "Ax2dr_wOD18RlsmfuVqjtB",
+   "legacy": "97RWb58OHD-px3nFYeucaO",
+   "noSavings": false
+  },
+  "round8 widowPlan": {
+   "full": "cK7dCfzwaADPhO_aedb6Yh",
+   "stripped": "cK7dCfzwaADPhO_aedb6Yh",
+   "legacy": "Yiku54hzLD1x0x24ZX5Qmk",
+   "noSavings": false
+  },
+  "persona sam": {
+   "full": "6See62Dvwe27iL0CHnk-9_",
+   "stripped": "xUFpN87HbnNjfYRM_VuD3T",
+   "legacy": "YxdqAwL_U-JoPGQhc6OryY",
+   "noSavings": true
+  },
+  "persona jordan": {
+   "full": "JvgNQ0zRan_6k9qVOjuu32",
+   "stripped": "q8EpSymNs_FLGOm4t9eR_v",
+   "legacy": "KIdogytYqBhDtyRwHFnbgm",
+   "noSavings": true
+  },
+  "persona patLee": {
+   "full": "sPU_GxYAiFVYvuu1w1Hj_j",
+   "stripped": "1r3akGfNfWX6P_I1HQdzXG",
+   "legacy": "gB2v1DFPyUx8L1SMLsgi3C",
+   "noSavings": false
+  },
+  "persona ruth": {
+   "full": "4okgJXOroQXeUijWbvn280",
+   "stripped": "4okgJXOroQXeUijWbvn280",
+   "legacy": "aaEDm4CFQPZgi8wMmnAxHQ",
+   "noSavings": false
+  },
+  "empty plan": {
+   "full": "iNHXbP39mmXC3QiOBoDAKP",
+   "stripped": "iNHXbP39mmXC3QiOBoDAKP",
+   "legacy": "QNIlw49RtcTdFvN0jC9sJA",
+   "noSavings": false
+  }
+ }
+}

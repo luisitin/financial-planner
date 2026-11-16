@@ -1477,3 +1477,109 @@ test("o2 (#31) fix round 1, P1: after Use age N the answer does not turn to the 
   assert.match(answerOf(b2).textContent, /Lee/);
   more.kept.clear("all"); more._test.reset();
 });
+
+// ---------------------------------------------------------------- leftovers of the rechecks (y2, 2026-11-16)
+/** Every invented household (y2 invariance, against 398a01e): the qa fixture plans, the qa/households archetypes, the phone,
+ *  round 8 and persona households, and the empty plan. */
+async function y2Plans(today) {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { migrate, emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const out = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`fixture ${f}:${name}`, fn(today)]);
+  }
+  for (const a of ARCHETYPES) out.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) out.push([`persona ${n}`, personas.finishSetup(n, personas[n](today), today)]);
+  out.push(["empty plan", blank()]);
+  return out.map(([name, p]) => [name, migrate(structuredClone(p))]);
+}
+const y2Digest = async (x) => (await import("node:crypto")).createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+const TY2 = "2026-11-16";
+/** A result with the Social Security card's sentence taken out (the one thing y2 (c) changes, and only for a plan the shared gate
+ *  calls unknown). */
+const withoutClaimWords = (d) => (d?.levers ? { ...d, levers: d.levers.map((l) => (l.id === "claim" ? { ...l, sentence: null } : l)) } : d);
+
+// (c) For a plan with nothing saved for retirement and nothing going in, the page says "we can't say what it would take yet" (the
+// shared gate, retirementUnknown in retirement/projection), but the compute still built "the money would still run out in 2067" in
+// the Social Security card's sentence (read by Legacy, which lists the cards when a gift is set). It says the gate's words now.
+test("y2 (c) nothing saved (Riley): the Social Security card says the shared gate's sentence, never a year the money runs out", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retirementUnknown } = await import("../../retirement/projection/compute.js");
+  const told = renterDebtPlan();
+  assert.deepEqual(retirementUnknown(told, { today: TY2 }), { nothingSaved: true });
+  const d = compute(told, { today: TY2 });
+  assert.equal(d.noSavings, true); assert.equal(d.nothingSaved, true);
+  const c = lever(d, "claim");
+  assert.equal(c.sentence, "Riley claiming at 65 lets the plan pay about $1,140 a month more, steady, if markets do as well as average. Nothing is saved for retirement, so we can't say whether the money would last yet.");
+  for (const l of d.levers) assert.doesNotMatch(l.sentence ?? "", /run(s)? out in \d{4}/, l.id);
+  // told nothing (no retirement account on file): the gate's other sentence
+  const untold = renterDebtPlan(); untold.accounts = untold.accounts.filter((a) => a.type !== "401k");
+  const u = compute(untold, { today: TY2 });
+  assert.equal(u.noSavings, true); assert.equal(u.nothingSaved, false);
+  assert.match(lever(u, "claim").sentence, / You haven't told us about retirement savings, so we can't say whether the money would last yet\.$/);
+});
+test("y2 (c) a plan with savings that falls short still says when the money runs out with the best claiming age", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const p = renterDebtPlan();
+  p.accounts.find((a) => a.type === "401k").balance = 20000;   // something saved: the gate lets the plan be answered
+  p.retirement.socialSecurity["setup-self"].claimAge = 70;
+  const d = compute(p, { today: TY2 });
+  assert.equal(d.noSavings, false); assert.equal(d.meets, false);
+  assert.equal(lever(d, "claim").sentence, "Riley claiming at 67 lets the plan pay about $940 a month more, steady, if markets do as well as average. At the $2,040 a month the plan spends, the money would still run out in 2068 (age 66).");
+});
+
+// (c) invariance: with nothing new typed, Goal seek's output is that of 398a01e for every household; for a household the shared gate
+// calls unknown, everything but the Social Security card's sentence. Legacy, which reads the cards, the same. Written with
+// PRINT_Y2=1 on 398a01e's code.
+test("y2 (c) invariance: Goal seek's and Legacy's output for every household are those of 398a01e (but the gated plans' claim sentence)", async () => {
+  const { compute: legacy } = await import("../../estate/legacy/compute.js");
+  const file = new URL("./y2-invariance.json", import.meta.url);
+  const now = {};
+  for (const [name, plan] of await y2Plans(TY2)) {
+    const safe = (f) => { try { return f(); } catch (e) { return `THROW ${e.message}`; } };
+    const d = safe(() => compute(structuredClone(plan), { today: TY2 }));
+    const g = structuredClone(plan); g.estate = { ...(g.estate ?? {}), legacy: { ...(g.estate?.legacy ?? {}), bequests: [{ id: "b1", to: "A cause", kind: "charity", amount: 100000 }] } };
+    const l = safe(() => legacy(g, { today: TY2 }));
+    now[name] = { full: await y2Digest(d), stripped: await y2Digest(withoutClaimWords(d)), legacy: await y2Digest(withoutClaimWords(l)), noSavings: !!d?.noSavings };
+  }
+  if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(was).length >= 45, `${Object.keys(was).length} households`);
+  assert.deepEqual(Object.keys(now), Object.keys(was));
+  assert.ok(Object.values(was).some((x) => x.noSavings), "a gated household is among them");
+  for (const name of Object.keys(was)) {
+    assert.equal(now[name].noSavings, was[name].noSavings, `${name}: the gate`);
+    assert.equal(now[name].stripped, was[name].stripped, `${name}: all but the claim sentence`);
+    assert.equal(now[name].legacy, was[name].legacy, `${name}: Legacy`);
+    if (!was[name].noSavings) assert.equal(now[name].full, was[name].full, `${name}: all of it`);
+  }
+});
+// (c) fix round, critic F2: the shared gate checks "retirement still ahead" on the plan's inputs (retireYear after the start year)
+// before it runs the projection, where the old gate here read it off the run (atRetirement.year after the start year). The two are
+// the same rule: retireYear is never before the start year (householdRetireYear), and atRetirement is the row of retireYear, or the
+// start year's row when there is none. Pinned at the edges: retiring this year, retiring at an age already past, retiring next year.
+test("y2 (c) fix F2: the gate before the Social Security card is the old one at the edges (retiring this year, already past, next year)", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const P = await import("../../retirement/projection/compute.js");
+  const seen = {};
+  for (const age of [null, 20, 23, 24, 25, 30]) {   // Riley is 24 in 2026
+    const p = renterDebtPlan();
+    if (age !== null) p.household.people[0].retirementAge = age;
+    const d = P.compute(p, { today: TY2 });
+    const old = P.savingsUnknown(d), I = P.buildInputs(p, { today: TY2 }).inputs;
+    assert.equal(!!P.retirementUnknown(p, { today: TY2 }), old, `retirement age ${age}`);
+    assert.equal(compute(p, { today: TY2 }).noSavings, old, `retirement age ${age}: Goal seek's noSavings`);
+    assert.ok(I.retireYear >= I.startYear, "retireYear is never before the start year");
+    assert.equal(d.atRetirement.year, I.retireYear, "atRetirement is the row of retireYear");
+    seen[age] = old;
+  }
+  assert.deepEqual(seen, { null: true, 20: false, 23: false, 24: false, 25: true, 30: true }, "retiring this year or at an age already past: retirement is not ahead, so the gate lets the plan be answered");
+});

@@ -4,7 +4,7 @@
 // the return it needs, the lump sum it is short (or the room it has today), and the Social Security
 // claiming age that lets you spend the most.
 import { project, copyInputs, affordableSpending } from "../../../core/math/retirement.js";
-import { buildInputs, healthAdded, workingNow, withStops, compute as projectionOf, savingsUnknown, nothingSaved } from "../../retirement/projection/compute.js";
+import { buildInputs, healthAdded, workingNow, withStops, retirementUnknown, unknownParts, nothingSaved } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -614,6 +614,11 @@ export function compute(plan, params = {}) {
     }
   }
 
+  // nothing saved for retirement and nothing going in: the shared gate (retirementUnknown, the projection's own savingsUnknown on
+  // the same run; worked out only when the plan falls short), asked before the Social Security card so its sentence never says when
+  // the money runs out on such a plan (recheck leftover y2 (c), 2026-11-16: "the money would still run out in 2067" for Riley)
+  const unknown = ok0 ? null : (() => { try { return retirementUnknown(plan, { today }); } catch { return null; } })();
+
   // 6. Social Security: the claiming age that lets the plan spend the most while reaching the goal, for the people who have
   // not claimed yet and only at ages still possible (round 4, 2026-11-02: it advised claiming at 70 to someone who has
   // been getting it since 66); those still choosing all claim at the same age here
@@ -667,14 +672,14 @@ export function compute(plan, params = {}) {
     const tail = `${names.length > 1 ? " Both claim at the same age here; the Social Security page shows each person's amounts." : ""}${others.length ? ` ${NamesIn(others)} already ${others.length === 1 ? verbFor(others[0], "gets", "get") : "get"} it, so that stays as it is.` : ""}`;
     const sentence = !best ? "No claiming age still open gets there on its own."
       : atBest?.meets ? `${who} claiming ${atWords(best.age)} alone makes the money last${legacy ? ` and leave ${fmt(legacy)}` : ""}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average${more !== null && more >= 5 ? `, ${fmt(more, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}.`
-      : atBest ? `${who} claiming ${atWords(best.age)} lets the plan pay ${more !== null && more >= 5 ? `about ${fmt(more, "down")} a month more` : `the most, about ${fmt(best.monthly / scale, "down")} a month`}, steady, if markets do as well as average. ${claimOutcome(base, atBest, { spendingMonthly, scale, legacy, fmt })}`
+      : atBest ? `${who} claiming ${atWords(best.age)} lets the plan pay ${more !== null && more >= 5 ? `about ${fmt(more, "down")} a month more` : `the most, about ${fmt(best.monthly / scale, "down")} a month`}, steady, if markets do as well as average. ${claimOutcome(base, atBest, { spendingMonthly, scale, legacy, fmt, unknown })}`
       : `${candidates.length === 1 ? `${who} can only claim ${isNow(best.age) ? "now" : "at"} ${isNow(best.age) ? `(${ageWords(best.age)})` : ageWords(best.age)}: about ${fmt(best.monthly / scale, "down")} a month can be spent if markets do as well as average` : `${who} claiming ${atWords(best.age)} lets the plan spend the most if markets do as well as average, about ${fmt(best.monthly / scale, "down")} a month${more !== null ? `, ${fmt(more, "down")} more than claiming at ${ageWords(nowAt.age)}` : ""}`}.`;
     add({ id: "claim", icon: "🇺🇸", title: "When to claim Social Security", value: best?.age ?? null, current: claims.length === 1 ? claims[0] : null, unit: "age", status, results, who: movable.map((x) => x.id), nowAge, nowForAll, ...(atBest ? { atBest } : {}),
       sentence: `${sentence}${tail}`, go: ["retirement", "social-security"] });
   }
 
-  const noSavings = !ok0 && (() => { try { return savingsUnknown(projectionOf(plan, { today })); } catch { return false; } })();
-  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: nothingSaved(plan) } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers, ...(ages ? { ages } : {}), ...(asked ? { target } : {}) };
+  const noSavings = !!unknown;
+  return { ready: true, missing: [], legacy, scale, noSavings, ...(noSavings ? { nothingSaved: unknown.nothingSaved } : {}), meets: ok0, endReal: base.endBalanceReal, success: base.success, failYear: base.failYear, spendingMonthly, strategy: I.strategy, levers, ...(ages ? { ages } : {}), ...(asked ? { target } : {}) };
 }
 
 /** How a change card ranks for the first view: one that gets there on its own first, then room, "just right", "not on its own". */
@@ -913,8 +918,13 @@ export function idleSavingWords(plan, into, idle, cur = "USD") {
   return `Put ${list}.${match} ${used.length === 1 && idle.accounts.length === 1 ? idle.holds : idle.words}`;
 }
 
-/** What claiming at the best age does to the headline (P1): when the money runs out, or what it leaves, against the plan as it stands. */
-function claimOutcome(base, alt, { spendingMonthly, scale = 1, legacy = 0, fmt }) {
+/** What claiming at the best age does to the headline (P1): when the money runs out, or what it leaves, against the plan as it stands.
+ * A plan the shared gate calls unknown (`unknown`: retirementUnknown's answer) gets the gate's own sentence instead, with this
+ * card's question: "Nothing is saved for retirement, so we can't say whether the money would last yet." / "You haven't told us
+ * about retirement savings, so we can't say whether the money would last yet." (recheck leftover y2 (c)). */
+export const CLAIM_UNKNOWN_WHAT = "whether the money would last";
+function claimOutcome(base, alt, { spendingMonthly, scale = 1, legacy = 0, fmt, unknown = null }) {
+  if (unknown) return unknownParts(unknown, CLAIM_UNKNOWN_WHAT).sentence;
   const spend = scale !== 1 ? `At ${Math.round((scale - 1) * 100)}% more than the ${fmt(spendingMonthly / scale)} a month the plan spends` : `At the ${fmt(spendingMonthly)} a month the plan spends`;
   const when = (r) => `${r.failYear}${r.failAge !== null && r.failAge !== undefined ? ` (age ${r.failAge})` : ""}`;
   const left = (n) => fmt(Math.round(Math.max(0, n) / 1000) * 1000);
