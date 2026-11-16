@@ -339,3 +339,12 @@ test("What you save for retirement: with the answer card's 'Start it at 3%' fill
   assert.match(textOf(r.root), /Filled in with 3% of pay/, "the form opens, filled in");
   assert.match(textOf(r.root), /Add contribution/);
 });
+
+test("Capital gains on the empty plan: 'Add your income' is the one filled button; the sale form waits behind '+ Add a sale'", async () => {
+  const e = await drawn("taxes/capital-gains", migrate({}));
+  assert.deepEqual(e.filled, ["Add your income"]);
+  assert.match(e.text, /\+ Add a sale/);
+  // with income on file the empty form stays open, its "Add sale" the one filled button, as before
+  const f = await drawn("taxes/capital-gains", fam());
+  assert.ok(f.filled.includes("Add sale") && f.filled.length === 1, String(f.filled));
+});

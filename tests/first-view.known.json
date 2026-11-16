@@ -84,7 +84,7 @@
   "system/help": {"plan":{"words":310},"empty":{"words":310}},
   "system/settings": {"plan":{"words":220},"empty":{"words":200},"checks":{"S5":4}},
   "taxes/brackets": {"plan":{"words":270,"figs":60,"tiles":7},"empty":{"words":120,"figs":20}},
-  "taxes/capital-gains": {"plan":{"words":410,"figs":36,"boxes":6,"tiles":7},"empty":{"words":330,"figs":20,"filled":2}},
+  "taxes/capital-gains": {"plan":{"words":410,"figs":36,"boxes":6,"tiles":7},"empty":{"words":260,"figs":19}},
   "taxes/estimated": {"plan":{"words":270,"figs":16,"boxes":4}},
   "taxes/hsa-fsa": {"plan":{"boxes":4},"empty":{"words":130}},
   "taxes/withholding": {"plan":{"words":190}},

@@ -71,3 +71,9 @@ Review fixes (2026-11-07): the 3.8% surtax threshold is the filing status's own 
   what it cost, or a gain and a loss that cancel), "Your sales come out even: no gain or loss overall", never an empty lead
   before the full stop (it read ". The 0% band is used up; ...").
 - Tests: module.test.mjs "C11 r1 P2"; taxes/federal module.test.mjs "C11 gains" and "C11 r1 F2".
+
+## One filled button with nothing on file (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+With no income and no sale on file, the hero's "Add your income" is the page's filled button (the page needs the income first);
+the empty sale form, whose "Add sale" was a second filled button, now waits behind an outlined "+ Add a sale" (its Cancel folds
+it back). With income on file the empty form stays open as before. The empty plan's first view went from 330 words and 2 filled
+buttons to 253 and 1 (counts file lowered).

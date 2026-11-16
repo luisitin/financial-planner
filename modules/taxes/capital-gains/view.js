@@ -70,7 +70,9 @@ export function render(root, ctx) {
   // the sales
   const formCard = ui.card(null);
   const formHost = ui.h("div");
-  let showForm = !d.hasSales;
+  // nothing earned on file and no sale: the hero's "Add your income" is the page's one filled button, and the empty sale form waits
+  // behind an outlined "+ Add a sale" (whole-app sweep x3, 2026-11-16: "Add your income" and "Add sale" both filled)
+  let showForm = !d.hasSales && d.hasIncome;
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!showForm && !editing) { formHost.append(ui.button("+ Add a sale", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
@@ -83,7 +85,7 @@ export function render(root, ctx) {
         pending = editing ? "Sale saved." : "Sale added.";
         store.update((p) => { p.taxes.gains = p.taxes.gains ?? []; if (editing) { const i = p.taxes.gains.findIndex((g) => g?.id === editing.id); if (i >= 0) p.taxes.gains[i] = { ...p.taxes.gains[i], ...clean }; } else p.taxes.gains.push({ id: ui.uid(), ...clean }); });
         editing = null;
-      }, { submitLabel: editing ? "Save changes" : "Add sale", resetAfter: !editing, onCancel: (editing || d.hasSales) ? () => { editing = null; showForm = false; drawForm(); } : null }),
+      }, { submitLabel: editing ? "Save changes" : "Add sale", resetAfter: !editing, onCancel: (editing || d.hasSales || !d.hasIncome) ? () => { editing = null; showForm = false; drawForm(); } : null }),
       editing ? ui.h("p", { style: { marginTop: "12px" } }, ui.button("Remove this sale", () => { if (!ui.confirm(`Remove ${editing.name} from this year's sales?`)) return; const id = editing.id, name = editing.name; editing = null; pending = `${name} removed from this year's sales.`; store.update((p) => { p.taxes.gains = (p.taxes.gains ?? []).filter((g) => g?.id !== id); }); }, { class: "danger" })) : null,
     ));
   };
