@@ -159,7 +159,7 @@ export function wayLine(o, money = dollars) {
  *  asset is property, Instructions for Form 8949). Empty when no way sells at a loss. */
 export function washNote(r) {
   if (!r?.orders?.some((o) => o.state === "ok" && o.loss)) return "";
-  return "Coins are property, not securities: as of 2026 the wash-sale rule does not stop you buying the same coin back at once, so the loss counts in full.";
+  return "Coins are property, not securities: as of 2026 the wash-sale rule does not stop you buying the same coin back at once, so a loss counts in full.";
 }
 
 // =============================================================================================================================

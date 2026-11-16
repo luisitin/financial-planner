@@ -27,6 +27,8 @@ const STYLE = `
 .cr-root .cr-down { color: var(--bad); }
 .cr-root .cr-price { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 .cr-root .cr-price input { width: 9em; min-height: 44px; }
+.cr-root .cr-add { margin-top: 12px; }
+.cr-root .cr-add.open { border-top: 1px solid var(--line); padding-top: 12px; }
 `;
 
 /** What the row says first, in plain words (R5: one sentence). */
@@ -71,8 +73,8 @@ export function render(page, ctx) {
     ui.h("p", {}, ui.h("b", {}, `A fall of ${pct(d.stress.drop)} would take ${money(d.stress.loss)}`), d.stress.share !== null ? `, ${pct(d.stress.share)} of your net worth.` : "."),
     d.volatile < d.total ? ui.h("p", { class: "muted small" }, `Stablecoins (${money(d.total - d.volatile)}) are left out: they are meant to stay at a dollar, but they are not bank deposits and no government insures them.`) : null));
 
-  // each holding
-  root.append(ui.card("What you hold", ui.h("ul", { class: "records" }, d.items.map((i) => {
+  // each holding; "+ Add another coin" at the foot of the list (R20)
+  const holdCard = ui.card("What you hold", ui.h("ul", { class: "records" }, d.items.map((i) => {
     const kindLabel = { coin: "coin", stable: "stablecoin", fund: "fund", account: "account balance" }[i.kind];
     const lots = i.lots.filter((l) => l.assigned);
     const li = ui.h("li", {},
@@ -95,7 +97,8 @@ export function render(page, ctx) {
       }, { class: "secondary" })));
     }
     return li;
-  }))));
+  })));
+  root.append(holdCard);
 
   // tax
   const t = d.tax;
@@ -139,15 +142,16 @@ export function render(page, ctx) {
     ui.h("li", {}, "Coins on an exchange are not insured like a bank account; coins in your own wallet are lost with the recovery phrase."),
     ui.h("li", {}, "Write down where the recovery phrase is kept, so your family can find it: the Digital assets page below has a place for it."))));
 
-  // adding another coin: one outlined button where the fold was; the form opens in its place (R20)
-  const addHost = ui.h("div");
+  // adding another coin: one outlined button at the foot of the list; the form opens in its place (R20)
+  const addHost = ui.h("div", { class: "cr-add" });
   const drawAdd = () => {
     addHost.replaceChildren?.();
+    addHost.className = adding ? "cr-add open" : "cr-add";
     if (!adding) { addHost.append(ui.row(ui.button("+ Add another coin", () => { adding = true; drawAdd(); addHost.querySelector?.("select, input")?.focus?.({ preventScroll: true }); }, { class: "secondary" }))); return; }
     addHost.append(addCard(false));
   };
   drawAdd();
-  root.append(addHost);
+  holdCard.append(addHost);
 
   // the optional parts, as rows of one card (docs/OPTIONAL.md R12): which coins count as sold
   const coins = coinsOf(plan, { today });
@@ -242,7 +246,12 @@ export function render(page, ctx) {
   function salesBody(cs, rec) {
     const mine = said?.part === "sales" ? said : null;
     const out = [];
-    if (mine) out.push(ui.notice("ok", mine.text), mine.note ? ui.h("p", { class: "muted small" }, mine.note) : null, mine.cost ? ui.h("p", { class: "small cr-flag" }, mine.cost) : null, mine.undo ? ui.row(ui.button("Undo", mine.undo, { class: "secondary" })) : null);
+    if (mine) {
+      // the list above the tapped button changes after a save: the green line is brought under the top bar (ui.reveal)
+      const n = ui.notice("ok", mine.text);
+      out.push(n, mine.note ? ui.h("p", { class: "muted small" }, mine.note) : null, mine.cost ? ui.h("p", { class: "small cr-flag" }, mine.cost) : null, mine.undo ? ui.row(ui.button("Undo", mine.undo, { class: "secondary" })) : null);
+      ui.reveal?.(n, { block: "start" });
+    }
     out.push(ui.h("p", {}, coinSalesSentence(cs, money)));
     const other = elsewhereSentence(cs);
     if (other) out.push(ui.h("p", { class: "small cr-flag" }, other));
@@ -295,7 +304,7 @@ export function render(page, ctx) {
       said = { part: "sales", text: recordedSentence(sale, money), note: moneyNote(sale, money), cost: costNote(sale, money), undo: () => { said = { part: "sales", text: UNDONE_SALE }; store.update((p) => { removeSale(p, id, today); }); } };
       recording = false; recDraft = null;
       store.update((p) => { applySale(p, sale, id, today); });
-    }, { submitLabel: "Record the sale", moreLabel: "Pick the purchases yourself (optional)", moreOpen: m.key === "picked" && hasWays(coin) ? true : undefined, onCancel: cs.count ? () => { recording = false; recDraft = null; drawRecord(host, rec, cs, true); } : undefined });
+    }, { submitLabel: "Record the sale", moreLabel: "Pick the purchases yourself (optional)", moreOpen: m.key === "picked" && hasWays(coin) ? true : undefined, onCancel: cs.count ? () => { recording = false; recDraft = null; drawRecord(host, rec, cs, true); host.querySelector?.("button")?.focus?.(); } : undefined });
     // another coin: its purchases are drawn, keeping what was typed (nothing is saved until "Record the sale")
     f.elements?.coin?.addEventListener?.("change", () => { recDraft = { coin: f.elements.coin.value, units: f.elements.units?.value ?? null, sold: f.elements.sold?.value ?? "", proceeds: f.elements.proceeds?.value ?? null }; drawRecord(host, rec, cs, false); });
     host.append(...[ui.h("h3", {}, "Record a sale"), ui.h("p", { class: "muted small" }, recordWay(m)), costMissing(coin) ? ui.h("p", { class: "small cr-flag" }, costMissing(coin)) : null, f].filter(Boolean));
@@ -351,12 +360,12 @@ export function render(page, ctx) {
         p.holdings = [...(p.holdings ?? []), { id: ui.uid(), accountId: acct.id, symbol, name: COINS[symbol] ?? "", shares: v.shares, price: v.price, priceAsOf: today, costBasis: cost, assetClass: "other", expenseRatio: null, yield: null, lots: v.date ? [{ id: ui.uid(), date: v.date, shares: v.shares, cost }] : [] }];
         syncCrypto(p);
       });
-    }, { submitLabel: "Add coin", onCancel: first ? undefined : () => { adding = false; drawAdd(); } });
+    }, { submitLabel: "Add coin", onCancel: first ? undefined : () => { adding = false; drawAdd(); addHost.querySelector?.("button")?.focus?.(); } });   // back on the button (in view: the form above it is gone)
     // a purchase date still to come was taken ("long-term from Jan 2, 2100")
     const when = form.elements.date;
     const dateRule = () => when.setCustomValidity(when.value && when.value > today ? "A purchase date cannot be in the future." : "");
     when.addEventListener("input", dateRule); when.addEventListener("change", dateRule); dateRule();
-    return ui.h("section", { class: "card" }, ui.h("h2", {}, first ? "Add a coin" : "Add another coin"), form);
+    return first ? ui.h("section", { class: "card" }, ui.h("h2", {}, "Add a coin"), form) : ui.h("div", {}, ui.h("h3", {}, "Add another coin"), form);
   }
   // a crypto account's balance follows its coins (only accounts that have coins listed)
   function syncCrypto(p) {

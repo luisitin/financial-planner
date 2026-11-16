@@ -112,8 +112,9 @@ sale" and Cancel; every coin sold; two coins); invariance: the `coin` object cha
 ## First view and the parts (simple first; docs/OPTIONAL.md, opt spec C17's crypto row, done in this page's gap commit)
 
 - First view, as before: the two tiles, how far it can fall, what you hold, if you sold everything today, worth knowing.
-  The add form is a card open while there are no coins ("Add a coin"), else behind one outlined "+ Add another coin" that
-  opens the form in its place (Cancel puts the button back); it was a hand-written fold, which a page that uses
+  The add form is a card open while there are no coins ("Add a coin"), else behind one outlined "+ Add another coin" at
+  the foot of the coin list that opens the form in its place under a hairline (Cancel puts the button back, with the
+  focus on it); it was a hand-written fold, which a page that uses
   `core/ui/more.js` may not draw (S10). "More on this" goes through `links()`, each row a question.
 - One card of quiet rows (`parts()`): "Which coins count as sold" (kind `item`), only when a coin in a crypto account has
   two or more purchases (with one, every way sells the same coins). Its status is the way that counts ("oldest first"),
@@ -122,7 +123,8 @@ sale" and Cancel; every coin sold; two coins); invariance: the `coin` object cha
   "Sales for your tax return" (kind `item`), when there is a coin to sell or a coin sale recorded this year (also with
   every coin sold, under the hero); its status "1 in 2026" or "none in 2026". The form "Record a sale" is open in it while
   no sale is recorded, else behind an outlined "+ Record another sale". Inside, the only filled buttons are each form's
-  own (Work it out, Record the sale); Undo, Remove this sale, the CSV and the printout are outlined.
+  own (Work it out, Record the sale); Undo, Remove this sale, the CSV and the printout are outlined. After a record, Undo
+  or a removal the list above the tapped button changes, so the green line is brought under the top bar (`ui.reveal`).
 
 ## Which coins count as sold (gap list, next 60, item 46; `sales.js`)
 
@@ -152,7 +154,7 @@ exchange counts saved for the sales they record here.
   and half the Dec 2025 purchase at a $500 gain, both short-term: no tax; the Dec 2025 purchase picked: +$1,000 × 22% =
   $220. "Highest cost first costs least: about $1,125 less federal tax than oldest first."
 - **The wash-sale note** (`washNote`), only where a way sells at a loss: "Coins are property, not securities: as of 2026
-  the wash-sale rule does not stop you buying the same coin back at once, so the loss counts in full." IRC 1091(a) reaches
+  the wash-sale rule does not stop you buying the same coin back at once, so a loss counts in full." IRC 1091(a) reaches
   "stock or securities"; the Instructions for Form 8949 (2025) say "A digital asset is treated as property" (read
   2026-11-16, https://www.irs.gov/instructions/i8949); the Instructions for Form 1099-DA (2026) put a tokenized security
   under 1091 (read 2026-11-16, https://www.irs.gov/instructions/i1099da), which this page never offers. No wash-sale match

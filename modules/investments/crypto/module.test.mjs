@@ -295,7 +295,7 @@ test("Which coins count as sold: one written sentence per case (R5)", () => {
 test("Which coins count as sold: the wash-sale note only where a way sells at a loss, and it says the rule does not reach coins", () => {
   const p = wallet();
   // highest cost first sells the 110,000 purchase at a loss: the note
-  assert.equal(S.washNote(S.coinOrders(p, { today: T2, ask: ask(0.1) })), "Coins are property, not securities: as of 2026 the wash-sale rule does not stop you buying the same coin back at once, so the loss counts in full.");
+  assert.equal(S.washNote(S.coinOrders(p, { today: T2, ask: ask(0.1) })), "Coins are property, not securities: as of 2026 the wash-sale rule does not stop you buying the same coin back at once, so a loss counts in full.");
   // a coin bought again 10 days ago does not cancel the loss (no match for coins), unlike a fund on Tax lots
   const q = wallet(); q.holdings[0].lots.push({ id: "l4", date: "2026-11-06", shares: 0.05, cost: 5000 }); q.holdings[0].shares = 0.3; q.holdings[0].costBasis = 22000;
   const lossy = S.coinOrders(q, { today: T2, ask: ask(0.05, { picked: ["l3"] }) });
@@ -425,12 +425,12 @@ test("The page: no coins, the add form open in a card; one purchase per coin, no
   const one = wallet(); one.holdings[0].lots = [{ id: "l1", date: "2023-03-01", shares: 0.25, cost: 17000 }];
   const P = await page(one);
   assert.deepEqual(P.states().map((x) => x[0]), ["sales"], "every way sells the same coins: no row for the ways (the sales row stays)");
-  assert.ok(!P.root.all().some((e) => e.tagName === "H2" && /Add another coin/.test(P.textOf(e))), "the form waits behind its button");
+  assert.ok(!P.root.all().some((e) => /^H[23]$/.test(e.tagName) && /Add another coin/.test(P.textOf(e))), "the form waits behind its button");
   P.button("+ Add another coin").click();
-  assert.ok(P.root.all().some((e) => e.tagName === "H2" && P.textOf(e) === "Add another coin"), "the form in place of the button");
+  assert.ok(P.root.all().some((e) => e.tagName === "H3" && P.textOf(e) === "Add another coin"), "the form in place of the button, inside the list's card");
   assert.equal(P.saved.length, 0);
   P.button("Cancel").click();
-  assert.ok(P.button("+ Add another coin")); assert.ok(!P.root.all().some((e) => e.tagName === "H2" && P.textOf(e) === "Add another coin"));
+  assert.ok(P.button("+ Add another coin")); assert.ok(!P.root.all().some((e) => e.tagName === "H3" && P.textOf(e) === "Add another coin"));
   // add: saved, said in green, the button back
   P.button("+ Add another coin").click();
   const f = P.root.all().find((e) => e.tagName === "FORM" && e.querySelector('[name="symbol"]'));
