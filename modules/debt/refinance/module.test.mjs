@@ -734,3 +734,178 @@ test("r2 Compare two offers: with an offer's other closing costs blank the compa
   const zeroed = t(crit.map((o) => ({ ...o, costs: o.costs ?? 0 })));
   assert.equal(t(crit).diff, zeroed.diff); assert.equal(t(crit).cheaper, zeroed.cheaper);
 });
+
+// ---------------------------------------------------------------- share a link (gap list, next 60, item 33)
+// "Share these figures" builds a link with the offer only; opened on another phone it is compared with that phone's own
+// mortgage for the visit, and only "Keep these" (asked first, with Undo) writes the plan. The helper: tests/share-link.test.mjs.
+import { parse } from "../../../core/router.js";
+import { SHARE_SPEC, keptWords } from "./view.js";
+import { readShare, shareText, withShared, planWith, UNREAD, OWN_AGAIN, keepAsk } from "../../../core/share-link.js";
+import * as FMT from "../../../core/format.js";
+import { renterDebtPlan as renterOf } from "../../../qa/fixtures/renter-debt-plan.mjs";
+
+const SHARED_OFFER = { rate: 0.0525, termYears: 20, closingCosts: 4500, yearsStaying: 7 };
+async function busyFamily() {
+  const p = await family();
+  p.household = { ...(p.household ?? {}), name: "Quillfeather household", city: "Marrowdale", employer: "Brightnook Widgets" };
+  p.household.people = (p.household.people ?? []).map((x, i) => ({ ...x, name: ["Ottoline Quill", "Barnaby Quill", "Cressida Quill"][i] ?? x.name }));
+  p.accounts = p.accounts.map((a, i) => ({ ...a, name: `Thornbury account ${i}`, institution: "Larkspur Credit Union", balance: a.type === "mortgage" ? 265000 : 52345.67 + i }));
+  p.pageNotes = { "debt/refinance": "the quote from the broker on Wren Lane" };
+  p.debtPlan = { ...(p.debtPlan ?? {}), refinance: { ...SHARED_OFFER, offers: [ONE, TWO], keep: 10 } };
+  return p;
+}
+const PLANTED = ["Quillfeather", "Marrowdale", "Brightnook", "Ottoline", "Barnaby", "Cressida", "Thornbury", "Larkspur", "52345", "265000", "1980", "Wren", "broker", "offers", "keep", "1500", "5.625"];
+
+async function sharePage(plan0, { query = {}, confirm = true } = {}) {
+  await fresh();
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  let cur = migrate(structuredClone(plan0));
+  const pg = { saves: [], replaced: [], asked: [], root: null, route: { group: "debt", id: "refinance", rest: [], query }, textOf };
+  const store = { get: () => cur, update: (fn) => { const d = structuredClone(cur); fn(d); cur = d; pg.saves.push(d); } };
+  pg.draw = () => {
+    pg.root = new FakeElement("main");
+    render(pg.root, { ui: { ...ui, confirm: (q) => { pg.asked.push(q); return confirm; } }, fmt: { ...fmt, today: () => T13 }, plan: cur, route: pg.route, module: { group: "debt", id: "refinance" }, computeOf: () => null, store,
+      redraw: () => pg.draw(), replace: (href) => { pg.replaced.push(href); pg.route = parse(href); pg.draw(); } });
+    return pg;
+  };
+  pg.plan = () => cur;
+  pg.text = () => textOf(pg.root).replace(/​/g, "");
+  pg.button = (label) => pg.root.all().find((e) => e.tagName === "BUTTON" && textOf(e) === label);
+  pg.banner = () => pg.root.all().find((e) => e.dataset?.shared !== undefined) ?? null;
+  pg.part = (id) => pg.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.part === id);
+  pg.share = async () => { pg.button("Share these figures").click(); await new Promise((r) => setTimeout(r, 0)); return textOf(pg.root.all().find((e) => e.dataset?.shareLink !== undefined)); };
+  return pg.draw();
+}
+
+test("share: the page's list carries the offer only, every figure round-trips, never the mortgage or the two-offer comparison", () => {
+  assert.deepEqual(SHARE_SPEC.fields.map((f) => f.key), ["rate", "termYears", "closingCosts", "yearsStaying"]);
+  assert.deepEqual(SHARE_SPEC.path, ["debtPlan", "refinance"]);
+  assert.deepEqual(readShare(SHARE_SPEC, shareText(SHARE_SPEC, SHARED_OFFER)), { figures: SHARED_OFFER, used: 4, refused: 0 });
+  assert.equal(shareText(SHARE_SPEC, { ...SHARED_OFFER, rate: 0.31 }), "term:20,costs:4500,stay:7", "a rate over 30% is not carried, as the box refuses it");
+  assert.equal(readShare(SHARE_SPEC, "costs:0").figures.closingCosts, 0, "a typed $0 of costs is a figure, not a blank");
+});
+
+test("share: the round trip; the link holds the offer only, and the other phone compares it with its own mortgage", async () => {
+  const a = await sharePage(await busyFamily());
+  assert.ok(a.part("figures") && !a.part("figures").hasAttribute("open"), "the share sits inside the shut figures");
+  const link = await a.share();
+  assert.equal(link, "#/debt/refinance?share=rate:5.25,term:20,costs:4500,stay:7");
+  // which figures go, and that the other phone's answer is its own mortgage's (critic P1, P2): no "any phone"
+  assert.match(a.text(), /Copy this link and paste it into a message\. It carries the offered rate, the new term and 2 more figures, nothing else\. The other phone compares the offer with its own mortgage\. #\/debt/);
+  assert.equal(a.saves.length, 0);
+  for (const w of PLANTED) assert.ok(!link.includes(w), `the link holds ${w}`);
+  const route = parse(link);
+  const other = debtPlan();
+  const b = await sharePage(other, { query: route.query });
+  assert.equal(b.saves.length, 0, "opening a link writes nothing");
+  assert.match(b.textOf(b.banner()), /^Figures from a shared link: nothing in your plan has changed\. The link filled in 4 figures on this page\. Keep these Back to my own figures$/);
+  assert.ok(b.part("figures").hasAttribute("open"), "The figures is open while a link shows (critic P5)");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const typed = migrate(structuredClone(other)); typed.debtPlan = { ...(typed.debtPlan ?? {}), refinance: { ...(typed.debtPlan?.refinance ?? {}), ...SHARED_OFFER } };
+  const want = compute(typed, { today: T13 });
+  const o = migrate(structuredClone(other));
+  assert.equal(JSON.stringify(compute(planWith(o, SHARE_SPEC, withShared(o.debtPlan?.refinance, readShare(SHARE_SPEC, route.query.share).figures, SHARE_SPEC)), { today: T13 })), JSON.stringify(want));
+  assert.ok(b.text().includes(`${FMT.money(want.offer.payment, "USD")} a month`), "the offer's payment on this household's own mortgage");
+  assert.ok(b.text().includes(`Your mortgage: ${FMT.money(want.current.balance, "USD")}`));
+  assert.equal(b.part("offers"), undefined, "Compare two offers is not drawn while a link shows (its Save would write the plan)");
+});
+
+test("share: unknown and malicious keys are ignored and counted; nothing readable shows the person's own page", async () => {
+  const b = await sharePage(debtPlan(), { query: { share: "rate:5.5,evil:1,__proto__:1,rate:2,term:0,costs:1e3" } });
+  assert.match(b.textOf(b.banner()), /The link filled in 1 figure on this page; 5 could not be read and were left out\./);
+  assert.ok(!/evil|__proto__/.test(b.text()));
+  assert.equal(b.saves.length, 0);
+  const c = await sharePage(debtPlan(), { query: { share: "rate:55" } });
+  assert.equal(c.banner(), null, "a 55% rate is out of the box's range");
+  assert.ok(c.text().includes(UNREAD));
+});
+
+test("share: nothing is saved without Keep; Keep asks, writes the offer once, names the answer, and Undo puts it all back", async () => {
+  const mine = await family(); mine.debtPlan = { ...(mine.debtPlan ?? {}), refinance: { rate: 0.059, termYears: 30, closingCosts: 3000, yearsStaying: 10, offers: [ONE, TWO], keep: 10 } };
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const before = JSON.stringify(migrate(structuredClone(mine)));
+  const query = { share: shareText(SHARE_SPEC, SHARED_OFFER) };
+  const a = await sharePage(mine, { query });
+  a.button("Back to my own figures").click();
+  assert.equal(a.saves.length, 0);
+  assert.equal(a.banner(), null);
+  assert.ok(a.text().includes(OWN_AGAIN));
+  assert.ok(a.part("offers"), "the person's own two offers are back");
+  // Compare while the link shows: for this visit, in the address
+  const b = await sharePage(mine, { query });
+  b.root.querySelector('[name="closingCosts"]').value = "6,000";
+  b.root.querySelector('[name="rate"]').closest("form").dispatch("submit");
+  assert.equal(b.saves.length, 0);
+  assert.deepEqual(b.replaced, ["#/debt/refinance?share=rate:5.25,term:20,costs:6000,stay:7"]);
+  assert.match(b.text(), /Compared: \$1,786 a month, \$194 less than now\. Nothing in your plan has changed\./);
+  const c = await sharePage(mine, { query, confirm: false });
+  c.button("Keep these").click();
+  assert.deepEqual(c.asked, [keepAsk(SHARE_SPEC, readShare(SHARE_SPEC, query.share))]);
+  assert.deepEqual(c.asked, ["Keep these 4 figures in your plan? They take the place of yours on this page. Undo puts yours back."]);
+  assert.equal(c.saves.length, 0);
+  const d = await sharePage(mine, { query });
+  d.button("Keep these").click();
+  assert.equal(d.saves.length, 1);
+  assert.deepEqual(d.plan().debtPlan.refinance, { ...SHARED_OFFER, offers: [ONE, TWO], keep: 10 }, "the offer from the link; the person's own two offers stay");
+  const rest = (p) => { const q = structuredClone(p); delete q.debtPlan.refinance; delete q.meta; return JSON.stringify(q); };
+  assert.equal(rest(d.plan()), rest(JSON.parse(before)));
+  d.draw();
+  assert.equal(d.banner(), null);
+  assert.ok(d.text().includes("Kept. The offer: $1,786 a month, $194 less than now."));
+  d.root.all().find((e) => e.tagName === "BUTTON" && d.textOf(e) === "Undo").click();
+  const back = structuredClone(d.plan()); const was = JSON.parse(before); delete back.meta; delete was.meta;
+  assert.equal(JSON.stringify(back), JSON.stringify(was));
+  d.draw();
+  assert.ok(d.text().includes("Back to your own figures, as before."));
+  // no mortgage on this phone: the banner, the page's own way to add one, and Keep still keeps the offer for later
+  const e = await sharePage(renterOf(), { query });
+  assert.ok(e.banner());
+  assert.match(e.text(), /It needs your mortgage with its rate and payment first\./);
+  e.button("Keep these").click();
+  assert.equal(e.saves.length, 1);
+  assert.deepEqual(e.plan().debtPlan.refinance, SHARED_OFFER);
+  e.draw();
+  assert.ok(e.text().includes("Kept. Add your mortgage to see what the offer does."));
+});
+
+test("share (critic F1, F2): a link with the rate only keeps this phone's own closing costs and years, and says so", async () => {
+  const mine = await family(); mine.debtPlan = { ...(mine.debtPlan ?? {}), refinance: { rate: 0.059, termYears: 30, closingCosts: 3000, yearsStaying: 10 } };
+  const a = await sharePage(mine, { query: { share: "rate:5.25" } });
+  assert.match(a.textOf(a.banner()), /The link filled in 1 figure on this page\. The rest are your own figures\./);
+  assert.equal(a.root.querySelector('[name="closingCosts"]').value, "3,000", "this phone's own costs in their box during the visit");
+  a.button("Keep these").click();
+  assert.deepEqual(a.asked, ["Keep the offered rate in your plan? It takes the place of yours on this page; your other figures stay as they are. Undo puts yours back."]);
+  assert.deepEqual(a.plan().debtPlan.refinance, { rate: 0.0525, termYears: 30, closingCosts: 3000, yearsStaying: 10 });
+  // a phone with no offer of its own: the boxes the link left out start as on a new offer
+  const b = await sharePage(await family(), { query: { share: "rate:5.25,term:20" } });
+  assert.match(b.textOf(b.banner()), /The link filled in 2 figures on this page\. Anything it left out starts as on a new offer\./);
+});
+
+test("share: the sentences of each case", () => {
+  const f = { money: (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` };
+  assert.equal(keptWords({ hasData: false }, f, "USD"), "Kept. Add your mortgage to see what the offer does.");
+  assert.equal(keptWords({ hasData: true, needsOffer: true }, f, "USD"), "Kept. Type the offered rate to see what the offer does.");
+  assert.equal(keptWords({ hasData: true, needsOffer: false, offer: { payment: 1785.69 }, monthlySaving: 194.31 }, f, "USD"), "Kept. The offer: $1,785.69 a month, $194.31 less than now.");
+  assert.equal(keptWords({ hasData: true, needsOffer: false, offer: { payment: 1785.69 }, monthlySaving: -61.68 }, f, "USD"), "Kept. The offer: $1,785.69 a month, $61.68 more than now.");
+  assert.equal(keptWords({ hasData: true, needsOffer: false, offer: { payment: 1785.69 }, monthlySaving: 0.2 }, f, "USD"), "Kept. The offer: $1,785.69 a month, the same as now.");
+});
+
+test("share invariance: with no link the page is as before for every invented household: no banner, nothing written, nothing new on the first view", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  for (const p0 of [familyPlan(T13), renterOf(), retiredCouplePlan(T13), emptyPlan(), debtPlan(), ...ARCHETYPES.map((x) => x.build())]) {
+    const a = await sharePage(p0);
+    assert.equal(a.banner(), null);
+    assert.equal(a.saves.length, 0);
+    assert.ok(!a.text().includes("Share these figures"), "no offer compared: nothing to share");
+    const b = await sharePage(p0, { query: { from: "plan" } });
+    assert.equal(b.text(), a.text());
+    const { migrate } = await import("../../../core/schema/migrate.js");
+    const p = migrate(structuredClone(p0));
+    assert.equal(planWith(p, SHARE_SPEC, null), p);
+  }
+});

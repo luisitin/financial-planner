@@ -23,7 +23,11 @@ Plan sections read (`needs`): the mortgage (through the Mortgage page compute), 
 `tests/debt-pages.test.mjs`, `module.test.mjs` (the two offers: every formula, the worked example, each sentence case and
 each line under an offer, the invariance of `compute()` over every invented household, the first view, the part's labels
 and its one outlined Save, the hero with saved offers, the working copy saved only by "Save these offers", the green line
-said once, a missing rate held at its box, a credit above the costs, S11).
+said once, a missing rate held at its box, a credit above the costs, S11). Share (item 33): the list and its round trip,
+a sender plan full of invented names and balances (and its two saved offers) whose link holds none of them, the other
+household's answer equal to `compute()` with its own mortgage, unknown and malicious keys counted, nothing saved without
+Keep (Back to my own figures, Compare on a link, Keep refused), Keep writing the offer once with Undo, a phone with no
+mortgage, the sentences, and invariance over every invented household.
 
 ## Two offers side by side (gap list, next 60, item 1; claude-b, 2026-11-14)
 
@@ -214,6 +218,40 @@ costs"; and Compare saved the blank box as `closingCosts: 0`, so a blank could n
   import this compute). A plan the old Compare saved with a blank as 0 still reads as a typed 0.
 - The guesses ledger's row for this box (`overview/guesses/coverage.js`) now says how a blank is handled ("compute:", the page
   says the costs are not typed and gives the most they can be); it said "fallback:0" before. The coverage count is unchanged.
+
+## Share these figures (gap list, next 60, item 33; claude-b, 2026-11-16)
+One quiet tap away, at the foot of "The figures" (the part that holds the offer once it is compared, so never on the
+first view): "Only these figures go in the link; nothing is sent until you send it." and an outlined "Share these
+figures", which hands the link to the phone's share menu (or copies it, or shows it to copy by hand) and says what goes
+(fix round 2026-11-16, critics P1 to P4): "Link copied: paste it into a message. It carries the offered rate, the new
+term and 2 more figures, nothing else. The other phone compares the offer with its own mortgage." (the spec's `note`),
+with "It opens only on this device." or "... on phones on your home network." where the address is not a public one.
+The helper is
+`core/share-link.js` (`tests/share-link.test.mjs`); this page's list is `SHARE_SPEC` in `view.js`.
+
+What the link holds: the offer only, `#/debt/refinance?share=rate:5.25,term:20,costs:4500,stay:7` (`rate` 0 to 30% as
+its box allows, `term` 1 to 40 whole years, `costs` the closing costs, $0 to $10 million, a typed $0 kept as $0, `stay`
+the years you expect to stay, 1 to 40). Never the mortgage it is compared with (balance, rate, payment, lender), never
+"Compare two offers" (`offers` and `keep` stay on the phone they were typed on), never anything else from the plan.
+
+Opening a link: the offer is compared with **this phone's own mortgage**, from a copy of the plan with the link's offer
+in `debtPlan.refinance` (a box the link leaves out keeps this phone's own figure), under "Figures from a shared link:
+nothing in your plan has changed.", "The link filled in 4 figures on this page." (fewer: then "The rest are your own
+figures." or "Anything it left out starts as on a new offer.", the spec's own `rest` words: a blank costs box here is
+"not known yet", not a guess) and the outlined "Keep these" and "Back to my own figures"; "The figures" is open while
+it shows (critic P5). For the invented family ($265,000 at
+6.25%, $1,980 a month) the example offer reads "Worth it": $1,786 a month, $194 less than now; for the debt fixture's
+household ($1,724 a month) the same link is $62 more than now. While it shows, "Compare two offers" is not drawn (its
+Save would write the plan), and "Compare" compares for this visit only (the offer goes into the address): "Compared:
+$1,786 a month, $194 less than now. Nothing in your plan has changed." "Keep these" asks first ("Keep these 4 figures in your plan? They take the place of yours on this page. Undo puts yours
+back."; a link with the rate only: "Keep the offered rate in your plan? ...; your other figures stay as they are. ..."),
+writes the keys the link holds in `debtPlan.refinance` once (this phone's own costs and years stay when the link leaves
+them out, critic F1; the saved two offers stay as they were) and says "Kept. The
+offer: $1,786 a month, $194 less than now." with Undo. With no mortgage on this phone the page asks for it as always,
+and "Keep these" keeps the offer for later: "Kept. Add your mortgage to see what the offer does." No formula is new:
+the answer is this page's `compute()`. Builder's choices as on House down payment (its README, "Share these figures"),
+and: the two-offer comparison does not travel (one offer is what a partner sends; the part's working copy would
+otherwise need its own visit-only save).
 
 ## Ideas / not yet
 - Cash-out refinance (on Renovation already). The tax effect of points (Pub. 936: deducted over the loan's life) and of the

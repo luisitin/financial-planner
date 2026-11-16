@@ -1,8 +1,39 @@
 // modules/debt/refinance/view.js -- DOM only. Type the offer, see the payment, the break-even
 // month and the interest both ways over the years you plan to stay. One quiet tap away, "Compare two offers": two
-// lenders' quotes with points, a lender credit and the costs paid or added to the loan, side by side.
+// lenders' quotes with points, a lender credit and the costs paid or added to the loan, side by side. Inside "The
+// figures", "Share these figures" builds a link that carries only the offer (core/share-link.js); opened on any phone it
+// is compared with that phone's own mortgage for the visit, and only "Keep these" (asked first, with Undo) saves it.
 import { compute, twoOffers, offerInputs, keepOf, blankCost, KEEP_CHIPS, TERM_CHIPS, POINT_CHIPS, TIE } from "./compute.js";
 import { parts, choice } from "../../../core/ui/more.js";
+import { defineShare, visitOf, sharedTop, shareBlock, visitGo, VISIT_TAIL, NO_LINK } from "../../../core/share-link.js";
+
+/**
+ * What a link may carry from this page (core/share-link.js): the offer, never the mortgage it is compared with (the other
+ * phone compares it with its own: the `note` said after a share) and not "Compare two offers" (its offers and years stay
+ * on the phone they were typed on). Ranges are the form's own; the costs up to $10 million. A box the link leaves out
+ * is not a guess here (blank costs mean "not known yet", a blank term or stay the form's 30 and 7), hence its own `rest`.
+ */
+export const SHARE_SPEC = defineShare({ page: "debt/refinance", path: ["debtPlan", "refinance"],
+  note: "The other phone compares the offer with its own mortgage.",
+  rest: { none: "Anything it left out starts as on a new offer.", mixed: "The rest are your own figures, or start as on a new offer." },
+  fields: [
+    { key: "rate", as: "rate", unit: "percent", min: 0, max: 0.3, name: "the offered rate" },
+    { key: "termYears", as: "term", unit: "whole", min: 1, max: 40, name: "the new term" },
+    { key: "closingCosts", as: "costs", unit: "money", min: 0, max: 1e7, name: "the closing costs" },
+    { key: "yearsStaying", as: "stay", unit: "whole", min: 1, max: 40, name: "the years you would stay" },
+  ] });
+/**
+ * The green line after "Keep these" (R7: it names the answer), one per case:
+ *   "Kept. The offer: $1,850 a month, $130 less than now." / "... $40 more than now." / "... the same as now."
+ *   no mortgage on file: "Kept. Add your mortgage to see what the offer does."
+ *   no rate in the link: "Kept. Type the offered rate to see what the offer does."
+ */
+export function keptWords(d, fmt, cur) {
+  if (!d.hasData) return "Kept. Add your mortgage to see what the offer does.";
+  if (d.needsOffer) return "Kept. Type the offered rate to see what the offer does.";
+  const vs = Math.abs(d.monthlySaving) < 0.5 ? "the same as now" : d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`;
+  return `Kept. The offer: ${fmt.money(d.offer.payment, cur)} a month, ${vs}.`;
+}
 
 let pending = false;   // Compare was tapped: the answer card under it says what it found (kept across the shell's redraw)
 // "Compare two offers": the working copy (chips and boxes act on it at once; nothing reaches the plan until "Save these
@@ -12,9 +43,16 @@ let pendingTwo = null;   // { part: "offers" } after "Save these offers": the pa
 let twoSaid = null;      // that green line, on this draw: the page brings it into view once it is drawn
 
 export function render(root, ctx) {
-  const { ui, fmt, store, plan } = ctx;
+  const { ui, fmt, store } = ctx;
+  // a shared link in the address (core/share-link.js): the offer is the link's for this visit only, compared with this
+  // phone's own mortgage; the plan itself is untouched (sv.plan is a copy with it in debtPlan.refinance)
+  const sv = visitOf(ctx, SHARE_SPEC);
+  const plan = sv.plan;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
+  // the banner of a shared link, or the line kept from its last tap, above everything (the compare's own green line says
+  // "Compared: ..." in the answer card, so the visit line is not said twice)
+  root.append(...sharedTop(ctx, SHARE_SPEC, sv, { kept: keptWords(d, fmt, cur) }));
 
   if (!d.hasData) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -32,13 +70,15 @@ export function render(root, ctx) {
   ];
   // offers saved in "Compare two offers" with no single offer compared: the hero says their answer, not "Type an offer
   // below." (a person critic's P2: the page asked for an offer while two sat saved behind a shut row)
-  const savedTwo = d.needsOffer ? twoOffers(plan, { today: fmt.today() }) : null;
+  const savedTwo = d.needsOffer && !sv.live ? twoOffers(plan, { today: fmt.today() }) : null;
   const savedLine = savedTwo && savedTwo.case !== "none" ? ` ${savedLede(savedTwo, fmt, cur)}` : null;
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, d.needsOffer ? "Refinance" : headline(d, fmt, cur)),
     ui.h("p", { class: "lede" }, `Your mortgage: ${fmt.money(d.current.balance, cur)} at ${fmt.pct(d.current.rate, 2)}, ${fmt.money(d.current.payment, cur)} a month.${d.needsOffer ? savedLine ?? " Type an offer below." : ""}`),
   ));
   const offerForm = ui.form(FIELDS, { rate: rf.rate ?? null, termYears: rf.termYears ?? 30, closingCosts: rf.closingCosts ?? null, yearsStaying: rf.yearsStaying ?? 7 }, (v) => {
+    // a shared link: compared for this visit (the offer goes into the address), never saved
+    if (sv.live) { pending = true; const r = visitGo(ctx, SHARE_SPEC, v); if (r !== true) { pending = false; if (r) ui.fieldError(offerForm.querySelector?.(`[name="${r}"]`), NO_LINK); } return; }
     pending = true;
     // a blank box is kept blank (null), not saved as $0: the page then says the costs are missing (fix round r2)
     store.update((p) => { p.debtPlan = { ...(p.debtPlan ?? {}), refinance: { ...(p.debtPlan?.refinance ?? {}), rate: v.rate ?? null, termYears: v.termYears ?? 30, closingCosts: v.closingCosts ?? null, yearsStaying: v.yearsStaying ?? 7 } }; });
@@ -49,7 +89,7 @@ export function render(root, ctx) {
   // the whole answer sits in one card: the verdict in words, a green line for each compare, then the figures (D5: a second
   // compare looked like nothing); after Compare the page brings it up under the top bar, and "The figures" stays open
   const compared = pending;
-  const said = pending && !d.needsOffer ? ui.notice("ok", `Compared: ${fmt.money(d.offer.payment, cur)} a month, ${Math.abs(d.monthlySaving) < 0.5 ? "the same as now" : d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`}.`) : null;
+  const said = pending && !d.needsOffer ? ui.notice("ok", `Compared: ${fmt.money(d.offer.payment, cur)} a month, ${Math.abs(d.monthlySaving) < 0.5 ? "the same as now" : d.monthlySaving > 0 ? `${fmt.money(d.monthlySaving, cur)} less than now` : `${fmt.money(-d.monthlySaving, cur)} more than now`}.${sv.live ? ` ${VISIT_TAIL}` : ""}`) : null;
   pending = false;
   const stale = ui.h("p", { class: "muted small", hidden: true }, "These figures are for the offer you last compared. Tap Compare to see the one typed below.");
   offerForm.addEventListener("input", () => { stale.hidden = false; said?.remove(); });
@@ -66,12 +106,15 @@ export function render(root, ctx) {
   // offer's own four boxes are the one way in (a person critic's P3: the part asked the same questions again); offer 1
   // then starts from the offer compared, and offer 2's boxes are the ones out
   const saved = Array.isArray(rf.offers) && rf.offers.some((o) => offerInputs(o).ready);
+  // while a shared link shows, "Compare two offers" is not drawn: its Save would write the plan, and only "Keep these" may
+  // under "The figures", "Share these figures" (once an offer is compared): a link with the offer and nothing else
   const justSaved = pendingTwo?.part === "offers";
   twoSaid = null;
   root.append(ui.h("div", {}, parts(ctx,
-    !d.needsOffer && { id: "figures", kind: "figures", says: `${rateWords(d.offer.rate)}, ${d.offer.termYears} year${d.offer.termYears === 1 ? "" : "s"}`, open: compared,
-      holds: FIELDS.map((x) => x.key), body: [offerForm] },
-    (!d.needsOffer || saved) && { id: "offers", kind: "own", title: TWO_TITLE, set: saved, open: justSaved, holds: ["twoRate", "twoCosts", "twoCredit"],
+    // open after Compare (R17), and while a link shows, so the visitor sees where to change the offer (critic P5)
+    !d.needsOffer && { id: "figures", kind: "figures", says: `${rateWords(d.offer.rate)}, ${d.offer.termYears} year${d.offer.termYears === 1 ? "" : "s"}`, open: compared || sv.live,
+      holds: FIELDS.map((x) => x.key), body: [offerForm, ...shareBlock(ctx, SHARE_SPEC, rf)] },
+    !sv.live && (!d.needsOffer || saved) && { id: "offers", kind: "own", title: TWO_TITLE, set: saved, open: justSaved, holds: ["twoRate", "twoCosts", "twoCredit"],
       body: () => twoBody(ctx, { rf, single: d, cur, justSaved }) })));
   pendingTwo = null;
   // after "Save these offers" its green line, in the answer's place at the top of the part, is brought up under the top
