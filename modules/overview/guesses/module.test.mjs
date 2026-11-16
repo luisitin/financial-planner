@@ -1925,7 +1925,8 @@ test("C7 fix UX 2 and 4: on the Dashboard the card sits right under where you st
   const row = (k) => pg.all(kids[at], (n) => n.tag === "a" && pg.text(n).trim().startsWith(k))[0];
   assert.equal(pg.text(row("Left over each month")).trim(), "Left over each month Depends on your spending: not counted yet See below ›");
   assert.equal(pg.text(row("Emergency fund")).trim(), "Emergency fund Needs your spending See below ›");
-  assert.equal(pg.text(row("Retirement")).trim(), "Retirement Depends on the figures below See below ›", "no green 'On track' while spending is not counted");
+  // (it said "Depends on the figures below", which never said which: dashboard/compute.js retireWaitRow, z1 fix round P1)
+  assert.equal(pg.text(row("Retirement")).trim(), "Retirement Depends on your spending: not counted yet See below ›", "no green 'On track' while spending is not counted");
   for (const k of ["Left over each month", "Emergency fund", "Retirement"]) {
     const a = row(k);
     assert.equal(a.attrs.href, "#/overview/guesses", k);

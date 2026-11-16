@@ -85,7 +85,7 @@ or missing is up, the rows of "where you stand" that it decides wait on it and l
 spending, UX review 4): "Left over each month" ("Depends on your spending: not counted yet", "...: your list may be
 missing about $2,460 a month", or with a debt alone "Depends on what you owe: not all counted yet"), "Safety cushion"
 when it is open and the spending is not counted ("Needs your spending"), and "Retirement" whatever its verdict
-("Depends on the figures below"): no coloured dot, "See below ›", `#/overview/guesses`, and a tap scrolls to the card.
+(`retireWaitRow`, below): no coloured dot, "See below ›", `#/overview/guesses`, and a tap scrolls to the card.
 (The headline and the next move are overview/setup's `standing` and Next best action's, another batch's files.) Each
 card lists what its filled button writes; nothing is written before a tap; "Not now", "That's everything" and "Keep the
 old ones" write only the answer. The green line a tap leaves is kept in a module-level `pending` and shown where the
@@ -242,6 +242,28 @@ an ask; "The money lasts", "On track"; "It lasts, just", "Tight" or the Social S
 "Short at A" or "Needs a look" or the Social Security ask; "We don't know yet", "Not known yet" or an ask; and that every
 other household's row is the one the 398a01e view built. The cost: one more `standing()` of the copy (about 20 to 60 ms
 in Node) only for a plan missing Social Security whose money lasts.
-Not done: Get started's done screen, the Timeline, Needs attention and the other pages that gate on `retirementKnown`
-still say Social Security is needed for such a plan; moving `answerWithoutSs` into `standing()` (overview/setup, claude-b's
-lane) would carry the same answer to all of them.
+Not done then: Get started's done screen, the Timeline, Needs attention and the other pages that gate on `retirementKnown`
+still said Social Security was needed for such a plan. Done in z1 (below): the answer moved into `standing()`.
+
+### One answer on every overview page (z1, 2026-11-16)
+
+`answerWithoutSs` and `ssLeftOutWords` are gone from this file. The rule is overview/setup's `lastsWithoutSs(plan, { today,
+proj })` (its README, "One retirement answer"), asked inside Get started's `standing()`, which then carries the answer
+(`retire` and the fields worked out from it) and `withoutSs: "Sam's Social Security"`. `retireRow(st, ...)` reads `st` as it
+is: no second `standing()` of a marked copy (the 20 to 60 ms above are gone) and no second copy of the rule. The row's words
+are unchanged for every invented household (`tests/one-answer-invariance.test.mjs`: the row's digest is the e223a42 one for
+all 49 plans), and Get started's tile, Your plan, Quick answers, the Timeline, Health score and the path's "Your retirement"
+step now say the same (`tests/one-answer.test.mjs`).
+
+While a card under "where you stand" waits on the spending or the debts, the row is `retireWaitRow(row, wait)` (compute.js;
+fix round, critic P1). It read "Depends on the figures below" whatever it waited on, so for Ruth and Sam, whose list may be
+missing about $1,220 a month, the first screen said that while Your plan, Quick answers and the Timeline one tap away said
+"The money lasts". Now, one sentence per case, still with no dot, "See below ›" and the tap to the card:
+- the list may be short ("Is something missing?") and the row's answer is "The money lasts" (green, not on our guesses):
+  "The money lasts on what you listed" (spoken "Retirement: see below. The money lasts on what you listed.", `said`);
+- the list may be short, any other answer (or one partly on our guesses): "Depends on your spending list. Check it below";
+- spending skipped ("Fill in what you skipped"): "Depends on your spending: not counted yet" (the left-over row's words);
+- a debt skipped: "Depends on what you owe: not all counted yet".
+After "That's everything" the card goes and the row is `retireRow`'s again ("The money lasts, even without Sam's Social
+Security" / "On track"). The first-view count (qa/first-view-node.mjs) for Ruth and Sam stays at 196 words (the
+page's entry is 200).

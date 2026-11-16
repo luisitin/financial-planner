@@ -3258,3 +3258,28 @@ test("gy1 fix P3: once the person says their Expenses list is everything, the pl
   assert.ok(first.includes("you plan to spend $33,360 (from your Expenses list)."), first.slice(0, 600));
   assert.ok(!first.includes("(our estimate)"));
 });
+
+// ---- z1 fix round, critic P3: the Social Security notice above an answer that stands without the figure
+test("z1 fix P3: the money lasts without Sam's Social Security: the notice says so, calm, never 'looks worse than it is' above 'The money lasts'", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const notice = (root) => root.querySelectorAll("div").find((e) => /^notice /.test(e.className ?? "") && /Social Security is not counted yet/.test(textOf(e))) ?? null;
+  const r = await sfDraw(retiredCouplePlan());
+  const n = notice(r.root);
+  assert.equal(n.className, "notice info");
+  assert.equal(textOf(n), "Sam's Social Security is not counted yet. The money lasts even without it. Add an estimate (ssa.gov shows theirs), or say Sam will not get it.");
+  assert.match(textOf(r.root), /The money lasts/);
+  // the same two answers under it: the filled "Add Social Security" and "Sam won't get Social Security"
+  assert.ok(r.root.querySelectorAll("a").some((a) => a.getAttribute("href") === "#/retirement/social-security" && textOf(a) === "Add Social Security"));
+  assert.ok(r.root.querySelectorAll("button").some((b) => textOf(b) === "Sam won't get Social Security"));
+  // short without it (spending three times as high): the page does look worse than it is, and says so, as before
+  const high = retiredCouplePlan(); for (const x of high.expenses) x.amount *= 3;
+  const h = notice((await sfDraw(high)).root);
+  assert.equal(h.className, "notice warn");
+  assert.match(textOf(h), /^Sam's Social Security is not counted yet, so this page looks worse than it is\. Add an estimate/);
+  // the other retirement pages hand in no answer: their chances and years still look worse without it
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js");
+  const { ssNotice } = await import("../ss-notice.js");
+  const card = ssNotice({ ui, fmt: { ...fmt, today: () => SF }, plan: retiredCouplePlan(), store: { update() {} } });
+  assert.match(textOf(card), /so this page looks worse than it is/);
+});

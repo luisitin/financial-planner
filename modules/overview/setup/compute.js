@@ -523,6 +523,17 @@ export function retireGuessAsk(st) {
   return bal ? { words: "Partly our guesses. Type your 401(k) ›", dash: "Partly our guesses of your savings", id: "have-amounts", line: "Partly our guesses of your savings." }
     : { words: "Partly our guesses. Type what you spend ›", dash: "Partly our guesses of your spending", id: "spend", line: "Partly our guesses of your spending." };
 }
+/**
+ * retireTileWords(st) -> the line under Get started's Retirement tile once it has an answer: "If nothing changes.", or while our
+ * guesses carry it retireGuessAsk(st).words ("Partly our guesses. Type what you spend ›"). An answer that stands without the
+ * Social Security not in yet (standing().withoutSs, lastsWithoutSs; z1) names whose it leaves out, as the Dashboard's row does:
+ * "If nothing changes, even without Sam's Social Security." / "Partly our guesses, without Sam's Social Security. Type what you spend ›".
+ */
+export function retireTileWords(st) {
+  const w = st?.withoutSs ?? null;
+  if (st?.retireGuessed) { const words = retireGuessAsk(st).words; return w ? words.replace(/^Partly our guesses\./, `Partly our guesses, without ${w}.`) : words; }
+  return w ? `If nothing changes, even without ${w}.` : "If nothing changes.";
+}
 /** Q2's own $0 401(k): its own id, so question 4b's "On my own" IRA never takes its place (review UX 4). */
 export const workPlanId = (pid) => `setup-workplan-${pid}`;
 export const workPlanAcct = (p, pid) => byId(L(p, "accounts"), workPlanId(pid)) ?? null;
@@ -2721,6 +2732,56 @@ export function ssMissingFor(plan) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
   return adults(plan).filter((p) => !ssKnown(ss, said, p.id, plan));
 }
+/**
+ * Whose Social Security an answer leaves out, in a page's words (moved from the Dashboard, z1; gy1 fix F2, P2): one adult of two
+ * or more, by name ("Sam's Social Security"; the person themself "your Social Security"), else "your Social Security".
+ */
+export function ssLeftOutWords(plan) {
+  let missing = [];
+  try { missing = ssMissingFor(plan); } catch { missing = []; }
+  const one = missing.length === 1 && adults(plan).length > 1 ? missing[0] : null;
+  return one && one.role !== "self" && one.name ? `${one.name}'s Social Security` : "your Social Security";
+}
+/**
+ * orphanSsLine(plan, today) -> true when a Social Security line on the Income page that Will the money last? counts (yearly, an
+ * amount, not ended by `today`: projection incomeSocial's own filter) names no adult of the household on it (no one, a child,
+ * someone no longer in it). The projection gives such a line to the first adult and drops it once that adult has a figure on the
+ * Social Security page, so typing a figure can take money away (lastsWithoutSs; z1 critic M1).
+ */
+export function orphanSsLine(plan, today = null) {
+  const ids = new Set(adults(plan).map((p) => p.id));
+  return L(plan, "income").some((x) => x?.type === "social" && x.period !== "once" && Number(x.amount) > 0 && !(x.endDate && today && String(x.endDate) < String(today)) && !ids.has(x.personId));
+}
+/** The sentence a page adds to an answer that leaves it out: "Sam's Social Security is not counted yet; the money lasts even without it." */
+export const ssLeftOutLine = (words) => `${String(words).charAt(0).toUpperCase()}${String(words).slice(1)} is not counted yet; the money lasts even without it.`;
+/**
+ * lastsWithoutSs(plan, { today, proj }) -> { proj, ids, words } | null: the one rule (z1, 2026-11-16) for a retirement answer that
+ * does not wait for the Social Security not in yet. Will the money last? already counts no Social Security for an adult with no
+ * figure and says the page "looks worse than it is" (retirement/ss-notice.js). While Social Security is the only thing the
+ * check waits for (a copy with those adults marked "won't get it", what that notice's button saves, is checkable: every birth
+ * date in, no line that has ended) and that page says the money lasts ("on track") even so, more income can only keep it
+ * lasting (at most 85% of a benefit is taxed: README "One retirement answer"), so its answer stands on every page. Short or only
+ * just lasting, the missing figure could change the answer: null, and the pages keep asking for it, as the page's notice does
+ * first. `proj`: Will the money last?'s compute for the plan (worked out here when the caller has none), returned as the answer;
+ * `ids`: whose figure is missing; `words`: ssLeftOutWords. Nothing is written.
+ */
+export function lastsWithoutSs(plan, { today = null, proj = null } = {}) {
+  let missing = [];
+  try { missing = ssMissingFor(plan); } catch { missing = []; }
+  if (!missing.length || retirementKnown(plan, today)) return null;
+  // a Social Security line on the Income page with no adult on it (no one, a child, someone no longer in the household): Will the
+  // money last? counts it for the first adult, and drops it once that adult has a figure (projection incomeSocial), so a figure
+  // typed then could take money away and the money could stop lasting (z1 critic M1: $100 a month each made the retired couple
+  // short at twice the spending). The answer does not stand: null, and the pages keep asking, as before
+  if (orphanSsLine(plan, today)) return null;
+  const g = plan?.guide ?? {}, s = g.setup ?? {};
+  const marked = { ...plan, guide: { ...g, setup: { ...s, ss: { ...(s.ss ?? {}), ...Object.fromEntries(missing.map((m) => [m.id, "none"])) } } } };
+  if (!retirementKnown(marked, today)) return null;
+  let d = proj;
+  if (!d) { try { d = computeProjection(plan, { today }); } catch { d = null; } }
+  if (!d?.ready || d.verdict !== "on track") return null;
+  return { proj: d, ids: missing.map((m) => m.id), words: ssLeftOutWords(plan) };
+}
 /** What the retirement check still needs, in plain words: only what is missing (README "Where you stand"). */
 export function retirementMissing(plan, { today = null } = {}) {
   const ss = plan?.retirement?.socialSecurity ?? {}, said = setupOf(plan).ss ?? {};
@@ -2882,6 +2943,10 @@ export function standing(plan, { today }) {
   try { liq = computeLiquidity(plan, { today }); } catch { liq = null; }
   const known = retirementKnown(plan, today);
   if (known) { try { proj = computeProjection(plan, { today }); } catch { proj = null; } }
+  // Social Security the only gap and the money lasts without it (lastsWithoutSs, z1): Will the money last?'s answer stands, and
+  // every reader of this (Get started's tile, the Dashboard's row) gives it, saying whose Social Security it leaves out
+  const without = known ? null : lastsWithoutSs(plan, { today });
+  if (without) proj = without.proj;
   const spare = nba?.ready ? nba.spare.monthly : null;
   // savings never asked (nothing owned on file, only debts or nothing, and no answer to "What do you have?"): the months of
   // bills the cash covers are not known, never "0 months" with a red "Build your emergency fund first" (left2 merge E2,
@@ -3036,6 +3101,9 @@ export function standing(plan, { today }) {
     bank: bank ? { gap: bank.gap, bankOut: bank.bankOut, planOut: bank.planOut, months: bank.months } : null, bankCard,
     stateTaxCounted: !!(nba?.ready && nba.spare.stateKnown), debtExtra, debtOn: debtNames.length === 1 ? debtNames[0] : debtNames.length === 2 ? `${debtNames[0]} and ${debtNames[1]}` : debtNames.length ? "your debts" : null, debtUntil: nba?.debtPlan?.until ?? null,
     retire, retirementKnown: known, retirementMissing: missing, moves, later, headline, guessed,
+    // the answer above stands without the Social Security not in yet (lastsWithoutSs): whose it leaves out, "Sam's Social
+    // Security" (only then; retirementKnown and retirementMissing keep saying what is missing)
+    ...(without ? { withoutSs: without.words } : {}),
     // each done-screen tile that cannot be worked out, in words, from what is really missing (C5 B9); null when it is worked out
     ...(() => { const { retireAt, ...why } = tileWhyOf(plan, { netWorth: empty ? null : nw.netWorth, nba, spare, runway, known, retire, missing, retired, proj }); return { tileWhy: why, tileAt: { retire: retireAt } }; })(),
     homeMissing: hasMortgage(plan) && !L(plan, "accounts").some((a) => a.type === "property"),

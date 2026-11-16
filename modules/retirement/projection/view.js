@@ -118,12 +118,16 @@ export function render(root, ctx) {
   // no Social Security in the plan: say so first (ss-notice.js); not while the page still needs its basics, where its filled button
   // stood above the one thing to do first (stress test 2026-11-11, x-5: four filled buttons on the first screen). While it shows,
   // its "Add Social Security" is the page's one filled button (the page looks worse than it is until then): the hero's are outlined
-  const ss = d.ready ? ssNotice(ctx) : null;
+  // (it hands in its own answer: when that answer stands without the figure, the notice says the money lasts even so, never "this
+  // page looks worse than it is" above "The money lasts"; z1 fix round, critic P3)
+  const ss = d.ready ? ssNotice(ctx, { proj: d }) : null;
   if (ss) root.append(ss);
   const rt = plan.retirement ?? {};
   // (a chip that is on under "Things that will happen" is a tint with a tick, not a solid fill: the solid fill is for the one
   // action on the screen, "Add it" or "Save"; critic of gap design #1, F5)
-  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 0; margin: -14px 0; } [data-part=\"happenings\"] .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); } [data-part=\"happenings\"] .chip.on::before { content: \"\\2713\\00a0\"; color: var(--accent-ink); }"));
+  // (an inline link is 44 px tall and at least 44 px wide: "Ages ›" alone was 40 px wide; the padding is taken back by the margin,
+  // so the words do not move; z1 fix round, critic P5)
+  root.append(ui.h("style", {}, ".pj-link { display: inline; padding: 14px 4px; margin: -14px -4px; } [data-part=\"happenings\"] .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--text); } [data-part=\"happenings\"] .chip.on::before { content: \"\\2713\\00a0\"; color: var(--accent-ink); }"));
   const money = (n) => fmt.money(n, cur);
   // taps let go just after one that scrolled the page (B4): the second of a double tap lands on whatever slid under the finger
   // (the press too: it would move the focus to the link under the finger)

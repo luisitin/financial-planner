@@ -14,7 +14,7 @@ import {
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  retireGuessAsk, retireKindsFor, ssGettingHelp, ssBlankGuess, fullAgeWords, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
+  retireGuessAsk, retireTileWords, retireKindsFor, ssGettingHelp, ssBlankGuess, fullAgeWords, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
   payGuesses, payStateLeftOut, payForAge, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
@@ -1995,16 +1995,18 @@ export function render(page, ctx) {
       : fig(st.runwayStatus === "ok" ? "ok" : "warn", "Emergency fund", monthsNear(st.runway, target), held ? `${held} Aim for ${target} months.${heldAsk ? ` ${heldAsk}` : ""}` : `of the bills you have to pay, in cash. Aim for ${target}.`, st.runwayStatus === "ok" ? "● Covered" : "● Worth building up", heldAsk ? "#/goals/emergency-fund" : null);
     // the ages are in but the check could not run: what it waits for is the monthly spending, and that is where the link goes
     // (j-first-renter/x-1); no retirement savings on file: the link opens "What do you have?", where Retirement is ticked (x-2)
-    const retireFig = st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? "Needs what you spend each month.", "Add it ›", setupHref(st.tileAt?.retire ?? "spend"))
-      : !st.retirementKnown || !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? (st.retirementMissing ? `Needs ${st.retirementMissing}.` : "Needs your Social Security."), "Add it ›", setupHref("ages"))
+    // (an answer that stands without the Social Security not in yet, standing().withoutSs: the tile gives it, as the Dashboard and
+    // Will the money last? do, and names whose Social Security it leaves out; z1, overview/setup lastsWithoutSs)
+    const retireFig = !st.retire && st.retirementKnown ? fig("open", "Retirement", "Not worked out yet", why.retire ?? "Needs what you spend each month.", "Add it ›", setupHref(st.tileAt?.retire ?? "spend"))
+      : !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? (st.retirementMissing ? `Needs ${st.retirementMissing}.` : "Needs your Social Security."), "Add it ›", setupHref("ages"))
       // no retirement savings on file: "not known yet", never "Short at 65" while Will the money last? says it does not know
       : st.retireSavingsUnknown ? fig("open", "Retirement", "Not known yet", "Add your retirement savings to see: tick Retirement on the next screen.", "Add them ›", setupHref("have"))
       // its spending is mostly our guesses: the verdict word, calm, never "Short at 65" in amber on guesses alone
-      : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", retireGuessAsk(st).words, "● Our guesses for now", retireGuessAsk(st).href ?? setupHref(retireGuessAsk(st).id))
+      : st.retireGuessed ? fig("calm", "Retirement", st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", retireTileWords(st), "● Our guesses for now", retireGuessAsk(st).href ?? setupHref(retireGuessAsk(st).id))
       // "Small changes help" only when they would (the plan carries 85% or more of the spending), else "Check the numbers first",
       // landing on what the answer rests on: the Dashboard's rule (plan/words.js smallChangesHelp; retirement spec L12, C5 follow-up F1)
       : (() => { const ok = st.retire.verdict === "on track", small = ok || smallChangesHelp(st.retire);
-        return fig(ok ? "ok" : "warn", "Retirement", ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", "If nothing changes.", ok ? "● The money lasts" : small ? "● Small changes help" : "● Check the numbers first", small ? "#/retirement/projection" : "#/retirement/projection?check=1"); })();
+        return fig(ok ? "ok" : "warn", "Retirement", ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", retireTileWords(st), ok ? "● The money lasts" : small ? "● Small changes help" : "● Check the numbers first", small ? "#/retirement/projection" : "#/retirement/projection?check=1"); })();
     add(card, ui.h("div", { class: "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
     // (the figures are shown as they are at once: they used to count up from $0, so a look at the screen while they ran read
     // $380 and -$10,085 where the next screens say $384 and -$10,200; follow-up B4)

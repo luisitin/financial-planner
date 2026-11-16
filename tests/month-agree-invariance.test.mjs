@@ -3,8 +3,8 @@
 // best action leaves an income-tax line out of spending, as much of it as the month's tax holds (the rest, and a state's tax
 // where none is counted, stays spending: gy1 fix F3, F4), and Budget (50/30/20) counts a property tax as a need, as Next best
 // action did. (b) The Dashboard's retirement line gives the answer Will the money last? gives while Social Security is the
-// only thing missing and the money lasts even without it, naming whose it leaves out (overview/dashboard `retireRow`,
-// `answerWithoutSs`; gy1 fix F2, P2).
+// only thing missing and the money lasts even without it, naming whose it leaves out (overview/dashboard `retireRow`; the
+// answer itself is overview/setup `lastsWithoutSs` in standing() since z1; gy1 fix F2, P2).
 // Over every qa/fixtures/*-plan.mjs plan, the 14 households' base plans, the phone-built ones, the round 8 households, the
 // four setup personas, the demo and the empty plan, with nothing new typed:
 //   - the Forecast's, Expenses' and the Dashboard's compute give, byte for byte, what they gave at commit 398a01e;
@@ -34,8 +34,11 @@ import { compute as nextBest, monthOf } from "../modules/overview/next-best-acti
 import { compute as budget } from "../modules/cashflow/budget-percent/compute.js";
 import { compute as forecast } from "../modules/cashflow/forecast/compute.js";
 import { compute as expenses } from "../modules/cashflow/expenses/compute.js";
-import { compute as dashboard, retireRow, answerWithoutSs, rowWords, ssLeftOutWords } from "../modules/overview/dashboard/compute.js";
-import { standing, ssMissingFor, retireGuessAsk } from "../modules/overview/setup/compute.js";
+import { compute as dashboard, retireRow, rowWords } from "../modules/overview/dashboard/compute.js";
+// (z1, 2026-11-16: the answer without the Social Security not in yet moved from the Dashboard into Get started's standing(), as
+// overview/setup lastsWithoutSs and ssLeftOutWords, the one rule every overview page asks; tests/one-answer-invariance.test.mjs
+// holds standing() of the three plans it lifts to e223a42 outside that answer)
+import { standing, ssMissingFor, retireGuessAsk, lastsWithoutSs, ssLeftOutWords } from "../modules/overview/setup/compute.js";
 import { compute as projection, savingsUnknown } from "../modules/retirement/projection/compute.js";
 import { smallChangesHelp } from "../modules/overview/plan/words.js";
 import { monthsTaxOf } from "../modules/cashflow/forecast/compute.js";
@@ -102,6 +105,8 @@ test("with nothing new typed, every figure is what it was at 398a01e, but for th
     for (const k of ["forecast", "expenses", "dashboard"]) { assert.equal(now[k], w[k], `${name}: ${k}`); same++; }
     for (const k of ["nextBest", "standing"]) {
       if (incomeTax > 0.005) { assert.notEqual(now[k], w[k], `${name}: ${k} moves`); continue; }
+      // (z1: standing() carries the answer that stands without the Social Security not in yet; pinned in one-answer-invariance)
+      if (k === "standing" && lastsWithoutSs(plan, { today: T })) continue;
       assert.equal(now[k], w[k], `${name}: ${k}`); same++;
     }
     if (otherTax > 0.005) assert.notEqual(now.budget, w.budget, `${name}: budget moves`);
@@ -186,7 +191,10 @@ const asksSs = (row) => !!row.open && /Social Security/.test(row.s);
 const RUNS = ALL.map(({ name, plan }) => {
   const st = standing(structuredClone(plan), { today: T });
   const d = run(() => projection(structuredClone(plan), { today: T }));
-  return { name, plan, st, d, row: retireRow(st, { plan: structuredClone(plan), today: T }), was: rowAt398a01e(st, structuredClone(plan), T), page: pageAnswer(d) };
+  // (the 398a01e view was handed standing() as it was then: for a plan whose answer now stands without the Social Security not
+  // in yet (z1), no answer and the tile's ask for it)
+  const then = st.withoutSs ? { ...st, retire: null, tileWhy: { ...(st.tileWhy ?? {}), retire: `Needs ${st.retirementMissing}.` } } : st;
+  return { name, plan, st, d, row: retireRow(st, { plan: structuredClone(plan), today: T }), was: rowAt398a01e(then, structuredClone(plan), T), page: pageAnswer(d) };
 });
 
 test("(b) the Dashboard's retirement line and the answer on Will the money last? agree, for every household", () => {
@@ -214,7 +222,7 @@ test("(b) every other household's row is the one the 398a01e view built; Social 
     moved.push(name);
     // what moved: an ask for Social Security alone, where the page says the money lasts without it
     assert.ok(asksSs(was) && st.retirementKnown === false, `${name}: ${was.s}`);
-    assert.equal(answerWithoutSs(plan, { today: T })?.retire?.verdict, "on track", name);
+    assert.equal(lastsWithoutSs(plan, { today: T })?.proj?.verdict, "on track", name);
     assert.deepEqual(row, { dot: "ok", k: "Retirement", s: `The money lasts, even without ${ssLeftOutWords(plan)}`, v: "On track", href: "#/retirement/projection" }, name);
   }
   assert.deepEqual(moved.sort(), ["08-retired/base", "14-unusual-structures/base", "fixture retired-couple-plan.mjs:retiredCouplePlan"]);
@@ -242,13 +250,13 @@ test("(b) counting the missing Social Security as none is what Will the money la
   assert.ok(n >= 10, `${n} households with Social Security missing`);
   // nothing is written: the plan handed in is unchanged
   const rc = ALL.find((x) => x.name === "fixture retired-couple-plan.mjs:retiredCouplePlan").plan, before = JSON.stringify(rc);
-  answerWithoutSs(rc, { today: T });
+  lastsWithoutSs(rc, { today: T }); standing(rc, { today: T });
   assert.equal(JSON.stringify(rc), before);
   // short without it, or a birth date missing too: no answer (the row keeps asking)
-  assert.equal(answerWithoutSs(ALL.find((x) => x.name === "01-single-adult/base").plan, { today: T }), null);
+  assert.equal(lastsWithoutSs(ALL.find((x) => x.name === "01-single-adult/base").plan, { today: T }), null);
   const noDate = structuredClone(rc); noDate.household.people.find((q) => q.name === "Sam").birthDate = "";
-  assert.equal(answerWithoutSs(noDate, { today: T }), null);
+  assert.equal(lastsWithoutSs(noDate, { today: T }), null);
   // Social Security already in for everyone: no answer needed (standing has it)
   const all = structuredClone(rc); all.guide = { ...(all.guide ?? {}), setup: { ...(all.guide?.setup ?? {}), ss: { "p-sam": "none" } } };
-  assert.equal(answerWithoutSs(all, { today: T }), null);
+  assert.equal(lastsWithoutSs(all, { today: T }), null);
 });

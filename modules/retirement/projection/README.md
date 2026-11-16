@@ -2031,3 +2031,13 @@ touched compute with ce79d70 over the invented households).
   and we can answer." (it read "You haven't told us about retirement savings" for Riley, whose Work 401(k) is on file at $0);
   told nothing, it reads as before. Quick answers' "Will my money last?" line follows ("Nothing is saved for retirement, so we
   can't say whether the money will last yet.").
+
+## The Social Security notice over an answer that stands (z1 fix round, critic P3 and P5, 2026-11-17)
+When Social Security is the only gap and this page says the money lasts even without it (overview/setup `lastsWithoutSs`, the
+rule every overview page asks), the notice no longer says "this page looks worse than it is" right above "The money lasts": the
+page hands its own answer to `ssNotice(ctx, { proj })`, and the notice reads, in the calm (info) look, "Sam's Social Security
+is not counted yet. The money lasts even without it. Add an estimate (ssa.gov shows theirs), or say Sam will not get it.", with
+the same filled "Add Social Security" and outlined "Sam won't get Social Security". Short or only just lasting without it, and on
+the other retirement pages (which hand in no answer: their chances and years still look worse without it), the words are as
+before (test "z1 fix P3"). The inline links (`.pj-link`) also get 4 px each side, taken back by the margin so no word moves:
+"Ages ›" alone was 40 px wide, now 48 (test in tests/wording-review.test.mjs).

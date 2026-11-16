@@ -1,0 +1,2043 @@
+{
+ "note": "digests of the touched computes before one retirement answer on every overview page (commit e223a42); tests/one-answer-invariance.test.mjs says how to write them again",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "full": {
+    "standing": "yrG0VDn4qNFn5e1-luC5yN",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "WVcoOHE-R_d53AcklL6zz0",
+    "timeline": "qls2rC3HF1wvpAAlRthegE",
+    "alerts": "Z9hymR8RSQn2vdPognGElV",
+    "health": "C0xdcDRCFXzjbLCaJwPWq2",
+    "quick": "ZeDzPEsJajwKpk0KHSPGFq",
+    "path": "q3uj-SQJe5dpNSMHZLp4Xi",
+    "guide": "Rp97qPpAPfhe6-027ZZ99p",
+    "start": "sBHGIoTdE_Q8q7MBfkp_6q",
+    "nextBest": "-sJoRfaSIVTxofjUcngUIE",
+    "solveSpend 0": "lKh31Nmkt4lt7G00n6Rk3P",
+    "solveSpend 750": "DL_v2D3UPKOCNoXcbBL5YX",
+    "solveSpend 100000": "HCesKF5BgDhntnjvJfWczn"
+   },
+   "stripped": {
+    "standing": "qzZfgasNyB5cgVLRqfiujg",
+    "plan": "W-qBAyvJg9O-IaJKNCF-Hh",
+    "timeline": "3OC2uCrmsWmKo3j8egN5UU",
+    "health": "LaHJvHy5J0pMtoKe99B-9W",
+    "quick": "9pRF2j7CpTSxEcAORQWTbx",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "tEEqugG4u09XmcD8rqR6MB"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "lKh31Nmkt4lt7G00n6Rk3P"
+    },
+    "750": {
+     "rest": "DL_v2D3UPKOCNoXcbBL5YX"
+    },
+    "100000": {
+     "available": 10661,
+     "over": 89339,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "full": {
+    "standing": "rFhNIZAbP7PvLWA-ezavXg",
+    "dashboard": "uCSsxMJ1v3XtKjs7zsUCa5",
+    "dashboardRow": "J3iiXLtSyoMEi2VbetuW8i",
+    "plan": "3THHqUxfrYTL0o7IhIuvV_",
+    "timeline": "rjqP5NMGHee5JGuxPoZEpn",
+    "alerts": "rOdu8F9M3PmWI-YGiMe3tw",
+    "health": "I49TmM_pCc1-XDra6tq5HM",
+    "quick": "od6o8b1iejR7FWvT_CStM6",
+    "path": "v6Ak-PruDfzdj53wjA9UWv",
+    "guide": "7hvxuunv4NJq3PgDF5yPKS",
+    "start": "XkMlLqno0c_-S1uqJ9bGke",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "j9-IqVncYNaycdCj4DJb2x",
+    "solveSpend 750": "h-Hk0DjfYHcn43NyKkuY5X",
+    "solveSpend 100000": "7m5psDneDPW0zgUW26pBUj"
+   },
+   "stripped": {
+    "standing": "CpQYi3nMUXvfNasZi6Sro-",
+    "plan": "iNAX4HUEV7Tsg5Tst1nTQR",
+    "timeline": "rjqP5NMGHee5JGuxPoZEpn",
+    "health": "uaiShiFRPFTnuncGi4nS-_",
+    "quick": "Xl4J40wSNCRKC_QgEm-I5A",
+    "path": "3wKwb3jaeukSc20z4sQPUw",
+    "guide": "mB9BSiXlVQoXWAXCEB-HhR"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "j9-IqVncYNaycdCj4DJb2x"
+    },
+    "750": {
+     "rest": "h-Hk0DjfYHcn43NyKkuY5X"
+    },
+    "100000": {
+     "available": 6867,
+     "over": 93133,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "full": {
+    "standing": "9Z3NZtxqvubJGHOKfOk2cP",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "1xWUJMyb5-1yF-s0lTPUgY",
+    "timeline": "qls2rC3HF1wvpAAlRthegE",
+    "alerts": "I7jleTQEFj8oGAyybYQ0D6",
+    "health": "C0xdcDRCFXzjbLCaJwPWq2",
+    "quick": "ZeDzPEsJajwKpk0KHSPGFq",
+    "path": "q3uj-SQJe5dpNSMHZLp4Xi",
+    "guide": "4IeeO6c-De6iOT5gqgQRKZ",
+    "start": "QDtfK4bydAQ32aOyOhSh4V",
+    "nextBest": "-sJoRfaSIVTxofjUcngUIE",
+    "solveSpend 0": "lKh31Nmkt4lt7G00n6Rk3P",
+    "solveSpend 750": "DL_v2D3UPKOCNoXcbBL5YX",
+    "solveSpend 100000": "HCesKF5BgDhntnjvJfWczn"
+   },
+   "stripped": {
+    "standing": "fi5ByQddzY9en3YVyYFS13",
+    "plan": "eD1Vw_d58CT5-GYDLeSy61",
+    "timeline": "3OC2uCrmsWmKo3j8egN5UU",
+    "health": "LaHJvHy5J0pMtoKe99B-9W",
+    "quick": "9pRF2j7CpTSxEcAORQWTbx",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "b9Bx4VeC9VFgvlm5YJpB4s"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "lKh31Nmkt4lt7G00n6Rk3P"
+    },
+    "750": {
+     "rest": "DL_v2D3UPKOCNoXcbBL5YX"
+    },
+    "100000": {
+     "available": 10661,
+     "over": 89339,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "full": {
+    "standing": "sevMSU2zUay779juUeByMf",
+    "dashboard": "5eTwbAm9M_Zl8Ha3ZrQwjU",
+    "dashboardRow": "0ElnteAHXyMK1DH20V7kRa",
+    "plan": "WjYJP0iKhW412-4H6wdMJN",
+    "timeline": "I_9Q20Jv5r6dM2FzzhcoqM",
+    "alerts": "OZIMuKo-qRkrqqWIxNn9Fj",
+    "health": "0s63Q11Coj9KaZy5cu88ey",
+    "quick": "ZzjyLiR98fhrbGBZdNpKq6",
+    "path": "CuwprBH2ouvTuNw601fdk-",
+    "guide": "d4y6prUShFaDJn8-WDEKA0",
+    "start": "YcrNIEQ7gISV4ctoRxmlfD",
+    "nextBest": "uF8efe-PmsydM1UBJtRHLK",
+    "solveSpend 0": "OuP3iPEy4YS3qfFnW-5mea",
+    "solveSpend 750": "J2MX989wA23domguWcDVUE",
+    "solveSpend 100000": "UFZDlsGQkWjSU891Fpguxw"
+   },
+   "stripped": {
+    "standing": "wLwvBaCpGtOPRqCDdXuGc1",
+    "plan": "oXr1p22odYvkGj98caH3aZ",
+    "timeline": "hOy06uz4Kbnf62hGCmoxrK",
+    "health": "bi0u1fnjcnxNY2sHYSLKJC",
+    "quick": "xXmxb6sUc_b3aVLNnMrpMT",
+    "path": "foLYf-lrv1VdfW21O0Jxhd",
+    "guide": "DVBNviCb1m0IFweOvVcrtb"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "OuP3iPEy4YS3qfFnW-5mea"
+    },
+    "750": {
+     "rest": "J2MX989wA23domguWcDVUE"
+    },
+    "100000": {
+     "available": 8286,
+     "over": 91714,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "full": {
+    "standing": "Y0_1E00jqBlVzUSxVmjKte",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "ArmZQ_1xy8m4Uck9S48yNZ",
+    "timeline": "4ZFWf9ibotHosDrwRiGllw",
+    "alerts": "4jyqbR2Jm_5PaxxBHBjmo2",
+    "health": "L5ANS3tGx34sXR6E2hZJd0",
+    "quick": "nJDkKmxPxpgIElocYkbPcs",
+    "path": "q3uj-SQJe5dpNSMHZLp4Xi",
+    "guide": "4IeeO6c-De6iOT5gqgQRKZ",
+    "start": "R1wDPIdzKynE-vrbPUxLwl",
+    "nextBest": "WpAhn3pU-R-Up_V5F36O2c",
+    "solveSpend 0": "lKh31Nmkt4lt7G00n6Rk3P",
+    "solveSpend 750": "DL_v2D3UPKOCNoXcbBL5YX",
+    "solveSpend 100000": "HCesKF5BgDhntnjvJfWczn"
+   },
+   "stripped": {
+    "standing": "ho9Yzh5sPMLfbLFR40XppH",
+    "plan": "x8O1kEvctIpNyRit_ufeG6",
+    "timeline": "JZT2c0YMRw0XZzLaY27fGt",
+    "health": "LaHJvHy5J0pMtoKe99B-9W",
+    "quick": "-JbBBNBpeMY41FP5Tjrq3u",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "b9Bx4VeC9VFgvlm5YJpB4s"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "lKh31Nmkt4lt7G00n6Rk3P"
+    },
+    "750": {
+     "rest": "DL_v2D3UPKOCNoXcbBL5YX"
+    },
+    "100000": {
+     "available": 10661,
+     "over": 89339,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "full": {
+    "standing": "tkxaqbCPye5LnjSiQf-xd3",
+    "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "EGTaMkJ6jgyZDmpHmuu7Dt",
+    "timeline": "oERvNloUsQ0AoDRc9zDxcI",
+    "alerts": "knzQTRIvohWhK7sA6yXCmc",
+    "health": "8FlFSfTssJTzr2SaZM6UhC",
+    "quick": "DIQIAu9pBhiDtBz0bMiUyk",
+    "path": "lz9L-V4IN4x_YmxF0mOHIs",
+    "guide": "O47HTIXGYImzDwtiEu5f_J",
+    "start": "Px2M2TdGu3hrFb8xrX8T7t",
+    "nextBest": "s1YEaKk6y16nlgjJOq2Lfo",
+    "solveSpend 0": "nZbzlyGnCNgvArIM8ONmBb",
+    "solveSpend 750": "ghHwWdVXpmUw1wLqogCIjx",
+    "solveSpend 100000": "5F1QqLb5Q99tJuMSqrhdn3"
+   },
+   "stripped": {
+    "standing": "zFJwmIDJUbRZwmEr2_noNu",
+    "plan": "mLTET0F6778rLGp_8dbN_c",
+    "timeline": "PSaSOtTguKZFGuSeeNGxsu",
+    "health": "VFM29XdkEfoEZL_AMn2IRN",
+    "quick": "whmk4CDEsNutBwmWkyX_HI",
+    "path": "ARqZlv0SUNvSvbJm0_lsMW",
+    "guide": "GgemEs5_EuocwoYrPZ61l1"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "nZbzlyGnCNgvArIM8ONmBb"
+    },
+    "750": {
+     "rest": "ghHwWdVXpmUw1wLqogCIjx"
+    },
+    "100000": {
+     "available": 8059,
+     "over": 91941,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "full": {
+    "standing": "xqSxKpA0UDKtYDJOoBIuwr",
+    "dashboard": "iy5tHjxTFvDZjcgv5XsxSx",
+    "dashboardRow": "t-5sQBF7A9Yaw2UdIolu2l",
+    "plan": "y0g_0CeTS-cs9mBOtIf1rG",
+    "timeline": "jPLGpa62GOsBWJB60n5ssL",
+    "alerts": "fbWQna5y8juVnsimOr61-8",
+    "health": "RXTlkhzcCnbnsStXbYGOgn",
+    "quick": "Nt4srrv7uFEdbqtB13c0MP",
+    "path": "ybjxVQMr9iIf8o-LBEwj_G",
+    "guide": "9786aw7GPPZUIMfs1ImFru",
+    "start": "YRZbzz5vLRMzqR32Yd4T_I",
+    "nextBest": "K6qtC5Zh-4Hc_OEAlZcLEX",
+    "solveSpend 0": "VuKWBwCiU5mqpxSUxWKnCA",
+    "solveSpend 750": "0uZ0QiFE0c7W5JbpOO25x9",
+    "solveSpend 100000": "cX5KfLQRLmiPi4fiyMjVCl"
+   },
+   "stripped": {
+    "standing": "7gI4_47Z4R9-iLz8wg53CJ",
+    "plan": "lFuaOXnbAjstckb5XP9kqx",
+    "timeline": "J0DhsCDPH45aIV7XIpVaWh",
+    "health": "ZI02bhwnp5NoMyXLKXgx5V",
+    "quick": "quR-mq23IWH1bfICLYVckz",
+    "path": "8fCpaSVMQVH70-k81YOOW0",
+    "guide": "jCTUlxUpXevdE_oTsbjyzd"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "VuKWBwCiU5mqpxSUxWKnCA"
+    },
+    "750": {
+     "available": 2713,
+     "over": 747,
+     "why": "typed",
+     "rest": "Xp_bIKMxLgjHuDBg2EWwFl"
+    },
+    "100000": {
+     "available": 2713,
+     "over": 97287,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "full": {
+    "standing": "RzN7LJ-oJopQjr5VcdxG6I",
+    "dashboard": "iy5tHjxTFvDZjcgv5XsxSx",
+    "dashboardRow": "t-5sQBF7A9Yaw2UdIolu2l",
+    "plan": "4HUSfffOrjqZd-1s-rInUD",
+    "timeline": "Pvp5BRGxC5ud-rXLCioB9p",
+    "alerts": "EADbctldy_HU7O_ByYbUa5",
+    "health": "zxMjjCWCJszfNAGUeRXJ_c",
+    "quick": "nvIlmF-RzJUI4oEZbpSCiJ",
+    "path": "ybjxVQMr9iIf8o-LBEwj_G",
+    "guide": "9786aw7GPPZUIMfs1ImFru",
+    "start": "iSar5xDAowQ_n54aUJ_fi9",
+    "nextBest": "TJd2h64SQMa_KZ0e5UMDte",
+    "solveSpend 0": "g4zwmbuS3-0f4iGRJS_jXe",
+    "solveSpend 750": "fawjzZx9H9XiQsY_2nvBvb",
+    "solveSpend 100000": "cX5KfLQRLmiPi4fiyMjVCl"
+   },
+   "stripped": {
+    "standing": "28PMrw9sSPV7TNJtcRYzFw",
+    "plan": "YUXPSXvEnN6xxRF1MB_8T9",
+    "timeline": "UqONplLLIwpDMcJ1O1ww1Y",
+    "health": "NdpDXUoefDSFCn166TcRNf",
+    "quick": "mjPLSwSl_0M3f0XImTgn9r",
+    "path": "8fCpaSVMQVH70-k81YOOW0",
+    "guide": "jCTUlxUpXevdE_oTsbjyzd"
+   },
+   "ceilings": {
+    "0": {
+     "available": 2713,
+     "over": 47,
+     "why": "typed",
+     "rest": "yEhxjPtaUscmPqib0y18Xt"
+    },
+    "750": {
+     "available": 2713,
+     "over": 797,
+     "why": "typed",
+     "rest": "TTVN2LbRdLZbt3k1hGzTIO"
+    },
+    "100000": {
+     "available": 2713,
+     "over": 97287,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "full": {
+    "standing": "OiNINibN9Wymh2sJ9sxPvV",
+    "dashboard": "H_V3hvz5aENOvbF-Cc1U3A",
+    "dashboardRow": "ZYQV4cpo6lM0MHaWYkUaOr",
+    "plan": "hf_rr1T9nNwQHIoDlohUiC",
+    "timeline": "UqvDMi2AweKgZk0es4aZ4Y",
+    "alerts": "TJtrzPmj45XwzKGQGXWEld",
+    "health": "Jytae_EhGnkD4SkPL7S9Nd",
+    "quick": "LhNIioflBMkDggGo1DJgWg",
+    "path": "T7qEYNs_kfPn25HUbobaP-",
+    "guide": "VcWWxF4bXOLIf4h2fd5PMJ",
+    "start": "ISkUBRJ__rruaqQ66lSbUW",
+    "nextBest": "agHn2MP9x24kiwzvdTMEfa",
+    "solveSpend 0": "wBexoNXn4jifJtOt5E3mnS",
+    "solveSpend 750": "XGgVkaz_IGSJS8whqgRXF9",
+    "solveSpend 100000": "mAVRwJ7EBUWIIIaZE_pG7t"
+   },
+   "stripped": {
+    "standing": "Kf8t-ImHca4IrDRa2Iek-X",
+    "plan": "jGv1xdaInnsYz5dIqo6U91",
+    "timeline": "qGrlVKJlF0uUCF5Q0-OuBe",
+    "health": "GEOxtTyMExo217PwEWrhf3",
+    "quick": "yiQnDhx-D--ncwBSKxXBGu",
+    "path": "XHhni97O8BIBY8YKkkaf_c",
+    "guide": "KP5-SV7VxAdjd-9t1YIgA4"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "wBexoNXn4jifJtOt5E3mnS"
+    },
+    "750": {
+     "rest": "XGgVkaz_IGSJS8whqgRXF9"
+    },
+    "100000": {
+     "available": 5783,
+     "over": 94217,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "full": {
+    "standing": "-8pwvNVLOAj6N3ewW3CKdF",
+    "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "wvpEtuFjbEnvmCW4GV53Ai",
+    "timeline": "c0-6wTqVh4Ht86aaJXNEQI",
+    "alerts": "uiBjCjGVq0HYdzL0qCcf4M",
+    "health": "5ySoShBk6akLrhSNVHlG9a",
+    "quick": "f9HimWFBy1intz4lOeqKjw",
+    "path": "lz9L-V4IN4x_YmxF0mOHIs",
+    "guide": "CH8C1poDF3j-mS5p_O_-FM",
+    "start": "Px2M2TdGu3hrFb8xrX8T7t",
+    "nextBest": "0YkTXXyXQuYwk9xFy3GoUp",
+    "solveSpend 0": "nmGBHCuwi9U9O7sGI0-Syy",
+    "solveSpend 750": "EhURn5_p6hu-sN0Neu4sfS",
+    "solveSpend 100000": "ujZGjf5WYs-woUe-63T-12"
+   },
+   "stripped": {
+    "standing": "jCDlAaO0cDoRFcujmZxhoj",
+    "plan": "h5czR2Xr3El4JoQzzOCI8n",
+    "timeline": "ZFP5EX2dYZddv74yQm5xqI",
+    "health": "PKifJGHbBf8VLGZyp-BPxv",
+    "quick": "x7Vk8KscvgsOxwcsQkWLmJ",
+    "path": "ARqZlv0SUNvSvbJm0_lsMW",
+    "guide": "MvLJlGAIl2dGwJTiDG_4Od"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "nmGBHCuwi9U9O7sGI0-Syy"
+    },
+    "750": {
+     "rest": "EhURn5_p6hu-sN0Neu4sfS"
+    },
+    "100000": {
+     "available": 7999,
+     "over": 92001,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "full": {
+    "standing": "0jo_fQuMPla4wPqaiesSvM",
+    "dashboard": "TMHw8vgntFzGFk6dPLB5qm",
+    "dashboardRow": "J3iiXLtSyoMEi2VbetuW8i",
+    "plan": "tY7la5wf4AXJPR_VKsMm0h",
+    "timeline": "rjqP5NMGHee5JGuxPoZEpn",
+    "alerts": "VpGSl7Np6-42CV6xpLB9CA",
+    "health": "BTHef5hGck2Asyh7CvpDw8",
+    "quick": "nMzT-eq7zLDadDTbmv4C28",
+    "path": "zXJjFQImVaPNFOurtlV7c2",
+    "guide": "q_kFLXrxjhTtlN7kJ5lvA-",
+    "start": "iuUMcUjmWvtCjvASVLI_ec",
+    "nextBest": "WYjwNi71q3NGxAEYuZOA1_"
+   },
+   "stripped": {
+    "standing": "D7fe5H8ZIMLqHJOBfktlBi",
+    "plan": "LQzXbaMo3PU2hO-zxVlgyO",
+    "timeline": "rjqP5NMGHee5JGuxPoZEpn",
+    "health": "jfR-z7w4dJIfUPFcklKuF6",
+    "quick": "ZYnNn5XWXKkQZuEs9yhZ54",
+    "path": "uby_wWhlHWjbZmiedw5d1k",
+    "guide": "FrGoKhSZdZu8hieoYz2kE5"
+   },
+   "ceilings": {}
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "full": {
+    "standing": "u2nNPBveYoEhgDv7vaJBhJ",
+    "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "QQd-LV1KmyTUL8uUHGD9SC",
+    "timeline": "PA5JbyOY5sDDkztvnps-ZS",
+    "alerts": "knzQTRIvohWhK7sA6yXCmc",
+    "health": "B9CGoRoC2ovQ4JTmTlhrXP",
+    "quick": "jMjwL2-HNMwTSU0HeXpfsJ",
+    "path": "lz9L-V4IN4x_YmxF0mOHIs",
+    "guide": "O47HTIXGYImzDwtiEu5f_J",
+    "start": "Px2M2TdGu3hrFb8xrX8T7t",
+    "nextBest": "zprPyEzeI27rKOVwklBPud",
+    "solveSpend 0": "wRh_WQ7ss-jxhijLuNX-oV",
+    "solveSpend 750": "tKx7LNtikJbG_LDLOZ8102",
+    "solveSpend 100000": "bw1fsdBFYcwqnfDaWS0Xff"
+   },
+   "stripped": {
+    "standing": "zWeq78VVQF4dZJo5oWUfaJ",
+    "plan": "LuWah_armD6lFuybjN1C6H",
+    "timeline": "Wjep2iKRTG2cz4emFA9PsZ",
+    "health": "1IUvHyuhFywpd33PBY7bAt",
+    "quick": "uD2CcArObQM50xM6OybZZq",
+    "path": "ARqZlv0SUNvSvbJm0_lsMW",
+    "guide": "GgemEs5_EuocwoYrPZ61l1"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "wRh_WQ7ss-jxhijLuNX-oV"
+    },
+    "750": {
+     "rest": "tKx7LNtikJbG_LDLOZ8102"
+    },
+    "100000": {
+     "available": 9059,
+     "over": 90941,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "full": {
+    "standing": "XbDsiOCiWAfSYt56ixCoyq",
+    "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "hdIPXN8qbTCKKk0VZoMUTH",
+    "timeline": "rgpsljzQZR6_O0f-hNVzux",
+    "alerts": "ck6zRUaYayZBslD38YNhE2",
+    "health": "vte5sdudhVq-KS3qGcsrxs",
+    "quick": "qiUCyYNoNcrPk7HRCskdAP",
+    "path": "Os_2-chmHvCxWgHwYZpxv_",
+    "guide": "l90vHD0tdTdW_rSUcZFagT",
+    "start": "GZq-eBXE9jJ_BM37hA_ct0",
+    "nextBest": "4eH5tezqt-wABJu76tF5Rr",
+    "solveSpend 0": "jMQuhvwRE-Fw7qst6dt4O-",
+    "solveSpend 750": "wULTlkAB3lVnD4JoW7us9n",
+    "solveSpend 100000": "1IRVjmuXL-scrEl-10b5Yi"
+   },
+   "stripped": {
+    "standing": "odA50xfqbQRG7ENM0xSonH",
+    "plan": "jaGXmyoo7cO_7RESZVF0nP",
+    "timeline": "WX6lWYI2Od9U-vsNzLyiBC",
+    "health": "kMrxLEXvQTjeXUt33cCS3I",
+    "quick": "uMPiClr6-rJKmQA4-_S1JN",
+    "path": "W4JTHjvD7xIjpVVgJFvBYH",
+    "guide": "cRkLMHRwbNCtBhBRQuVj78"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "jMQuhvwRE-Fw7qst6dt4O-"
+    },
+    "750": {
+     "rest": "wULTlkAB3lVnD4JoW7us9n"
+    },
+    "100000": {
+     "available": 4155,
+     "over": 95845,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "01-single-adult/base": {
+   "full": {
+    "standing": "Rj5HZuUxUfx2H9RURWOMx3",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "sbLebkublDvvi5qeL4uUaz",
+    "timeline": "zU4kVo1FMIO2S5_R0BjIYg",
+    "alerts": "tKjUvxW-BhdRijj36k2QUt",
+    "health": "9lyzJCDg8bJSQbWZoKmYud",
+    "quick": "va7OzGbzlPSsgt9nJO0Tdr",
+    "path": "YSirqWqXa69pPzLATfQ3xy",
+    "guide": "jl1rW_WW6okuxFMccGzx6C",
+    "start": "Kq0xVH5yuNiowAjuzuf3ub",
+    "nextBest": "CJ1DQuu6Z2mTn9qKBkT7HZ",
+    "solveSpend 0": "yQ7t34U_SSwiLLWpfNbQ-n",
+    "solveSpend 750": "K8ldIzaeByyx__h1B6aI2q",
+    "solveSpend 100000": "xlUhoESPl-TJadiIWnGJkN"
+   },
+   "stripped": {
+    "standing": "q1eah5l3sbiL8KuZw8ojUG",
+    "plan": "A3wPtDVHifvRA7lQ5YGc88",
+    "timeline": "rgg1F-UvnB3VetUPZoZRHi",
+    "health": "UsZkSK_GXGkkBSyIBwNy0Z",
+    "quick": "sD7Or-1Gnv9jWI1YLueO9A",
+    "path": "tB-Lk9TnXGiAsCQKmzp2m-",
+    "guide": "KbVgf0rAyBhSEFLdn5_kOY"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "yQ7t34U_SSwiLLWpfNbQ-n"
+    },
+    "750": {
+     "rest": "K8ldIzaeByyx__h1B6aI2q"
+    },
+    "100000": {
+     "available": 4272,
+     "over": 95728,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "02-couple-no-kids/base": {
+   "full": {
+    "standing": "AjkL-4key6JhG6kDuxJeRZ",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "ierbxCyq1_DTMiVE2pSjPS",
+    "timeline": "LKOF0NAkPBWntA7vaF9raN",
+    "alerts": "Epkrz1Cbsz8UiF3Rs8_2TT",
+    "health": "rUPG7a3lihT3-lekW2PYVe",
+    "quick": "DotOHiCChIel0d4pxYl3Vj",
+    "path": "1_GyyTDS9OETCXkR8cv-b3",
+    "guide": "bLkxpCmpCmutKVYA-_zA9j",
+    "start": "Bvc8ypoGzWIKgTdS-cgmPs",
+    "nextBest": "LmRAeNWaCkkXbCmCJj2kyG",
+    "solveSpend 0": "jqhr-p9ohDDwYc3gROTyuH",
+    "solveSpend 750": "-cUSEV9O-65xw52p60yoOE",
+    "solveSpend 100000": "jH3c6RW8BifEHa4vmYQZdC"
+   },
+   "stripped": {
+    "standing": "9Ji2dNdIIFmtW1lIkttW9W",
+    "plan": "CfdXRsg3ii9TB8G7mBTMgw",
+    "timeline": "ajtK_-07pM4L6a3UYq-pfe",
+    "health": "Ry9oO3omPWp61UOkfJOf2W",
+    "quick": "YHq5O171RhHxcDxsWOz6CY",
+    "path": "YFtZ0TgU0uz30BE7MnHQpl",
+    "guide": "ZO94iClu8__nbtriSa5o7t"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "jqhr-p9ohDDwYc3gROTyuH"
+    },
+    "750": {
+     "rest": "-cUSEV9O-65xw52p60yoOE"
+    },
+    "100000": {
+     "available": 11391,
+     "over": 88609,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "03-single-parent/base": {
+   "full": {
+    "standing": "SZJ_JGV9ZGuz1qcX4sshH0",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "33UHT39QzEg0Llj8Xy-_Hh",
+    "timeline": "LJ5aQQfkJ8v7V7q8MLN6rD",
+    "alerts": "hHTKtLsMNv4fFDWPTmZoB1",
+    "health": "YSLEe5VtHcZo3rlbEuEgEz",
+    "quick": "bIerVyFW3yduSDIcb8K9jJ",
+    "path": "t_cj_JDFxxAwgfYsh-cT_o",
+    "guide": "S9MI-x_Ny-bQuDeSIUwewa",
+    "start": "ZsO7Y5IQV8xWfMD30ao8Q3",
+    "nextBest": "NqZeivY7y6_D7VVb4USrHE",
+    "solveSpend 0": "K6m5jnCRONwhAB07LGi0qb",
+    "solveSpend 750": "zsChFl2thFoITrWHRImpc6",
+    "solveSpend 100000": "6yz5GGgXqKDlKmPpByk4Gf"
+   },
+   "stripped": {
+    "standing": "6mJIrZpNAPrA_1wMZDcWlR",
+    "plan": "88uMMvTKUqdW5vJEm92BQE",
+    "timeline": "HKIAXoFmF1pwQ1MjzUxshJ",
+    "health": "4HxhQL_524q_dDXZV4SsNn",
+    "quick": "onejKMd99q6EZPOVFnCKVk",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "Tpje_l_fjQ_BWxUEtO0vyo"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "K6m5jnCRONwhAB07LGi0qb"
+    },
+    "750": {
+     "rest": "zsChFl2thFoITrWHRImpc6"
+    },
+    "100000": {
+     "available": 7175,
+     "over": 92825,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "04-two-parents/base": {
+   "full": {
+    "standing": "MnM9i5xqrIfuHbSnsh2uI1",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "hIwYD7nzcfKUYisZ8vscRl",
+    "timeline": "_f9zAO853OhWI063ymALyt",
+    "alerts": "7pkU6mkw7qeKegCsDRLmh8",
+    "health": "_sbVj2Z349Mx2Ha0hSDZeJ",
+    "quick": "1geA4rdeOLSd35f-Lvn4Bp",
+    "path": "aCk70w2szyUyMIHVCvzcXA",
+    "guide": "1vkYDLkFsybi9F6yK-XyoQ",
+    "start": "yu6YZV-0OCTLdO5g01fASk",
+    "nextBest": "MftU75Np5gIV0Exv1enw3B",
+    "solveSpend 0": "cbA0MZZQfevZqXqa0D2jyR",
+    "solveSpend 750": "9X6RAYKAZJApI2npK71UIS",
+    "solveSpend 100000": "j1NnG8Lv-ZnwpgHfTsNJln"
+   },
+   "stripped": {
+    "standing": "Hd1VAK_8LjzI9KSL6a2Hej",
+    "plan": "HigAbl9YeStbSF6ysnhs2I",
+    "timeline": "3MdegcCqjc6qBiqetloWRZ",
+    "health": "Bu5Bt-fv9cnqLQA3sITNkk",
+    "quick": "AMF09TQIALaHi1Ssi_sCPf",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "Tpje_l_fjQ_BWxUEtO0vyo"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "cbA0MZZQfevZqXqa0D2jyR"
+    },
+    "750": {
+     "rest": "9X6RAYKAZJApI2npK71UIS"
+    },
+    "100000": {
+     "available": 11927,
+     "over": 88073,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "05-stay-at-home-parent/base": {
+   "full": {
+    "standing": "50cN2SLPcgl5Naw3i1dKKe",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "y22Utgv6HtdbrwbKVFREZ3",
+    "timeline": "hR_AHcMXAAq7TH3izW2lKI",
+    "alerts": "Ptcli96069X7pvahTVX1GL",
+    "health": "xQztzs-W4OBgt0H-aI2kSX",
+    "quick": "9KsO_KcNdLw4Yi2fuPLBQn",
+    "path": "5EywnekcYgWbHhQ24rUyXC",
+    "guide": "ha7eHLbTyUtsCBWargfGtr",
+    "start": "9t9henRBwTUt094xO863kx",
+    "nextBest": "ZZrAgttuOfK9MdAHryMO10",
+    "solveSpend 0": "EW0naO-vKBbq0y9DVFZdfX",
+    "solveSpend 750": "TKEiQd8KKeNjORlag2WaO1",
+    "solveSpend 100000": "QOb7KxfiEZ7V-cjapzU-mR"
+   },
+   "stripped": {
+    "standing": "729fYLcT207hvW_wrr1a_R",
+    "plan": "kbtsuiE4T4zPUOju78o1vd",
+    "timeline": "bw-y0aebuO9uqAkZg7DlQd",
+    "health": "GZ-2TVMICNlJjzRFikd9ty",
+    "quick": "IQuGX1WVgFcD4vMFpuzDrT",
+    "path": "7luYstPvhVEmYdQ6yvRkIU",
+    "guide": "iB5dVC2HFZbniAcl4C6r7R"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "EW0naO-vKBbq0y9DVFZdfX"
+    },
+    "750": {
+     "rest": "TKEiQd8KKeNjORlag2WaO1"
+    },
+    "100000": {
+     "available": 6066,
+     "over": 93934,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "06-blended-family/base": {
+   "full": {
+    "standing": "dZAJBkkzIxd7csZDB-7esu",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "JwiEwCyfhnhYsYI6nrM5rb",
+    "timeline": "L1zqAavwlqGyTRCC6ChSut",
+    "alerts": "oqjA71XC-1On9QUSu6ceEq",
+    "health": "IyUJTLBmNgOZqRWobe290U",
+    "quick": "nkwzBCqKYMUX_NMIiiKJlv",
+    "path": "d9Vq3KRtccVhWTQFMAJDZh",
+    "guide": "KI8WM6c_pooohBTJbtIGhf",
+    "start": "lv0fTZ83DdRhIrqvE0T6_j",
+    "nextBest": "PvZ9dBVkUAikVdll-rH3-8",
+    "solveSpend 0": "D7_lNjlnSWTqzGQmSjMfOi",
+    "solveSpend 750": "o7e6mwu4jLfrA7oQY8sx6m",
+    "solveSpend 100000": "_RFa7OJi3wxUV09kuBxZMG"
+   },
+   "stripped": {
+    "standing": "7QdsCTf7aKt3dZR6prrGZL",
+    "plan": "zRhQbv1y9Rmm-BGh3kVMkX",
+    "timeline": "fG5-4J0BcEa6_enEasI83g",
+    "health": "OToNksykNTPXWMgPuz4Cys",
+    "quick": "kt0lg1ed7GoOMNm36_0xQp",
+    "path": "7luYstPvhVEmYdQ6yvRkIU",
+    "guide": "ISgoeUjhHa6WN_kKifKXo1"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "D7_lNjlnSWTqzGQmSjMfOi"
+    },
+    "750": {
+     "rest": "o7e6mwu4jLfrA7oQY8sx6m"
+    },
+    "100000": {
+     "available": 15095,
+     "over": 84905,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "07-multigenerational/base": {
+   "full": {
+    "standing": "WIAcCxVZcK8etZMkvH8SWf",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "UpOAI2Y0Rgd3-s4aOpuxBC",
+    "timeline": "AgduinxiZw8hzhzIzEmoiu",
+    "alerts": "gKY4SAUvLhaUu3ZNclo_lE",
+    "health": "E5cL97YADikI9NLOJ0n_au",
+    "quick": "SNSxWpAamVBedKb9wHle1t",
+    "path": "cxUfBGB9l4HcQSmi27oO3b",
+    "guide": "j9xp_eXZ6NtleDyr-ywxUW",
+    "start": "7swhW1SfAHGN91SNy_xfs0",
+    "nextBest": "ghI8PeLl8_Cixrafn80rrc",
+    "solveSpend 0": "TtF4xV3E0BiH4DyzXgP9tL",
+    "solveSpend 750": "mzqhYbCUQ3ZR8aVGCXmdxA",
+    "solveSpend 100000": "y1PX0eBgwIJa9e-YAL29nd"
+   },
+   "stripped": {
+    "standing": "3JL9Rue8qhUkm0ZHqXD0gs",
+    "plan": "w0tZDtIWDhfogn1_ZEHrfA",
+    "timeline": "6UPwHcXoCM1vNuEhiAN2if",
+    "health": "vLlyLO4j1epog889eC0nOS",
+    "quick": "QqMQ7uBPJYTWX6R9yPPyh3",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "yTemDfZme1MbIK0eWrs2mJ"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "TtF4xV3E0BiH4DyzXgP9tL"
+    },
+    "750": {
+     "rest": "mzqhYbCUQ3ZR8aVGCXmdxA"
+    },
+    "100000": {
+     "available": 9017,
+     "over": 90983,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "08-retired/base": {
+   "full": {
+    "standing": "KeTRlgszb7TfaO2kWox-H-",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "ZYQV4cpo6lM0MHaWYkUaOr",
+    "plan": "6tAuu-fFJE-xLA1j-rhGb4",
+    "timeline": "SS1NzHSumyPeKFnXIQLBu0",
+    "alerts": "0DsL89imslEgIxssGEmtQu",
+    "health": "z6v7e871KMcK1Z2LJrWCcv",
+    "quick": "ptGLbLFwXoPvga6y74R_cD",
+    "path": "Xn4rdqQzcyA8WmVsLITye3",
+    "guide": "TLCY3kcNsIxbC9Pyt9YBoU",
+    "start": "TSnwV-h3MAtjwayNY0BMcI",
+    "nextBest": "aGVS1qSHMFE-QyjOoutlCG",
+    "solveSpend 0": "Ww-daiH3vtyMSVCzLkiFWZ",
+    "solveSpend 750": "p4wU2fRC_w4EVO_vJ39cd6",
+    "solveSpend 100000": "mAVRwJ7EBUWIIIaZE_pG7t"
+   },
+   "stripped": {
+    "standing": "GDpgZsxw_8nNJlDqflKuKb",
+    "plan": "MErVgm_1F37WpxRfZiBK8H",
+    "timeline": "Xl2TyYzp9s9lqKD8rWzBhu",
+    "health": "MxTIJPCFfCQnIeOWPq_8L5",
+    "quick": "FG87SN3fidpPSPOB3bFKje",
+    "path": "RTEh6ZL5aNhSpz9jYTV9Ik",
+    "guide": "VOqURVN_BVLw1wi024-76w"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "Ww-daiH3vtyMSVCzLkiFWZ"
+    },
+    "750": {
+     "rest": "p4wU2fRC_w4EVO_vJ39cd6"
+    },
+    "100000": {
+     "available": 5783,
+     "over": 94217,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "09-near-retirement/base": {
+   "full": {
+    "standing": "wdTMi7pnma2_NXRGkr46Vl",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "hQ219OTkQB9Pm2aCRsftTO",
+    "timeline": "trhGrP8BvlmqU30je1qqjc",
+    "alerts": "R09yj_FiOnC0BUrdYUOu39",
+    "health": "-fkthoGfJByCyz_leNh7hL",
+    "quick": "x3B7YiL2eM7jURGZagjWBg",
+    "path": "zQKkau5DxzM0NqVsd3ro2C",
+    "guide": "yitZ2zChpi28djZv2KO3VC",
+    "start": "WX2HlkE-9lkmpA8UccYUwl",
+    "nextBest": "q3t-8HyESt8YUkgW3Z9_nc",
+    "solveSpend 0": "xxiduW_pMyP_M1dCoP_7Gr",
+    "solveSpend 750": "2fplRnhntN6bDso2G3wTpA",
+    "solveSpend 100000": "OS_4HHoB-zA3xAe9vGFpuU"
+   },
+   "stripped": {
+    "standing": "tatXkc5X4g8qr-_qhOaPgm",
+    "plan": "VaaoOmQylnS2E1naAUqiAM",
+    "timeline": "sGC82xfo1biP0tXJmOqbzq",
+    "health": "FO0K1zka7VJRodDXUeAt-u",
+    "quick": "Wd6DRX2B1VhBk-UJosK-o5",
+    "path": "7luYstPvhVEmYdQ6yvRkIU",
+    "guide": "EqnA93TdbeemXfnkKC1VgK"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "xxiduW_pMyP_M1dCoP_7Gr"
+    },
+    "750": {
+     "rest": "2fplRnhntN6bDso2G3wTpA"
+    },
+    "100000": {
+     "available": 10382,
+     "over": 89618,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "10-student-and-starter/base": {
+   "full": {
+    "standing": "eFRYgbyXdCG2RxWgnWHkcP",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "w9AafQokHBkmFxceyV1xLi",
+    "timeline": "Coi7eYaTnDlg1bjJ2t9K-y",
+    "alerts": "gqnAQ9Ycg5-Uoq8zBn7qsZ",
+    "health": "KnluFOd8oasUtdoQabeCjE",
+    "quick": "LqEHs5yv0YMVWMNgKyusuX",
+    "path": "FQ_06yUtgLSK-Oxep2BIYH",
+    "guide": "gzqKni10dfZ42HI_PDiS14",
+    "start": "HqA-w-FkR6wJoya2SHX32q",
+    "nextBest": "0Gh0XWdM0Wti_RJK1udpYS",
+    "solveSpend 0": "eYtQTLLjsI3nOsk2d2RWMp",
+    "solveSpend 750": "O7aqUfnNCoQN6L1qhF3uHo",
+    "solveSpend 100000": "tP0ld9v4mNYLy42SDcmpO8"
+   },
+   "stripped": {
+    "standing": "wjRv7n4KcTsDblNqwNaW3y",
+    "plan": "1kj2X9Zad9qeQXkKkP1Q7X",
+    "timeline": "UQsPsOe4TnZplGYvLTVfy5",
+    "health": "zTVUMLxDmDmiS12IDQatKB",
+    "quick": "vjJAppH-ed-ZdPMUyiXQwW",
+    "path": "bEv3D48Eg602-vF9O1j-4F",
+    "guide": "IrMJ_OqSAwAAIx86bBl23x"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "eYtQTLLjsI3nOsk2d2RWMp"
+    },
+    "750": {
+     "rest": "O7aqUfnNCoQN6L1qhF3uHo"
+    },
+    "100000": {
+     "available": 3550,
+     "over": 96450,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "11-self-employed/base": {
+   "full": {
+    "standing": "4ivebYNvQ-a7VqTNVX7mxH",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "oxPITTcgSufQSqlxDi1Giy",
+    "timeline": "SKsugSM2wBs-9Rlfgv6Iqd",
+    "alerts": "psVE-4XdZfr2a9oFbJjI9P",
+    "health": "v4ShqVFeX7IvyKi-_ADbBR",
+    "quick": "eJwcWVuA0H-3k3JaHr60Uf",
+    "path": "Qo919LsIMSRtCRgkWiJS3I",
+    "guide": "Mssz0tPpe2_kOEvGypzniN",
+    "start": "7W2c8Vst4xrK8YpZgsAcK4",
+    "nextBest": "H2FPHdV2s6RRDn2uzXTJa6",
+    "solveSpend 0": "x0qICyVxMz8W2P4tfhk6Ra",
+    "solveSpend 750": "prEL76hi5A1PKLvO-Z3s48",
+    "solveSpend 100000": "_9iPN6xsF9h1buYetQhQpU"
+   },
+   "stripped": {
+    "standing": "v6V3h9SV6Ei52FGXKYKdy3",
+    "plan": "xLx93rS6gAC92kIKvMZdcA",
+    "timeline": "1BzFqZzPv1tXwxZJdQ1M1p",
+    "health": "xVXVZQ7K5TbszrJ_cWcoNl",
+    "quick": "Wzzyz60_Ucjb_boAuBvmct",
+    "path": "7luYstPvhVEmYdQ6yvRkIU",
+    "guide": "m0TuX8-aJblKs5O8fawKUE"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "x0qICyVxMz8W2P4tfhk6Ra"
+    },
+    "750": {
+     "available": 7033,
+     "over": 650,
+     "why": "bills",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    },
+    "100000": {
+     "available": 7033,
+     "over": 92967,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "12-high-net-worth/base": {
+   "full": {
+    "standing": "vO-u4_lc8AFyqD6rJHKsKu",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "09q3eEKkmyNP9B9xjJ_RRH",
+    "timeline": "4DiR2vh_7zswSZdQQWXJId",
+    "alerts": "nFTrLCb6Bj45H1rFdNzMmx",
+    "health": "teoOiACUEsdUCSQiLm3Z-O",
+    "quick": "Wi27ocjvgSJDjPvC4OIg9-",
+    "path": "vj-XL8d5k1ZjtibFNF2nZ1",
+    "guide": "XSShszJ1ma6w7II5p0MNd8",
+    "start": "z02rOxJaFIWHi5YzpmVn7p",
+    "nextBest": "XThkNxGMvisCAUx1k2rsFU",
+    "solveSpend 0": "EWHcIK50fr2i5d03ZG3urE",
+    "solveSpend 750": "LEAZWuzx8uysaiy5g8-Kbz",
+    "solveSpend 100000": "cXIyQEioUjLP36GRJClMN6"
+   },
+   "stripped": {
+    "standing": "nepIxmlyW90xGODQqPxTfn",
+    "plan": "NZHN9CTQN2IMhsER6I8mly",
+    "timeline": "nLQa5sh46JS6qfjmCDrTux",
+    "health": "zhsflPlXlpriRwIJ6oYKlm",
+    "quick": "CRMuovWo1D37hdQYxEn80e",
+    "path": "UCagHnf6P8RhP_v9qEB-kb",
+    "guide": "_lvbK3fyJ-acvwTZxT8VmD"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "EWHcIK50fr2i5d03ZG3urE"
+    },
+    "750": {
+     "rest": "LEAZWuzx8uysaiy5g8-Kbz"
+    },
+    "100000": {
+     "available": 37493,
+     "over": 62507,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "13-in-crisis/base": {
+   "full": {
+    "standing": "t_xb5qwV6My0ScQZqA-u-9",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "WmiHHsQpFZMiMnBNskMoIn",
+    "timeline": "-Xj0TkwDHGxnD9aPIwUCyJ",
+    "alerts": "G-Jh74aM9A3xPPNnaRBlT7",
+    "health": "dRMTM4amR1NKSZX3Wgt5Rw",
+    "quick": "exDSDMSzcVFbu49UTEQpfY",
+    "path": "USUb2mxdPKWehSpwQxBFez",
+    "guide": "Y7i-A9qW_ANkV2KUbM9RGw",
+    "start": "1d0UI3r6w291nZzXEpPDGv",
+    "nextBest": "KZzuAD1yOnlriAXx4MsVoE",
+    "solveSpend 0": "hUnkak-fnOkscpi-7DKMmd",
+    "solveSpend 750": "KBp-R99PssgE8UzpGdwJFY",
+    "solveSpend 100000": "qxdKjg2CrOhx3XlmRQelo7"
+   },
+   "stripped": {
+    "standing": "xblZX6en24LwbOJ1MbMbRK",
+    "plan": "hZ_-oG2ewxZ5uumwrPl980",
+    "timeline": "OpJ-Z6NMp_GUKFjITZLwOX",
+    "health": "os6JjLL0X1XKfjbXY8PvsP",
+    "quick": "NRKY7lOUOO5tHKORDgYexN",
+    "path": "7luYstPvhVEmYdQ6yvRkIU",
+    "guide": "UH2jTCcqLqdhi-mbl1g1ow"
+   },
+   "ceilings": {
+    "0": {
+     "available": 5059,
+     "over": 1022,
+     "why": "bills",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    },
+    "750": {
+     "available": 5059,
+     "over": 1772,
+     "why": "bills",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    },
+    "100000": {
+     "available": 5059,
+     "over": 94941,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "14-unusual-structures/base": {
+   "full": {
+    "standing": "6KyDRg-jEuQbLo97UotyD7",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "uEK5_y8OSpCYO975_59RDp",
+    "plan": "-dr_mZtymX3Z1KmppeljzP",
+    "timeline": "8-7k9sMMHp_M5AFJnhJPz5",
+    "alerts": "xW5zrgiKX742D9VSLaKh4B",
+    "health": "rG_g3SZC5Ebvq88i11cUPK",
+    "quick": "yobm1f3IUBjFZHR6ZgbFk_",
+    "path": "dMMyAdmwa5bxB3wQ6vXgVh",
+    "guide": "PrrN5HiY9Bkvdec0M-oKsD",
+    "start": "JxstHqwv2qVCgIM3dHCa2f",
+    "nextBest": "s0D1ad-r8izKNgn9DZCiRP",
+    "solveSpend 0": "urLOkol9JV0JT7br2n0xSE",
+    "solveSpend 750": "QM5vmAQAOHW7CWz8c867UH",
+    "solveSpend 100000": "51WlDQPWEtx85UtW1o5GOQ"
+   },
+   "stripped": {
+    "standing": "Wdaelksr2z8rHwI-l8AAyn",
+    "plan": "HzzQBMQ_9ZKj3QlvkbhbFu",
+    "timeline": "v_FHsfJ2N0jbRbxdy0Hbrm",
+    "health": "JRGbShTN-5FAj82DsoG-L5",
+    "quick": "hSAde7x0c863AYcI1Qr_HP",
+    "path": "z422CoP8h1CpciBcixS_JY",
+    "guide": "IgcMk5GrF9jYVhJoJiyjg9"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "urLOkol9JV0JT7br2n0xSE"
+    },
+    "750": {
+     "rest": "QM5vmAQAOHW7CWz8c867UH"
+    },
+    "100000": {
+     "available": 7077,
+     "over": 92923,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "phone casey": {
+   "full": {
+    "standing": "qlvcaPxjmVSN8DoyxAOJue",
+    "dashboard": "Li2YJ5qSJWqMUf_E_wkqxe",
+    "dashboardRow": "ANJaE0ZgfqiinGVZxDUcH1",
+    "plan": "Iwn7p0xRSSlVZ13wipysKZ",
+    "timeline": "aYi9w7zrumgkLO55jyRRQc",
+    "alerts": "el7BTUcBy-Nhqox09Y4bbn",
+    "health": "MzeQNBEt3gPtUcKgj-JsNF",
+    "quick": "IhxRrpoodu7gbT3pcwA4Wy",
+    "path": "aRIvrZfZ1Dh-TU6-BhfJg1",
+    "guide": "OdqAztIB3kRB8-ZYK9oKVp",
+    "start": "qFpSf74ZhdL575EpwuYdlT",
+    "nextBest": "QXaNZmKwrae9IGerCD294D",
+    "solveSpend 0": "H7zTMH338l_BRFUXfeeOjh",
+    "solveSpend 750": "4Jh5OKjIpjTmK4Zqrg2b6R",
+    "solveSpend 100000": "8Zpzt_txuBs3m5KIgcsG-4"
+   },
+   "stripped": {
+    "standing": "E0x0BwuttE5GRecmumS6zZ",
+    "plan": "ikEZpbLQ8EpgYLaffZrkUy",
+    "timeline": "H2IYLviglPvoZspTP-rt4Y",
+    "health": "7sZcucSXNp8xisu_zc6FgA",
+    "quick": "WFCv2NMenObTe_Wf6ptjwd",
+    "path": "j6Ss0qJQbwW65FPFpmS91_",
+    "guide": "w3ULpnr0oIMJwZQGpv0Jqa"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "H7zTMH338l_BRFUXfeeOjh"
+    },
+    "750": {
+     "rest": "4Jh5OKjIpjTmK4Zqrg2b6R"
+    },
+    "100000": {
+     "available": 4773,
+     "over": 95227,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "phone danaLee": {
+   "full": {
+    "standing": "QJhvIDH-5wXqmspFfYXGzM",
+    "dashboard": "Li2YJ5qSJWqMUf_E_wkqxe",
+    "dashboardRow": "0ElnteAHXyMK1DH20V7kRa",
+    "plan": "tMrVI4ddJiFROfYfrpeOCa",
+    "timeline": "BdqJtVvY83j7-kLVvPCazd",
+    "alerts": "Fq9XeIrGQl4XbUpeuP3f7D",
+    "health": "NcpwYtLeHt4U-a1r4dcDCm",
+    "quick": "-rGRX1XlpL87DB2bDWqKfk",
+    "path": "WpL3kw9C20ZtmvhxWs4xO9",
+    "guide": "P1M6ycSkabESgXlKKvdW_s",
+    "start": "loTe7S1GhuErJBgiqwSghA",
+    "nextBest": "fpEj9fOlnm3Hsq37mI6TjG",
+    "solveSpend 0": "S_hDMtqZFKKtS5MERahYyS",
+    "solveSpend 750": "Vu-RZjAcdyhtxZ_AGdsBWc",
+    "solveSpend 100000": "1m-Nb-Rl_-aRTtDx1etpUh"
+   },
+   "stripped": {
+    "standing": "uNMlja1zpN2_gMRQm8Z55S",
+    "plan": "mWghjpp2CplkGDL90dBOyG",
+    "timeline": "xZDD0yW0QaDBVYSVIGq2lt",
+    "health": "JXYM6QP6SGXfMl7pSevrw7",
+    "quick": "28jeebDFZtWPW0xTK128A5",
+    "path": "BR2-enDzO08mwgoLsqO6AB",
+    "guide": "fPMLhzDqmzPAw2TxylgQW8"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "S_hDMtqZFKKtS5MERahYyS"
+    },
+    "750": {
+     "rest": "Vu-RZjAcdyhtxZ_AGdsBWc"
+    },
+    "100000": {
+     "available": 8258,
+     "over": 91742,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "phone jamie": {
+   "full": {
+    "standing": "gHqZrqoEcryBkF5tagBJMt",
+    "dashboard": "pjDhVF8Eap3bEQEhH4ewp-",
+    "dashboardRow": "l1o97By19zZzOiOID5AZkw",
+    "plan": "3rVhLbrq36GHprrG4j5ZU6",
+    "timeline": "3j8hwxQ2bcW3xka2jMVMtq",
+    "alerts": "C422Wz1YYp8mO9NurgUPNg",
+    "health": "vn5CeDTBhM3NvN60Wl06UF",
+    "quick": "zz9mDBOftN9-nzEeuZYkoO",
+    "path": "hgkdwWH9S6fX8MlFYjNlsh",
+    "guide": "XIaYEH7nnLzXGRQpj00jiN",
+    "start": "E9rTPMgD6DX4cy7ci7xI7L",
+    "nextBest": "aJrTPIzsLtKvXWGJJcE9_d",
+    "solveSpend 0": "Wl1ivtNbK1trIQiJ1SNqjM",
+    "solveSpend 750": "3AN5wi7W3MB3nGwKpWIT2-",
+    "solveSpend 100000": "c9vpdUbM5qxFlH9_2mLcWb"
+   },
+   "stripped": {
+    "standing": "kXfBX9xiC-jgSWRMmFSwlF",
+    "plan": "nP6TMQWc89iImp4wdDSoWs",
+    "timeline": "mphMSjrM0R5Ir8BkeaswLc",
+    "health": "-rPKOMMwheOqnkn2_3v8C2",
+    "quick": "IR2muDuESnpk-3SA_rbobM",
+    "path": "ACHBk6h0jC_eDyblnYYZN3",
+    "guide": "eva6NCvdalo1P8XLUV3oB6"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "Wl1ivtNbK1trIQiJ1SNqjM"
+    },
+    "750": {
+     "rest": "3AN5wi7W3MB3nGwKpWIT2-"
+    },
+    "100000": {
+     "available": 4167,
+     "over": 95833,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "phone morgan": {
+   "full": {
+    "standing": "5k7JdBuOAAl_6Ao_kgXMfJ",
+    "dashboard": "9kxw4sq0hMEMQctlalmKEY",
+    "dashboardRow": "w7fldyAkV2SZ_sIQIuccyY",
+    "plan": "1Nu1WH-1jMkS4eCq96C97k",
+    "timeline": "B_6Trq6Tk9MzAkkQZ20w4s",
+    "alerts": "pTNe6LvjKJYY55xHL6hiPU",
+    "health": "bi0qCd63W2d-c_LczhBEoZ",
+    "quick": "cfs5xSmOXMtn9wAniueM7i",
+    "path": "aRIvrZfZ1Dh-TU6-BhfJg1",
+    "guide": "8RYqbl68F_ZzWF3Fp0UECK",
+    "start": "OU4Ts0xBbCwHtpNEoSzesv",
+    "nextBest": "fHohwjLtD_CbAMh9CG1cjY",
+    "solveSpend 0": "7CKnzFhMiiGmvP3AtDd4WM",
+    "solveSpend 750": "bKNOUD3uixF77QyagQ2U3k",
+    "solveSpend 100000": "MK6Gj2dk5Et-75ViD6pCbX"
+   },
+   "stripped": {
+    "standing": "y65C4gBXeAJP0d6Hqw2JJb",
+    "plan": "5xnvczFyAiYkVsjGrZHB6Z",
+    "timeline": "9IfF_a766Do5pgOALvTLnG",
+    "health": "vPhe3ZbNk63KZw2ySfgzpv",
+    "quick": "T9x2yUQCvQ8CLLfkcgvCrd",
+    "path": "j6Ss0qJQbwW65FPFpmS91_",
+    "guide": "z7f9vXmVW_n8ExuyCaoAgZ"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "7CKnzFhMiiGmvP3AtDd4WM"
+    },
+    "750": {
+     "rest": "bKNOUD3uixF77QyagQ2U3k"
+    },
+    "100000": {
+     "available": 3712,
+     "over": 96288,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "phone robin": {
+   "full": {
+    "standing": "nVlZ7Lpb0IpyYiGnOpvpBe",
+    "dashboard": "Li2YJ5qSJWqMUf_E_wkqxe",
+    "dashboardRow": "u-5HrLVPSSoB3BUyr0yI50",
+    "plan": "KjYu6hu7CoariaufibCs5X",
+    "timeline": "B6GWl6DXtyWcIwhlI025gw",
+    "alerts": "-y2ixv3qVm1aH2YJoEqImY",
+    "health": "si8AKiCVTBdJMbqqbm2nGv",
+    "quick": "yOqTr8HTdsLXZ4n6-bI26k",
+    "path": "aRIvrZfZ1Dh-TU6-BhfJg1",
+    "guide": "f_mnHrqScmN53lTxnwUdnz",
+    "start": "5mXnBuDvELcx_PBh7ozvKo",
+    "nextBest": "_XfE6wKJRhtoLHavdrKczp",
+    "solveSpend 0": "KpXa6Oa8UAm12RbeTsJ9JW",
+    "solveSpend 750": "7N49Ks-Nz7xbXoBSpSN6gV",
+    "solveSpend 100000": "YVKhQYiryqsC0slXpunRYY"
+   },
+   "stripped": {
+    "standing": "XltexNzG5RpwrCfaDeFum5",
+    "plan": "b0CQVnAhBX8XGdkgQdi1Tq",
+    "timeline": "tIH5iUDTpRfUBzE2BcTSZx",
+    "health": "ONClwT683v5WEKQn1DlpZ4",
+    "quick": "7sN16y6XO7x6CrSoT4wL3O",
+    "path": "j6Ss0qJQbwW65FPFpmS91_",
+    "guide": "ODznIMl_H1QYlrjwjYvEVN"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "KpXa6Oa8UAm12RbeTsJ9JW"
+    },
+    "750": {
+     "rest": "7N49Ks-Nz7xbXoBSpSN6gV"
+    },
+    "100000": {
+     "available": 4139,
+     "over": 95861,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 earlyRetireePlan": {
+   "full": {
+    "standing": "6NmLPRzhGOn2UzYTwyBo9-",
+    "dashboard": "FEd8REqKYpX5xeLEleBWTj",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "kB4uSKK1QgCYEaaMo42tr3",
+    "timeline": "x20wlivQxW3vtASzBsihFq",
+    "alerts": "6iFAC5LeiaxUhVYtfGdhwi",
+    "health": "xICO40ipBGnFPmQk1jWIYt",
+    "quick": "hvdY5bZt9vXBHGITeSpOv0",
+    "path": "1pxYHpNs5_mg_02zfv3Ap4",
+    "guide": "Vq58qy0vinzrACdt9ZC7_S",
+    "start": "rTgn54nLQpILG0uwbhOqpn",
+    "nextBest": "WYjwNi71q3NGxAEYuZOA1_"
+   },
+   "stripped": {
+    "standing": "rq8_TTfCaZQvPOPT21a-lg",
+    "plan": "foZ2hBmLDWs74J8q3fO-KX",
+    "timeline": "2tXK1GV0phdlBiCYZXxGEm",
+    "health": "CrSfnoX7OmMTAYCzOtg1KL",
+    "quick": "qDx3l4C9pV2VBs3hjPORiS",
+    "path": "miLPuvM5KW1MJmeRoDSBID",
+    "guide": "BG2lGCYvC7gKz_jXxGZu4y"
+   },
+   "ceilings": {}
+  },
+  "round8 equityPlan": {
+   "full": {
+    "standing": "rCqhq1nhoxYXvXExqmXBOY",
+    "dashboard": "rORKdolvgFyAnIn2qetifE",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "KTY0goX2XP_JORo_9Rdyy5",
+    "timeline": "fLYa7hK82Vpkl29yUA2PRR",
+    "alerts": "HN32H4jM56qQU4VYYvFDL6",
+    "health": "Bd2nanEGBio6eP8ZooS8jv",
+    "quick": "E219psxzeKBtuHo8OGqiIw",
+    "path": "Q3_cymGBCeHy54QKGUo_PJ",
+    "guide": "HtQMxgiFW3unBIbxxJLM3D",
+    "start": "wJBC316n6HfZs4e6NNlZBB",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "Z-nAve9eZBVCRvZQrWb3M1",
+    "solveSpend 750": "EwNYxYnfdygPRDqdGsgIHH",
+    "solveSpend 100000": "gNjHbXWiGD-XisyvFNq7bC"
+   },
+   "stripped": {
+    "standing": "NQ5N9XbH_3AjeBamW99y_4",
+    "plan": "oAiqm00xMyTt0GfCZ69iWD",
+    "timeline": "bxfxd8k6KAl5tceb1UwE3l",
+    "health": "S-ryTx8frU9cSm8yYRxY3H",
+    "quick": "KRhRK2EUiy2Som8ZSbL_9R",
+    "path": "BAoGSbuOZz89wUHmjsmBkJ",
+    "guide": "2DDUhntpd1G47ZAceoD6QN"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "Z-nAve9eZBVCRvZQrWb3M1"
+    },
+    "750": {
+     "rest": "EwNYxYnfdygPRDqdGsgIHH"
+    },
+    "100000": {
+     "available": 14002,
+     "over": 85998,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 firstRmdPlan": {
+   "full": {
+    "standing": "nB_QsfHV010niq_pEYnMkh",
+    "dashboard": "z0SzzwdXAG5QNQ8xQOzNuT",
+    "dashboardRow": "0ElnteAHXyMK1DH20V7kRa",
+    "plan": "CJAgQ_HTlyy5Qursq878do",
+    "timeline": "3CjrH1HgT2ID1HHwLjFKq4",
+    "alerts": "fq73raN9ezQabBBOoPdiiH",
+    "health": "U0J_D4ZPazkwaIzkcFPvyh",
+    "quick": "dVkBPAx7Kb6oC2vErfsAD_",
+    "path": "-K1FkOtX_vAOz-FfOmADk2",
+    "guide": "xGqW50RX1q7laKt5H7z2ai",
+    "start": "_tCgULh_71-PN5LbDjhlle",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "v3608KjQgwKwtIzXnaa5cz",
+    "solveSpend 750": "C4-VsaFa1XS6n5btDUS0f4",
+    "solveSpend 100000": "2yyo0aIKz7nXbdLff0Yii_"
+   },
+   "stripped": {
+    "standing": "dFZF9IJarTojxrpU2H320S",
+    "plan": "D4JKUbdTFYLnbwIAlk2dJ4",
+    "timeline": "pqeBVpZvXgVZE69Q5c0eLD",
+    "health": "se9O7UYXFtJvyLbW3Veyhl",
+    "quick": "2mnAUeYRtGRQIzDdA_A9Sd",
+    "path": "RbVecjPoKHY8DLQnc-LRIT",
+    "guide": "-8UOULQpJSygP6FcnTQQ92"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "v3608KjQgwKwtIzXnaa5cz"
+    },
+    "750": {
+     "rest": "C4-VsaFa1XS6n5btDUS0f4"
+    },
+    "100000": {
+     "available": 2500,
+     "over": 97500,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 freelancerPlan": {
+   "full": {
+    "standing": "NVY_d4CyvWPcA16Wq5UKbG",
+    "dashboard": "CW4VEPjANE-VkGc5npGDKx",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "AJNVgMU76VbhvelJRHH9Hk",
+    "timeline": "SSI0rvIxvN4zn1UR2u4dhT",
+    "alerts": "1t5eUF0sH_dw7HIfdAq9cT",
+    "health": "Bd2nanEGBio6eP8ZooS8jv",
+    "quick": "HfacR35SUtMzmKnrI1FrDB",
+    "path": "fqVMrrfCjt15gaoYNp7E7j",
+    "guide": "PR5g-AXDnW9KBPTdC6ddT_",
+    "start": "5Fj2lp6NSGBlx-lGaLbPpD",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "VhsYatqoFJ5q5zAmv5MCiN",
+    "solveSpend 750": "PM82berad5zXFjD6bVjTJb",
+    "solveSpend 100000": "3qyauQW2EVyLhTAm9g81hO"
+   },
+   "stripped": {
+    "standing": "nqN2aFR9DHJN5yEj-c8Jpi",
+    "plan": "MTdVIabUrEXE4CrvftuJBN",
+    "timeline": "9ahQmrYCrG1T5fbXj5xSm1",
+    "health": "S-ryTx8frU9cSm8yYRxY3H",
+    "quick": "Vur2rwbkYGlU7WA2NXrorT",
+    "path": "4_2N-Ju6ke7EvQxI02m04f",
+    "guide": "1I6KIB8cHlgbAlQ5TpYhIe"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "VhsYatqoFJ5q5zAmv5MCiN"
+    },
+    "750": {
+     "rest": "PM82berad5zXFjD6bVjTJb"
+    },
+    "100000": {
+     "available": 4725,
+     "over": 95275,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 highFreelancerPlan": {
+   "full": {
+    "standing": "UtcVhyxBOMVTYSLU9t6mR1",
+    "dashboard": "1TQfNE30GvbVGuoJtnOAkI",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "qYiyH_Q15bja8mg8O3uapL",
+    "timeline": "Y6mfCgazAbpIcqokfJFhPL",
+    "alerts": "46JpSHjqDO2v6DFh02B6wU",
+    "health": "Bd2nanEGBio6eP8ZooS8jv",
+    "quick": "qS7xWo_zePTwVLDw_w1IRX",
+    "path": "fqVMrrfCjt15gaoYNp7E7j",
+    "guide": "IiLNVp0v__O1fAcxQ96DvY",
+    "start": "5Fj2lp6NSGBlx-lGaLbPpD",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "UjcHIwHuRUi5Pp04ZuzhCg",
+    "solveSpend 750": "K_PRQFmEglzE3U9_ojhCon",
+    "solveSpend 100000": "zKkfc1vxqJdJHREqq4Gmru"
+   },
+   "stripped": {
+    "standing": "O4LTKkw95eYuF0t2j_3SGN",
+    "plan": "CeGpcKGQ1R-boMtkyC-QVV",
+    "timeline": "xLTazjID3IFIJJj2wMlOZl",
+    "health": "S-ryTx8frU9cSm8yYRxY3H",
+    "quick": "5V3ph5wTSIEy8lCvdqdyqk",
+    "path": "4_2N-Ju6ke7EvQxI02m04f",
+    "guide": "UfjjUOLeqySxIILIGZiJLz"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "UjcHIwHuRUi5Pp04ZuzhCg"
+    },
+    "750": {
+     "rest": "K_PRQFmEglzE3U9_ojhCon"
+    },
+    "100000": {
+     "available": 22314,
+     "over": 77686,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 landlordBusinessPlan": {
+   "full": {
+    "standing": "Fyx1NigESBGmr1qn-IFvln",
+    "dashboard": "WSOn1MknEhXNir95I9eR85",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "sotcP59rDdjQB_-DoyOBJE",
+    "timeline": "_CvWW-jqlX7Ud588YCE6Eb",
+    "alerts": "YrecWkBAQOHW6IcxGY4GOE",
+    "health": "Bd2nanEGBio6eP8ZooS8jv",
+    "quick": "812swKzYKjeasjy9JG7hiw",
+    "path": "fqVMrrfCjt15gaoYNp7E7j",
+    "guide": "IiLNVp0v__O1fAcxQ96DvY",
+    "start": "5Fj2lp6NSGBlx-lGaLbPpD",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "nFBhA-ByzVcbEYNDtPG9OG",
+    "solveSpend 750": "9O5ySsbZqiQof93YW-0U88",
+    "solveSpend 100000": "xiwINqlLyeQS5EiYYIXxPo"
+   },
+   "stripped": {
+    "standing": "vw0beNtKt7GzPJcecIxHwG",
+    "plan": "lff2tzAD56IqMuEAH-KD22",
+    "timeline": "H6kXw9VPSVlBdqXwSBQDaF",
+    "health": "S-ryTx8frU9cSm8yYRxY3H",
+    "quick": "1Qvp0YK_NH0XOngmmyGKY6",
+    "path": "4_2N-Ju6ke7EvQxI02m04f",
+    "guide": "UfjjUOLeqySxIILIGZiJLz"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "nFBhA-ByzVcbEYNDtPG9OG"
+    },
+    "750": {
+     "rest": "9O5ySsbZqiQof93YW-0U88"
+    },
+    "100000": {
+     "available": 7391,
+     "over": 92609,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 landlordPlan": {
+   "full": {
+    "standing": "w0RdJ4zhVg26ObpZv5e74_",
+    "dashboard": "5faIIhAsYuHcUnXQG0KfHZ",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "DcIO4qSvjVkRZN-8IieaPI",
+    "timeline": "5kQ_bhxhbCa7GdPIEu5JdU",
+    "alerts": "j1uDzVgF80sd40D4UfSoEs",
+    "health": "dWGNVafM-sG1V74K9bEQyK",
+    "quick": "fVIyyZ9FDkAw4vLc83mF3T",
+    "path": "4-k5LLaMfUDuRwJbdQcpcY",
+    "guide": "_dozCU9xgNGMCXRNkTdK79",
+    "start": "E-EvXe6zPvppY2F8SJCxlz",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "g02KyJfh33dq1g2q5y6FPG",
+    "solveSpend 750": "oPBC8XK4GDOVbr1gEBIrU8",
+    "solveSpend 100000": "tsHkNQGKHfG0N5-R9W5qXb"
+   },
+   "stripped": {
+    "standing": "_ZR4boen77Cye5k2ynHYWD",
+    "plan": "rduqRTJyrbOz4DGgpriCn3",
+    "timeline": "qaCRE8Fy9BczPH3A_-vlCY",
+    "health": "2uRVd5zUK5clPCHzmk-2xX",
+    "quick": "sRaIUCSSvZrSuMtW-xhuG1",
+    "path": "BAoGSbuOZz89wUHmjsmBkJ",
+    "guide": "NKfZKamcTli_2KWRqBExg4"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "g02KyJfh33dq1g2q5y6FPG"
+    },
+    "750": {
+     "rest": "oPBC8XK4GDOVbr1gEBIrU8"
+    },
+    "100000": {
+     "available": 11563,
+     "over": 88437,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 parentLoanPlan": {
+   "full": {
+    "standing": "q_L4-e-wn4iLcOHsFLZkN8",
+    "dashboard": "AC5VyOE98SlEiX_qNG1Lqr",
+    "dashboardRow": "6RwLdoGTcB-r1-LQC9W6o4",
+    "plan": "w2fgYSajed22jB7k2ao_u9",
+    "timeline": "2MJSJHc7ilhSmm02KqCQEC",
+    "alerts": "PIXvY3DzOoyPBxyebQWl3J",
+    "health": "-z5eeyAPl59aeLPOKj2Byx",
+    "quick": "2ia1QcxWpwem1VZvBeV3N5",
+    "path": "pIn0hpzD3hN2Dts4449pP1",
+    "guide": "6j28rXdb_L3C73egwYTBSZ",
+    "start": "E99_50I6Eq5f6AEq24GqoI",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "UjnrqLcQdSL5iBsfxq8tjs",
+    "solveSpend 750": "D5kIufNMP62X7UduP6U-6l",
+    "solveSpend 100000": "CfwGVDGcr9lfuTZ7BcNCkE"
+   },
+   "stripped": {
+    "standing": "IZy_3mVQ38oq9FdkBXUkgH",
+    "plan": "bIHF0IyQJ5gWw7kHeMX_NV",
+    "timeline": "xWwlIFNORW4Q7yOGod78Ma",
+    "health": "Ob8cAQaNHEx7bla4LLji8y",
+    "quick": "7B6ZEUf3dBdqGQNQ4r_qag",
+    "path": "NKq-VvOJpVXwfboMMcOcNz",
+    "guide": "PohCcB8H7wceNrl_6F0ywI"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "UjnrqLcQdSL5iBsfxq8tjs"
+    },
+    "750": {
+     "rest": "D5kIufNMP62X7UduP6U-6l"
+    },
+    "100000": {
+     "available": 4374,
+     "over": 95626,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 stockAndBusinessPlan": {
+   "full": {
+    "standing": "a8nrUrIeP704tVzkj5ADzM",
+    "dashboard": "rUVExf6s7TtyqVXBqEf2Ee",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "JuB8PkHdPjfbmr3dOKXS6C",
+    "timeline": "WS6JiT4nKHsOyvRhJz3UVZ",
+    "alerts": "8yL2-qopojf66IlDQLMroS",
+    "health": "Bd2nanEGBio6eP8ZooS8jv",
+    "quick": "yMeCO0BtKHaGid0SEBNGXP",
+    "path": "fqVMrrfCjt15gaoYNp7E7j",
+    "guide": "IiLNVp0v__O1fAcxQ96DvY",
+    "start": "5Fj2lp6NSGBlx-lGaLbPpD",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "tfaBXWuSTxqLPM3BmWErgq",
+    "solveSpend 750": "VKRNc_SLN_3cq8NlWE3QHv",
+    "solveSpend 100000": "B7htpePOM9zPQ_7CMwRe-P"
+   },
+   "stripped": {
+    "standing": "zU-6jTjegoazu3uQY1Trj2",
+    "plan": "_ABPdgVdDOKENQybtJVuLy",
+    "timeline": "JSbp2MprtZUnpAgaYV1U4K",
+    "health": "S-ryTx8frU9cSm8yYRxY3H",
+    "quick": "8Ntl3gEtX4twEwTSaoz67o",
+    "path": "4_2N-Ju6ke7EvQxI02m04f",
+    "guide": "UfjjUOLeqySxIILIGZiJLz"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "tfaBXWuSTxqLPM3BmWErgq"
+    },
+    "750": {
+     "rest": "VKRNc_SLN_3cq8NlWE3QHv"
+    },
+    "100000": {
+     "available": 11773,
+     "over": 88227,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 studentLoanPlan": {
+   "full": {
+    "standing": "lgzQNcgZzRxOg-ihZtzAJm",
+    "dashboard": "PkldJrvFhiWFY_v7qyCMRl",
+    "dashboardRow": "HIm2mhCcCPv2HlYA72K1A4",
+    "plan": "VPCpwYGCAdTb4x3QuCQeXj",
+    "timeline": "f6Wkc7ON06OCLDPR8MR8ZW",
+    "alerts": "XsWY2JXf4e2R0i0KdPF8lu",
+    "health": "hQHiNkNvIiqO6HYkKoYwXR",
+    "quick": "VJ5RWciBgYJDf84VpxPWJh",
+    "path": "J-Sv64fiF45fY8nMVnhfNE",
+    "guide": "UmOrRQxHlVl9owltaf3QtD",
+    "start": "uHJ20maMTYnWtChVlUdmq4",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "H-63mq7sd7-s-XoFl0YHV7",
+    "solveSpend 750": "KGtuW8r9RYMdtgBW_TWeQ1",
+    "solveSpend 100000": "LtbV7DgQGho3N4Zh0noSN_"
+   },
+   "stripped": {
+    "standing": "bYoAs6q1pVQds25SsZKpWM",
+    "plan": "ECPUKbR1THQasac2uQLpe_",
+    "timeline": "WZx2ql26Laqcex1LveGndy",
+    "health": "4x-0T1gAKu0wbANmKt2PV6",
+    "quick": "-JyLSxJUFzI2gIAx0bWquM",
+    "path": "ufA3SS7vj0TwPyd5Raww_r",
+    "guide": "waZCmDqKzSio6Qp7utQEPS"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "H-63mq7sd7-s-XoFl0YHV7"
+    },
+    "750": {
+     "rest": "KGtuW8r9RYMdtgBW_TWeQ1"
+    },
+    "100000": {
+     "available": 8245,
+     "over": 91755,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "round8 widowPlan": {
+   "full": {
+    "standing": "c60MumjGZ-5RjpQueGTAF1",
+    "dashboard": "yqO3mt2vlL19QyBAhYUTAa",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "KNnz3zSkR-lY5nxo_Gvd-i",
+    "timeline": "yMTehitTw08j5dITbJ9Tsk",
+    "alerts": "T2iflHH8iBuIboJEgFiRrI",
+    "health": "lBfKHHCJa87RcSTZc6yjdS",
+    "quick": "HyjmSM667VG8iWXbcS-mHo",
+    "path": "xzxGSH9DLDklV4dnT3Y9AJ",
+    "guide": "e0JA_CKXkF7w20tCMC7S99",
+    "start": "RNCVeOGxYFGiVX0_RAvDAo",
+    "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+    "solveSpend 0": "LSfCnVrSOFt3oLplMpmwVH",
+    "solveSpend 750": "bISUwXLuIsgAjSupCb9NGS",
+    "solveSpend 100000": "1IRVjmuXL-scrEl-10b5Yi"
+   },
+   "stripped": {
+    "standing": "aCY5M78ZIo0NL8v4K_pwKO",
+    "plan": "ZI0d79bcMJA6YkeIJOr4Hb",
+    "timeline": "gW9wemK6s1tF_Z15hp-qT_",
+    "health": "se9O7UYXFtJvyLbW3Veyhl",
+    "quick": "uMPiClr6-rJKmQA4-_S1JN",
+    "path": "xXYjLfHEWRIaHS_62IqeVL",
+    "guide": "AH1IMrmKJzDfhIG8qMKphG"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "LSfCnVrSOFt3oLplMpmwVH"
+    },
+    "750": {
+     "rest": "bISUwXLuIsgAjSupCb9NGS"
+    },
+    "100000": {
+     "available": 4155,
+     "over": 95845,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "persona sam": {
+   "full": {
+    "standing": "e7CvDZlG1u6_y2JjDgyCy5",
+    "dashboard": "hyLkIVTUM6R_NLrpnTlTJb",
+    "dashboardRow": "t-5sQBF7A9Yaw2UdIolu2l",
+    "plan": "zrtgs4Aw37q0PyntiXAgK0",
+    "timeline": "VUy5hN8S7N6pqbNjVs-ymb",
+    "alerts": "ZqPw5qGQ_G0RhdiNlkMMq7",
+    "health": "QKh-K3SESvpztMs4yZ0zNv",
+    "quick": "YLGrrdfU3l44PcktSqGklo",
+    "path": "kyzioTBhYTxBuRdm5uw5N5",
+    "guide": "1YDJizPP9UkzlSh1Rzu3EU",
+    "start": "s7bqvZvaYJIjqzpu5FlJf4",
+    "nextBest": "YGP2UC2QsPvM9HDZ3OFYXK",
+    "solveSpend 0": "sV74GvJXGjbLEKYWUyywo6",
+    "solveSpend 750": "uFo8VYKvLL3F1nOKC93571",
+    "solveSpend 100000": "AqLEnieLd8lYWFz1pkD6iu"
+   },
+   "stripped": {
+    "standing": "Foao0qNoH4wvxJgi2IoXXA",
+    "plan": "3cFc4ftq3zPIg-BIuVe8NX",
+    "timeline": "59hLhusIqyClWhu8jswei0",
+    "health": "8tdCBYorzdHSDzoiCi7DFv",
+    "quick": "MC3VqaZc6j-UjYTd5vCJtp",
+    "path": "kB7p10w5Ppwq9KDDozFD_F",
+    "guide": "nuedx3heMhsb91PyQOE5YI"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "sV74GvJXGjbLEKYWUyywo6"
+    },
+    "750": {
+     "available": 3396,
+     "over": 4,
+     "why": "typed",
+     "rest": "4WQDoug87zq-vSJXNb6ubW"
+    },
+    "100000": {
+     "available": 3396,
+     "over": 96604,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "persona jordan": {
+   "full": {
+    "standing": "PzSXQQTV1oRh1P2qQZ4uLv",
+    "dashboard": "FtNP1YEVc8OhGnYZosw59_",
+    "dashboardRow": "t-5sQBF7A9Yaw2UdIolu2l",
+    "plan": "mNZyPPNJbQp68vb1LFgDDS",
+    "timeline": "PCacO94KlOybeFMB9f9vb6",
+    "alerts": "T8IDEfe2OqCOA7ytGKaNdw",
+    "health": "A3hUtsG0KVC7ry1AhNLJJA",
+    "quick": "EZ7x4sUQCOpy_7nnHylVib",
+    "path": "lz9L-V4IN4x_YmxF0mOHIs",
+    "guide": "Uvk28HeSOrBH7_G94fpPO3",
+    "start": "Px2M2TdGu3hrFb8xrX8T7t",
+    "nextBest": "r4yOdU3r28B-VnkaezYq4b",
+    "solveSpend 0": "pHrtKjU6dh2MtPpX8rzr9r",
+    "solveSpend 750": "UrZAwJfX3WkpmuFiXNkuzQ",
+    "solveSpend 100000": "6o_fxsMmnhjWpKGuytDiiK"
+   },
+   "stripped": {
+    "standing": "Z1OYj_0bSnXRx4Zn18iLrd",
+    "plan": "ScL6oi6SrTIn26LbAoW5av",
+    "timeline": "XUaRpf8N7IqtDjC5e3uZD5",
+    "health": "1avBZPHVNZypl3TfmWDO61",
+    "quick": "xk2m0aJAK0B37T0do5MUsk",
+    "path": "ARqZlv0SUNvSvbJm0_lsMW",
+    "guide": "lRI0XBIS9Ic3KqVfGCKdL-"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "pHrtKjU6dh2MtPpX8rzr9r"
+    },
+    "750": {
+     "available": 4448,
+     "over": 352,
+     "why": "typed",
+     "rest": "1tKduU3dzX90kg2UaRTKtp"
+    },
+    "100000": {
+     "available": 4448,
+     "over": 95552,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "persona patLee": {
+   "full": {
+    "standing": "NVwpRrCAckMLFdwYQPkLl2",
+    "dashboard": "xaa2pt2krsHK43g5BqG6hE",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "6L8wScoxoXRKLV9kfhSwRg",
+    "timeline": "6sg6OxEJ4WusLRzzqAWefh",
+    "alerts": "SICEXOGRAuol--VwtjKYKH",
+    "health": "QVyG1Rkx_UWq0th73z3dJU",
+    "quick": "BX67rJCvR0iYOwNgytl4E7",
+    "path": "lz9L-V4IN4x_YmxF0mOHIs",
+    "guide": "OPOLSpZeD_l3NsxcYnAz7D",
+    "start": "Px2M2TdGu3hrFb8xrX8T7t",
+    "nextBest": "7BKeUFX7Ehly8BeqzF9GwP",
+    "solveSpend 0": "fZvBG5zRPoww2xOgcyvqAM",
+    "solveSpend 750": "B5vscdRMpjTR7GJeK_psMO",
+    "solveSpend 100000": "-AAPDb7Q-oFacI-C_88MXJ"
+   },
+   "stripped": {
+    "standing": "VpxG1_493wpYnWHtBpd2Qz",
+    "plan": "sTW935L4Ak3j6XMpSpynOc",
+    "timeline": "c8-pAgqS9CzBgNiHt3h0gI",
+    "health": "yoOq7vHd6R5vdNERkPsKAA",
+    "quick": "jaeT38XOCZc3tBYA6tWFud",
+    "path": "ARqZlv0SUNvSvbJm0_lsMW",
+    "guide": "kvZUVh-zbYwUnmEUb4olLl"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "fZvBG5zRPoww2xOgcyvqAM"
+    },
+    "750": {
+     "rest": "B5vscdRMpjTR7GJeK_psMO"
+    },
+    "100000": {
+     "available": 8540,
+     "over": 91460,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "persona ruth": {
+   "full": {
+    "standing": "rh2Wp5nMW8D-swRGUe9UPH",
+    "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "oGldtQNi62i45c_8KdRJii",
+    "timeline": "6nowaQnGlq96XZLap357Zs",
+    "alerts": "2z9Q55EONc9vcrleNH6EWT",
+    "health": "8QTxpjBRF4-bicgF4FZPSb",
+    "quick": "g1IPhibl3W1byIallYD85C",
+    "path": "Os_2-chmHvCxWgHwYZpxv_",
+    "guide": "IJ4p9azpjN6M6gnO_9D1gw",
+    "start": "GZq-eBXE9jJ_BM37hA_ct0",
+    "nextBest": "rOP7BjiVFScFrEM1P4iYF5",
+    "solveSpend 0": "bmA_8wfcmklZTc7i3HvSlB",
+    "solveSpend 750": "aU9nRyA_u0EzYKHaJnMChi",
+    "solveSpend 100000": "nujkdIiqjwJciu5s2yzURq"
+   },
+   "stripped": {
+    "standing": "Vj-_9XGgbpclg09DAiyJKk",
+    "plan": "RESFjbu9fDNf0KesdT76DS",
+    "timeline": "YM2W9EwPxfeufRzcIcyUPq",
+    "health": "WBeFCZavUFQI5s5NcI8QeG",
+    "quick": "rHxO7N-gunxknhbrIOejcz",
+    "path": "W4JTHjvD7xIjpVVgJFvBYH",
+    "guide": "8SLqgEGRk8ymGFNa_vhH5g"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "bmA_8wfcmklZTc7i3HvSlB"
+    },
+    "750": {
+     "available": 3100,
+     "over": 200,
+     "why": "typed",
+     "rest": "t2BOpuDlkqZONdNoON0iUI"
+    },
+    "100000": {
+     "available": 3100,
+     "over": 96900,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "demo": {
+   "full": {
+    "standing": "jqbbiqZf1mhkdhooTShCj7",
+    "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+    "dashboardRow": "T16MYJLipHp4OOw9VbRzIR",
+    "plan": "uXiNdOMpDoUQEv3ZvGO79u",
+    "timeline": "GU2HlvsEcJf_u8-rtQFnEr",
+    "alerts": "hcCwCO6qHYcIwfDlamAR0y",
+    "health": "ztprzCUkuBlTyhsDJUgbmb",
+    "quick": "P_5FHx2Btm6FxLtN5Me7-l",
+    "path": "q3uj-SQJe5dpNSMHZLp4Xi",
+    "guide": "4IeeO6c-De6iOT5gqgQRKZ",
+    "start": "lltifXoh9NTiOCvXmgjjA4",
+    "nextBest": "xHL5V0tL0JuWcxae-3Eumw",
+    "solveSpend 0": "Zlot7376Gbd1ZjqPclXZoM",
+    "solveSpend 750": "CA3DPIldByBmtf7PXhsJCq",
+    "solveSpend 100000": "-7N1lYM8ViGDGZ7WezdmFb"
+   },
+   "stripped": {
+    "standing": "EXEF-UdGRnopYawBiG-yPx",
+    "plan": "Azs5xsmI_HcObAUOls-atj",
+    "timeline": "U9f3sGaJsHNpmO7NYJoSEb",
+    "health": "kib2mpKPXyqt3BfJ05wGWP",
+    "quick": "7arI0ZhTakXR5ZYb1NPkfO",
+    "path": "dEupTRPbdrNrAXNaB1yu9K",
+    "guide": "b9Bx4VeC9VFgvlm5YJpB4s"
+   },
+   "ceilings": {
+    "0": {
+     "rest": "Zlot7376Gbd1ZjqPclXZoM"
+    },
+    "750": {
+     "rest": "CA3DPIldByBmtf7PXhsJCq"
+    },
+    "100000": {
+     "available": 10924,
+     "over": 89076,
+     "why": "more-than-pay",
+     "rest": "MekzExtqA-UbQKvWXBsohX"
+    }
+   }
+  },
+  "empty plan": {
+   "full": {
+    "standing": "88-TVRmO7mxRli0yuEsZXI",
+    "dashboard": "57C0wZNyEDxSAHEU3tDu5-",
+    "dashboardRow": "J3iiXLtSyoMEi2VbetuW8i",
+    "plan": "YJUu4hzWnMlMdfsbK4hcTR",
+    "timeline": "rjqP5NMGHee5JGuxPoZEpn",
+    "alerts": "WAh4KKJA4dIZA-ES8CF_Ak",
+    "health": "ydnyBc47gTfMNOP8YKKgjH",
+    "quick": "nMzT-eq7zLDadDTbmv4C28",
+    "path": "_ypq32rGNw_jr7ApkJg99E",
+    "guide": "xXfrnlS19rsDwR6HkI4JFB",
+    "start": "wHTQGSpI2bnxezjH_pTya8",
+    "nextBest": "WYjwNi71q3NGxAEYuZOA1_"
+   },
+   "stripped": {
+    "standing": "IW1YLBh9tpr-LY1OW8Bfu-",
+    "plan": "OqQ6l0BssBew70p2fhZ5Zo",
+    "timeline": "rjqP5NMGHee5JGuxPoZEpn",
+    "health": "72yvn4aoTxp0TrjrTcTcDy",
+    "quick": "ZYnNn5XWXKkQZuEs9yhZ54",
+    "path": "li5yuJRe5KBsIS2xB_y-9q",
+    "guide": "3iLpDFh_9d3CfgIT0UOYPY"
+   },
+   "ceilings": {}
+  }
+ }
+}

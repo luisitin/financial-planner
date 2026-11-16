@@ -271,8 +271,8 @@ Dashboard shows one at a time: `first` is fill (blanks that leave a figure out),
 else upgrade (older figures). Fill and missing sit right under "where you stand" (C7 UX review 2), and while one is up
 the rows it decides wait on it: "Left over each month" ("Depends on your spending: not counted yet", or "...: your list
 may be missing about $2,460 a month", or "Depends on what you owe: not all counted yet"), "Safety cushion" while it is
-open and the spending is not counted ("Needs your spending") and "Retirement" with any verdict ("Depends on the figures
-below"), each with no coloured dot, "See below ›", and a tap that scrolls to the card (one way to fill in spending, UX
+open and the spending is not counted ("Needs your spending") and "Retirement" with any verdict (what it waits on, or "The
+money lasts on what you listed" while the list may be short: the Dashboard's `retireWaitRow`, z1 fix round), each with no coloured dot, "See below ›", and a tap that scrolls to the card (one way to fill in spending, UX
 review 4). "Better guesses are ready" comes after the money tiles, with the same filter and why-lines as this page
 ("Our new guess: ...", "Plus one small change of under 2%.") and "See all on Our guesses for you ›" as a link (UX
 review 10). `guessCards` adds `fillEffect`. The Dashboard compute adds the key only when given a day (its view asks

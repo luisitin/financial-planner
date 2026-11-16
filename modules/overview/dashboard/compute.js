@@ -5,8 +5,8 @@
 // view.js asks), the cards about our guesses (spec 11.3; overview/guesses guessCards): "Fill in what you skipped", "Is
 // something missing?" and "Better guesses are ready", the key `guesses` only while one of them applies.
 import { guessCards, estimators as GUESS_ESTIMATORS, compute as guessesPage, newSinceLooked } from "../guesses/compute.js";
-import { progress as setupProgress, QUESTIONS, SCREENS as SETUP_SCREENS, estimators as SETUP_ESTIMATORS, standing, ssMissingFor, retireGuessAsk } from "../setup/compute.js";
-import { compute as projection, retirementKnown } from "../../retirement/projection/compute.js";
+import { progress as setupProgress, QUESTIONS, SCREENS as SETUP_SCREENS, estimators as SETUP_ESTIMATORS, retireGuessAsk } from "../setup/compute.js";
+import { compute as projection } from "../../retirement/projection/compute.js";
 import { smallChangesHelp } from "../plan/words.js";
 import { guessesInUse, mergeEstimators } from "../../../core/estimate/index.js";
 
@@ -186,63 +186,19 @@ export function calmHeadline(headline, { underWay = false } = {}) {
   return s;
 }
 
-// ---------------------------------------------------------------- the retirement row (gy1, 2026-11-16)
-/**
- * answerWithoutSs(plan, { today, proj }) -> Get started's standing() of the plan with the Social Security not in it yet
- * counted as none, or null. Will the money last? already runs that way: it counts no Social Security for an adult with no
- * figure, and says the page "looks worse than it is" (retirement/ss-notice.js). While Social Security is the only thing the
- * retirement check waits for (every adult's birth date in) and that page says the money lasts even so, more income can only
- * keep it lasting, so its answer stands, and the Dashboard says it instead of "Needs Social Security for Sam" (the whole-app
- * sweep: the two contradicted each other for the invented retired couple). Short or only just lasting, the missing figure
- * could change the answer: null, and the row keeps asking for it, as the page's own notice does first. The copy marks each
- * adult that notice names (ssMissingFor) as not getting it (guide.setup.ss[id] = "none", what its "Sam won't get Social
- * Security" button saves); nothing is written. `proj`: the compute behind Will the money last? for the plan, when the caller has it.
- */
-export function answerWithoutSs(plan, { today = null, proj = null } = {}) {
-  let missing = [];
-  try { missing = ssMissingFor(plan); } catch { missing = []; }
-  if (!missing.length || retirementKnown(plan, today)) return null;
-  const p = structuredClone(plan);
-  p.guide = p.guide ?? {}; p.guide.setup = p.guide.setup ?? {}; p.guide.setup.ss = { ...(p.guide.setup.ss ?? {}) };
-  for (const m of missing) p.guide.setup.ss[m.id] = "none";
-  // a birth date missing too (or a Social Security line that has ended): the row keeps asking
-  if (!retirementKnown(p, today)) return null;
-  let d = proj;
-  if (!d) { try { d = projection(plan, { today }); } catch { d = null; } }
-  if (!d?.ready || d.verdict !== "on track") return null;
-  let st = null;
-  try { st = standing(p, { today }); } catch { st = null; }
-  return st?.retire?.verdict === "on track" ? st : null;
-}
-
-/**
- * Whose Social Security the answer above leaves out, in the row's words (gy1 fix F2, P2: the row said "The money lasts" in
- * green while Will the money last?, Your plan, Health score and the Timeline all asked for Sam's Social Security): one adult
- * of two or more, by name ("Sam's Social Security"; the person themself "your Social Security"), else "your Social Security".
- */
-export function ssLeftOutWords(plan) {
-  let missing = [];
-  try { missing = ssMissingFor(plan); } catch { missing = []; }
-  const adults = (plan?.household?.people ?? []).filter((p) => p && p.role !== "dependent");
-  const one = missing.length === 1 && adults.length > 1 ? missing[0] : null;
-  return one && one.role !== "self" && one.name ? `${one.name}'s Social Security` : "your Social Security";
-}
-
+// ---------------------------------------------------------------- the retirement row (gy1, 2026-11-16; z1)
 const SETUP_BACK = (id) => `#/overview/setup/${id}?back=done`;
 /**
  * retireRow(st, { plan, today, back, proj }) -> the Dashboard's retirement row { dot, k: "Retirement", s, v, open?, href }
- * from Get started's standing() `st`: the view's branches, moved here as they were so a test can read them (gy1), with one
- * change: while Social Security is the only gap and Will the money last? says the money lasts without it (answerWithoutSs),
- * the row is the one a checked plan gets, saying whose Social Security it leaves out ("The money lasts, even without Sam's
- * Social Security" / "On track", or "Partly our guesses of your spending, without Sam's Social Security" while our guesses
- * carry it; gy1 fix F2, P2). `back(id)`: the link to a Get started question (the view's picks the questions up where they stopped).
+ * from Get started's standing() `st`: the view's branches, moved here as they were so a test can read them (gy1). While Social
+ * Security is the only gap and Will the money last? says the money lasts without it, standing() already carries that answer
+ * (overview/setup lastsWithoutSs, the one rule every overview page asks since z1; this file kept its own copy before) with
+ * `withoutSs`, and the row says whose Social Security it leaves out ("The money lasts, even without Sam's Social Security" /
+ * "On track", or "Partly our guesses of your spending, without Sam's Social Security" while our guesses carry it; gy1 fix F2,
+ * P2). `back(id)`: the link to a Get started question (the view's picks the questions up where they stopped).
  */
 export function retireRow(st0, { plan, today = null, back = SETUP_BACK, proj = null } = {}) {
-  let st = st0 ?? {};
-  if (!st.retire && st.retirementKnown === false) {
-    const a = answerWithoutSs(plan, { today, proj });
-    if (a) st = { ...st, retire: a.retire, retirementKnown: true, retirementMissing: null, retireSavingsUnknown: a.retireSavingsUnknown, retireGuessed: a.retireGuessed, retireGuessedWhat: a.retireGuessedWhat, tileWhy: { ...(st.tileWhy ?? {}), retire: null }, withoutSs: ssLeftOutWords(plan) };
-  }
+  const st = st0 ?? {};
   const why = st.tileWhy ?? {};
   const pj = () => { if (proj) return proj; try { return projection(plan, { today }); } catch { return null; } };
   // Social Security and the birth dates known, the forecast still waits: on the spending (j-first-renter/x-1: it said the
@@ -261,4 +217,20 @@ export function retireRow(st0, { plan, today = null, back = SETUP_BACK, proj = n
   // else "Check the numbers first", landing on "What this answer rests on" (retirement spec D1, L12)
   const ok = st.retire.verdict === "on track", small = ok || smallChangesHelp(pj());
   return { dot: ok ? "ok" : "warn", k: "Retirement", s: ok ? (st.withoutSs ? `The money lasts, even without ${st.withoutSs}` : "The money lasts") : small ? "Small changes help" : "Check the numbers first", v: ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: small ? "#/retirement/projection" : "#/retirement/projection?check=1" };
+}
+/**
+ * retireWaitRow(row, wait) -> what the retirement row (retireRow) takes while a card under "where you stand" waits on the
+ * spending or the debts (C7 UX reviews 2 and 4: no coloured dot, "See below ›", a tap that scrolls to the card; the view adds
+ * the tap). wait: "missing" ("Is something missing?": the list may be short), "spend" (spending skipped), "debts" (what you
+ * owe not all in). It said "Depends on the figures below" whatever it waited on, and while the list may be short it held back
+ * the answer every other overview page gives (z1 fix round, critic P1: Ruth and Sam read "Depends on the figures below" here
+ * and "The money lasts" one tap away). Now, while the list may be short, an answer that lasts is said on what is listed ("The
+ * money lasts on what you listed", spoken "Retirement: see below. ..."); any other answer, and a skipped figure, says what it
+ * waits on. Open rows keep their own words. -> { dot, s, v, open, said? } | null
+ */
+export function retireWaitRow(row, wait) {
+  if (!row || row.open) return null;
+  const lasts = wait === "missing" && row.dot === "ok";
+  const s = lasts ? "The money lasts on what you listed" : wait === "missing" ? "Depends on your spending list. Check it below" : wait === "spend" ? "Depends on your spending: not counted yet" : "Depends on what you owe: not all counted yet";
+  return { dot: "", s, v: "See below ›", open: true, ...(lasts ? { said: "see below" } : {}) };
 }

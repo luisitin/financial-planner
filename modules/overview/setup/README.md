@@ -1121,3 +1121,55 @@ in each part); the build notes are in the C5 audit's BUILD LIST.
   href: "#/overview/setup/money?back=done" }`, after a bank move if there is one; three moves in all, as before. Your plan
   (`overview/plan`) used to add the same move itself; it now takes Get started's and only changes its link to come back to
   Your plan. Test: overview/plan module.test.mjs "F3".
+
+## One retirement answer (z1, 2026-11-16; tests `tests/one-answer.test.mjs`, `tests/one-answer-invariance.test.mjs`)
+
+Will the money last? counts no Social Security for an adult with no figure, and says so first ("Sam's Social Security is not
+counted yet, so this page looks worse than it is"). The Dashboard (gy1) gave its answer when the money lasts even so; every
+other overview page held it back until each adult's Social Security was typed. One rule now, here:
+
+`lastsWithoutSs(plan, { today, proj })` -> `{ proj, ids, words } | null`. An answer only when:
+1. an adult has no Social Security figure and has not said "won't get it" (`ssMissingFor`), and retirement is not otherwise
+   checkable (`retirementKnown(plan, today)` false);
+2. a copy with those adults marked "won't get it" (`guide.setup.ss[id] = "none"`, what the page's button saves) is checkable:
+   every birth date in, no Social Security line that has ended (otherwise the pages keep asking for both);
+3. Will the money last?'s own compute for the plan (`proj` when the caller has it) is ready and says "on track": the run lasts
+   to the end and the spending it can pay for is at least 1.15 times the spending planned (retirement/projection compute);
+4. no Social Security line on the Income page that the projection counts (yearly, an amount, not ended) names no adult on it
+   (`orphanSsLine(plan, today)`: no one, a child, or someone no longer in the household). The projection gives such a line to
+   the first adult and drops it once that adult has a figure on the Social Security page (projection `incomeSocial`, so
+   nothing counts twice), so a figure typed then can take money away. Fix round, critic M1: Ruth and Sam with Ruth's Income
+   line named to no one and the spending 2.05 times as high were "on track" (can pay for $85,416 a year against $68,388) and
+   every page said "even without your Social Security"; $100 a month typed for each made the money short ($63,000), $400 tight
+   ($71,352). Such a plan now gets no answer here, and the pages keep asking for both figures, as before z1.
+
+Why the answer stands: Social Security is income, and at most 85% of a benefit is taxable ("up to 85% of your benefits can be
+taxable", IRS Publication 915, https://www.irs.gov/publications/p915, page reviewed 30-Apr-2026, read 2026-11-16), so each
+dollar of it leaves money after tax and a plan that lasts without it lasts with it. Short or only just lasting ("tight", under
+the 15% to spare), the missing figure could change the answer: null, and every page keeps asking for it, as the page's own
+notice does first. Limit: two cliffs in the projection take money back as income rises (Medicare's income surcharge, and the
+health-cover credit before 65); a small benefit that crossed one could in principle take back a little more than it adds. The
+15% "on track" needs is far more than either for these households, and Will the money last? and the Dashboard already reason
+this way; the rule does not try to prove it for every plan.
+
+`standing()` asks it when the plan is not checkable. When it stands, `retire` (verdict, short age, what the plan can pay for)
+comes from that projection exactly as for a checked plan, and so do the fields worked out from it (`retireSavingsUnknown`,
+`retireGuessed`, `retireGuessedWhat`; `tileWhy.retire` and `tileAt.retire` null), plus `withoutSs` ("Sam's Social Security",
+`ssLeftOutWords`). `retirementKnown` and `retirementMissing` keep their meaning (false, "Social Security for Sam"). No other
+field moves: the headline's only retirement case is a verdict other than "on track". Every reader of `standing()` (the
+Dashboard's row, this page's done screen, Your plan's figures) gets the answer from here; nothing else holds a copy.
+
+The words, one sentence per case:
+- `ssLeftOutWords(plan)` (moved from the Dashboard): "Sam's Social Security" (one adult of two or more, not the person
+  themself), else "your Social Security".
+- `ssLeftOutLine(words)`: "Sam's Social Security is not counted yet; the money lasts even without it." (Your plan, Quick
+  answers, the Timeline and Health score add it to their answer.)
+- `retireTileWords(st)`, the line under the done screen's Retirement tile: "If nothing changes." /
+  "If nothing changes, even without Sam's Social Security."; resting on our guesses, `retireGuessAsk(st).words`
+  ("Partly our guesses. Type what you spend ›") / "Partly our guesses, without Sam's Social Security. Type what you spend ›".
+
+Ruth and Sam (the invented retired couple, Sam with no figure): the done screen's tile now reads "On track", "If nothing
+changes, even without Sam's Social Security.", "● The money lasts" (it read "Not worked out yet. Needs Social Security for
+Sam."), as the Dashboard and Will the money last? say ($85,416 a year the plan can pay for against $33,360 planned). The same
+for 08-retired (Sam) and 14-unusual-structures (Grace, on her own: "your Social Security"). The 14 households' singles and
+couples whose money runs short without it (01-07, 09-13) keep the ask on every page.

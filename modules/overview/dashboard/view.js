@@ -14,6 +14,7 @@ import { lookNext } from "../../../core/demo/names.js";
 import { goalsWords, guessedGoals } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice, rankedFor } from "../guesses/view.js";
+import { retireWaitRow } from "./compute.js";
 
 // scoped to the where-you-stand card (no new global CSS)
 const STYLE = `
@@ -164,7 +165,8 @@ export function render(root, ctx) {
         for (const r of rows) {
           if (r.k === "Short each month") r.k = "Left over each month";   // waiting on the card: no verdict (L-3 keeps this row's name)
           if (r.k === "Left over each month" || (r.k === "Emergency fund" && r.open && fillSpend)) Object.assign(r, { dot: "", s: r.k === "Left over each month" ? waitWords : "Needs your spending", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
-          else if (r.k === "Retirement" && !r.open) Object.assign(r, { dot: "", s: "Depends on the figures below", v: "See below ›", open: true, href: "#/overview/guesses", ...toCard });
+          // (what it waits on, and an answer that lasts said on what is listed: dashboard/compute.js retireWaitRow; z1 fix round P1)
+          else if (r.k === "Retirement" && !r.open) Object.assign(r, retireWaitRow(r, gc.first === "missing" ? "missing" : fillSpend ? "spend" : "debts"), { href: "#/overview/guesses", ...toCard });
         }
       }
       const move = st.moves[0] ?? null;

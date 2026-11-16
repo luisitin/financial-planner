@@ -2814,7 +2814,9 @@ test("FL-SETUP view parts: the reveal, retired words, reload drafts and a phone 
   assert.ok(csrc.includes('payGone ? `Needs ${payWords}.`') && csrc.includes('const payWords = retired ? "your pension or Social Security" : noneWork ? "what comes in" : "your pay";'));
   assert.ok(view.includes('hasSpend ? "Needs your savings."') && csrc.includes('hasSpend ? "Needs your savings."'), "the open cushion tile asks for the savings");
   // x-1 / x-2: the retirement tile's links go where the missing answer is typed
-  assert.ok(view.includes('st.retirementKnown && !st.retire ? fig("open", "Retirement", "Not worked out yet", why.retire ?? "Needs what you spend each month.", "Add it ›", setupHref(st.tileAt?.retire ?? "spend"))'));
+  // (z1: an answer that stands without the Social Security not in yet is an answer, so `!st.retire` leads the two open cases)
+  assert.ok(view.includes('!st.retire && st.retirementKnown ? fig("open", "Retirement", "Not worked out yet", why.retire ?? "Needs what you spend each month.", "Add it ›", setupHref(st.tileAt?.retire ?? "spend"))'));
+  assert.ok(view.includes(': !st.retire ? fig("open", "Retirement", "Not worked out yet"'), "Social Security or a birth date missing, and no answer: the ages question");
   assert.ok(view.includes('"Add them ›", setupHref("have"))') && !view.includes('setupHref("have-amounts"))\n      // its spending'), "no retirement savings: the tick screen");
   // the cushion months never round up to the target beside "Aim for"
   assert.ok(view.includes("monthsNear(st.runway, target)"));

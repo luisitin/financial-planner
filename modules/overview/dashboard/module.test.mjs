@@ -342,20 +342,51 @@ test("L12: the retirement row says 'Small changes help' only when they would, el
   assert.deepEqual([t.s, t.v], ["Small changes help", "Tight"]);
 });
 
+test("z1 fix P1: while a card below waits on the spending, the retirement row says what it waits on, and an answer that lasts on what is listed", async () => {
+  const { retireWaitRow } = await import("./compute.js");
+  const lasts = { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" };
+  // the list may be short ("Is something missing?"): the answer every other overview page gives, said on what is listed
+  assert.deepEqual(retireWaitRow(lasts, "missing"), { dot: "", s: "The money lasts on what you listed", v: "See below ›", open: true, said: "see below" });
+  // any other answer, or one partly on our guesses: what it waits on, never "the figures below"
+  assert.deepEqual(retireWaitRow({ dot: "warn", k: "Retirement", s: "Small changes help", v: "Short at 84" }, "missing"), { dot: "", s: "Depends on your spending list. Check it below", v: "See below ›", open: true });
+  assert.equal(retireWaitRow({ dot: "", k: "Retirement", s: "Partly our guesses of your spending", v: "On track" }, "missing").s, "Depends on your spending list. Check it below");
+  // a skipped figure: the same words as the left-over row's
+  assert.equal(retireWaitRow(lasts, "spend").s, "Depends on your spending: not counted yet");
+  assert.equal(retireWaitRow(lasts, "debts").s, "Depends on what you owe: not all counted yet");
+  // a row that asks for something keeps its own words
+  assert.equal(retireWaitRow({ dot: "", k: "Retirement", s: "Needs Social Security for Sam", v: "Add ›", open: true }, "missing"), null);
+  // drawn: Ruth and Sam, whose list may be missing about $1,220 a month: "The money lasts", as Your plan and Quick answers say
+  // one tap away (it read "Depends on the figures below"); once they say the list is everything, the row's own answer
+  const D = "2026-11-16";
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const d = await drawDashboard(retiredCouplePlan(D), D);
+  assert.match(d.row("Left over each month").s, /^Depends on your spending: your list may be missing about \$1,220 a month$/);
+  assert.deepEqual([d.row("Retirement").s, d.row("Retirement").v, d.row("Retirement").href], ["The money lasts on what you listed", "See below ›", "#/overview/guesses"]);
+  assert.doesNotMatch(d.text, /Depends on the figures below/);
+  const all = retiredCouplePlan(D); all.guide = { ...(all.guide ?? {}), spendComplete: D };
+  const e = await drawDashboard(all, D);
+  assert.deepEqual([e.row("Retirement").s, e.row("Retirement").v], ["The money lasts, even without Sam's Social Security", "On track"]);
+});
+
 test("gy1: the retirement row says what Will the money last? says while Social Security alone is missing", async () => {
-  const { retireRow, answerWithoutSs } = await import("./compute.js");
-  const { standing } = await import("../setup/compute.js");
+  // (z1: the answer is Get started's standing(), by overview/setup's lastsWithoutSs; this file's own copy is gone)
+  const compute = await import("./compute.js");
+  const { retireRow } = compute;
+  const { standing, lastsWithoutSs } = await import("../setup/compute.js");
+  assert.equal(compute.answerWithoutSs, undefined, "no second copy of the rule here");
   const { markGuess } = await import("../../../core/estimate/index.js");
   const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
   const T = "2026-11-16";
   // Ruth and Sam: Sam has no Social Security figure; Will the money last? says the money lasts without it
   const p = retiredCouplePlan(T), st = standing(p, { today: T });
-  assert.equal(st.retire, null);
+  assert.equal(st.retire.verdict, "on track");
+  assert.equal(st.retirementKnown, false);
   assert.equal(st.retirementMissing, "Social Security for Sam");
+  assert.equal(st.withoutSs, "Sam's Social Security");
   // (gy1 fix F2, P2: the row names whose Social Security the answer leaves out, as Your plan, Health score and the Timeline
   // still ask for it, and Will the money last? opens with "Sam's Social Security is not counted yet")
   assert.deepEqual(retireRow(st, { plan: p, today: T }), { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" });
-  assert.equal(answerWithoutSs(p, { today: T }).retire.verdict, "on track");
+  assert.equal(lastsWithoutSs(p, { today: T }).proj.verdict, "on track");
   // Sam's figure typed: the same answer, now from Get started's own check, and nothing left out to name
   const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
   const st2 = standing(typed, { today: T });
@@ -367,7 +398,7 @@ test("gy1: the retirement row says what Will the money last? says while Social S
   const rg = retireRow(standing(g, { today: T }), { plan: g, today: T });
   assert.deepEqual([rg.s, rg.v, rg.dot], ["Partly our guesses of your spending, without Sam's Social Security", "On track", ""]);
   // whose, in the row's words: the other adult by name, the person themself or everyone as "your"
-  const { ssLeftOutWords } = await import("./compute.js");
+  const { ssLeftOutWords } = await import("../setup/compute.js");
   assert.equal(ssLeftOutWords(p), "Sam's Social Security");
   const ruth = retiredCouplePlan(T); ruth.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } }; ruth.income = (ruth.income ?? []).filter((x) => !/social security/i.test(x.name ?? ""));
   const { ssMissingFor } = await import("../setup/compute.js");
@@ -377,7 +408,7 @@ test("gy1: the retirement row says what Will the money last? says while Social S
   // spending three times as high: the money runs short without Sam's Social Security, which could change that: keep asking
   const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
   const sh = standing(high, { today: T });
-  assert.equal(answerWithoutSs(high, { today: T }), null);
+  assert.equal(lastsWithoutSs(high, { today: T }), null); assert.equal(sh.retire, null); assert.equal(sh.withoutSs, undefined);
   assert.deepEqual(retireRow(sh, { plan: high, today: T }), { dot: "", k: "Retirement", s: "Needs Social Security for Sam", v: "Add ›", open: true, href: "#/overview/setup/ages?back=done" });
   // part way through the questions, the ask picks them up where they stopped (the view's `back`)
   assert.equal(retireRow(sh, { plan: high, today: T, back: () => "#/overview/setup/spend" }).href, "#/overview/setup/spend");
