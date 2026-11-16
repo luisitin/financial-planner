@@ -104,3 +104,13 @@ test("If history repeated: nothing saved -> the page's own we-can't-say-yet sent
   assert.match(f.text, /start years since 1928 in which the money lasts to the end/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("Chance the money lasts: nothing saved -> the page's own we-can't-say-yet sentence, no '0 of 100'; the family's answer unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/retirement/monte-carlo/view.js");
+  await saysUnknown("retirement/monte-carlo", UNKNOWN_WHAT, { title: "Chance the money lasts" });
+  const r = await drawn("retirement/monte-carlo", rd());
+  assert.doesNotMatch(r.text, /0 of 100|Weak/);
+  const f = await drawn("retirement/monte-carlo", fam());
+  assert.match(f.text, /pretend futures where the money lasts/);
+  assert.doesNotMatch(f.text, /can't say/);
+});

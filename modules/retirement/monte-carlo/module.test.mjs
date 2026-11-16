@@ -303,7 +303,7 @@ test("g34 critic 1: a page that asks for the plan's own careful chance says it i
 
 test("gap #17 invariance: with no careful chance and no lines, compute() is what it was over the qa households and the fixture plans", async () => {
   const { compute: mc, settledAtChance } = await import("./compute.js");
-  const { buildInputs } = await import("../projection/compute.js");
+  const { buildInputs, retirementUnknown } = await import("../projection/compute.js");
   const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
@@ -321,7 +321,8 @@ test("gap #17 invariance: with no careful chance and no lines, compute() is what
     const o = { today: T17, paths: 200, careful: heavy };
     const d = mc(p, o);
     if (!d.ready) { assert.equal(JSON.stringify(mc(withA(p, defaults), o)), JSON.stringify(d), name); continue; }
-    assert.deepEqual(Object.keys(d), KEYS, name);
+    // `unknown` (whole-app sweep x3, 2026-11-16) is added exactly when the projection's own rule says nothing is saved yet
+    assert.deepEqual(Object.keys(d), retirementUnknown(p, { today: T17 }) ? [...KEYS, "unknown"] : KEYS, name);
     // the old verdict rule, 85 and 70
     assert.equal(d.verdict, d.successRate >= 0.85 ? "strong" : d.successRate >= 0.7 ? "fair" : "weak", name);
     // the old careful call, without a chance

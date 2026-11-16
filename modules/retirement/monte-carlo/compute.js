@@ -3,7 +3,7 @@
 // assumptions (lognormal, the plan's means and swings), to say how often the money lasts.
 import { project, affordableSpending } from "../../../core/math/retirement.js";
 import { mulberry32, normal, percentile, pickIndices, ar1Paths, lag1 } from "../../../core/math/montecarlo.js";
-import { buildInputs } from "../projection/compute.js";
+import { buildInputs, retirementUnknown } from "../projection/compute.js";
 import { BAD_RUN_NOTE } from "../odds.js";
 import { toCsv } from "../../../core/csv.js";
 import { RETURNS } from "../historical/data/returns.js";
@@ -445,5 +445,9 @@ export function compute(plan, params = {}) {
   if (wantRuns) { out.runs = runs; out.runsYears = withYears ? yearList : []; }
   // money and the odds of living, only when asked (the page's "How the pretend futures end")
   if (params.living === true) out.living = livingOdds(plan, out.byAge, { today: params.today, inputs: b.inputs });
+  // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "0 of 100" (whole-app
+  // sweep x3, 2026-11-16); absent for every other plan
+  const unknown = retirementUnknown(plan, { today: params.today ?? null });
+  if (unknown) out.unknown = unknown;
   return out;
 }

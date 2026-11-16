@@ -31,6 +31,7 @@ import { compute as summary } from "../modules/reports/plan-summary/compute.js";
 import { compute as fire } from "../modules/retirement/fire/compute.js";
 import { compute as goals } from "../modules/goals/goals/compute.js";
 import { compute as compare } from "../modules/scenarios/compare/compute.js";
+import { retirementUnknown } from "../modules/retirement/projection/compute.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const T = "2026-11-15";
@@ -51,25 +52,35 @@ async function plans() {
 const ALL = (await plans()).map((x) => ({ ...x, plan: migrate(structuredClone(x.plan)) }));
 const digest = (v) => crypto.createHash("sha256").update(JSON.stringify(v) ?? "undefined").digest("base64url").slice(0, 22);
 const run = (fn) => { try { return fn(); } catch (e) { return { threw: e.message }; } };
+// Whole-app sweep x3 (2026-11-16): for a plan with nothing saved for retirement and nothing going in, the retirement pages add
+// `unknown`, the projection's own "We don't know yet" (retirementUnknown). Without that one field each output is what it was
+// before; the field must be the projection's answer. The words those pages now say are pinned by tests/sweep-x3.test.mjs.
+const sansUnknown = (v, u) => { if (!u || !v || typeof v !== "object" || !("unknown" in v)) return v; assert.deepEqual(v.unknown, u); const { unknown: _u, ...rest } = v; return rest; };
+/** The plans whose plan summary now says "not known yet" (the Timeline's and the Plan health score's words; tests/sweep-x3.test.mjs
+ * and the health score's module test pin them): their summary is not compared here. */
+const SAYS_UNKNOWN = new Set(ALL.filter(({ plan }) => retirementUnknown(plan, { today: T })).map((x) => x.name));
+const skipped = (name, k) => k === "summary" && SAYS_UNKNOWN.has(name);
 /** The careful figure (thousands of runs) only for the plans the module tests use. */
 const CAREFUL = new Set(["fixture family-plan.mjs:familyPlan", "fixture retirement-plan.mjs:retirementPlan", "fixture widow-plan.mjs:widowPlan"]);
 /** Chance the money lasts' own figures for one plan, asked for with `extra` on top of each call the pages make. */
 function chanceFigures(name, plan, extra = {}) {
   const p = () => structuredClone(plan);
+  const u = retirementUnknown(plan, { today: T });
   return {
-    page: run(() => chance(p(), { today: T, paths: 300, seed: 1, careful: false, ...extra })),
-    ends: run(() => chance(p(), { today: T, paths: 300, seed: 1, careful: false, endings: true, runs: true, ...extra })),
-    careful: CAREFUL.has(name) ? run(() => chance(p(), { today: T, paths: 300, ...extra })) : null,
+    page: run(() => sansUnknown(chance(p(), { today: T, paths: 300, seed: 1, careful: false, ...extra }), u)),
+    ends: run(() => sansUnknown(chance(p(), { today: T, paths: 300, seed: 1, careful: false, endings: true, runs: true, ...extra }), u)),
+    careful: CAREFUL.has(name) ? run(() => sansUnknown(chance(p(), { today: T, paths: 300, ...extra }), u)) : null,
   };
 }
 /** Every figure these changes could reach, for one plan, by what it is. */
 function figures(name, plan) {
   const p = () => structuredClone(plan);
+  const u = retirementUnknown(plan, { today: T });
   return {
     ...chanceFigures(name, plan),
-    report: run(() => reportRetirement(p(), { today: T, maxPaths: 200 })),
+    report: run(() => sansUnknown(reportRetirement(p(), { today: T, maxPaths: 200 }), u)),
     summary: run(() => summary(p(), { today: T, maxPaths: 200 })),
-    fire: run(() => fire(p(), { today: T })),
+    fire: run(() => sansUnknown(fire(p(), { today: T }), u)),
     goals: run(() => goals(p(), { today: T })),
     compare: run(() => compare(p(), { today: T, paths: 100 })),
   };
@@ -106,7 +117,7 @@ test("with the usual way of drawing, every figure is the one the code gave befor
   assert.deepEqual(Object.keys(now).sort(), Object.keys(was.plans).sort(), "the same plans");
   let ran = 0;
   for (const [name, d] of Object.entries(now)) {
-    for (const [k, v] of Object.entries(was.plans[name])) assert.equal(d[k], v, `${name}: ${k}`);
+    for (const [k, v] of Object.entries(was.plans[name])) if (!skipped(name, k)) assert.equal(d[k], v, `${name}: ${k}`);
     if (ALL.find((x) => x.name === name) && chance(structuredClone(ALL.find((x) => x.name === name).plan), { today: T, paths: 100, careful: false }).ready) ran++;
   }
   assert.ok(ran >= 25, `${ran} plans run`);
@@ -131,6 +142,6 @@ test("the usual way asked for by name, an unknown way, a way kept in the plan, o
     }
     // every figure, with a way kept in the plan: this page as the other pages ask for it, and every other page
     const d = figures(name, kept("history"));
-    for (const k of Object.keys(was[name])) assert.equal(digest(d[k]), was[name][k], `${name}, kept history: ${k}`);
+    for (const k of Object.keys(was[name])) if (!skipped(name, k)) assert.equal(digest(d[k]), was[name][k], `${name}, kept history: ${k}`);
   }
 });

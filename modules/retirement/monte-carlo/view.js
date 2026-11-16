@@ -7,14 +7,16 @@
 // is done (its status says "with a spreadsheet"). Gap next-60 #35 and #37 add no row (the first view may not grow): "How the
 // pretend years are drawn" sits in Set my own numbers (try a way, keep it with Undo), "Money and the odds of living" in How the
 // pretend futures end.
-import { needButtons } from "../needs.js";
+import { needButtons, unknownBody } from "../needs.js";
 import { rememberChance, chanceKey, whenCareful, monthlyOf, slot, busyWords, carefulChanceOf, badRunNote, inWords, linesOf, verdictOf, perHundred, CAREFUL_CHANCE, CAREFUL_CHOICES, GOOD_CHANCE, OK_CHANCE } from "../careful.js";
-import { buildInputs, healthAdded } from "../projection/compute.js";
+import { buildInputs, healthAdded, unknownWords } from "../projection/compute.js";
 import { bandChart } from "../charts.js";
 import { ssNotice } from "../ss-notice.js";
 import { needsWords, nameIn, namesIn, nameOf, verbFor } from "../../../core/words.js";
 import { parts, choice } from "../../../core/ui/more.js";
 import { runsCsv, DRAWS, drawOf, HISTORY } from "./compute.js";
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "the chance the money lasts";
 
 // draw: the way being tried on this visit (null: the way the plan keeps, drawOf); never in the plan until "Keep ..." is tapped
 const state = { paths: 2000, seed: 1, draw: null };
@@ -90,6 +92,9 @@ export function render(root, ctx) {
     // way's, the one Compare's own draw is moved from
     if (way === "usual") rememberChance(ctx, d, sentFor);
     chances.set(chanceSlot(sentFor, way), d.successRate);
+    // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
+    // (whole-app sweep x3, 2026-11-16: "0 of 100 ... the money ran out in every pretend future" beside its "We don't know yet")
+    if (d.unknown) { answer.append(...unknownBody(ui, unknownWords(d.unknown, UNKNOWN_WHAT))); return; }
     const lines = linesOf(plan);
     const trying = way !== kept;
     const a = answerFor(d, lines, { trying });
