@@ -127,3 +127,28 @@ Test: "next year's units are worked on next year's tax tables".
 **(a) This household's own tax year.** What the vesting units cost is this household's tax. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. The base is the Federal estimate's return without this year's units (`taxView(..., { without: "stock" })`, `knownWithout(..., "stock")`): the Federal estimate has them in its wages already and this page adds them itself, so they must not be counted twice. The card now shows the extra 0.9% Medicare tax row (owed on the household's pay past the line, held back on the person's pay past 200,000), so "federal tax on it", "held back" and that row add up to "set aside". With a business, "Federal tax on it" is the Federal estimate's return with the units less without them (known() and knownWithout(), so the 20% business deduction and half the self-employment tax are worked again), and a row shows the change in the business's self-employment tax (the units fill the Social Security base, and move the 0.9% on the business's profit).
 
 Round 8 follow-up (2026-11-07): the card's labels say "Social Security and Medicare (0.9% included)" and "self-employment and Medicare tax changes by".
+
+## First view and the rows one tap away (simple first, opt spec 6.1 class B; 2026-11-16)
+The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` by hand.
+- **First view**: the answer cards as before (the stake, units by year, incentive options, each option grant, purchase-plan
+  shares), then the page's list, **"Grants"**: its rows with Edit and Remove and an outlined "+ Add another grant", or, while
+  there are none, its add form. The form asks first for Kind, Units or options granted and Grant date, and "Options: the
+  price you pay per share" only while Kind is an option (units have no price to pay); the name and the vesting pattern sit
+  under "More details (optional)", blank by default (a blank vesting box saves the usual 48 months, a 12-month cliff and
+  every 3 months, as each box's help says, so the line opens short).
+- **One card of quiet rows** (kind `own`): **"The company"** (symbol, price, who works there; its status is "ACME at $50.00"
+  or "not set yet") and **"Purchase-plan shares"** (the purchases; its add form while there are none). "The company" opens
+  by itself only when the page has grants or shares to value and no price (the box the answer needs is in sight, R9); a
+  save in a row keeps that row open with its green line (R17); Edit on a purchase opens its row with the form.
+- **"More on this"**: "How much rides on one company?" (Employer stock), "What else does work give you?" (Work benefits),
+  "What is the tax when you sell?" (Capital gains).
+- **One filled button** on the first view: while the grant form is open its "Add the grant" is the one; the company's Save
+  is outlined then, and so is the add or save of every other row's form, opened or not (opening "Purchase-plan shares"
+  beside the grant form showed two filled buttons); while the company's price is missing for grants on the list, its Save
+  is the one and the other rows' forms are outlined.
+- Builder's choices: the company row is shut on an empty page (before, the company and the grant form were both open with
+  two filled buttons: 12 boxes): the hero says "Add each grant from your stock plan's website below; the share price comes
+  next." Purchase-plan boxes are no longer marked required at the box (a shut row may hold no required box); a purchase
+  missing a date or a price is refused at Save with the same words as before.
+- Counts (`node qa/first-view-node.mjs career/equity`): before 175 words, 12 boxes, 2 filled buttons with a plan (172, 11, 2
+  on the empty plan); after 145 words, 4 boxes, 1 filled button, 2 rows on both. Test: "S11 (R17)" and "the page drawn".

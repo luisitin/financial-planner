@@ -1,14 +1,17 @@
 // modules/career/equity/view.js -- DOM only. Stock from work: the stake, units vesting this year and next with the tax
 // to set aside, each option grant (exercising now; for incentive options the amount that adds no alternative minimum
-// tax, shared across grants, and when a sale qualifies), purchase-plan shares sold now or later; the company, the grants
-// and the purchased shares edited in folds.
+// tax, shared across grants, and when a sale qualifies), purchase-plan shares sold now or later; then the grants (the
+// page's list: rows, or the add form while there are none) and one card of quiet rows, "The company" and "Purchase-plan
+// shares", drawn by core/ui/more.js (no hand-written <details>; opt spec 6.1, career/equity, class B).
 import { compute, DEFAULT_GRANT, ESPP_DISCOUNT, ISO_AFTER_LEAVING, ISO_LIMIT } from "./compute.js";
 import { nameIn } from "../../../core/words.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
+import { parts, links } from "../../../core/ui/more.js";
 
-let pending = null;   // the confirmation shown on the next render
+// the confirmation shown on the next render, and where: { text, at: "company" | "grants" | "espp" }. The section saved in
+// shows it, and a part saved in stays open (docs/OPTIONAL.md R17); no other part opens or shuts
+let pending = null;
 let editing = null;   // the grant or lot whose form is open
-let openFold = null;  // the fold just saved stays open
 
 const STYLE = `
 .eq-root .eq-lines { list-style: none; margin: 0; padding: 0; }
@@ -17,6 +20,7 @@ const STYLE = `
 .eq-root .eq-lines li span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
 .eq-root .eq-say { margin: 8px 0; }
 .eq-root .eq-past { color: var(--muted); }
+.eq-root .field[hidden] { display: none; }
 `;
 
 export function render(page, ctx) {
@@ -30,17 +34,18 @@ export function render(page, ctx) {
   const eq = plan.equity ?? {};
   const root = ui.h("div", { class: "eq-root" }, ui.h("style", {}, STYLE));
   page.append(root);
-  if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  const said = pending; pending = null;
+  const noteAt = (at) => (said && said.at === at ? ui.notice("ok", said.text) : null);
   const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const n0 = (x) => Math.round(x).toLocaleString("en-US");
   const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
-  const saveEq = (msg, fn) => { pending = msg; store.update((p) => { p.equity = p.equity ?? {}; fn(p.equity); }); };
+  const saveEq = (msg, at, fn) => { pending = { text: msg, at }; store.update((p) => { p.equity = p.equity ?? {}; fn(p.equity); }); };
   // an error shown next to its form, replacing any earlier one
   const formError = (form, text) => { form.querySelector(".notice.error")?.remove(); form.prepend(ui.notice("error", text)); form.scrollIntoView({ block: "start" }); };
 
   if (!d.ready) root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Stock from work"),
     ui.h("p", { class: "lede" }, "Units and options from your employer, and shares bought through its purchase plan: when they vest, the tax on each and how much to set aside, when to exercise options, and when selling costs less tax."),
-    ui.h("p", { class: "muted small" }, "Start with the company's share price below, then add each grant from your stock plan's website.")));
+    ui.h("p", { class: "muted small" }, "Add each grant from your stock plan's website below; the share price comes next.")));
   for (const n of d.notes ?? []) root.append(ui.notice("info", n));
   if (d.ready && d.needsPrice) root.append(ui.notice("warn", "Type today's share price under \"The company\" below to see what your grants and shares are worth and the tax they bring."));
   if (d.esppSkipped) root.append(ui.notice("warn", `${d.esppSkipped} purchase${d.esppSkipped === 1 ? " is" : "s are"} missing a price (paid, at the offering's start or on the day bought) and ${d.esppSkipped === 1 ? "is" : "are"} left out: add ${d.esppSkipped === 1 ? "it" : "them"} under "Purchase-plan shares".`));
@@ -124,49 +129,43 @@ export function render(page, ctx) {
     if (d.espp.length) root.append(ui.card("Shares from the purchase plan", ui.h("ul", { class: "records" }, d.espp.map((e) => ui.h("li", {},
       ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${n0(e.shares)} shares bought ${shortDate(e.purchaseDate)}`), ui.h("span", { class: "rec-value" }, money(e.now.proceeds))),
       ui.h("div", { class: "rec-sub" }, `Worth ${money(e.now.proceeds)} today. ${e.now.qualifying ? `A qualifying sale now: about ${money(e.taxNow.total)} in tax.` : `Sold now: about ${money(e.taxNow.total)} in tax. From ${shortDate(e.now.qualifiesOn)}: about ${money(e.taxAtQualifying.total)}${e.wait > 0.5 ? `, ${money(e.wait)} less if the price holds` : ""}.`}`),
-      ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { editing = e.id; drawLots(); lotsFold.open = true; lotsFold.scrollIntoView({ block: "start" }); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm("Remove these shares?")) return; saveEq("Shares removed.", (q) => { q.espp = (q.espp ?? []).filter((x) => x.id !== e.id); }); }, { class: "secondary small" }))))),
+      ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { editing = e.id; drawLots(); openPart("espp"); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm("Remove these shares?")) return; saveEq("Shares removed.", "espp", (q) => { q.espp = (q.espp ?? []).filter((x) => x.id !== e.id); }); }, { class: "secondary small" }))))),
       ui.h("p", { class: "muted small" }, "Waiting for a qualifying sale (more than two years after the offering began, and more than one after buying) taxes less of the gain as pay, but leaves the money on one company for longer.")));
   }
 
-  // the company
-  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
-  let coForm = null;
-  const coFields = [
-    { key: "symbol", label: "Company stock symbol", type: "text", placeholder: "e.g. ACME" },
-    { key: "price", label: "Price of one share today", type: "money", min: 0 },
-    adults.length > 1 ? { key: "personId", label: "Who works there", type: "select", options: [{ value: "", label: "Whoever has a salary" }, ...adults.map((p) => ({ value: p.id, label: p.name || "Someone" }))] } : null,
-  ].filter(Boolean);
-  root.append(ui.h("details", { class: "card fold fold-card", open: !d.ready || d.needsPrice || openFold === "company" || null }, ui.h("summary", {}, ui.h("h2", {}, "The company"), ui.h("span", { class: "fold-status" }, d.ready && d.price > 0 ? `${d.symbol || "a share"} at ${price2(d.price)}` : "not set yet"), ui.h("span", { class: "fold-chev" }, "›")),
-    (coForm = ui.form(coFields, { symbol: eq.symbol ?? "", price: eq.price ?? null, personId: eq.personId ?? "" }, (v) => {
-      // Save with nothing typed on a first visit said "Saved." and saved nothing (stress test F5, 2026-11-11)
-      if (!String(v.symbol ?? "").trim() && !(v.price > 0) && !eq.symbol && !(eq.price > 0)) { formError(coForm, v.price === null ? "Type the stock symbol or today's share price first." : "The share price must be more than $0. Type today's price, or the stock symbol."); coForm.querySelector("input")?.focus(); return false; }
-      openFold = "company";
-      saveEq("Saved.", (q) => { q.symbol = String(v.symbol ?? "").trim().toUpperCase(); if (v.price !== null && v.price !== q.price) q.priceAsOf = today; q.price = v.price; if (v.personId !== undefined) q.personId = v.personId; });
-    }, { submitLabel: "Save" }))));
-
-  // the grants
+  // the grants: the page's list. While there are none the add form is open (R20) and its button is the page's one filled
+  // button; with grants, each row's Edit opens its form in place and "+ Add another grant" folds the add form
   const grants = eq.grants ?? [];
   const kindOf = (g) => (g.kind === "option" ? (g.optionType === "iso" ? "iso" : "nso") : "rsu");
   const KIND = [{ value: "rsu", label: "Restricted stock units" }, { value: "nso", label: "Nonqualified options" }, { value: "iso", label: "Incentive options" }];
+  // the boxes most grants need first; the name and the vesting pattern (usually the plan's usual one, prefilled) under
+  // "More details (optional)" (R21)
   const grantFields = [
     { key: "kind", label: "Kind", type: "select", options: KIND, help: "units are shares given to you as they vest; options are the right to buy at a set price, and the plan's papers say which kind" },
-    { key: "name", label: "Name", type: "text", placeholder: "e.g. 2026 new-hire grant" },
     { key: "shares", label: "Units or options granted", type: "number", min: 1, step: "1", required: true },
     { key: "strike", label: "Options: the price you pay per share", type: "money", min: 0 },
     { key: "granted", label: "Grant date", type: "date", required: true, help: "the two years you must hold for a lower-tax (\"qualifying\") sale count from this date" },
-    { key: "vestStart", label: "Vesting starts", type: "date", help: "If blank: the grant date" },
-    { key: "vestMonths", label: "Vests over (months)", type: "number", min: 1, max: 120, step: "1" },
-    { key: "cliffMonths", label: "First part vests after (months)", type: "number", min: 0, max: 60, step: "1", help: "months before the first shares vest (the \"cliff\"); 0 if none" },
-    { key: "every", label: "Then every (months)", type: "number", min: 1, max: 12, step: "1" },
+    { key: "name", label: "Name", type: "text", placeholder: "e.g. 2026 new-hire grant", more: true },
+    { key: "vestStart", label: "Vesting starts", type: "date", help: "If blank: the grant date", more: true },
+    { key: "vestMonths", label: "Vests over (months)", type: "number", min: 1, max: 120, step: "1", help: `If blank: ${DEFAULT_GRANT.vestMonths}, the usual`, more: true },
+    { key: "cliffMonths", label: "First part vests after (months)", type: "number", min: 0, max: 60, step: "1", help: `months before the first shares vest (the "cliff"); 0 if none. If blank: ${DEFAULT_GRANT.cliffMonths}`, more: true },
+    { key: "every", label: "Then every (months)", type: "number", min: 1, max: 12, step: "1", help: `If blank: ${DEFAULT_GRANT.every}`, more: true },
   ];
   const grantForm = (g) => {
-    const form = ui.form(grantFields, g ? { ...g, kind: kindOf(g) } : { kind: "rsu", ...DEFAULT_GRANT }, (v) => {
+    // a new grant starts with nothing in its optional boxes, so "More details (optional)" opens short; blank vesting
+    // boxes save the usual pattern (DEFAULT_GRANT), as their help says
+    const form = ui.form(grantFields, g ? { ...g, kind: kindOf(g) } : { kind: "rsu" }, (v) => {
       if (!(v.shares > 0) || !v.granted) return formError(form, "Type how many units or options, and the grant date.");
       if (v.kind !== "rsu" && !(v.strike > 0)) return formError(form, "Type the price you pay per share for these options.");
       const item = { kind: v.kind === "rsu" ? "rsu" : "option", optionType: v.kind === "rsu" ? null : v.kind, name: String(v.name ?? "").trim(), granted: v.granted, vestStart: v.vestStart || v.granted, shares: Math.floor(v.shares), strike: v.kind === "rsu" ? null : v.strike, vestMonths: v.vestMonths ?? DEFAULT_GRANT.vestMonths, cliffMonths: v.cliffMonths ?? DEFAULT_GRANT.cliffMonths, every: v.every ?? DEFAULT_GRANT.every };
-      editing = null; openFold = "grants";
-      saveEq(g ? "Grant saved." : "Grant added.", (q) => { q.grants = q.grants ?? []; if (g) Object.assign(q.grants.find((x) => x.id === g.id) ?? {}, item); else q.grants.push({ id: ui.uid(), ...item }); });
+      editing = null;
+      saveEq(g ? "Grant saved." : "Grant added.", "grants", (q) => { q.grants = q.grants ?? []; if (g) Object.assign(q.grants.find((x) => x.id === g.id) ?? {}, item); else q.grants.push({ id: ui.uid(), ...item }); });
     }, { submitLabel: g ? "Save the grant" : "Add the grant", onCancel: g ? () => { editing = null; drawGrants(); } : null });
+    // the price paid per share is asked only for options (it showed under the default kind, units, which have none)
+    const kindBox = form.querySelector('[name="kind"]'), strikeAt = form.querySelector('[name="strike"]')?.closest(".field");
+    const showStrike = () => { if (!strikeAt) return; if (kindBox?.value === "rsu") strikeAt.setAttribute("hidden", ""); else strikeAt.removeAttribute("hidden"); };
+    kindBox?.addEventListener("change", showStrike);
+    showStrike();
     return form;
   };
   const grantBody = ui.h("div", {});
@@ -177,31 +176,52 @@ export function render(page, ctx) {
     box.append(ui.row(b));
     return box;
   };
-  const drawGrants = () => grantBody.replaceChildren(...[grants.length ? ui.h("ul", { class: "records" }, grants.map((g) => ui.h("li", {},
+  const drawGrants = () => grantBody.replaceChildren(...[noteAt("grants"), grants.length ? ui.h("ul", { class: "records" }, grants.map((g) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, g.name || KIND.find((k) => k.value === kindOf(g)).label), ui.h("span", { class: "rec-value" }, n0(g.shares))),
     ui.h("div", { class: "rec-sub" }, `${kindOf(g) === "rsu" ? "Units" : `${kindOf(g) === "iso" ? "Incentive" : "Nonqualified"} options at ${price2(g.strike ?? 0)}`}, vesting from ${g.vestStart ? shortDate(g.vestStart) : "?"} over ${g.vestMonths ?? DEFAULT_GRANT.vestMonths} months`),
-    editing === g.id ? grantForm(g) : ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { editing = g.id; drawGrants(); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm(`Remove ${g.name || "this grant"}?`)) return; saveEq("Grant removed.", (q) => { q.grants = (q.grants ?? []).filter((x) => x.id !== g.id); }); }, { class: "secondary small" }))))) : null, addGrant()].filter(Boolean));
+    editing === g.id ? grantForm(g) : ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { editing = g.id; drawGrants(); }, { class: "secondary small" }), ui.button("Remove", () => { if (!ui.confirm(`Remove ${g.name || "this grant"}?`)) return; saveEq("Grant removed.", "grants", (q) => { q.grants = (q.grants ?? []).filter((x) => x.id !== g.id); }); }, { class: "secondary small" }))))) : null, addGrant()].filter(Boolean));
   drawGrants();
-  root.append(ui.h("details", { class: "card fold fold-card", open: !grants.length || openFold === "grants" || null }, ui.h("summary", {}, ui.h("h2", {}, "Grants"), ui.h("span", { class: "fold-status" }, grants.length ? `${grants.length} grant${grants.length === 1 ? "" : "s"}` : "none yet"), ui.h("span", { class: "fold-chev" }, "›")), grantBody));
+  root.append(ui.card("Grants", grantBody));
 
-  // purchase-plan shares
+  // the company: one quiet row, open while something on the page needs its price (R9: the box the answer needs is in sight)
+  const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  let coForm = null;
+  const coFields = [
+    { key: "symbol", label: "Company stock symbol", type: "text", placeholder: "e.g. ACME", help: "The letters its shares trade under, as your stock plan's website shows them." },
+    { key: "price", label: "Price of one share today", type: "money", min: 0, help: "Every figure on this page is worked at this price: update it now and then. A newer price on Holdings is used instead." },
+    adults.length > 1 ? { key: "personId", label: "Who works there", type: "select", options: [{ value: "", label: "Whoever has a salary" }, ...adults.map((p) => ({ value: p.id, label: p.name || "Someone" }))] } : null,
+  ].filter(Boolean);
+  coForm = ui.form(coFields, { symbol: eq.symbol ?? "", price: eq.price ?? null, personId: eq.personId ?? "" }, (v) => {
+    // Save with nothing typed on a first visit said "Saved." and saved nothing (stress test F5, 2026-11-11)
+    if (!String(v.symbol ?? "").trim() && !(v.price > 0) && !eq.symbol && !(eq.price > 0)) { formError(coForm, v.price === null ? "Type the stock symbol or today's share price first." : "The share price must be more than $0. Type today's price, or the stock symbol."); coForm.querySelector("input")?.focus(); return false; }
+    saveEq("Saved.", "company", (q) => { q.symbol = String(v.symbol ?? "").trim().toUpperCase(); if (v.price !== null && v.price !== q.price) q.priceAsOf = today; q.price = v.price; if (v.personId !== undefined) q.personId = v.personId; });
+  }, { submitLabel: "Save" });
+  // while the grant form is open (no grants yet) its button is the page's one filled button: this Save is outlined
+  if (!grants.length) coForm.querySelector?.('[type="submit"]')?.classList?.add("secondary");
+  // the forms in the other rows are outlined while the grant form or the company's price is the page's one filled button
+  // (opening "Purchase-plan shares" beside the grant form showed two)
+  const outlineRows = !grants.length || (d.ready && d.needsPrice);
+  const outlined = (form) => { if (outlineRows) form.querySelector?.('[type="submit"]')?.classList?.add("secondary"); return form; };
+  const priced = d.ready && d.price > 0;
+
+  // purchase-plan shares: the add form while there are none, else "+ Add more shares"; Edit on a row above opens this row
   const lots = eq.espp ?? [];
   const lotFields = [
-    { key: "offeringDate", label: "Offering period began", type: "date", required: true },
-    { key: "purchaseDate", label: "Bought on", type: "date", required: true },
-    { key: "shares", label: "Shares bought", type: "number", min: 0, step: "any", required: true },
-    { key: "price", label: "Price paid per share", type: "money", min: 0, required: true },
-    { key: "fmvOffering", label: "Share price when the offering began", type: "money", min: 0, required: true },
-    { key: "fmvPurchase", label: "Share price on the day you bought", type: "money", min: 0, required: true },
-    { key: "discount", label: "The plan's discount", type: "percent", min: 0, max: 15, help: "usually 15" },
+    { key: "offeringDate", label: "Offering period began", type: "date" },
+    { key: "purchaseDate", label: "Bought on", type: "date" },
+    { key: "shares", label: "Shares bought", type: "number", min: 0, step: "any" },
+    { key: "price", label: "Price paid per share", type: "money", min: 0 },
+    { key: "fmvOffering", label: "Share price when the offering began", type: "money", min: 0 },
+    { key: "fmvPurchase", label: "Share price on the day you bought", type: "money", min: 0 },
+    { key: "discount", label: "The plan's discount", type: "percent", min: 0, max: 15, help: "usually 15", more: true },
   ];
   const lotForm = (l) => {
     const form = ui.form(lotFields, l ?? { discount: ESPP_DISCOUNT }, (v) => {
       if (!(v.shares > 0) || !v.offeringDate || !v.purchaseDate || v.price === null || v.fmvOffering === null || v.fmvPurchase === null) return formError(form, "Type the shares, the dates and the three prices: they are on the plan's statement.");
-      editing = null; openFold = "espp";
-      saveEq(l ? "Shares saved." : "Shares added.", (q) => { q.espp = q.espp ?? []; if (l) Object.assign(q.espp.find((x) => x.id === l.id) ?? {}, v); else q.espp.push({ id: ui.uid(), ...v }); });
+      editing = null;
+      saveEq(l ? "Shares saved." : "Shares added.", "espp", (q) => { q.espp = q.espp ?? []; if (l) Object.assign(q.espp.find((x) => x.id === l.id) ?? {}, v); else q.espp.push({ id: ui.uid(), ...v }); });
     }, { submitLabel: l ? "Save" : "Add the shares", onCancel: l ? () => { editing = null; drawLots(); } : null });
-    return form;
+    return outlined(form);
   };
   const lotBody = ui.h("div", {});
   function drawLots() {
@@ -212,8 +232,24 @@ export function render(page, ctx) {
     lotBody.replaceChildren(ui.row(b));
   }
   drawLots();
-  const lotsFold = ui.h("details", { class: "card fold fold-card", open: openFold === "espp" || null }, ui.h("summary", {}, ui.h("h2", {}, "Purchase-plan shares"), ui.h("span", { class: "fold-status" }, lots.length ? `${lots.length} purchase${lots.length === 1 ? "" : "s"}` : "none"), ui.h("span", { class: "fold-chev" }, "›")),
-    ui.h("p", { class: "muted small" }, "Each purchase is on the plan's statement (Form 3922 after the year ends)."), lotBody);
-  root.append(lotsFold);
-  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/investments/employer-stock" }, "Employer stock"), ui.h("a", { class: "btn secondary", href: "#/career/benefits" }, "Work benefits"), ui.h("a", { class: "btn secondary", href: "#/taxes/capital-gains" }, "Capital gains"))));
+
+  const partsCard = parts(ctx,
+    { id: "company", kind: "own", title: "The company", says: priced ? `${d.symbol || "a share"} at ${price2(d.price)}` : "", missing: !priced,
+      open: (d.ready && d.needsPrice) || said?.at === "company" || undefined, holds: coFields.map((f) => f.key), body: [noteAt("company"), coForm] },
+    { id: "espp", kind: "own", title: "Purchase-plan shares", says: lots.length ? `${lots.length} purchase${lots.length === 1 ? "" : "s"}` : "none",
+      open: said?.at === "espp" || undefined, holds: lotFields.map((f) => f.key),
+      body: [noteAt("espp"), ui.h("p", { class: "muted small" }, "Each purchase is on the plan's statement (Form 3922 after the year ends)."), lotBody] });
+  root.append(partsCard);
+  // Edit on a purchase above: its row opens with the form, under the top bar (nothing else opens or shuts)
+  function openPart(id) {
+    const el = partsCard?.querySelector?.(`details[data-part="${id}"]`);
+    if (!el) return;
+    el.open = true;
+    (ui.reveal ?? ((x) => x.scrollIntoView?.({ block: "start" })))(el, { block: "start" });
+  }
+  root.append(links(ctx, [
+    { href: "#/investments/employer-stock", ask: "How much rides on one company?" },
+    { href: "#/career/benefits", ask: "What else does work give you?" },
+    { href: "#/taxes/capital-gains", ask: "What is the tax when you sell?" },
+  ]));
 }

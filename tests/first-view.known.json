@@ -8,7 +8,7 @@
   "balance/update": {"plan":{"boxes":10}},
   "career/benefits": {"plan":{"words":470,"figs":27}},
   "career/business": {"plan":{"words":560,"figs":32,"boxes":6,"filled":2},"empty":{"words":150,"boxes":6,"filled":2}},
-  "career/equity": {"plan":{"boxes":12,"filled":2},"empty":{"words":180,"boxes":11,"filled":2}},
+  "career/equity": {"empty":{"words":150}},
   "career/human-capital": {"plan":{"words":290,"figs":13}},
   "career/offer-compare": {"plan":{"words":330,"boxes":18},"empty":{"words":330,"figs":3,"boxes":18}},
   "career/salary": {"plan":{"words":450,"figs":37,"tiles":6}},

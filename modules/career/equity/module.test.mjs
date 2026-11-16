@@ -233,3 +233,119 @@ test("round 8 fix: next year's units are worked on next year's tax tables, so Eq
   near(y27.tax.gap, es.wholeYears.find((x) => x.year === 2027).gap, 0.5); near(y27.tax.gap, 352, 0.5);
   assert.equal(y27.estimated, true); assert.equal(y26.estimated, false);
 });
+
+// ---------------------------------------------------------------- the page, drawn on the stand-in DOM (opt spec 6.1: class B)
+async function drawPage(plan0, { answer = true, today = TODAY } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const asked = [];
+  let cur = migrate(structuredClone(plan0)); const saved = [];
+  let n = 0;
+  const store = { get: () => cur, update: (fn) => { const dft = structuredClone(cur); fn(dft); cur = dft; saved.push(dft); } };
+  const draw = () => {
+    const root = new FakeElement("main");
+    const ctx = { ui: { ...ui, uid: () => `new-${++n}`, confirm: (q) => { asked.push(q); return answer; } }, fmt: { ...fmt, today: () => today }, plan: cur, route: { rest: [], query: {} }, module: { group: "career", id: "equity" }, computeOf: () => null, store };
+    render(root, ctx);
+    return root;
+  };
+  return { draw, saved, asked, textOf, plan: () => cur };
+}
+const partsOpen = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const partEl = (root, id) => root.querySelectorAll("details").find((x) => x.dataset.part === id);
+const btnOf = (root, words) => root.querySelectorAll("button").find((b) => b.textContent === words);
+const boxOf = (el, name) => el.querySelector(`[name="${name}"]`);
+// inside a shut section (a part, or a form's "More details (optional)")
+const shut = (el) => { for (let a = el.parentNode; a; a = a.parentNode) if (a.tagName === "DETAILS" && !a.hasAttribute("open")) return true; return false; };
+// the filled buttons on the first view: submit buttons not outlined, outside shut sections
+const filled = (root) => root.querySelectorAll("button").filter((b) => b.getAttribute("type") === "submit" && !String(b.className ?? "").includes("secondary") && !shut(b));
+
+// hidden by the page (the option price box under units)
+const hid = (el) => { for (let a = el; a; a = a.parentNode) if (a.hasAttribute?.("hidden")) return true; return false; };
+
+test("the page drawn: no fold by hand; the grant form first with three boxes and the one filled button; the company a quiet row", async () => {
+  const a = await drawPage(familyPlan(TODAY));
+  const root = a.draw();
+  assert.equal(root.querySelectorAll("details").filter((x) => !x.dataset.part && !String(x.className).includes("form-more")).length, 0, "no fold by hand (R10)");
+  assert.deepEqual(partsOpen(root), { company: false, espp: false }, "nothing to price yet: the company row is shut");
+  const t = a.textOf(root);
+  assert.match(t, /Add each grant from your stock plan's website below; the share price comes next\./);
+  const grantForm = btnOf(root, "Add the grant").closest("form");
+  const shown = () => grantForm.all().filter((b) => (b.tagName === "INPUT" || b.tagName === "SELECT") && !shut(b) && !hid(b)).map((b) => b.getAttribute("name"));
+  assert.deepEqual(shown(), ["kind", "shares", "granted"], "three boxes first (units ask no price); the name and the vesting under More details (optional)");
+  // options ask the price paid per share; back to units, the box goes again (person critic F8: it showed for units)
+  const kind = boxOf(grantForm, "kind");
+  kind.value = "nso"; kind.dispatch("change");
+  assert.deepEqual(shown(), ["kind", "shares", "strike", "granted"]);
+  kind.value = "rsu"; kind.dispatch("change");
+  assert.deepEqual(shown(), ["kind", "shares", "granted"]);
+  assert.deepEqual(filled(root).map((b) => b.textContent), ["Add the grant"], "one filled button: the company's Save is outlined while the grant form shows");
+  // a row opened beside the grant form adds no second filled button (opening "Purchase-plan shares" showed two)
+  for (const id of ["company", "espp"]) partEl(root, id).setAttribute("open", "");
+  assert.deepEqual(filled(root).map((b) => b.textContent), ["Add the grant"], "every row open: still one filled button");
+  assert.equal(a.textOf(partEl(root, "company").querySelector(".fold-status")).trim(), "not set yet");
+  assert.equal(a.saved.length, 0, "drawing writes nothing");
+  // More on this: the deeper pages as questions
+  for (const q of ["How much rides on one company?", "What else does work give you?", "What is the tax when you sell?"]) assert.ok(t.includes(q), q);
+});
+
+test("a grant with no price opens the company row (the box the answer needs is in sight); with a price it is shut and says it", async () => {
+  const p = familyPlan(TODAY); p.equity = { grants: [RSU] };
+  const root = (await drawPage(p)).draw();
+  assert.equal(partsOpen(root).company, true);
+  assert.deepEqual(filled(root).map((b) => b.textContent), ["Save"], "with a grant on the list the company's Save is the one filled button");
+  partEl(root, "espp").setAttribute("open", "");
+  assert.deepEqual(filled(root).map((b) => b.textContent), ["Save"], "the purchase form beside it is outlined while the price is missing");
+  const q = await drawPage(withEquity([RSU]));
+  const r2 = q.draw();
+  assert.equal(partsOpen(r2).company, false);
+  assert.equal(q.textOf(partEl(r2, "company").querySelector(".fold-status")).trim(), "ACME at $50.00");
+  assert.ok(btnOf(r2, "+ Add another grant"), "with grants the add form folds behind its outlined button (R20)");
+});
+
+test("a new grant saved with its vesting boxes blank gets the usual pattern; the green line shows in the grants card", async () => {
+  const a = await drawPage(familyPlan(TODAY));
+  let root = a.draw();
+  const f = btnOf(root, "Add the grant").closest("form");
+  boxOf(f, "shares").value = "1200"; boxOf(f, "granted").value = "2026-02-01";
+  f.dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const g = a.plan().equity.grants[0];
+  assert.deepEqual({ kind: g.kind, shares: g.shares, granted: g.granted, vestStart: g.vestStart, vestMonths: g.vestMonths, cliffMonths: g.cliffMonths, every: g.every }, { kind: "rsu", shares: 1200, granted: "2026-02-01", vestStart: "2026-02-01", vestMonths: 48, cliffMonths: 12, every: 3 });
+  root = a.draw();
+  assert.match(a.textOf(root), /Grant added\./);
+});
+
+test("S11 (R17): a save in a row keeps that row open with its green line; no other row opens or shuts; the next visit opens shut", async () => {
+  const a = await drawPage(withEquity([RSU]));
+  let root = a.draw();
+  assert.deepEqual(partsOpen(root), { company: false, espp: false });
+  const f = boxOf(partEl(root, "company"), "price").closest("form");
+  boxOf(f, "price").value = "55";
+  f.dispatch("submit");
+  assert.equal(a.saved.length, 1); assert.equal(a.plan().equity.price, 55); assert.equal(a.plan().equity.priceAsOf, TODAY);
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { company: true, espp: false }, "the row just saved stays open, no other moves");
+  assert.match(a.textOf(partEl(root, "company")), /Saved\./);
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { company: false, espp: false }, "the next draw opens shut");
+  // purchase-plan shares: an empty list keeps its add form in its row; nothing is required at the box (a shut row holds no required box)
+  const b = await drawPage(withEquity([RSU]));
+  root = b.draw();
+  const lf = btnOf(partEl(root, "espp"), "Add the shares").closest("form");
+  assert.equal(lf.querySelectorAll("input").filter((x) => x.hasAttribute("required")).length, 0);
+  for (const [k, v] of Object.entries({ offeringDate: "2025-01-01", purchaseDate: "2025-06-30", shares: "100", price: "34", fmvOffering: "40", fmvPurchase: "45" })) boxOf(lf, k).value = v;
+  lf.dispatch("submit");
+  assert.equal(b.saved.length, 1); assert.equal(b.plan().equity.espp.length, 1);
+  root = b.draw();
+  assert.deepEqual(partsOpen(root), { company: false, espp: true });
+  assert.match(b.textOf(partEl(root, "espp")), /Shares added\./);
+  // a purchase missing a price is refused at Save, nothing written
+  const c = await drawPage(withEquity([RSU]));
+  root = c.draw();
+  const cf = btnOf(partEl(root, "espp"), "Add the shares").closest("form");
+  boxOf(cf, "shares").value = "10";
+  cf.dispatch("submit");
+  assert.equal(c.saved.length, 0);
+});
