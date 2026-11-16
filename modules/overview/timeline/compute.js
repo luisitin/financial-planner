@@ -10,7 +10,7 @@ import { rmdStartAge, rmdStartYear, RMD_ACCOUNT_TYPES } from "../../../core/math
 import { money as fmtMoney } from "../../../core/format.js";
 import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, needItem } from "../../../core/words.js";
 import { compute as computePeople } from "../../household/people/compute.js";
-import { buildInputs, retirementKnown } from "../../retirement/projection/compute.js";
+import { buildInputs, retirementKnown, retirementUnknown, unknownWords } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { compute as computePayoff, twoDates } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
@@ -73,7 +73,8 @@ export function needWords(monthly, cur = "USD") {
  *   events: [{ id, date (ISO or null), year, kind, topic, icon, title, detail, tone: "ok"|"warn"|"bad"|null, personId, go: [group, id] | null }],
  *   years: [{ year, ages: [{ id, name, age }], events: [...], era: "work"|"retired", gapBefore (quiet years since the previous year shown) }],
  *   savings: [{ year, real }] (the projection's savings in today's dollars, or [] without one),
- *   headline: { retireYear, retireIn, debtFreeYear, lastsTo, shortYear, fiYear, endYear },
+ *   headline: { retireYear, retireIn, debtFreeYear, lastsTo, shortYear, fiYear, endYear, unknown? ({ nothingSaved }: nothing saved for
+ *     retirement and nothing going in, the projection's retirementUnknown; then shortYear is null) },
  *   counts: { [topic]: n }
  * }
  * Only moments from today on are listed; a moment without a known day is placed on January 1 of its year for ordering.
@@ -112,6 +113,7 @@ export function compute(plan, params = {}) {
   const b = buildInputs(plan, { today });
   const run = b.inputs ? project(b.inputs) : null;
   const known = retirementKnown(plan, today);   // Social Security and birth dates in: the money lasting can be said
+  const unknown = run && known && !run.success ? retirementUnknown(plan, { today }) : null;   // nothing saved yet (projection's rule)
   const gap = known ? null : retirementGap(plan);
   const rows = run ? run.rows : [];
   if (!run) notes.push(`Add ${listWords(b.missing.map(needItem))} to see your savings and whether the money lasts.`);   // the words every page uses (l001)
@@ -238,6 +240,9 @@ export function compute(plan, params = {}) {
     // the money running out or lasting is said only once Social Security is known (projection's retirementKnown, the
     // Dashboard's rule): without it the path leaves Social Security out and ran short (round 4, 2026-11-02)
     if (!known) { add({ id: "needs-ss", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: `Not worked out yet. ${gap?.fix ?? "Add Social Security on the Social Security page."}`, go: gap?.go ?? ["retirement", "social-security"] }); }
+    // nothing saved for retirement and nothing going in: Will the money last? says "We don't know yet", so no "The savings run
+    // out" here either (whole-app sweep x3, 2026-11-16); the plan's last year says it is not known yet, with the way on
+    else if (!run.success && unknown) add({ id: "unknown", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: unknownWords(unknown, "whether the money lasts"), go: ["balance", "net-worth"] });
     else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${nameIn(self.name)} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
     else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
   }
@@ -277,8 +282,9 @@ export function compute(plan, params = {}) {
   const headline = {
     retireYear, retireIn: Math.max(0, retireYear - startYear), debtFreeYear: debtFree ? debtFree.year : null,
     // no "runs out" or "lasts" in the top box either until Social Security and birth dates are in (review 2026-11-02)
-    lastsTo: run && known ? (run.success ? rows[rows.length - 1].year : null) : null, shortYear: run && known && !run.success ? run.failYear : null, needsSS: !!run && !known, needs: run && !known ? gap?.what ?? null : null,
+    lastsTo: run && known ? (run.success ? rows[rows.length - 1].year : null) : null, shortYear: run && known && !run.success && !unknown ? run.failYear : null, needsSS: !!run && !known, needs: run && !known ? gap?.what ?? null : null,
     fiYear: events.find((e) => e.kind === "fi")?.year ?? null, endYear,
+    ...(unknown ? { unknown } : {}),
   };
   return {
     ready: true, missing: [], notes, startYear, endYear,

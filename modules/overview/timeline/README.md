@@ -102,3 +102,12 @@ has passed, a year after the plan ends: `check`) is not listed. The savings line
 come from the projection's `buildInputs`. With none set the page is exactly as before (tested). Goals with a date were
 already on the timeline; whether they are taken from savings (`retirement.countGoals`) changes only the savings line.
 
+
+## Nothing saved yet: no "The savings run out" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page's top
+box said "Savings run out 2067" and its event "The savings run out, in 2067, when Riley would be 65" on the same plan (Riley, 24,
+an empty Work 401(k)). When the run falls short and retirement/projection's `retirementUnknown` holds: `headline.unknown = {
+nothingSaved }` and `headline.shortYear` is null, so the box reads "Will it last? Not yet known" with "nothing saved for
+retirement yet" (told) or "add what you own" (not told); the "short" event becomes, on the plan's last year, "Whether the money
+lasts" with the projection's sentence (`unknownWords(unknown, "whether the money lasts")`), opening Net worth. Every other plan:
+the same events and headline as before.

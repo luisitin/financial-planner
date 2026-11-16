@@ -223,3 +223,23 @@ test("How am I doing and Quick answers: nothing saved -> the two retirement rows
   const d1 = bench(one, { today: T });
   assert.match(d1.items.find((x) => x.id === "saving-rate").sentence, /Your own plan runs short at \d+ \(see the Will the money last\? page\)\.$/);
 });
+
+test("Life timeline: nothing saved -> no 'Savings run out 2067' box or event; 'Not yet known' and the plan's last year says we can't say whether the money lasts; the family's timeline unchanged", async () => {
+  const { compute: timeline } = await import("../modules/overview/timeline/compute.js");
+  for (const [who, plan, nothing] of [["renterDebt", rd(), true], ["sam", sam(), false]]) {
+    const d = timeline(plan, { today: T });
+    assert.equal(d.headline.shortYear, null, who);
+    assert.deepEqual(d.headline.unknown, { nothingSaved: nothing }, who);
+    const e = d.events.find((x) => x.id === "unknown");
+    assert.equal(e.title, "Whether the money lasts");
+    assert.equal(e.detail, unknownWords({ nothingSaved: nothing }, "whether the money lasts"));
+    assert.deepEqual(e.go, ["balance", "net-worth"]);
+    assert.ok(!d.events.some((x) => x.id === "short"), who);
+    const r = await drawn("overview/timeline", plan);
+    assert.doesNotMatch(r.text, /Savings run out|The savings run out/, who);
+    assert.match(r.text, nothing ? /Not yet known Will it last\? nothing saved for retirement yet/ : /Not yet known Will it last\? add what you own/, who);
+  }
+  const f = timeline(fam(), { today: T });
+  assert.equal(f.headline.unknown, undefined);
+  assert.equal(f.headline.lastsTo, 2085);
+});
