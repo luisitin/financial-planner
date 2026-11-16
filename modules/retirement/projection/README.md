@@ -2020,3 +2020,8 @@ Long-term care, How am I doing, the Timeline, the Retirement report).
   you own ›" (Net worth).
 No figure changes: the pages that use it add `unknown` to their result only when it holds (the invariance test compares every
 touched compute with ce79d70 over the invented households).
+- This page's own sentence picks its words the same way (`nothingSaved`): an empty 401(k), IRA or Roth on file, or Get started's
+  "None", reads "Nothing is saved for retirement, so we can't say whether the money will last yet. Once you start saving, add it
+  and we can answer." (it read "You haven't told us about retirement savings" for Riley, whose Work 401(k) is on file at $0);
+  told nothing, it reads as before. Quick answers' "Will my money last?" line follows ("Nothing is saved for retirement, so we
+  can't say whether the money will last yet.").

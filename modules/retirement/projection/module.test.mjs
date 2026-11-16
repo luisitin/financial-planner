@@ -1847,7 +1847,8 @@ test("simple first: with nothing saved on file the first view is what to do; onl
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const r = await sfDraw(renterDebtPlan());
   const first = await firstViewOf(r.root);
-  inOrder(first, ["We don't know yet", "You haven't told us about retirement savings", "1 thing is not counted yet: retirement saving.", "Add what you own ›", "Check the numbers behind this ↓",
+  // Riley's empty Work 401(k) says it: nothing is saved (whole-app sweep x3, 2026-11-16: it read "You haven't told us")
+  inOrder(first, ["We don't know yet", "Nothing is saved for retirement, so we can't say whether the money will last yet.", "1 thing is not counted yet: retirement saving.", "Add what you own ›", "Check the numbers behind this ↓",
     "Retirement starts in 2067 (Riley at 65); the plan runs to 2097.", "What this answer rests on", "How this is worked out", "Retirement settings"]);
   assert.deepEqual(filledIn(r.root, first), ["Add what you own ›"]);
   assert.equal(partOf(r.root, "numbers"), null); assert.equal(partOf(r.root, "links"), null);

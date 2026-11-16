@@ -22,7 +22,20 @@ const fam = () => migrate(familyPlan(T));
 
 // ---- the page as a person meets it: its text, outside nothing (every fold's words included, as a reader who opens them)
 const textOf = (el) => (el.data !== undefined && !el.tagName ? el.data : el.tagName === "STYLE" ? "" : (el.childNodes ?? []).map(textOf).join(" ")).replace(/\s+/g, " ");
-const filledOf = (root) => { const out = []; const walk = (n) => { if (n.tagName && /\bbtn\b/.test(String(n.className ?? "")) && !/\b(secondary|chip|ghost|link)\b/.test(String(n.className ?? ""))) out.push(textOf(n).trim()); for (const c of n.childNodes ?? []) walk(c); }; walk(root); return out; };
+// the filled buttons a person meets before any tap, as qa/first-view-lib counts them (the accent background after the cascade),
+// outside every shut <details>
+const filledOf = (root) => {
+  const out = [];
+  const walk = (n, shut) => {
+    if (!n.tagName) return;
+    if (L.unseen(n)) return;
+    if (!shut && L.isFilled(n)) out.push(textOf(n).trim());
+    const closed = n.tagName === "DETAILS" && !n.hasAttribute("open");
+    for (const c of n.childNodes ?? []) walk(c, shut || (closed && c.tagName !== "SUMMARY"));
+  };
+  for (const c of root.childNodes ?? []) walk(c, false);
+  return out;
+};
 let L = null;
 async function drawn(key, plan) {
   L = L ?? await import("../qa/first-view-lib.mjs");
@@ -284,3 +297,17 @@ test("Retirement report under 'we can't say yet': no red 'short' years, no 'Left
   assert.ok(classed(k.root, "rp-bad").length > 0);
 });
 
+test("Will the money last? and Quick answers: an empty 401(k) on file reads 'Nothing is saved for retirement', as Goal seek does; told nothing still reads 'You haven't told us'", async () => {
+  const r = await drawn("retirement/projection", rd());
+  assert.ok(r.text.includes(unknownWords({ nothingSaved: true }, "whether the money will last")), r.text.slice(0, 400));
+  assert.doesNotMatch(r.text, /You haven't told us about retirement savings/);
+  const s = await drawn("retirement/projection", sam());
+  assert.match(s.text, /You haven't told us about retirement savings, so we can't say whether the money will last\. Add what you own to see\./);
+  const { compute: quick } = await import("../modules/overview/quick/compute.js");
+  const retireLine = (p) => quick(p, { today: T }).answers.find((a) => a.guide === "retire")?.line ?? null;
+  assert.equal(retireLine(rd()), "Nothing is saved for retirement, so we can't say whether the money will last yet.");
+  assert.equal(retireLine(sam()), "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see.");
+});
+
+// ---- 2. one filled button per first view ----------------------------------------------------------------------------------------
+import { freelancerPlan } from "../qa/fixtures/round8-households.mjs";

@@ -4,7 +4,7 @@
 // on, the most it can pay a month and one filled button; the rest is one quiet tap away, in parts drawn by core/ui/more.js.
 import { part, parts, rest, choice } from "../../../core/ui/more.js";
 import { listOf as happeningsOf, effects as happeningEffects, lineWords, effectSay, noteWords, howWords, check as checkHappening, saveHappening, removeHappening, nextId, homeFacts, datedGoals, whoWords, clean as cleanHappening, AMOUNT_CEILING, MONTHLY_CEILING, MOVE_FROM, MOVE_INTO, MOVE_BUCKET, moveTail, wantsBrackets, moveHolds } from "../happenings.js";
-import { buildInputs, compute, earlyNote, earlyTaxWords, savingsUnknown, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords, SPEND_RULES, easeWords, easeSaveWords, easeAgeCheck, EASE_CHIPS } from "./compute.js";
+import { buildInputs, compute, earlyNote, earlyTaxWords, savingsUnknown, nothingSaved, unknownWords, healthAdded, healthSummary, incomeWords, onJobWords, spouseWords, saveSpendingFigure, spendingLoanWords, middleWords, SPEND_RULES, easeWords, easeSaveWords, easeAgeCheck, EASE_CHIPS } from "./compute.js";
 import { twoDates } from "../../debt/payoff/compute.js";
 import { STRATEGIES, EASE_MAX } from "../../../core/math/retirement.js";
 import { lineChart } from "../charts.js";
@@ -382,7 +382,9 @@ export function render(root, ctx) {
     !lvCard && beforeSay?.rest.length ? ui.h("p", { class: "small lv-also" }, beforeSay.rest.join(" ")) : null,
     // no retirement savings on file (stress test 2026-11-11, F4): what to do, as the one filled button below; no chart of a line
     // falling to $0 under "we don't know"
-    unknownYet ? ui.h("p", { class: "lede" }, "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
+    // told rather than untold (whole-app sweep x3, 2026-11-16): an empty 401(k) on file or "None" in Get started reads "Nothing is
+    // saved for retirement yet", as on Goal seek and the twelve pages that now ask this page's rule (retirementUnknown)
+    unknownYet ? ui.h("p", { class: "lede" }, nothingSaved(plan) ? unknownWords({ nothingSaved: true }, "whether the money will last") : "You haven't told us about retirement savings, so we can't say whether the money will last. Add what you own to see. If you have no retirement savings yet, that is common; you can go on and come back.") : ui.h("p", { class: "lede" }, verdictText),
     // stage 2 (spec 8.2): a guess that could turn the verdict is named, with its box one tap away; a reason to doubt, never folded
     !unknownYet && decides ? ui.h("p", { class: "small", dataset: { guess: "", decides: "retire" } }, `${decides.text} `, ui.h("a", { href: decides.href, class: "pj-link" }, `${decides.ask} \u203a`)) : null,
     spentDown && d.verdict !== "short" && !unknownYet ? ui.h("p", {}, spentDown) : null,
