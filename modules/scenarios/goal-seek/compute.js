@@ -4,7 +4,7 @@
 // the return it needs, the lump sum it is short (or the room it has today), and the Social Security
 // claiming age that lets you spend the most.
 import { project, copyInputs, affordableSpending } from "../../../core/math/retirement.js";
-import { buildInputs, healthAdded, workingNow, withStops, compute as projectionOf, savingsUnknown } from "../../retirement/projection/compute.js";
+import { buildInputs, healthAdded, workingNow, withStops, compute as projectionOf, savingsUnknown, nothingSaved } from "../../retirement/projection/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -702,16 +702,9 @@ export function firstLevers(levers, n = FIRST_CARDS) {
   return { shown: cards.filter((l) => keep.has(l)), more: cards.filter((l) => !keep.has(l)) };
 }
 
-/**
- * nothingSaved(plan) -> true when the person told us there is nothing saved and nothing going in, rather than told us nothing: a
- * 401(k), IRA or Roth on file (even at $0), or Get started's saving answer "None" (fix round 1, 2026-11-12, B4: with an empty 401(k)
- * on Net worth and "$0 every month" on Retirement contributions, the gated pages said "You haven't told us about retirement
- * savings"). The gate itself is the projection's savingsUnknown; this only picks its words.
- */
-export function nothingSaved(plan) {
-  return (plan?.accounts ?? []).some((a) => a && ["401k", "ira", "roth"].includes(a.type))
-    || Object.values(plan?.guide?.setup?.saving ?? {}).some((x) => x && x.pct === 0);
-}
+/** nothingSaved(plan): moved to retirement/projection (whole-app sweep x3, 2026-11-16) so every gated page says the same words;
+ * re-exported here unchanged for What matters most and the tests. */
+export { nothingSaved };
 
 /**
  * Professional forecasts over the next 10 years, a year before inflation (the app's returns are the same kind): Vanguard's capital

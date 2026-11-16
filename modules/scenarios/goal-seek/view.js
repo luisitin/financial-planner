@@ -6,6 +6,7 @@ import { whenCareful, carefulKey, knownAnswer, monthlyOf, RULE_WORDS } from "../
 import { RETIRE_HOW, shownValue, roundUp, roundDown, BAD_LUCK, RETURN_FORECAST, firstLevers, agesFor, agesWords, ageLine,
   targetChips, chipLabel, ruleWords, targetDefault, reachWords, stopWords, canUseAge, targetConfirmWords, targetSavedWords, targetUndoneWords } from "./compute.js";
 import { needItem } from "../../../core/words.js";
+import { unknownWords } from "../../retirement/projection/compute.js";
 import { part, parts, choice } from "../../../core/ui/more.js";
 
 let legacy = null;   // what the plan should leave; a view choice on this device, starting from Legacy goals' amount
@@ -121,7 +122,7 @@ export function render(page, ctx) {
       heroH1,
       // no retirement savings on file: never "the money runs out in 2065" (the Will the money last? page says "we don't know yet")
       // told rather than untold (fix round 1, 2026-11-12, B4): an empty 401(k) on file, or "None" in Get started
-      d.noSavings ? ui.h("p", { class: "lede" }, d.nothingSaved ? "Nothing is saved for retirement yet, and nothing goes in, so we can't say what it would take yet. That is common; once something is saved or goes in each paycheck, add it and come back." : "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own first; if you have no retirement savings yet, that is common, and you can come back later.") : ui.h("p", { class: "lede" }, d.meets
+      d.noSavings ? ui.h("p", { class: "lede" }, unknownWords({ nothingSaved: d.nothingSaved }, "what it would take")) : ui.h("p", { class: "lede" }, d.meets
         ? `${stands} lasts and leaves about ${money(Math.round(d.endReal / 1000) * 1000)} (today's dollars)${d.legacy ? `, more than the ${money(d.legacy)} you want to leave` : ""}. Below: how far each change could go and still get there.`
         : d.success ? `${stands} lasts but leaves about ${money(Math.round(d.endReal / 1000) * 1000)}, short of the ${money(d.legacy)} you want to leave. Below: what each change would have to be.` : `${stands} runs out in ${d.failYear}. Below: what each change would have to be for it to last${d.legacy ? ` and leave ${money(d.legacy)}` : ""}.`),
       d.noSavings ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")) : null));

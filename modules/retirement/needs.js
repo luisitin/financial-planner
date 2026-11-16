@@ -22,3 +22,13 @@ export function needButtons(ui, missing) {
   if (!acts.length) return null;
   return ui.row(...acts.map((a, i) => ui.h("a", { class: i ? "btn secondary" : "btn", href: a.href }, a.label)));
 }
+
+/**
+ * unknownHero(ui, words, { title }) -> the hero for a plan with nothing saved for retirement and nothing going in (projection's
+ * retirementUnknown; `words` from its unknownWords): the page's title, the one sentence, and one filled link to Net worth, as Will
+ * the money last?, Goal seek and What matters most show it (whole-app sweep x3, 2026-11-16: twelve pages said "runs out at 65").
+ */
+export function unknownHero(ui, words, { title = "We don't know yet" } = {}) {
+  return ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, title), ui.h("p", { class: "lede" }, words),
+    ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")));
+}

@@ -152,7 +152,7 @@ test("L1: no retirement savings and nothing going in: 'We don't know yet' and on
   const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
   const live = { "scenarios/sensitivity": (plan, params) => compute(plan, params) };
   const r = await renderPage(new URL("./view.js", import.meta.url), renterDebtPlan(), T11, { computeRemote: live });
-  assert.match(r.text(), /We don't know yet/); assert.match(r.text(), /Nothing is saved for retirement yet, and nothing goes in/);
+  assert.match(r.text(), /We don't know yet/); assert.match(r.text(), /Nothing is saved for retirement, so we can't say which of your numbers change the answer most yet\./);
   assert.doesNotMatch(r.text(), /haven't told us/); assert.match(r.text(), /If Riley put in 4\.7% of pay/);
   assert.ok(!/\$0\b/.test(r.text()), r.text());
   const filled = r.root.querySelectorAll("a").filter((a) => a.classList.contains("btn") && !a.classList.contains("secondary"));

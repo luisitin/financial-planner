@@ -213,3 +213,10 @@ earn moves your plan the most" over a $0 bar. The plan there can pay for no stea
   today (nothing moves: no headline, the words), `runoutLine`'s four cases, every qa base household (the headline's row moves the
   measure shown, every measure offered moves a row), "More about this" kept open, three rows first, the measure fold and its line,
   the hero without the method sentence.
+
+## Nothing saved yet: the shared words (whole-app sweep x3, fix round, 2026-11-16; test `tests/sweep-x3.test.mjs`)
+The "We don't know yet" hero now says retirement/projection's `unknownWords` with "which of your numbers change the answer most":
+"Nothing is saved for retirement, so we can't say which of your numbers change the answer most yet. Once you start saving, add it
+and we can answer." (told nothing: "You haven't told us about retirement savings, so ... yet. Add what you own and we can
+answer."). The longer sentence it said before was repeated word for word on twelve other pages; every page now says the one short
+form. The grey line of what the usual saving would let the plan pay stays under it.

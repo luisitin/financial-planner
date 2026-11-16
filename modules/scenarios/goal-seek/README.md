@@ -595,3 +595,10 @@ P2: under the lines it sat after 16 of them, out of sight):
 **Invariance, byte for byte against 461df76** (one-off sweep, the builder's log): 33 plans (qa/fixtures, the 14 households, the
 phone households, the empty plan) x 9 calls (Goal seek plain, with ages, leaving $500,000, room for bad luck with ages, leaving
 $250,000 with ages; Legacy goals, the Plan health score, Financial independence, What matters most): 297 of 297 identical.
+
+**Nothing saved yet: the shared words (whole-app sweep x3, fix round, 2026-11-16; test `tests/sweep-x3.test.mjs`).** The hero for
+a plan with nothing saved for retirement and nothing going in now says retirement/projection's `unknownWords` with "what it would
+take": "Nothing is saved for retirement, so we can't say what it would take yet. Once you start saving, add it and we can answer."
+(told nothing: "You haven't told us about retirement savings, so we can't say what it would take yet. Add what you own and we can
+answer."). The 33-word sentence it said before (with "yet" twice) was repeated word for word on twelve other pages; every page now
+says the one short form. `nothingSaved` lives in retirement/projection and is re-exported here unchanged.

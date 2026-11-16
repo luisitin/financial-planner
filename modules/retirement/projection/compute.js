@@ -1787,3 +1787,45 @@ export function savingsUnknown(d) {
   const working = d.atRetirement && d.inputs && d.atRetirement.year > d.inputs.startYear;   // retirement is still ahead
   return !!working && !(invested > 0) && !(d.inputs?.contributions?.length);
 }
+
+/**
+ * nothingSaved(plan) -> true when the person told us there is nothing saved and nothing going in, rather than told us nothing: a
+ * 401(k), IRA or Roth on file (even at $0), or Get started's saving answer "None" (fix round 1, 2026-11-12, B4: with an empty 401(k)
+ * on Net worth and "$0 every month" on Retirement contributions, the gated pages said "You haven't told us about retirement
+ * savings"). The gate itself is savingsUnknown; this only picks its words. (Moved here from Goal seek, which re-exports it, so
+ * every page that asks retirementUnknown gets the same words; whole-app sweep x3, 2026-11-16.)
+ */
+export function nothingSaved(plan) {
+  return (plan?.accounts ?? []).some((a) => a && ["401k", "ira", "roth"].includes(a.type))
+    || Object.values(plan?.guide?.setup?.saving ?? {}).some((x) => x && x.pct === 0);
+}
+
+/**
+ * retirementUnknown(plan, { today }) -> { nothingSaved } | null: this page's own "We don't know yet" (savingsUnknown), for the pages
+ * that run the plan their own way (Year by year, Chance the money lasts, If history repeated, Order of returns, How much to take
+ * out, Financial independence, Stress tests, Tax year by year, Long-term care, How am I doing, the Timeline, the Retirement report).
+ * Whole-app sweep x3 (2026-11-16): for a plan with nothing saved for retirement and nothing going in, Will the money last? said
+ * "We don't know yet" while twelve pages said the money "runs out at 65". Worked out only when it can be true (nothing invested,
+ * nothing going in, retirement still ahead): every other plan gets null without running the projection.
+ */
+export function retirementUnknown(plan, params = {}) {
+  let b = null;
+  try { b = buildInputs(plan, params); } catch { return null; }
+  const I = b?.inputs;
+  if (!I) return null;
+  const bal = I.balances ?? {};
+  if (((bal.taxable ?? 0) + (bal.deferred ?? 0) + (bal.free ?? 0)) > 0 || (I.contributions ?? []).length || !(I.retireYear > I.startYear)) return null;
+  let d = null;
+  try { d = compute(plan, params); } catch { return null; }
+  return savingsUnknown(d) ? { nothingSaved: nothingSaved(plan) } : null;
+}
+
+/** The page's words for retirementUnknown, the same on every page that asks it (Goal seek and What matters most too); `what` is the
+ * page's own question ("the chance the money lasts"). Two cases: told us nothing, or told us nothing is saved. Short, one "yet",
+ * and the way on in a few words (fix round of the whole-app sweep x3, 2026-11-16: a 33-word sentence with two "yet"s, said word for
+ * word on twelve pages). */
+export function unknownWords(unknown, what) {
+  return unknown?.nothingSaved
+    ? `Nothing is saved for retirement, so we can't say ${what} yet. Once you start saving, add it and we can answer.`
+    : `You haven't told us about retirement savings, so we can't say ${what} yet. Add what you own and we can answer.`;
+}

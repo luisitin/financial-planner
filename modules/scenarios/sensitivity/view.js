@@ -2,6 +2,7 @@
 // with its low setting to the result with its high one, around the plan as it is; the widest first.
 import { NUDGE, MOVES, valueOn, swingOn } from "./compute.js";
 import { needItem } from "../../../core/words.js";
+import { unknownWords } from "../../retirement/projection/compute.js";
 
 let metric = null;      // "spend" | "end" | "runout": what the bars measure, once the person picks it; a view choice on this device
 let restOpen = false;   // whether "N more numbers" is open: kept while the measure is switched; a view choice, never the plan's
@@ -64,7 +65,7 @@ export function render(page, ctx) {
     // for retirement yet", with one grey line of what the usual saving would let the plan pay
     if (d.noSavings) {
       host.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "We don't know yet"),
-        ui.h("p", { class: "lede" }, d.nothingSaved ? "Nothing is saved for retirement yet, and nothing goes in, so we can't say which of your numbers change the answer most. That is common; once something is saved or goes in each paycheck, add it and come back." : "You haven't told us about retirement savings, so we can't say which of your numbers change the answer most. Add what you own first; if you have no retirement savings yet, that is common, and you can come back later."),
+        ui.h("p", { class: "lede" }, unknownWords({ nothingSaved: d.nothingSaved }, "which of your numbers change the answer most")),
         d.usualLine ? ui.h("p", { class: "muted small" }, d.usualLine.text) : null,
         ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›"))));
       return;

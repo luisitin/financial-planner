@@ -593,7 +593,7 @@ test("fix round 1 (B4): gated with an empty 401(k) on file, Goal seek says nothi
   const d = compute(told, { today: T11, only: ["spending"] });
   assert.equal(d.noSavings, true); assert.equal(d.nothingSaved, true);
   const r = await renderPage(new URL("./view.js", import.meta.url), told, T11, { computeRemote: live });
-  assert.match(r.text(), /Nothing is saved for retirement yet, and nothing goes in/); assert.doesNotMatch(r.text(), /haven't told us/);
+  assert.match(r.text(), /Nothing is saved for retirement, so we can't say what it would take yet\./); assert.doesNotMatch(r.text(), /haven't told us/);
   const untold = renterDebtPlan(); untold.accounts = untold.accounts.filter((a) => a.type !== "401k");
   assert.equal(compute(untold, { today: T11, only: ["spending"] }).nothingSaved, false);
   const r2 = await renderPage(new URL("./view.js", import.meta.url), untold, T11, { computeRemote: live });

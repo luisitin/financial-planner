@@ -1999,3 +1999,24 @@ retirement; `deferred` marks it (the plan's id), so "Income counted" (`incomeWor
 "Pay held for later: X: $100,000 in 2060 (Ana is 70)" rather than "a year from 2060 ... to 2060", and Retire early leaves it
 out of its yearly other income (it is paid in set years, often one). With no plan no line is added and the inputs are the
 same, byte for byte, over 46 invented plans.
+
+## One "We don't know yet" for every page that runs the plan (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+The sweep opened every usable page at 390 px for the empty plan and six invented households. For a plan with nothing saved for
+retirement and nothing going in (renterDebt: Riley, 24, an empty Work 401(k); the Get started persona Sam), this page, Goal seek
+and What matters most said "We don't know yet" while twelve pages said the money "runs out at 65" (Year by year, How much to take
+out, Chance the money lasts, If history repeated, Order of returns, Financial independence, Stress tests, Tax year by year,
+Long-term care, How am I doing, the Timeline, the Retirement report).
+- `retirementUnknown(plan, { today })` -> `{ nothingSaved } | null`: `savingsUnknown` of this page's own run, so the pages can
+  never disagree with it. Worked out only when it can be true (nothing in taxable, pre-tax or Roth savings, no contribution
+  line, retirement after this year, read from `buildInputs`); every other plan gets `null` without running the projection.
+- `nothingSaved(plan)` moved here from Goal seek (which re-exports it unchanged): a 401(k), IRA or Roth on file even at $0, or
+  Get started's saving answer "None", means we were told there is nothing.
+- `unknownWords(unknown, what)`: the words per case, with the page's own question as `what`: "Nothing is saved for retirement, so
+  we can't say <what> yet. Once you start saving, add it and we can answer." or "You haven't told us about retirement savings, so
+  we can't say <what> yet. Add what you own and we can answer." Goal seek and What matters most say theirs with it too. (Fix
+  round, critics P3 and P4: the first words, Goal seek's, ran to 33 words with "yet" twice and were said word for word on
+  twelve pages; tests/sweep-x3.test.mjs pins one "yet" and at most 24 words.)
+- `modules/retirement/needs.js` `unknownHero(ui, words, { title })`: the hero those pages show, with one filled link, "Add what
+  you own ›" (Net worth).
+No figure changes: the pages that use it add `unknown` to their result only when it holds (the invariance test compares every
+touched compute with ce79d70 over the invented households).
