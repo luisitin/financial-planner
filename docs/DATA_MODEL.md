@@ -108,6 +108,12 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
   history entry, and the way each entry was reached. A kept box in no form may carry `took: 1` (optional; absent reads as
   0): the page took that figure itself, so another figure drawn there later is the page's answer, not "changed since".
+* The address's `?share=` on House down payment, Rent vs buy and Refinance (core/share-link.js; gap list next 60, item 33,
+  added 2026-11-16) -- a shared calculator's own figures, `name:value` pairs (`#/goals/house?share=price:420000,rate:6.25`),
+  read in the page for that visit only: the page is drawn from a copy of the plan with them in its own key. Never stored
+  (beyond the tab's own record of its addresses above), never sent to the computer, and in the plan only after "Keep
+  these" (asked first, with Undo), as the page's existing fields (`whatIfs.house`, `whatIfs.rentVsBuy`,
+  `debtPlan.refinance`). Adds no field to the plan.
 * `sessionStorage["planner.legacy.whose"]` (`.sandbox` in the sandbox) -- this tab only (estate/legacy): the case "Who gets
   what" pictures for a couple, an adult's id or "both", so a reload keeps the chip picked. Never a name or a figure, never
   in the plan; a case the plan no longer has draws the first.

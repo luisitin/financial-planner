@@ -108,6 +108,57 @@ Measured, not guessed: a one-line-shorter hero pulled one more row of figures in
 `qa/first-view.mjs`, counts what is above 844 px), and the guesses line under the answer put the empty plan's first screen over
 its 110 words; the hero's words and the line's place were chosen so both checks stay at or under their counts.
 
+## Share these figures (gap list, next 60, item 33; 2026-11-16)
+One quiet tap away, at the foot of "The figures" (drawn only once a figure is typed, so never on the first view): the
+short line "Only these figures go in the link; nothing is sent until you send it." and an outlined "Share these
+figures". The tap builds the link and hands it to the phone's share menu where the phone has one (the person picks the
+app and sends it), else copies it (the clipboard, else the older select-and-copy for an http address on the home
+network), and shows the link itself with one line that names what goes and what does not (critic P1, P2, P3; fix round
+2026-11-16): "Link copied: paste it into a message. It carries the price and the down payment, nothing else. The other
+phone fills in the rest with its own figures, so its answer can differ." (the sender sees about $2,920 a month with our
+guesses for where the sender lives; an empty phone sees about $2,610 with its own). Up to three figures are named, more
+are "the price, the down payment and 7 more figures"; a saved figure a link cannot hold (a price over $100 million, from
+an import) is named: "The price could not go in the link." Where the address opens only here or at home it says so:
+"It opens only on this device." (localhost, a file) or "It opens only on phones on your home network." (a private
+address, a .local or one-word name, a tailnet); "on any phone" is never said.
+
+What the link holds (`SHARE_SPEC` in `view.js`, read and written by `core/share-link.js`): `#/goals/house?share=` and
+`name:value` pairs for the home's own figures only: `price` (money, 0 to 100 million), `down` (downShare, a percent),
+`rate`, `closing` (closingShare), `term` (termYears, 5 to 40 whole), `tax` (taxRate), `insurance` (insuranceRate), `hoa`
+(hoaMonthly, 0 to 1 million) and `reserve` (reserveMonths, 0 to 12 whole); percents 0 to 100 as typed (6.25 for 6.25%).
+Never `saved`, `monthly` or `targetDate` (the household's own savings and date: the spec's `stays`), never anything
+else from the plan, and never a box left blank. The page's own button writes `name:` (nothing after the colon) for a box
+emptied during a visit where this phone has its own figure; the reader takes it as blank, neither filled nor refused.
+A number with a leading zero ("07") is refused: the app never writes one. Example, the invented home of the tests: `#/goals/house?share=price:420000,down:10,rate:6.25,
+closing:3,term:30,tax:1.2,insurance:0.4,hoa:150,reserve:3`.
+
+Opening a link (another phone, or this one): the page is drawn from `planWith(plan, SHARE_SPEC, withShared(own, link))`,
+a copy, so the plan is untouched. At the top: "Figures from a shared link: nothing in your plan has changed.", "The link
+filled in 9 figures on this page." (or "...; 2 could not be read and were left out."), "Keep these" and "Back to my own
+figures" (both outlined). The answer counts the link's home with this phone's own income, debts, savings and goal; a box
+the link leaves blank counts this phone's gray guess (the sender's guess is worked out from where the sender lives,
+which is plan data, so it never travels). While the link shows, the savings and date boxes and the goal button are not
+drawn, and "Work it out" works the boxes out for this visit only: they go into the address (`ctx.replace`, no new Back
+step), with "Worked out for this visit: a $430,000 home, about $3,110 a month. Nothing in your plan has changed." (the invented family's figures)
+"Keep these" asks first ("Keep the price and the down payment in your plan? They take the place of yours on this page;
+your other figures stay as they are. Undo puts yours back."; four or more: "Keep these 9 figures ..."), writes
+`whatIfs.house` once (the keys the link holds and nothing else: this phone's own HOA, mortgage length, savings and date
+stay, so the kept page answers exactly as the visit did; critic F1, fix round 2026-11-16: Keep had blanked them), takes `share` out of the address and says "Kept. A $420,000 home: about $3,040 a month." with Undo ("Back to
+your own figures, as before."). "Back to my own figures" writes nothing: "Your own figures again. Nothing from the link
+was kept." A link with nothing readable: "This link's figures could not be read, so the page shows your own."
+
+No formula is new: the answer is this page's `compute()`. The link's figures are the plan's own numbers, a percent
+written x 100 (`Number((v x 100).toPrecision(12))`, read back / 100 the same way), money to the cent. The address after
+"#" stays in the browser (RFC 3986 section 3.5; the Fetch standard drops it from every request; builder's knowledge, not
+re-read this session: the network reaches only irs.gov and the package registries); the app sends it nowhere and stores
+it only where the shell keeps every address of this tab (sessionStorage).
+
+Builder's choices: figures travel, answers do not (each phone works the answer out with its own household); the
+household's own savings and date stay home; a box the link leaves out is the visitor's own (their figure, else their
+guess), so the visit shows what Keep keeps; Keep outlined and asked first, the page's own filled button keeps its place;
+the link carries no `?sandbox` or `?view`; the phone's share menu first, then the clipboard (the person still chooses
+where it goes; nothing is sent by the app).
+
 ## Tests
 `module.test.mjs`: the monthly cost and its inverse, months to save, the family's limits, cash and monthly needed, the house goal test (a repairs, pay-off or trip goal is never offered; the clearest of several wins), a house goal supplying the figures, entered figures winning, the warnings, no income. C9: each estimator's formula by hand
 from the bundled tables (Ohio and no state), the gate (another currency, outside the U.S.), invariance (no previews: the
@@ -115,6 +166,13 @@ output has no new key and is the same with `previews` null, absent or empty), pr
 and the goal's price win), the guesses line for one, two, three and four, the gray text, and the page drawn: gray figures in
 the empty boxes, the answer counting them, opening writes nothing, "Work it out" with empty boxes saves no figure and no
 guess, S11 (only The figures stays open after a save), no guesses for another country or without `ctx.guess`.
+Share (item 33): the round trip through the router's own `parse()` to another household (the answer is `compute()` on the
+link's figures), a sender plan full of invented names, places, an employer, notes and balances whose link holds none of
+them, unknown and malicious keys ignored and counted, nothing saved without Keep (opening, Back to my own figures, Work
+it out on a link, Keep refused), Keep writing the page's own keys once with its green line and Undo putting the plan back,
+Keep leaving the visitor's own HOA and length (F1), a box emptied on a visit staying empty, a figure no link can hold
+said at its box, a saved one named after the tap (F3), "The figures" open on a visit (P5), the sentences of each case, and invariance over every invented household (no link: no banner, nothing written, the same
+text with other query keys, the share never outside a shut part).
 
 ## Ideas / not yet
 - Mortgage insurance in the cost; first-time buyer programs; the down payment drawn from a 401(k) loan or an IRA's first-home exception.

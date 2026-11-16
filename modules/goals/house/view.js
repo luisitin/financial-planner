@@ -2,9 +2,42 @@
 // month, the cash it takes and when you get there; the figures in one form ("The figures": five boxes, the rest under
 // "More details (optional)"), and a button that puts the cash target on the Goals page. An empty price, rate, property
 // tax or insurance box shows our guess in gray (smart guesses C9, K3): counted in the answer while it stays empty, never
-// saved; opening the page writes nothing.
+// saved; opening the page writes nothing. Inside "The figures", "Share these figures" builds a link that carries only the
+// home's own figures (core/share-link.js); opened on any phone it fills this page for that visit, and only "Keep these"
+// (asked first, with Undo) puts them in the plan.
 import { compute, DEFAULTS, FRONT, BACK, guessedWords, previewText, placeOf, previewsOf } from "./compute.js";
 import { parts, links } from "../../../core/ui/more.js";
+import { defineShare, visitOf, sharedTop, shareBlock, visitGo, NO_LINK } from "../../../core/share-link.js";
+
+/**
+ * What a link may carry from this page (core/share-link.js): the home and its loan, never the household's own savings,
+ * monthly saving or date (saved, monthly, targetDate stay on the phone they were typed on: `stays`). Ranges are the
+ * form's own; a price up to $100 million. Each figure's plain name is said after a share and before Keep.
+ */
+export const SHARE_SPEC = defineShare({ page: "goals/house", path: ["whatIfs", "house"], stays: ["saved", "monthly", "targetDate"], fields: [
+  { key: "price", as: "price", unit: "money", min: 0, max: 1e8, name: "the price" },
+  { key: "downShare", as: "down", unit: "percent", min: 0, max: 1, name: "the down payment" },
+  { key: "rate", as: "rate", unit: "percent", min: 0, max: 1, name: "the mortgage rate" },
+  { key: "closingShare", as: "closing", unit: "percent", min: 0, max: 1, name: "the closing costs" },
+  { key: "termYears", as: "term", unit: "whole", min: 5, max: 40, name: "the mortgage length" },
+  { key: "taxRate", as: "tax", unit: "percent", min: 0, max: 1, name: "the property tax" },
+  { key: "insuranceRate", as: "insurance", unit: "percent", min: 0, max: 1, name: "the home insurance" },
+  { key: "hoaMonthly", as: "hoa", unit: "money", min: 0, max: 1e6, name: "the HOA fee" },
+  { key: "reserveMonths", as: "reserve", unit: "whole", min: 0, max: 12, name: "the months kept in reserve" },
+] });
+const SHARED_KEYS = new Set(SHARE_SPEC.fields.map((f) => f.key));
+/**
+ * The green lines of a shared link (R7: each names the answer), one per case:
+ *   kept   "Kept. A $420,000 home: about $3,040 a month."   (no monthly figure: "Kept. A $420,000 home.")
+ *   worked "Worked out for this visit: a $420,000 home, about $3,040 a month."   (core/share-link.js adds "Nothing in your plan has changed.")
+ */
+export function shareWords(d, money) {
+  const has = d.monthly !== null && Number.isFinite(d.monthly);
+  return {
+    kept: has ? `Kept. A ${money(d.inputs.price)} home: about ${money(d.monthly)} a month.` : `Kept. A ${money(d.inputs.price)} home.`,
+    worked: has ? `Worked out for this visit: a ${money(d.inputs.price)} home, about ${money(d.monthly)} a month.` : `Worked out for this visit: a ${money(d.inputs.price)} home.`,
+  };
+}
 
 let pending = null;   // the confirmation shown on the next render
 let worked = false;
@@ -18,7 +51,11 @@ const STYLE = `
 `;
 
 export function render(page, ctx) {
-  const { ui, fmt, plan, store } = ctx;
+  const { ui, fmt, store } = ctx;
+  // a shared link in the address (core/share-link.js): the page is drawn from the link's figures for this visit only;
+  // the plan itself is untouched (sv.plan is a copy with them in whatIfs.house)
+  const sv = visitOf(ctx, SHARE_SPEC);
+  const plan = sv.plan;
   const cur = plan.meta.currency;
   const money = (n) => fmt.money(Math.round(n / 10) * 10, cur);
   const pct = (x) => `${Math.round(x * 100)}%`;
@@ -37,6 +74,7 @@ export function render(page, ctx) {
   page.append(root);
   if (pending === WORKED) pending = d.monthly !== null && Number.isFinite(d.monthly) ? `Saved. A ${money(x.price)} home: about ${money(d.monthly)} a month.` : "Saved.";
   if (pending) { const n = ui.notice("ok", pending); root.append(n); setTimeout(() => n.remove(), 4000); pending = null; }
+  root.append(...sharedTop(ctx, SHARE_SPEC, sv, shareWords(d, money)));
   const keepOpen = worked; worked = false;
   const saved = !!plan.whatIfs?.house;
 
@@ -79,7 +117,8 @@ export function render(page, ctx) {
   // figures replaced a $50,000 goal with $97,000 in one tap. It names both amounts, and it is outlined (Save is the action).
   const newTarget = Math.round(d.cash.total / 100) * 100;
   const changes = d.goal && Math.abs((d.goal.target ?? 0) - newTarget) >= 100;
-  const goalButton = !saved ? null : d.goal ? (changes ? ui.button(`Change the goal from ${fmt.money(d.goal.target ?? 0, cur)} to ${fmt.money(newTarget, cur)}`, () => goalWrite(), { class: "secondary" }) : null) : ui.button(`Make it a goal (${fmt.money(newTarget, cur)})`, () => goalWrite());
+  // while a shared link shows nothing but "Keep these" writes the plan: no goal button
+  const goalButton = !saved || sv.live ? null : d.goal ? (changes ? ui.button(`Change the goal from ${fmt.money(d.goal.target ?? 0, cur)} to ${fmt.money(newTarget, cur)}`, () => goalWrite(), { class: "secondary" }) : null) : ui.button(`Make it a goal (${fmt.money(newTarget, cur)})`, () => goalWrite());
   if (!saved && !d.goal) when.append(ui.h("p", { class: "muted small" }, "Put the home you have in mind in the figures below and save; then it can become a goal."));
   const goalWrite = () => {
     pending = d.goal ? "Goal updated." : "Goal added on the Goals page.";
@@ -119,16 +158,23 @@ export function render(page, ctx) {
   // it out" without a change saves what the page shows; a box with our guess opens empty (gray), and so does a folded box
   // nobody filled in
   const SHOWN_FIRST = ["price", "downShare", "rate"];
-  const values = Object.fromEntries(fields.map((f) => [f.key, f.key === "targetDate" ? s.targetDate || ""
+  // while a shared link shows, the boxes are the link's: the household's own savings and date are not drawn (a link never
+  // carries them, and this visit writes nothing)
+  const boxes = sv.live ? fields.filter((f) => SHARED_KEYS.has(f.key)) : fields;
+  const values = Object.fromEntries(boxes.map((f) => [f.key, f.key === "targetDate" ? s.targetDate || ""
     : shown.has(f.key) ? null
     : SHOWN_FIRST.includes(f.key) ? x[f.key]
     : blank(f.key) ? null : Number(s[f.key])]));
-  const form = ui.form(fields, values, (v) => {
+  const form = ui.form(boxes, values, (v) => {
+    // a shared link: worked out for this visit (the figures go into the address), never saved
+    if (sv.live) { worked = true; const r = visitGo(ctx, SHARE_SPEC, v); if (r !== true) { worked = false; return ui.fieldError(form.querySelector?.(`[name="${r || "price"}"]`), r ? NO_LINK : "Type a figure first."); } return; }
     pending = WORKED; worked = true;
     store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.house = Object.fromEntries(fields.map((f) => [f.key, f.type === "date" ? v[f.key] || "" : v[f.key] ?? null])); });
   }, { submitLabel: "Work it out" });
-  // asks first (open until the page has an answer of the person's own), then folds under the answer (docs/OPTIONAL.md R8)
-  root.append(ui.h("div", {}, parts(ctx, { id: "figures", kind: "figures", says: money(x.price), guess: shown.size, open: !saved || keepOpen, holds: fields.map((f) => f.key), body: form })));
+  // asks first (open until the page has an answer of the person's own; a link's figures are not, so the part is open while
+  // one shows and the visitor sees where to change them: critic P5), then folds under the answer (docs/OPTIONAL.md R8)
+  // under the form, "Share these figures" (only when a figure is typed): a link with this page's own figures and nothing else
+  root.append(ui.h("div", {}, parts(ctx, { id: "figures", kind: "figures", says: money(x.price), guess: shown.size, open: !saved || keepOpen || sv.live, holds: boxes.map((f) => f.key), body: [form, ...shareBlock(ctx, SHARE_SPEC, s)] })));
   root.append(ui.h("div", {}, links(ctx, [
     { href: "#/property/rent-vs-buy", ask: "Rent or buy?" },
     { href: "#/debt/ratios", ask: "What do lenders see?" },
