@@ -3,7 +3,7 @@
 // and through the worst real stretch of history. What each gives in the first year, what it
 // could fall to, and how the money ends up.
 import { project, STRATEGIES, MORE_WAYS, isMoreWay, guardRule, shareWords } from "../../../core/math/retirement.js";
-import { buildInputs, compute as computeProjection, BUCKET_OF, healthAdded, FLOOR_MONTHLY_CEILING, saveSpendingFigure } from "../projection/compute.js";
+import { buildInputs, compute as computeProjection, BUCKET_OF, healthAdded, FLOOR_MONTHLY_CEILING, saveSpendingFigure, retirementUnknown } from "../projection/compute.js";
 import { RETURNS } from "../historical/data/returns.js";
 // the adults whose Social Security is not in the plan yet (the retirement pages' own notice, ss-notice.js): no trim is asked meanwhile
 import { ssMissingFor } from "../../overview/setup/compute.js";
@@ -444,8 +444,12 @@ export function compute(plan, params = {}) {
     if (n) guardNow = { year: g0.year, ...n };
   }
   return { ready: true, rows, worstStartYear: worst?.startYear ?? null, chosen: b.inputs.strategy, chosenHeld: chosenRow?.held ?? null, spendingYearly: planned, withdrawalRate: b.inputs.withdrawalRate, endYear: b.inputs.endYear, figureMonthly: b.figureMonthly ?? null,
-    ...(own.set ? { own } : {}), ...(floorWarn ? { floorWarn } : {}), ...(guardNow ? { guardNow } : {}), more };
+    ...(own.set ? { own } : {}), ...(floorWarn ? { floorWarn } : {}), ...(guardNow ? { guardNow } : {}), more,
+    // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "runs out at 65"
+    // (whole-app sweep x3, 2026-11-16); absent for every other plan
+    ...unknownOf(plan, params) };
 }
+const unknownOf = (plan, params) => { const u = retirementUnknown(plan, { today: params.today ?? null }); return u ? { unknown: u } : {}; };
 
 /**
  * firstYear(plan, { today }) -> null | { year, thisYear, ages, spending, health (the plan's health cover that year, 2026-11-02), healthAdded (the plan adds health cover on top of spending in some year), income, sources: ["Social Security", "a pension", ...],

@@ -647,3 +647,12 @@ wrong on the same part.
   `more` and `how` only).
 - Not changed here, measured on ab3bdde too: the family's first screen holds 191 words in the browser check, one over the
   page's entry of 190 in `qa/first-view.known.json`.
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page said
+"At this spending the money runs out at 65" and "Runs out at 65 even if markets do as well as average" under each way, on the
+same plan (Riley, 24, an empty Work 401(k)). `compute` now adds `unknown: { nothingSaved }` (projection `retirementUnknown`,
+the projection's own rule) only when that holds, and the page then shows, under its title, the projection's sentence with this
+page's question ("how much you could take out each year", `UNKNOWN_WHAT`) and one filled link, "Add what you own ›"; nothing
+else. For every other plan the result is the same as before (absent field; the invariance test compares it with ce79d70 over the
+invented households).

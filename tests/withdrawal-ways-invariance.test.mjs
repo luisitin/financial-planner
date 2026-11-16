@@ -21,7 +21,7 @@ import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
 import * as phone from "../qa/fixtures/phone-households.mjs";
 import * as round8 from "../qa/fixtures/round8-households.mjs";
 import { project } from "../core/math/retirement.js";
-import { buildInputs, compute as projection } from "../modules/retirement/projection/compute.js";
+import { buildInputs, compute as projection, retirementUnknown } from "../modules/retirement/projection/compute.js";
 import { compute as cashFlow } from "../modules/retirement/cash-flow/compute.js";
 import { compute as order } from "../modules/retirement/withdrawal-order/compute.js";
 import { compute as ways, firstYear, wayOptions } from "../modules/retirement/withdrawal-strategy/compute.js";
@@ -47,11 +47,16 @@ const ALL = (await plans()).map((x) => ({ ...x, plan: migrate(structuredClone(x.
 const digest = (v) => crypto.createHash("sha256").update(JSON.stringify(v) ?? "undefined").digest("base64url").slice(0, 22);
 const without = (o, keys) => { if (!o || typeof o !== "object") return o; const c = { ...o }; for (const k of keys) delete c[k]; return c; };
 const run = (fn) => { try { return fn(); } catch (e) { return { threw: e.message }; } };
+// Whole-app sweep x3 (2026-11-16): for a plan with nothing saved for retirement and nothing going in, the retirement pages add
+// `unknown`, the projection's own "We don't know yet" (retirementUnknown). Without that one field each output is what it was
+// before; the field must be the projection's answer. The words those pages now say are pinned by tests/sweep-x3.test.mjs.
+const sansUnknown = (v, u) => { if (!u || !v || typeof v !== "object" || !("unknown" in v)) return v; assert.deepEqual(v.unknown, u); const { unknown: _u, ...rest } = v; return rest; };
 const WAYS = ["fixed-real", "percent", "guardrails", "vpw"];
 const ORDERS = [["taxable", "deferred", "free"], ["deferred", "taxable", "free"], ["deferred", "free", "taxable"], ["free", "taxable", "deferred"]];
 /** Every figure these changes could reach, for one plan, by what it is. */
 function figures(plan) {
   const p = () => structuredClone(plan);
+  const u = retirementUnknown(plan, { today: T });
   const b = run(() => buildInputs(p(), { today: T }));
   const engine = {};
   if (b?.inputs) for (const way of WAYS) for (const o of ORDERS) engine[`${way} ${o.join(">")}`] = run(() => project({ ...b.inputs, strategy: way, withdrawalOrder: o }));
@@ -59,9 +64,9 @@ function figures(plan) {
     inputs: b?.inputs ? without(b, ["inputs"]) : b,
     engine,
     projection: run(() => projection(p(), { today: T })),
-    cashFlow: run(() => cashFlow(p(), { today: T })),
+    cashFlow: run(() => sansUnknown(cashFlow(p(), { today: T }), u)),
     order: without(run(() => order(p(), { today: T })), ["share", "five"]),
-    ways: without(run(() => ways(p(), { today: T })), ["more"]),
+    ways: without(run(() => sansUnknown(ways(p(), { today: T }), u)), ["more"]),
     firstYear: run(() => firstYear(p(), { today: T })),
     wayOptions: run(() => wayOptions(p(), { today: T })),
     offers: run(() => offers(p(), { today: T })),

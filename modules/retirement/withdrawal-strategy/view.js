@@ -2,17 +2,19 @@
 // year of retirement, and what it pays for), then each way of deciding as one line with what it lets you spend and one button,
 // and everything technical folded under "How this is worked out" (round 8, Batch 5b: the owner, 2026-11-06, "Just make sure a
 // layman can easily understand and use the page").
-import { needButtons } from "../needs.js";
+import { needButtons, unknownHero } from "../needs.js";
 import { needItem } from "../../../core/words.js";
 import { compute, firstYear, DESCRIPTIONS, wayName, ownNumbers, saveOwnNumbers, ownChanges, floorRisk, TRIM_CHIPS, guardNudgeWords, guardHowWords, guardDoneWords, guardUndoneWords, applyGuardStep } from "./compute.js";
 import { ssNotice } from "../ss-notice.js";
 import { whenCareful, monthlyOf, accountName as acct, chanceWords, BAD_RUN, BAD_RUN_NOTE } from "../careful.js";
 // a figure typed for the plan is saved the way Retirement settings saves it (Get started's own figure stops being ours)
-import { saveSpendingFigure, FLOOR_MONTHLY_CEILING } from "../projection/compute.js";
+import { saveSpendingFigure, FLOOR_MONTHLY_CEILING, unknownWords } from "../projection/compute.js";
 import { shareWords } from "../../../core/math/retirement.js";
 // "How this is worked out" is drawn by the one helper (docs/OPTIONAL.md), so Settings' "Show how answers are worked out"
 // opens it and a person's own tap on it is kept on this phone; its title is unchanged
 import { parts, part, choice } from "../../../core/ui/more.js";
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "how much you could take out each year";
 
 let pending = null;
 // "Set my own numbers" just saved (gap design #4): what changed, said on the next drawing with the page's new answer, inside
@@ -52,6 +54,9 @@ export function render(root, ctx) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "How much to take out each year"), ui.h("p", { class: "lede" }, "How much to take from savings each year in retirement, and what that lets you spend. It needs the answers from Will the money last? first:"), ui.h("ul", {}, (d.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), (needButtons(ui, d.missing) ?? ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Open Will the money last?")))));
     return;
   }
+  // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
+  // (whole-app sweep x3, 2026-11-16: "At this spending the money runs out at 65" beside its "We don't know yet")
+  if (d.unknown) { root.append(unknownHero(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { title: "How much to take out each year" })); return; }
   // the plan's end age, for wording only: a run that fails in the last year has lasted to the end
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
   const endAge = Math.max(...adults.map((p) => Number(p.lifeExpectancy ?? plan.assumptions?.planEndAge ?? 95)), 0) || Number(plan.assumptions?.planEndAge ?? 95);

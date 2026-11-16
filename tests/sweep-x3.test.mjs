@@ -114,3 +114,11 @@ test("Chance the money lasts: nothing saved -> the page's own we-can't-say-yet s
   assert.match(f.text, /pretend futures where the money lasts/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("How much to take out: nothing saved -> the page's own we-can't-say-yet sentence, no 'runs out at 65'; the family's answer unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/retirement/withdrawal-strategy/view.js");
+  await saysUnknown("retirement/withdrawal-strategy", UNKNOWN_WHAT, { title: "How much to take out each year" });
+  const f = await drawn("retirement/withdrawal-strategy", fam());
+  assert.match(f.text, /about \$[\d,]+ a month/);
+  assert.doesNotMatch(f.text, /can't say/);
+});

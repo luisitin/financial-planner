@@ -1281,9 +1281,19 @@ const r2Plans = async () => {
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   return [["family", familyPlan(TODAY8)], ["retired couple", retiredCouplePlan(TODAY8)], ["renter", renterDebtPlan()], ["widow", widowPlan()]];
 };
+// the renter has nothing saved for retirement and nothing going in: since the whole-app sweep x3 (2026-11-16) the page says it
+// can't tell yet, as Will the money last? does, and has no ways to explain (tests/sweep-x3.test.mjs pins the words)
+const saysUnknownYet = async (name, plan) => {
+  if (name !== "renter") return false;
+  const s = await livePage(plan);
+  assert.equal(s.part("how"), undefined, "renter: no How this is worked out under we-can't-say-yet");
+  assert.match(s.text(s.root), /Nothing is saved for retirement, so we can't say how much you could take out each year yet\./);
+  return true;
+};
 
 test("r2: How this is worked out opens to the method and one row per way, each shut; in sight it stays far under a screen and a half", async () => {
   for (const [name, plan] of await r2Plans()) {
+    if (await saysUnknownYet(name, plan)) continue;
     const s = await livePage(plan);
     const how = s.part("how");
     how.setAttribute("open", "");
@@ -1308,6 +1318,7 @@ test("r2: How this is worked out opens to the method and one row per way, each s
 test("r2: no rule and no source dropped: each way's row holds its rule, this year in full, both runs and where it comes from", async () => {
   const { NAMED } = await import("./compute.js");
   for (const [name, plan] of await r2Plans()) {
+    if (await saysUnknownYet(name, plan)) continue;
     const d = compute(migrate(structuredClone(plan)), { today: TODAY8 });
     const s = await livePage(plan);
     const how = s.part("how");
