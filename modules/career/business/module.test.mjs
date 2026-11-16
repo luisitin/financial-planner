@@ -37,9 +37,49 @@ test("the profit and loss: revenue less typed expenses, the miles at the year's 
   assert.equal(d.revenue, 60000); assert.equal(d.revenueFrom, "typed");
   near(d.typedTotal, 4000 + 720); near(d.miles.amount, 3000 * MILES_2026); assert.equal(d.homeOffice, 750);
   near(d.expensesTotal, 4720 + 3000 * MILES_2026 + 750); near(d.profit, 60000 - d.expensesTotal);
-  near(d.margin, d.profit / 60000); near(d.breakEvenMonthly, d.expensesTotal / 12);
+  near(d.margin, d.profit / 60000); near(d.breakEvenMonthly, (d.expensesTotal - 750) / 12, 1e-9);   // the home office is not money out
   // a negative amount from an imported plan counts as nothing
   near(compute(withBiz({ revenue: 60000, expenses: [{ id: "x", category: "other", amount: -1000, period: "monthly" }] }), { today: TODAY }).profit, 60000);
+});
+
+test("the home office is not money out of the business: what is left rises by the tax it saves (2026-11-16)", () => {
+  // the family's 7,200 of photography from Income: 150 square feet take $750 off the profit and about $259 off the tax;
+  // what the business leaves is $412 a month without it and about $434 with it (it said $371: the $750 taken as spent)
+  const T = "2026-11-16";
+  const a = compute(familyPlan(T), { today: T });
+  const p = familyPlan(T); p.whatIfs = { business: { homeOfficeSqft: 150 } };
+  const b = compute(p, { today: T });
+  assert.equal(b.homeOffice, 750); near(b.profit, a.profit - 750);
+  near(b.keepMonthly * 12, a.keepMonthly * 12 + (a.tax.total - b.tax.total), 1e-6);
+  assert.equal(Math.round(a.keepMonthly), 412); assert.equal(Math.round(b.keepMonthly), 434);
+  assert.equal(Math.round(a.tax.total - b.tax.total), 259);
+  assert.equal(Math.round((b.profit - b.notDeducted - b.tax.total) / 12), 371, "the old sum, the office taken as spent");
+  // the costs a month to break even leave it out too: it is capped at the profit, so it never needs covering
+  near(b.breakEvenMonthly, (b.expensesTotal - 750 + b.notDeducted) / 12, 1e-9); near(b.breakEvenMonthly, a.breakEvenMonthly, 1e-9);
+});
+
+test("the one deliberate change from a491122: only with a home office typed do what is left and the costs a month move; with none they are the old sums to the bit", async () => {
+  // money critic F1 (2026-11-16): the invariance rule holds for every plan without a home office; with one, what the
+  // business leaves a month and the costs a month to break even no longer take the office as money spent (the old sums
+  // are worked here by hand, so the test fails if either moves for a plan with no office)
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const R8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const plans = [familyPlan(TODAY), withBiz(BIZ), withBiz({ ...BIZ, homeOfficeSqft: 0 }), withBiz({ revenue: 1000, homeOfficeSqft: 300 }), withBiz({ revenue: 30000, expenses: [{ id: "m", category: "meals", amount: 2000, period: "annual" }], homeOfficeSqft: 200 }),
+    R8.freelancerPlan(), R8.landlordBusinessPlan(), R8.stockAndBusinessPlan(), ...ARCHETYPES.map((x) => x.build())];
+  let offices = 0, none = 0;
+  for (const p of plans) {
+    const d = compute(p, { today: TODAY });
+    if (!d.ready) continue;
+    if (d.homeOffice === 0) none++; else offices++;
+    const oldKeep = (d.profit - d.notDeducted - d.tax.total) / 12, oldBreakEven = (d.expensesTotal + d.notDeducted) / 12;
+    if (d.homeOffice === 0) { assert.equal(d.keepMonthly, oldKeep); assert.equal(d.breakEvenMonthly, oldBreakEven); }
+    else { near(d.keepMonthly, oldKeep + d.homeOffice / 12, 1e-9); near(d.breakEvenMonthly, oldBreakEven - d.homeOffice / 12, 1e-9); }
+  }
+  assert.equal(offices, 3); assert.ok(none >= 4, `${none} plans with a business and no home office`);
+  // the draw check follows: a draw between the old and the new figure was "over", it is "ok" now
+  const d = compute(withBiz({ ...BIZ, drawMonthly: null }), { today: TODAY });
+  const between = Math.round((d.profit - d.notDeducted - d.tax.total) / 12 + 30);
+  assert.equal(compute(withBiz({ ...BIZ, drawMonthly: between }), { today: TODAY }).draw, "ok");
 });
 
 test("business meals count half; the other half still leaves the business", () => {
@@ -291,4 +331,274 @@ test("care fourth pass: filing separately, the business is on its owner's own re
   // filing jointly nothing moves
   const j = familyPlan(TODAY); j.whatIfs = { ...(j.whatIfs ?? {}), business: { incomeId: "i-side" } };
   near(compute(j, { today: TODAY }).tax.total, 2255.01, 0.01);
+});
+
+// ---------------------------------------------------------------- the answer in words (words.js): one sentence per case
+import { answerFor, drawLine, savedLine, scorpWorth, scorpStatus } from "./words.js";
+import { checklist, missedStatus, typedByKind, CHECKLIST, MISSED_TITLE } from "./costs.js";
+import { CATEGORIES } from "./compute.js";
+const $ = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+const D = (o = {}) => ({ ready: true, profit: 50000, keepMonthly: 2950, margin: 0.83, notDeducted: 0, tax: { total: 14600, se: 7065, health: 0 }, draw: null, drawMonthly: null, scorp: null, ...o });
+
+test("the headline and the line under it: one written sentence per case (R3, R5)", () => {
+  const cases = [
+    [D(), "keep", "After tax, the business leaves you about $2,950 a month", "It makes $50,000 a year after costs, and about $14,600 of that goes to tax."],
+    [D({ tax: { total: 0 } }), "keepNoTax", "After tax, the business leaves you about $2,950 a month", "It makes $50,000 a year after costs, and it brings no tax."],
+    [D({ profit: 9000, keepMonthly: 800, margin: 1, tax: { total: -600 } }), "keepLowers", "After tax, the business leaves you about $800 a month", "It makes $9,000 a year after costs, and it lowers the household's tax by about $600."],
+    [D({ profit: 2000, keepMonthly: -40, margin: 0.2, notDeducted: 1500, tax: { total: 1000 } }), "shortMeals", "After tax, the business costs you about $40 a month", "It makes $2,000 a year after costs, but the tax and the half of business meals that does not count come to more."],
+    [D({ profit: 2000, keepMonthly: -40, margin: 0.2, tax: { total: 2480 } }), "shortTax", "After tax, the business costs you about $40 a month", "It makes $2,000 a year after costs, but what it adds to the household's tax comes to more."],
+    [D({ profit: -6000, keepMonthly: -390, margin: -0.5, tax: { total: -1320 } }), "lossSaves", "The business loses about $6,000 a year", "The loss comes off the household's other income and lowers the tax by about $1,320; after that it costs you about $390 a month."],
+    [D({ profit: -6000, keepMonthly: -500, margin: -0.5, tax: { total: 0 } }), "loss", "The business loses about $6,000 a year", "There is no other income for the loss to come off this year, so it costs you about $500 a month."],
+    [D({ profit: 0.2, keepMonthly: 0 }), "even", "The business breaks even", "What customers pay covers the costs with nothing left over, so there is no tax on it."],
+    // no profit for tax, but the home office (not money out) leaves what came in with the person, or the half of meals
+    // that does not count takes it from them (money critic F2)
+    [D({ profit: 0, keepMonthly: 83.33, tax: { total: 0 } }), "evenOffice", "After tax, the business leaves you about $83 a month", "The home office takes the profit for tax down to nothing, so there is no tax on it; the room is paid for anyway."],
+    [D({ profit: 0, keepMonthly: -83.33, notDeducted: 1000, tax: { total: 0 } }), "evenMeals", "After tax, the business costs you about $83 a month", "There is no profit for tax, but the half of business meals that does not count comes out of your own pocket."],
+    [{ ready: false }, "notReady", "Your small business", "What the business earns after costs and tax, and what you can safely pay yourself."],
+  ];
+  for (const [d, c, title, line] of cases) assert.deepEqual(answerFor(d, $), { case: c, title, line }, c);
+  // the green line after a save names the new answer (R7), per case
+  assert.equal(savedLine(D(), $), "Saved. After tax the business now leaves you about $2,950 a month.");
+  assert.equal(savedLine(D({ profit: 2000, keepMonthly: -40, tax: { total: 2480 } }), $, "Phone added."), "Phone added. After tax the business now costs you about $40 a month.");
+  assert.equal(savedLine(D({ profit: -6000, keepMonthly: -500, tax: { total: 0 } }), $), "Saved. The business now loses about $6,000 a year.");
+  assert.equal(savedLine(D({ profit: 0, keepMonthly: 0 }), $), "Saved. The business now breaks even.");
+  assert.equal(savedLine(D({ profit: 0, keepMonthly: 83.33 }), $), "Saved. After tax the business now leaves you about $83 a month.");
+  assert.equal(savedLine(D({ profit: 0, keepMonthly: -83.33, notDeducted: 1000 }), $), "Saved. After tax the business now costs you about $83 a month.");
+  assert.equal(savedLine({ ready: false }, $), "Saved.");
+  // what the owner takes out, when it fits (the amber notice says the other case)
+  assert.equal(drawLine(D({ draw: "ok", drawMonthly: 2500 }), $), "You take out $2,500 a month; that leaves $450 a month in the business.");
+  assert.equal(drawLine(D({ draw: "over", drawMonthly: 3500 }), $), null); assert.equal(drawLine(D({ draw: "ok", drawMonthly: 0 }), $), null); assert.equal(drawLine(D(), $), null);
+  // an S corporation: a worth line only when it saves; the row's status within 20 characters
+  assert.equal(scorpWorth(D({ scorp: { saving: 1234 } }), $), "As an S corporation you might keep about $1,234 more a year, after its running costs.");
+  assert.equal(scorpWorth(D({ scorp: { saving: -800 } }), $), null); assert.equal(scorpWorth(D(), $), null);
+  assert.equal(scorpStatus(D({ scorp: { saving: 1234 } }), $), "would save $1,234"); assert.equal(scorpStatus(D({ scorp: { saving: -800 } }), $), "would cost $800");
+  assert.equal(scorpStatus(D({ scorp: { saving: 0.2 } }), $), "about the same");
+  assert.ok(scorpStatus(D({ scorp: { saving: -123456 } }), $).length <= 20);
+});
+
+test("the headline from the page's own figures: the BIZ plan keeps, the family's 7,200 from Income keeps, a loss saves", () => {
+  const d = compute(withBiz(BIZ), { today: TODAY });
+  const a = answerFor(d, $);
+  assert.equal(a.case, "keep"); assert.equal(a.title, `After tax, the business leaves you about ${$(d.keepMonthly)} a month`);
+  assert.equal(a.line, `It makes ${$(d.profit)} a year after costs, and about ${$(d.tax.total)} of that goes to tax.`);
+  const loss = compute(withBiz({ revenue: 10000, expenses: [{ id: "x", category: "equipment", amount: 16000, period: "annual" }] }), { today: TODAY });
+  assert.equal(answerFor(loss, $).case, "lossSaves"); assert.match(answerFor(loss, $).title, /^The business loses about \$6,000 a year$/);
+  // $1,000 coming in and 300 square feet: the office takes the profit to nothing, the $1,000 stays with the person
+  // untaxed ($83 a month), and the costs a month to break even are nothing (it said "breaks even" beside $83 of costs)
+  const office = compute(withBiz({ revenue: 1000, homeOfficeSqft: 300 }), { today: TODAY });
+  assert.equal(office.profit, 0); near(office.keepMonthly, 1000 / 12, 1e-9); assert.equal(office.breakEvenMonthly, 0);
+  assert.equal(answerFor(office, $).case, "evenOffice"); assert.equal(answerFor(office, $).title, "After tax, the business leaves you about $83 a month");
+  // $1,000 coming in and $2,000 of business meals: half counts, so no profit for tax, but $1,000 a year is paid out
+  const meals = compute(withBiz({ revenue: 1000, expenses: [{ id: "m", category: "meals", amount: 2000, period: "annual" }] }), { today: TODAY });
+  assert.equal(meals.profit, 0); near(meals.keepMonthly, -1000 / 12, 1e-9); near(meals.breakEvenMonthly, 2000 / 12, 1e-9);
+  assert.equal(answerFor(meals, $).case, "evenMeals"); assert.equal(answerFor(meals, $).title, "After tax, the business costs you about $83 a month");
+});
+
+// ---------------------------------------------------------------- costs people often forget to count (costs.js)
+const S = (o = {}) => ({ ...o });
+const itemOf = (c, key) => c.items.find((x) => x.key === key);
+
+test("the checklist: nine rows in a person's order, each with what counts and a source; nothing counted from here", () => {
+  assert.equal(MISSED_TITLE, "Costs people often forget to count");
+  assert.deepEqual(CHECKLIST.map((x) => x.key), ["office", "miles", "health", "retire", "seHalf", "phone", "supplies", "professional", "education"]);
+  for (const r of CHECKLIST) { assert.ok(r.counts.length > 20 && r.counts.length < 140, r.key); assert.ok(/[.]$/.test(r.counts), `${r.key} ends with a stop`); }
+  // the two kinds the checklist needed are expense kinds now, counted in full
+  assert.equal(CATEGORIES.professional, "Accountant, lawyer, tax help"); assert.equal(CATEGORIES.education, "Courses for your work");
+  const d = compute(withBiz({ revenue: 60000, expenses: [{ id: "p", category: "professional", amount: 400, period: "annual" }, { id: "e", category: "education", amount: 300, period: "annual" }] }), { today: TODAY });
+  near(d.expensesTotal, 700); near(d.profit, 59300);
+  assert.equal(typedByKind(d).professional, 400); assert.equal(typedByKind(d).education, 300);
+});
+
+test("the checklist's states, each with its written sentence: counted, limited, typed but none, not yet, by itself, elsewhere, none", () => {
+  // nothing typed: every row with a box or a kind is "not yet"; half the tax is counted by itself; the plans are elsewhere
+  let c = checklist(D({ homeOffice: 0, miles: { amount: 0, miles: 0 }, earned: 46000, expenses: [] }), S(), $);
+  assert.deepEqual(c.items.map((x) => x.state), ["add", "add", "add", "elsewhere", "auto", "add", "add", "add", "add"]);
+  assert.equal(c.missing, 7); assert.equal(missedStatus(c), "7 not counted yet");
+  assert.equal(itemOf(c, "office").said, "Not counted yet."); assert.deepEqual(itemOf(c, "office").go, { box: "homeOfficeSqft" });
+  // plain words, no "comes off income" (person critic P5)
+  assert.equal(itemOf(c, "seHalf").said, "The page already takes $3,533 off the income you pay tax on."); assert.equal(itemOf(c, "seHalf").go, null);
+  assert.equal(itemOf(c, "retire").said, "This lowers the income you pay tax on; it is not a business cost. The plans and the tax each saves are above.");
+  assert.deepEqual(itemOf(c, "retire").go, { href: "#/retirement/contributions" });
+  assert.deepEqual(itemOf(c, "phone").go, { kind: "phone" }); assert.deepEqual(itemOf(c, "education").go, { kind: "education" });
+  // everything counted
+  c = checklist(D({ homeOffice: 750, miles: { amount: 2227.8, miles: 3000 }, tax: { total: 9000, se: 7000, health: 6000 }, earned: 46000,
+    expenses: [{ category: "phone", yearly: 720 }, { category: "software", yearly: 480 }, { category: "supplies", yearly: 720 }, { category: "professional", yearly: 400 }, { category: "education", yearly: 300 }, { category: "meals", yearly: 600 }] }), S({ homeOfficeSqft: 150, healthPremiums: 6000 }), $);
+  assert.deepEqual(c.items.map((x) => [x.key, x.state, Math.round(x.amount), x.said]), [
+    ["office", "counted", 750, "Counted: $750 for 150 square feet."],
+    ["miles", "counted", 2228, "Counted: $2,228 for 3,000 miles."],
+    ["health", "counted", 6000, "Counted: $6,000 off the income you pay tax on."],
+    ["retire", "elsewhere", 0, "This lowers the income you pay tax on; it is not a business cost. The plans and the tax each saves are above."],
+    ["seHalf", "auto", 3500, "The page already takes $3,500 off the income you pay tax on."],
+    ["phone", "counted", 720, "Counted: $720 a year."],
+    ["supplies", "counted", 1200, "Counted: $1,200 a year."],
+    ["professional", "counted", 400, "Counted: $400 a year."],
+    ["education", "counted", 300, "Counted: $300 a year."],
+  ]);
+  assert.equal(c.missing, 0); assert.equal(missedStatus(c), "nothing missing");
+  assert.ok(c.items.every((x) => x.key === "retire" ? x.go?.href : x.go === null), "a counted row has no button");
+  // typed, but the profit is too small: the home office and the health insurance count only up to it
+  // the profit cuts the home office: the $1,500 that 300 square feet allow is said beside what counts (money critic F5)
+  c = checklist(D({ profit: 900, homeOffice: 900, tax: { total: 0, se: 127, health: 0 }, earned: 836, expenses: [] }), S({ homeOfficeSqft: 300, healthPremiums: 6000 }), $);
+  assert.equal(itemOf(c, "office").state, "limited"); assert.equal(itemOf(c, "office").said, "Counted: $900 of the $1,500 for 300 square feet: it counts only up to the profit.");
+  assert.equal(itemOf(c, "office").amount, 900); assert.equal(itemOf(c, "office").go, null);
+  assert.equal(checklist(D({ homeOffice: 1500, expenses: [] }), S({ homeOfficeSqft: 450 }), $).items[0].said, "Counted: $1,500 for 300 square feet.", "above 300 square feet only 300 count, and that is no cut");
+  assert.equal(itemOf(c, "health").state, "typedNone"); assert.equal(itemOf(c, "health").said, "It counts only up to the profit, so none this year."); assert.equal(itemOf(c, "health").go, null);
+  c = checklist(D({ profit: 5000, homeOffice: 0, tax: { total: 0, se: 706, health: 4647 }, earned: 4647, expenses: [] }), S({ homeOfficeSqft: 100, healthPremiums: 6000 }), $);
+  assert.equal(itemOf(c, "health").state, "limited"); assert.equal(itemOf(c, "health").said, "Counted: $4,647 of the $6,000: it counts only up to the profit.");
+  assert.equal(itemOf(c, "office").state, "typedNone"); assert.equal(itemOf(c, "office").said, "It counts only up to the profit, so none this year.");
+  // a loss: no self-employment tax, nothing can go into a plan
+  c = checklist(D({ profit: -3000, homeOffice: 0, tax: { total: -660, se: 0, health: 0 }, earned: 0, expenses: [] }), S(), $);
+  assert.equal(itemOf(c, "seHalf").state, "none"); assert.equal(itemOf(c, "seHalf").said, "No self-employment tax this year, so nothing to take off.");
+  assert.equal(itemOf(c, "retire").state, "none"); assert.equal(itemOf(c, "retire").said, "No earnings from the business this year, so nothing can go in from it."); assert.equal(itemOf(c, "retire").go, null);
+  // no business yet: expenses typed meanwhile still count in their rows; the status counts nothing as missed (person
+  // critic P2: someone with no business was told "7 not counted yet")
+  c = checklist({ ready: false, expenses: [{ category: "phone", yearly: 600 }, { category: "other", yearly: 99, fromSelfEmployment: true }] }, S({ homeOfficeSqft: 120 }), $);
+  assert.equal(itemOf(c, "phone").state, "counted"); assert.equal(itemOf(c, "office").state, "typedNone"); assert.equal(itemOf(c, "retire").state, "none");
+  assert.equal(c.missing, 5); assert.equal(c.ready, false); assert.equal(missedStatus(c), "a short list");
+  assert.equal(missedStatus(checklist({ ready: false, expenses: [] }, S(), $)), "a short list");
+});
+
+test("the checklist from the page's own figures: the BIZ plan's office, miles and software are counted with their figures", () => {
+  const d = compute(withBiz(BIZ), { today: TODAY });
+  const c = checklist(d, BIZ, $);
+  assert.equal(itemOf(c, "office").said, "Counted: $750 for 150 square feet.");
+  assert.equal(itemOf(c, "miles").said, `Counted: ${$(3000 * MILES_2026)} for 3,000 miles.`);
+  assert.equal(itemOf(c, "supplies").said, "Counted: $720 a year.", "60 a month of software is in the supplies-and-software row");
+  near(itemOf(c, "seHalf").amount, d.tax.se / 2);
+  assert.deepEqual(c.items.filter((x) => x.state === "add").map((x) => x.key), ["health", "phone", "professional", "education"]);
+  // reading writes nothing
+  const p = withBiz(BIZ), was = JSON.stringify(p); checklist(compute(p, { today: TODAY }), p.whatIfs.business); assert.equal(JSON.stringify(p), was);
+});
+
+// ---------------------------------------------------------------- the page, drawn with the real kit on the fake DOM
+async function drawPage(plan0, { answer = true, today = TODAY } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const asked = [];
+  let cur = migrate(structuredClone(plan0)); const saved = [];
+  let n = 0;
+  const store = { get: () => cur, update: (fn) => { const dft = structuredClone(cur); fn(dft); cur = dft; saved.push(dft); } };
+  const draw = () => {
+    const root = new FakeElement("main");
+    const ctx = { ui: { ...ui, uid: () => `new-${++n}`, confirm: (q) => { asked.push(q); return answer; } }, fmt: { ...fmt, today: () => today }, plan: cur, route: { rest: [], query: {} }, module: { group: "career", id: "business" }, computeOf: () => null, store };
+    render(root, ctx);
+    return root;
+  };
+  return { draw, saved, asked, textOf, plan: () => cur };
+}
+const partsOpen = (root) => Object.fromEntries(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const partEl = (root, id) => root.querySelectorAll("details").find((x) => x.dataset.part === id);
+const btnOf = (root, words) => root.querySelectorAll("button").find((b) => b.textContent === words);
+const boxOf = (el, name) => el.querySelector(`[name="${name}"]`);
+const shutIn = (el) => { for (let a = el.parentNode; a; a = a.parentNode) if (a.tagName === "DETAILS" && !a.hasAttribute("open")) return true; return false; };
+const filledOf = (root) => root.all().filter((b) => b.tagName === "BUTTON" || (b.tagName === "A" && /\bbtn\b/.test(String(b.className ?? "")))).filter((b) => !String(b.className ?? "").includes("secondary") && (b.tagName === "A" || b.getAttribute("type") === "submit" || b.textContent === "Use this profit on Income") && !shutIn(b));
+const boxesShown = (root) => root.all().filter((b) => /^(INPUT|SELECT|TEXTAREA)$/.test(b.tagName) && b.getAttribute("type") !== "hidden" && !shutIn(b));
+
+test("the page opens simple: the answer, the plans for retirement, then quiet rows; no fold by hand, no box, one filled button at most", async () => {
+  const a = await drawPage(withBiz(BIZ));
+  const root = a.draw(), t = a.textOf(root);
+  const d = compute(withBiz(BIZ), { today: TODAY });
+  assert.equal(a.textOf(root.querySelector("h1")), answerFor(d, $).title);
+  assert.match(t, new RegExp(answerFor(d, $).line.replace(/[$().]/g, "\\$&")));
+  assert.match(t, /You take out \$3,000 a month; that leaves \$[\d,]+ a month in the business\./);
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: false, how: false });
+  assert.deepEqual(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => a.textOf(x.querySelector(".fold-title"))), ["Costs people often forget to count", "The business", "As an S corporation", "How this is worked out"]);
+  assert.equal(a.textOf(partEl(root, "missed").querySelector(".fold-status")), "4 not counted yet");
+  assert.equal(a.textOf(partEl(root, "business").querySelector(".fold-status")), "6 set by you", "revenue, home office, miles, what is taken out and the two expenses");
+  assert.match(a.textOf(partEl(root, "scorp").querySelector(".fold-status")), /^would (save|cost) \$[\d,]+$/);
+  assert.equal(root.querySelectorAll("details").filter((x) => !x.dataset.part && !String(x.className).includes("form-more")).length, 0, "no fold by hand (R10)");
+  assert.equal(boxesShown(root).length, 0, "no box on the first view");
+  assert.deepEqual(filledOf(root).map((b) => a.textOf(b)), ["Use this profit on Income"], "the one filled button");
+  // the retirement plans stay in sight (each saving is worth money), the SIMPLE IRA too late on October 30
+  assert.match(t, /Retirement plans for the business/); assert.match(t, /SIMPLE IRA\s*too late now/); assert.match(t, /Putting in the most saves about \$[\d,]+ in tax this year\./);
+  // moved, never deleted: the profit, the tax and the plans' rules are in How this is worked out
+  const how = a.textOf(partEl(root, "how"));
+  for (const re of [/What customers paid\s*\$60,000/, /Home office \(\$5 a square foot\)\s*−\$750/, /Self-employment tax \(Social Security and Medicare\)/, /Only the business puts in: 20% of your earnings/, /Costs a month: \$[\d,]+, what must come in each month to break even\./]) assert.match(how, re);
+  assert.match(a.textOf(root), /More on this/); assert.match(a.textOf(root), /What is the self-employment tax\?/);
+  // opening and shutting writes nothing
+  for (const p of root.querySelectorAll("details").filter((x) => x.dataset.part)) { p.setAttribute("open", ""); p.dispatch("toggle"); p.removeAttribute("open"); p.dispatch("toggle"); }
+  assert.equal(a.saved.length, 0);
+});
+
+test("the empty plan: one sentence on what to do first and one filled way to start; The business waits one tap away", async () => {
+  const a = await drawPage(emptyPlan());
+  const root = a.draw();
+  assert.equal(a.textOf(root.querySelector("h1")), "Your small business");
+  assert.deepEqual(filledOf(root).map((b) => a.textOf(b)), ["Add it on Income"]);
+  assert.equal(boxesShown(root).length, 0);
+  assert.deepEqual(partsOpen(root), { missed: false, business: false });
+  // no business yet: the costs list counts nothing as missed (person critic P2)
+  assert.equal(a.textOf(partEl(root, "missed").querySelector(".fold-status")), "a short list");
+  assert.equal(a.textOf(partEl(root, "business").querySelector(".fold-status")), "not set yet");
+  // the boxes a person may not know offhand carry a labelled example in their help line (P4), never grey text
+  for (const [box, words] of [["homeOfficeSqft", /For example, a 10 by 12 foot room is 120\./], ["miles", /For example, 50 miles a week is 2,600 a year\./]]) {
+    const el = boxOf(partEl(root, "business"), box);
+    assert.match(a.textOf(el.closest("label")), words, box); assert.equal(el.getAttribute("placeholder") ?? null, null, `${box}: no grey text`);
+  }
+  // Save with nothing typed is held back with words (stress test F5)
+  const f = boxOf(partEl(root, "business"), "revenue").closest("form");
+  f.dispatch("submit");
+  assert.equal(a.saved.length, 0); assert.match(a.textOf(f), /Type what customers pay a year, or the business's name, first\./);
+  boxOf(f, "revenue").value = "24000"; f.dispatch("submit");
+  assert.equal(a.saved.length, 1); assert.equal(a.plan().whatIfs.business.revenue, 24000);
+  const r2 = a.draw();
+  assert.equal(partsOpen(r2).business, true); assert.match(a.textOf(partEl(r2, "business")), /^.*Saved\. After tax the business now leaves you about \$[\d,]+ a month\./);
+});
+
+test("a checklist row's button opens The business where it is, the box ready or the expense form with its kind picked; nothing is saved", async () => {
+  const a = await drawPage(withBiz(BIZ));
+  let root = a.draw();
+  const missed = partEl(root, "missed");
+  assert.ok(btnOf(missed, "Type what you pay"), "health insurance is not counted yet");
+  btnOf(missed, "Type what you pay").click();
+  assert.equal(partsOpen(root).business, true, "The business opens");
+  assert.ok(boxOf(partEl(root, "business"), "healthPremiums"));
+  btnOf(missed, "Add the bill").click();
+  const f = btnOf(partEl(root, "business"), "Add the expense").closest("form");
+  assert.equal(boxOf(f, "category").value, "phone", "the expense form opens with Phone and internet picked");
+  btnOf(missed, "Add a course").click();
+  assert.equal(boxOf(btnOf(partEl(root, "business"), "Add the expense").closest("form"), "category").value, "education", "the same form, its kind changed");
+  assert.equal(a.saved.length, 0, "nothing saved by a tap here");
+  // the retirement row goes to Retirement contributions; the counted rows have no button
+  assert.equal(missed.querySelectorAll("a").find((x) => a.textOf(x) === "Retirement contributions")?.getAttribute("href"), "#/retirement/contributions");
+  for (const k of ["office", "miles", "supplies"]) assert.equal(missed.querySelectorAll("li").find((x) => x.dataset.cost === k).querySelectorAll("button").length, 0, k);
+  // an amount left empty is held back with words; typed, the expense is added and the green line names the new answer
+  boxOf(f, "amount").value = ""; f.dispatch("submit");
+  assert.equal(a.saved.length, 0);
+  boxOf(f, "amount").value = "60"; boxOf(f, "name").value = "Photo course"; f.dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const e = a.plan().whatIfs.business.expenses.at(-1);
+  assert.deepEqual({ category: e.category, amount: e.amount, name: e.name }, { category: "education", amount: 60, name: "Photo course" });
+  root = a.draw();
+  const d2 = compute(a.plan(), { today: TODAY });
+  assert.match(a.textOf(partEl(root, "business")), new RegExp(`Photo course added\\. After tax the business now leaves you about \\${$(d2.keepMonthly)} a month\\.`));
+});
+
+test("S11 (R17): a save in a row keeps that row open with its green line; no other row opens or shuts; the next visit opens shut", async () => {
+  const a = await drawPage(withBiz(BIZ));
+  let root = a.draw();
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: false, how: false });
+  const f = boxOf(partEl(root, "business"), "miles").closest("form");
+  boxOf(f, "miles").value = "4000"; f.dispatch("submit");
+  assert.equal(a.saved.length, 1); assert.equal(a.plan().whatIfs.business.miles, 4000);
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { missed: false, business: true, scorp: false, how: false }, "the row just saved stays open, no other moves");
+  assert.match(a.textOf(partEl(root, "business")), /Saved\. After tax the business now leaves you about \$[\d,]+ a month\./);
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: false, how: false }, "the next draw opens shut");
+  // the S corporation's figures: Compare keeps its row open and says the new saving or cost
+  const sf = boxOf(partEl(root, "scorp"), "salary").closest("form");
+  boxOf(sf, "salary").value = "30000"; sf.dispatch("submit");
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: true, how: false });
+  assert.match(a.textOf(partEl(root, "scorp")), /Saved\. As an S corporation you would now (keep|pay) about \$[\d,]+ more a year\./);
+  // removing an expense keeps The business open, with its line
+  root = a.draw();
+  btnOf(partEl(root, "business"), "Remove").click();
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { missed: false, business: true, scorp: false, how: false });
+  assert.match(a.textOf(partEl(root, "business")), /Equipment removed\. After tax the business now leaves you about \$[\d,]+ a month\./);
+  assert.equal(a.plan().whatIfs.business.expenses.length, 1);
 });

@@ -320,6 +320,8 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Work done on the home",         // property/home (gap list, next 60, item 56): the person's own dated list of jobs and their costs, a record a person looks for by name; not our guess overridden, so not "Set my own numbers"
   "Electric or gas for your miles", // property/vehicles (gap list, next 60, item 56): the two cars' running costs for the person's miles and the years to make up the price, a comparison a person looks for by name; not our guess overridden
   "Growing it",                    // household/kids-money (gap list, next 60, item 57): the brief's own title; what each child's money could become by 18 at a share of the allowance and a rate picked by chips (no box: its test), so not "Set my own numbers"; not how the page's answer is worked out (that is its own row)
+  "Costs people often forget to count", // career/business (gap list, next 60, item 6): the brief's own title; nine costs a self-employed person often leaves out, each counted or one tap from its box, a list a person looks for by name; not how the page's answer is worked out, nor "N more ..."
+  "The business",                  // career/business (opt spec 6.1, done with gap list, next 60, item 6): the opt spec's own title for the business's figures and its expenses; on the empty plan its only own part
   "Who gets what",                 // estate/legacy (gap list, next 60, item 15): the brief's own words; who would receive what today, as bars, a question a person asks by name (Choices to take to a lawyer's row of the same name is an item); not how the page's answer is worked out, nor "N more ..."
 ];
 const NEVER_TITLES = /^(more|details|other|more options|expert|simple mode|go deeper)$/i;

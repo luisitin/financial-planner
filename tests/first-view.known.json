@@ -7,7 +7,6 @@
   "balance/net-worth": {"plan":{"figs":22}},
   "balance/update": {"plan":{"boxes":10}},
   "career/benefits": {"plan":{"words":470,"figs":27}},
-  "career/business": {"plan":{"words":560,"figs":32,"boxes":6,"filled":2},"empty":{"words":150,"boxes":6,"filled":2}},
   "career/equity": {"empty":{"words":120}},
   "career/human-capital": {"plan":{"words":290,"figs":13}},
   "career/offer-compare": {"plan":{"words":330,"boxes":18},"empty":{"words":330,"figs":3,"boxes":18}},

@@ -19,6 +19,11 @@
   Self-employment page's expenses figure into this page's expenses and sets it there to 0, so the federal estimate, the
   Self-employment page, the budget and the retirement projection all count the same profit.
 
+- The kinds of expense (`CATEGORIES`): supplies, software, phone, marketing, travel, meals (half counts), equipment,
+  insurance, contractors, fees, professional ("Accountant, lawyer, tax help") and education ("Courses for your work"),
+  other. The last two before "other" came with the checklist below (2026-11-16): an expense saved under them was not
+  possible before, so no plan changes meaning; both count in full.
+
 ## Outputs
 `compute(plan, { today })` -> `{ ready, year, incomeId, name, person, revenue, revenueFrom, incomeYearly, expenses, typedTotal, notDeducted, homeOffice, miles, expensesTotal, profit, loss, margin, breakEvenMonthly, tax, keepMonthly, drawMonthly, draw, scorp, plans, best, earned, simpleComp, simpleLate, simpleLimit, job401k, qbiLimited, qbiLine, stateRate, notes, seExpenses, typedHere, singleBusiness }`.
 Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal }`, so expenses typed first still show.
@@ -51,8 +56,18 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   other income and of self-employment earnings). The refundable child tax credit counts profit − half the
   self-employment tax as earned income (IRC 24(d), 32(c)(2)). The 0.9% extra Medicare tax on Medicare wages + 92.35% of
   profit above the filing status's line. The state's rate on profit less half the self-employment tax and the health
-  insurance. Keep a month = (profit − the half of meals not counted − all the tax) ÷ 12; what the owner takes out is
-  compared with it.
+  insurance. Keep a month = (profit + the home office − the half of meals not counted − all the tax) ÷ 12; what the owner
+  takes out is compared with it. The home office comes back in (2026-11-16): it is a deduction for part of a home the
+  household pays for anyway, not money out of the business, so typing it raises what is left by the tax it saves (the
+  family's $7,200 of photography from Income with 150 square feet: $412 a month without it, about $434 with it, the tax
+  $259 less; it said $371). Costs a month to break even = (the costs counted − the home office + the half of meals not
+  counted) ÷ 12: the money paid out, not the office, which is capped at the profit and so never needs covering ($1,000
+  coming in and 300 square feet: the profit is $0, $83 a month stays with the person untaxed, and nothing needs to come
+  in to break even; it said $83 a month). **A deliberate exception to the invariance rule** (gap spec section 3 item 5;
+  money critic F1, kept, the lead's call): these two figures, and the draw check that reads the first, move from
+  a491122 for a plan with a home office typed, and only for one; with none, both are the old sums to the bit (test "the
+  one deliberate change from a491122"). Kept because the checklist's Add on the home office would otherwise have told the
+  person that typing it lowers what the business leaves.
 - **A loss** as a sole proprietor comes off the household's other income (no self-employment tax, no 20% deduction)
   and off the earned income the refundable child tax credit is figured on (Schedule 8812's Earned Income Worksheet,
   IRC 32(c)(2)(A)): the tax figures turn negative, what the loss saves. Loss limits (basis, at-risk, excess business loss) and carrying a
@@ -108,6 +123,13 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   against the solo 401(k)'s.
 
 ## Tests
+`module.test.mjs` (33; the 9 below the line came with the checklist): every headline and line case and the green line
+after a save (`words.js`); the headline from the page's own figures; the checklist's rows and the two new kinds; every
+state of every row with its sentence; the checklist from the page's figures (and that it writes nothing); the page drawn
+on the stand-in DOM (the first view: the answer, the plans, four shut rows, no fold by hand, no box, one filled button;
+moved, never deleted); the empty plan (one filled way to start, Save with nothing held back, the green line); a
+checklist button opening The business with the box or the expense form and its kind, the amount held back, the green
+line; S11 (a save keeps its row open, no other moves; the S corporation's Compare; Remove). Before:
 `module.test.mjs` (20): the home office; the year's mileage rate; the profit and loss and a negative amount; meals at
 half; the sole proprietor's tax by hand; the state's rate (Pennsylvania) for both forms, with health insurance; the tax
 year from the Federal tax page (2025 figures); the wage base and the 0.9%; self-employed health insurance and its limit;
@@ -122,8 +144,127 @@ from the IRS forms and Publication 560 for 2025 and 2026 (`tools/golden_business
 It found three errors, fixed above: the S corporation's 20% deduction did not take off the owner's health insurance
 deduction; a loss did not lower the child tax credit's earned income; the solo 401(k) passed 100% of pay.
 
+## On screen, simple first (opt spec 6.1, class C; done with gap list, next 60, item 6, 2026-11-16, claude-b)
+The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` by hand.
+- **First view.** The hero says what happens to the person, one written sentence per case (`words.js` `answerFor`, a test
+  each): "After tax, the business leaves you about $412 a month" (keep, and evenOffice: no profit for tax because the
+  home office takes it, "The home office takes the profit for tax down to nothing, so there is no tax on it; the room is
+  paid for anyway."), "... costs you about $40 a month" (shortMeals, shortTax, and evenMeals: "There is no profit for
+  tax, but the half of business meals that does not count comes out of your own pocket."), "The business loses about
+  $6,000 a year" (lossSaves, loss), "The business breaks even" (even: no profit and nothing left or short after it; it
+  was said beside $83 a month left, money critic F2), "Your small business" (no business yet). Under it one line: "It makes $7,200 a year after costs, and about $2,255 of that goes to
+  tax." (keep), "... and it brings no tax." (keepNoTax), "... and it lowers the household's tax by about $600."
+  (keepLowers, the earned income credit), "... but the tax and the half of business meals that does not count come to
+  more." (shortMeals), "... but what it adds to the household's tax comes to more." (shortTax), "The loss comes off the
+  household's other income and lowers the tax by about $1,320; after that it costs you about $390 a month." (lossSaves),
+  "There is no other income for the loss to come off this year, so it costs you about $500 a month." (loss), "What
+  customers pay covers the costs with nothing left over, so there is no tax on it." (even). With what the owner takes out
+  typed and within: "You take out $2,500 a month; that leaves $450 a month in the business." (`drawLine`). Then "Use this
+  profit on Income" (the one filled button, when it is offered) with its line; the notices (the amber one when the owner
+  takes out more than the business leaves); "As an S corporation you might keep about $1,234 more a year, after its
+  running costs." only when it would save (`scorpWorth`, a hint worth money, never folded); "Retirement plans for the
+  business": each plan's room ("up to $6,691", "too late now") and "Putting in the most saves about $1,238 in tax this
+  year." (hints worth money, never folded); one card of quiet rows; "More on this" (four questions: the
+  self-employment tax, paying during the year, where retirement savings go in, side income).
+- **The rows** (shut on the first view): "Costs people often forget to count" (kind `more`, pinned title; status "4 not
+  counted yet" / "nothing missing"), "The business" (own; the business's figures and, under them, its expenses; status "6
+  set by you", "from Income", "not set yet"), "As an S corporation" (own, with a profit; the comparison and its two
+  boxes; status "would save $1,234" / "would cost $1,479" / "about the same"), "How this is worked out" (how, "profit and
+  tax": the year's profit line by line with its share of what comes in and the costs a month, the tax as a sole
+  proprietor with what comes off income, each retirement plan's rules and deadlines, the earnings they count). Nothing
+  was deleted: every sentence and figure that left the first view is in one of these rows.
+- **The business's form** asks first for five boxes (what customers pay, the home office, the miles, the health
+  insurance, what you take out; with several businesses on Income, which one, and what you take out folds; the home
+  office and the miles carry a labelled example in their help line, "For example, a 10 by 12 foot room is 120.", "For
+  example, 50 miles a week is 2,600 a year.", never grey text, which means a counted guess, person critic P4) and folds
+  the name under "More details (optional)". Its expenses follow it in the same row: the list, then "+ Add another
+  expense" (outlined), or the add form while there are none. The amount is held back at Save with "Type the amount
+  first." rather than marked required (a required box may not sit in a shut row, S5).
+- **After a save** the row saved in stays open with its green line naming the new answer (R7, `savedLine`): "Saved.
+  After tax the business now leaves you about $434 a month.", "Photo course added. ...", "Equipment removed. ...", "Saved.
+  As an S corporation you would now keep about $1,800 more a year."; no other row opens or shuts (S11 test).
+- First view (`node qa/first-view-node.mjs career/business`, worst of the plan households, family): before 555 words, 32
+  figures, 6 boxes, 4 tiles, 2 filled buttons; after 146 words, 8 figures, 0 boxes, 0 tiles, 1 filled button. Empty
+  plan: before 143 words, 6 boxes, 2 filled; after 86 words, 0 boxes, 1 filled ("Add it on Income"). Inside the answer
+  budget, so the page left `tests/first-view.known.json`.
+- Builder's choices: the headline is what the business leaves the person after tax, not the S corporation's verdict the
+  opt spec row suggested (R3: what happens to the person); the S corporation's saving is a worth line under it. The
+  share of what comes in moved to "How this is worked out" so the first view keeps to eight figures. The business's
+  status names the person's own state, not the revenue the hero already says. Five rows is the most a page may have
+  (R12): the opt spec's four (The business, Expenses, S corporation figures, How) plus the brief's two would be six, so
+  the expenses sit inside "The business".
+
+## Costs people often forget to count (gap list, next 60, item 6; map P10; 2026-11-16, claude-b)
+One quiet row (`costs.js` `checklist(d, s)`): an intro ("Costs the tax law lets a self-employed person count that are easy
+to leave out. Nothing here is counted by itself: tap one that applies to put it where it goes."), nine rows, each with
+what counts in one line and its state, and one line on where the rules come from. A row the page already counts says so
+with the figure; a row not counted yet has one outlined button that opens "The business" where it is with the focus in
+its box (the home office, the miles, the health insurance) or its expense form open with the kind picked (phone,
+supplies, professional, education); nothing is saved until the person saves there, and nothing on this row writes the
+plan. Status: "N not counted yet" (the rows with a button), else "nothing missing".
+
+| row | what counts (on screen) | counted when / the sentence | where it goes |
+|---|---|---|---|
+| Home office | A space used only and regularly for the business: $5 a square foot, up to 300 square feet. | `homeOffice` > 0: "Counted: $750 for 150 square feet."; cut by the profit: "Counted: $600 of the $1,500 for 300 square feet: it counts only up to the profit." (money critic F5); typed but no profit for it: "It counts only up to the profit, so none this year." | box `homeOfficeSqft` |
+| Business miles | Driving for the work at the IRS rate a mile, not the drive from home to a regular workplace; parking and tolls count on top. | `miles.amount` > 0: "Counted: $2,228 for 3,000 miles." | box `miles` |
+| Health insurance you pay | Medical, dental and long-term care insurance for you and your family, for months no employer's plan could cover you. | `tax.health`: "Counted: $6,000 comes off income."; less than typed: "Counted: $4,647 of the $6,000: it counts only up to the profit."; none: "It counts only up to the profit, so none this year." | box `healthPremiums` |
+| Retirement savings | What you put into a SEP-IRA, a solo 401(k) or a SIMPLE IRA for yourself comes off income. | earnings: "Not part of the profit: it comes off income. The plans and the tax each saves are above."; none: "No earnings from the business this year, so nothing can go in from it." | Retirement contributions |
+| Half the self-employment tax | Half of the Social Security and Medicare tax on the profit comes off income; there is nothing to do. | `tax.se` > 0: "Counted by itself: $3,533 comes off income."; else "No self-employment tax this year, so nothing to take off." | (by itself) |
+| Phone and internet | The business share of your phone and internet bills; never the base rate of a home's first landline. | kind phone typed: "Counted: $720 a year." | expense, kind phone |
+| Supplies and software | Supplies, materials and postage used up in the year, and the software or subscriptions that run the business. | kinds supplies + software | expense, kind supplies |
+| Accountant and lawyer | Fees for an accountant, a lawyer or tax advice for the business, and preparing the business part of your tax return. | kind professional | expense, kind professional |
+| Courses for your work | Courses, books and seminars that keep up or improve a skill for the work you do now; not training for a new line of work. | kind education | expense, kind education |
+
+Every row not counted says "Not counted yet." No figure here is new: $5 and 300 square feet are the page's
+`HOME_OFFICE` (Rev. Proc. 2013-13, above), the mileage rate its `mileageYear`, the rest the page's own compute.
+
+**Sources, read at irs.gov on 2026-11-16** (the rules, in the IRS's words):
+- Publication 535 is discontinued: "We have discontinued Publication 535, Business Expenses; the last revision was for
+  2022. Below is a mapping to the major resources for each topic. ... Worksheet 6A that was in chapter 6 is now new 2023
+  Form 7206, Self-Employed Health Insurance Deduction." (irs.gov "Guide to business expense resources",
+  https://www.irs.gov/forms-pubs/guide-to-business-expense-resources, page reviewed 27-Jun-2026; the old PDF address
+  https://www.irs.gov/pub/irs-pdf/p535.pdf redirects there.) So the current source is Publication 334.
+- Publication 334 (2025), Tax Guide for Small Business, https://www.irs.gov/pub/irs-pdf/p334.pdf: Business Use of Your
+  Home ("Exclusive use. To qualify under the exclusive use test, you must use a specific area of your home only for your
+  trade or business"; "Regular use ... on a continuing basis"); car expenses ("If you choose to use the standard mileage
+  rate for a year, you can't deduct your actual expenses for that year except for business-related parking fees and
+  tolls"; "Parking fees and tolls. In addition to using the standard mileage rate, you can deduct any business-related
+  parking fees and tolls"; commuting between home and the main or regular workplace is personal); "Self-employed health
+  insurance deduction. You may be able to deduct the amount you paid for medical and dental insurance and qualified
+  long-term care insurance for you and your family"; Pension Plans ("If you are a sole proprietor, you can deduct
+  contributions you make to the plan for yourself on line 16 of Schedule 1 (Form 1040)"); "SE tax. You can deduct
+  one-half of your SE tax on line 15 of Schedule 1 (Form 1040)"; Legal and Professional Fees ("fees charged by
+  accountants ... are deductible"; "Tax preparation fees. You can deduct on Schedule C (Form 1040) the cost of preparing
+  that part of your tax return relating to your business"); Other Expenses You Can Deduct ("Education expenses",
+  "Supplies and materials").
+- Instructions for Schedule C (2025), https://www.irs.gov/pub/irs-pdf/i1040sc.pdf: line 17 ("fees charged by accountants
+  and attorneys ... Include fees for tax advice related to your business and for preparation of the tax forms related to
+  your business"), line 18 ("office supplies and postage"), line 22 (materials and supplies used in the year), line 25
+  ("If you used your home phone for business, do not deduct the base rate (including taxes) of the first phone line
+  into your residence"), "Technology and software tools. You can deduct technology and software tools that are ordinary
+  and necessary expenses ... Generally, this will include tax preparation software and subscription services paid to
+  manage your business. ... Most computer software expenses must be capitalized" (said on screen as "the software or
+  subscriptions that run the business"; software bought outright is equipment).
+- Publication 587 (2025), Business Use of Your Home, https://www.irs.gov/pub/irs-pdf/p587.pdf: the simplified method,
+  "multiplying $5, the prescribed rate, by the area of your home used for a qualified business use. The area you use to
+  figure your deduction is limited to 300 square feet."
+- Publication 463 (2025), Travel, Gift, and Car Expenses, https://www.irs.gov/pub/irs-pdf/p463.pdf: parking fees and
+  tolls on top of the standard mileage rate.
+- Instructions for Form 7206 (2025), https://www.irs.gov/pub/irs-pdf/i7206.pdf: "You were self-employed and had a net
+  profit for the year"; not for "any month you were eligible to participate in a health plan subsidized by your
+  employer or your spouse's employer".
+- Publication 970 (2025), Tax Benefits for Education, chapter 11, https://www.irs.gov/pub/irs-pdf/p970.pdf: "If you are
+  self-employed, you deduct your expenses for qualifying work-related education directly from your self-employment
+  income"; qualifying when "The education maintains or improves skills needed in your present work", but not when it
+  "Is needed to meet the minimum educational requirements of your present trade or business, or Is part of a program of
+  study that will qualify you for a new trade or business."
+- Publication 560 (2025), Retirement Plans for Small Business, https://www.irs.gov/pub/irs-pdf/p560.pdf (the plans'
+  rules above; contributions for yourself on line 16 of Schedule 1).
+On screen the sources are one plain line: "From the IRS's tax guide for small business (Publication 334, 2025, which
+replaced Publication 535) and its guides to the home office, cars, education and health insurance."
+
 ## Ideas / not yet
-- Expenses read from the ledger (transactions in a business category); a quarter-by-quarter profit and loss.
+- A quarter-by-quarter profit and loss.
 - The 20% deduction's wage and property limits above the line; the business's own retirement plan deadlines in the calendar.
 
 ## Separate returns, fourth pass (2026-11-02)

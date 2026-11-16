@@ -16,7 +16,7 @@ import { rulesFor } from "../side-income/data/rules.js";
 import { HOME_OFFICE, SIMPLE, QBI_LINE, QBI_MINIMUM, SIMPLE_DEADLINE, SCORP_COSTS_EXAMPLE, forYear } from "./data/business.js";
 
 export const PAYROLL = { ss: 0.062, medicare: 0.0145 };
-export const CATEGORIES = { supplies: "Supplies and materials", software: "Software and subscriptions", phone: "Phone and internet", marketing: "Advertising", travel: "Travel (fares, hotels)", meals: "Business meals", equipment: "Equipment", insurance: "Business insurance", contractors: "Help you paid", fees: "Fees and licenses", other: "Other" };
+export const CATEGORIES = { supplies: "Supplies and materials", software: "Software and subscriptions", phone: "Phone and internet", marketing: "Advertising", travel: "Travel (fares, hotels)", meals: "Business meals", equipment: "Equipment", insurance: "Business insurance", contractors: "Help you paid", fees: "Fees and licenses", professional: "Accountant, lawyer, tax help", education: "Courses for your work", other: "Other" };
 /** The share of a kind of expense the tax law lets you deduct: business meals half (IRC 274(n)(1)); everything else in full. */
 export const DEDUCTIBLE = { meals: 0.5 };
 
@@ -206,8 +206,14 @@ export function compute(plan, params = {}) {
   const stateSole = stateOf(sole);
   const soleTotal = sole.income - noneIncome + sole.se.total + sole.extra + stateSole;
   const tax = { se: sole.se.total, qbi: sole.qbi, income: sole.income - noneIncome, extra: sole.extra, state: stateSole, total: soleTotal, rate: profit > 0 ? soleTotal / profit : null, health: sole.healthOff };
-  // what is left a month: the profit, less the half of meals the tax law does not count, less the tax
-  const keepMonthly = (profit - notDeducted - soleTotal) / 12;
+  // what is left a month: the profit, less the half of meals the tax law does not count, less the tax; the home office
+  // comes back in: it is a deduction for part of a home the household pays for anyway, not money out of the business
+  // (the family's $7,200 of photography from Income, with 150 square feet typed, kept $371 a month where it keeps $412
+  // with none; it now keeps about $434: the $750 is not spent, and the tax is $259 less; 2026-11-16, found while building
+  // the costs a person may be missing, whose Add on the home office would otherwise have lowered what is left). With the
+  // costs a month to break even below, the outputs that move from a491122 on purpose, and only with a home office typed
+  // (with none, office is 0 and both are the old sums to the bit; the draw check follows this one)
+  const keepMonthly = (profit + office - notDeducted - soleTotal) / 12;
   const drawMonthly = num(s.drawMonthly);
   const draw = drawMonthly === null ? null : drawMonthly > keepMonthly + 0.5 ? "over" : "ok";
 
@@ -245,10 +251,14 @@ export function compute(plan, params = {}) {
   const Q = forYear(QBI_LINE, year);
   const line = Q[ti.filingStatus] ?? Q.single;
   const qbiLimited = sole.taxable > line;
+  // what must come in each month to break even: the money paid out (the half of meals that does not count too), not the
+  // home office, which never needs covering: it is capped at the profit and is not money out (2026-11-16; with none typed
+  // office is 0 and this is the old sum)
+  const breakEvenMonthly = (expensesTotal - office + notDeducted) / 12;
   return {
     ready: true, year, incomeId: item?.id ?? null, name: s.name || item?.name || "Your business", person: person ? { id: person.id, name: person.name } : null,
     revenue, revenueFrom: typedRevenue !== null ? "typed" : "income", incomeYearly: item?.yearly ?? null, expenses, typedTotal, notDeducted, homeOffice: office, miles, expensesTotal,
-    profit, loss: profit < 0, margin: revenue > 0 ? profit / revenue : null, breakEvenMonthly: (expensesTotal + notDeducted) / 12,
+    profit, loss: profit < 0, margin: revenue > 0 ? profit / revenue : null, breakEvenMonthly,
     tax, keepMonthly, drawMonthly, draw, scorp, plans, best, earned, simpleComp, simpleLate, simpleLimit: R.simpleLimit, job401k, qbiLimited, qbiLine: line, stateRate, notes,
     seExpenses, typedHere: typedRevenue !== null || typed.length > 0, singleBusiness: biz.length <= 1,
   };
