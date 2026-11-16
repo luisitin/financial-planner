@@ -12,10 +12,10 @@ export default {
   status: "usable",
   phase: 10,
   enabledByDefault: true,
-  needs: ["accounts", "transactions", "household", "reminders", "notes"],
-  writes: ["transactions", "reminders", "accounts", "notes"],
+  needs: ["accounts", "transactions", "household", "reminders", "notes", "debts"],
+  writes: ["transactions", "reminders", "accounts", "debts", "notes"],
   heavy: false,
-  purpose: "Say or type a note and the app turns it into entries for you to check: money spent or received, a reminder, an account balance or a note.",
+  purpose: "Say or type a note and the app turns it into entries for you to check: money spent or received, a reminder, an account balance, a debt or a note.",
   compute,
   render,
 };

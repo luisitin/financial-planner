@@ -2,7 +2,10 @@
 // it into entries to check: money spent, money in, a reminder, an account balance, a note. Each entry can be changed,
 // then added with one tap (through compute.js's applyEntry, which uses the Ledger's, Money calendar's and Account
 // detail's own helpers) or skipped. Nothing reaches the plan before Add. The notes kept are shown at the end.
-import { compute, quickRead, finish, buildPrompt, readAnswer, applyEntry, accountChoices, notePart, withoutSentences, KINDS } from "./compute.js";
+// Debts said in a note ("I owe 4,000 on my Visa at 24 percent ...") are a card of their own above the other entries:
+// each debt to check and change, one "Add these debts" with Undo, then one line to Pay off debts (gap next-60 #59).
+import { compute, quickRead, finish, buildPrompt, readAnswer, applyEntry, accountChoices, notePart, withoutSentences, KINDS,
+  finishDebt, applyDebts, debtAccounts, repeats, debtType, missingWords, unplacedWords, paidWords, doneWords, notAddedWords, twiceWords, leftWords, undoWords, payoffLine, DEBT_TYPES } from "./compute.js";
 import { REPEATS } from "../../household/calendar/compute.js";
 
 let text = "";          // the note being worked on, kept while the app is open
@@ -21,6 +24,8 @@ let live = null;        // { box, redraw } of the render on screen, where what t
 let focus = null;       // the entry brought back into view on the next render (the next one after an Add or Skip)
 let fresh = false;      // a reading just finished: its entries are scrolled into view
 let n = 0;              // entry ids in this page
+let debtDone = null;    // { text, undo?, line?, bare? }: the green line after "Add these debts" (or Undo), where the debts were
+let debtRoute = null;   // the route the green line belongs to: a new visit to the page starts without it
 const open = new Set(); // entries whose details are open for changing (an entry that needs a detail is always open)
 const typed = new Map(); // uid -> what was typed into an entry's open details, kept across redraws until Add or Skip
 
@@ -42,6 +47,7 @@ const STYLE = `
 .vn-root .rec-foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
 .vn-root .form-actions { flex-wrap: wrap; gap: 8px; }
 .vn-root .pill { margin-left: 0; }
+.vn-root .vn-entry .notice.vn-left { margin: 0 0 12px; }
 .vn-root .vn-notes { width: 100%; min-height: 120px; }
 `;
 
@@ -54,9 +60,18 @@ export function render(page, ctx) {
   const d = compute(plan);
   const today = fmt.today();
   const cur = plan.meta?.currency;
+  if (ctx.route !== debtRoute) { debtDone = null; debtRoute = ctx.route; }
   const root = ui.h("div", { class: "vn-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   const redraw = () => { if (me === shown) { root.remove(); render(page, ctx); } };
+  // another act on the page lets the debts' Undo go (a notice with a button brings itself into view on every drawing)
+  const letUndoGo = () => { if (debtDone?.undo) debtDone = { ...debtDone, undo: null }; };
+  // a debt made safe with our guesses at hand, so its words say what the tap will do with a figure not said (fix round 1)
+  const debtOpts = { guess: typeof ctx.guess === "function" ? ctx.guess : null, today };
+  const finishD = (p) => finishDebt(p, plan, text, debtOpts);
+  // what was typed into a debt's boxes, over the debt read: a name typed for a debt read with none (its box alone, with no
+  // "Kind of debt" beside it) says its kind too ("Store card" is a credit card), unless a kind was picked
+  const typedInto = (e, t) => ({ ...e, ...t, name: t.name ?? e.name, type: t.type ?? (!e.name && t.name ? debtType(t.name) : e.type) });
 
   // a message about an entry sits above the next entry, where the person is; any other at the top
   const notices = pending.map((m) => {
@@ -71,7 +86,7 @@ export function render(page, ctx) {
   if (near === null) root.append(...notices);
 
   root.append(ui.h("section", { class: "card" }, ui.h("h1", {}, "Voice notes"),
-    ui.h("p", { class: "lede" }, "Say or type what happened, the way you would tell a friend: \"spent 42 dollars at Corner Market yesterday\", \"my savings is at 12,400\", \"remind me to pay the car registration on December 1\". The app turns it into entries for you to check. Nothing is saved until you tap Add.")));
+    ui.h("p", { class: "lede" }, "Say or type what happened, the way you would tell a friend: \"spent 42 dollars at Corner Market yesterday\", \"my savings is at 12,400\", \"rent is due on the 1st\", \"I owe 4,000 on my Visa at 24 percent\". You check each entry, and nothing is saved until you tap Add.")));
 
   // the note
   const box = ui.h("textarea", { class: "vn-note", rows: 4, "aria-label": "Your note", placeholder: "Type or speak your note here", onInput: (e) => { text = e.target.value; } });
@@ -111,7 +126,7 @@ export function render(page, ctx) {
     inflight = (async () => {
       let st = "unreachable";
       try { st = String(await ai.status()); } catch { /* not answering */ }
-      const found = (list, by, m = "") => { entries = list.map((p) => ({ uid: ++n, ...p })); source = by; model = m; readPart = part.read; unread = part.rest.length; open.clear(); typed.clear(); fresh = entries.length > 0; };
+      const found = (list, by, m = "") => { entries = list.map((p) => ({ uid: ++n, ...(p.kind === "debt" ? finishDebt(p, plan, note, debtOpts) : p) })); source = by; model = m; readPart = part.read; unread = part.rest.length; open.clear(); typed.clear(); fresh = entries.length > 0; debtDone = null; };
       const rules = (why) => { found(quickRead(note, plan, today), "rules"); advice = aiQuiet ? null : why; };
       if (aiQuiet || !st.startsWith("on")) { rules({ kind: "info", text: st === "off" ? OFF : st === "no models" ? NO_MODELS : NO_ANSWER }); return; }
       try {
@@ -127,7 +142,9 @@ export function render(page, ctx) {
           advice = { kind: "info", text: "The AI helper found nothing to add in this note. Try saying the amount, the day and who was paid, for example \"spent 42 dollars at Corner Market yesterday\"." };
           return;
         }
-        found(got, "ai", r?.model ?? "");
+        // the AI saw no debt where the plain rules read one: the rules' debts are shown (the AI's notes for them are not)
+        const ruleDebts = got.some((x) => x.kind === "debt") ? [] : quickRead(note, plan, today).filter((p) => p.kind === "debt");
+        found(ruleDebts.length ? [...got.filter((x) => x.kind !== "note"), ...ruleDebts] : got, "ai", r?.model ?? "");
       } catch (e) {
         console.warn("[ai/notes] the AI did not answer", e);
         rules({ kind: "info", text: NO_ANSWER });
@@ -138,19 +155,47 @@ export function render(page, ctx) {
   }
   if (inflight) inflight.finally(redraw);
 
-  // the entries found
-  if (entries.length) {
-    const ready = entries.filter((e) => e.ready);
-    const list = ui.h("ul", { class: "records" }, entries.map((e) => ui.h("li", { class: "vn-entry", dataset: { uid: String(e.uid) } }, e.uid === near ? notices : null, entryView(e))));
-    const card = ui.h("section", { class: "card vn-found" }, ui.h("h2", {}, `What the app found (${entries.length})`),
-      advice ? ui.notice(advice.kind, advice.text) : ui.h("p", { class: "muted small" }, source === "ai" ? `Read by the AI helper${model ? ` (${model})` : ""}, which can get things wrong: check each entry, change anything, then tap Add.` : "Read with simple rules: check each entry, change anything, then tap Add."),
-      unread ? ui.notice("info", `Your note is long, so the app read its first ${readPart.length} sentences. The other ${unread === 1 ? "one stays" : `${unread} stay`} in the box: once these are done, tap Read my note again.`) : null,
+  // the entries found: debts in a card of their own first, then the others
+  const debtList = entries.filter((e) => e.kind === "debt"), others = entries.filter((e) => e.kind !== "debt");
+  const sourceLine = () => (advice ? ui.notice(advice.kind, advice.text) : ui.h("p", { class: "muted small" }, source === "ai" ? `Read by the AI helper${model ? ` (${model})` : ""}, which can get things wrong: check each entry, change anything, then tap Add.` : "Read with simple rules: check each entry, change anything, then tap Add."));
+  const longNote = () => (unread ? ui.notice("info", `Your note is long, so the app read its first ${readPart.length} sentences. The other ${unread === 1 ? "one stays" : `${unread} stay`} in the box: once these are done, tap Read my note again.`) : null);
+  let first = null;
+  if (debtList.length || debtDone) {
+    const card = ui.h("section", { class: "card vn-found vn-debts" });
+    if (debtDone) {
+      const d = debtDone;
+      const words = ui.h("span", {}, d.text, d.debts ? " " : "", d.debts ? ui.h("a", { href: "#/balance/liabilities" }, "Open Debts") : null);
+      card.append(ui.notice("ok", words, d.undo ? { undo: d.undo, undone: (r) => undone(d, r) } : {}));
+      if (d.line) card.append(ui.h("p", { class: "vn-payoff" }, d.line, " ", ui.h("a", { href: "#/debt/payoff" }, "Open Pay off debts")));
+    }
+    if (debtList.length) {
+      const unplaced = debtList.flatMap((e) => e.unplaced ?? []), paid = debtList.flatMap((e) => e.paid ?? []);
+      // two entries for one debt (the same debt in the plan, or one new name twice): the later one says so and is not added
+      const twice = repeats(debtList.map((e) => ({ ...e, ...typed.get(e.uid) })));
+      card.append(...[ui.h("h2", {}, `Debts from your note (${debtList.length})`),
+        advice || source === "ai" ? sourceLine() : ui.h("p", { class: "muted small" }, "Read with simple rules: check each figure, change anything, then add them."),
+        longNote(),
+        unplaced.length ? ui.notice("info", unplacedWords(unplaced)) : null,
+        paid.length ? ui.notice("info", paidWords(paid)) : null,
+        ui.h("ul", { class: "records" }, debtList.map((e, i) => ui.h("li", { class: "vn-entry", dataset: { uid: String(e.uid) } }, e.uid === near ? notices : null, debtView(e, twice.has(i))))),
+        ui.row(ui.button(debtList.length === 1 ? "Add this debt" : `Add these ${debtList.length} debts`, () => addDebts()))].filter(Boolean));
+    }
+    root.append(card);
+    first = card;
+  }
+  if (others.length) {
+    const ready = others.filter((e) => e.ready);
+    const list = ui.h("ul", { class: "records" }, others.map((e) => ui.h("li", { class: "vn-entry", dataset: { uid: String(e.uid) } }, e.uid === near ? notices : null, entryView(e))));
+    const card = ui.h("section", { class: "card vn-found" }, ui.h("h2", {}, `What the app found (${others.length})`),
+      sourceLine(),
+      first ? null : longNote(),
       list,
       ui.row(ready.length >= 2 ? ui.button(`Add all ${ready.length} that are ready`, () => addAll()) : null,
-        ui.button("Skip all", () => { entries = []; open.clear(); typed.clear(); advice = null; redraw(); }, { class: "secondary" })));
+        ui.button("Skip all", () => { for (const e of others) { open.delete(e.uid); typed.delete(e.uid); } entries = debtList; if (!entries.length) advice = null; redraw(); }, { class: "secondary" })));
     root.append(card);
-    if (fresh) { fresh = false; requestAnimationFrame(() => card.scrollIntoView({ block: "start", behavior: "smooth" })); }
+    first = first ?? card;
   }
+  if (fresh && first) { fresh = false; const at = first; requestAnimationFrame(() => at.scrollIntoView({ block: "start", behavior: "smooth" })); }
   // after an Add the shell has scrolled to the top: back to where the person was (as on ai/categorizer)
   if (near !== null) setTimeout(() => root.querySelector(`li[data-uid="${near}"]`)?.scrollIntoView({ block: notices.length ? "center" : "nearest" }), 0);
 
@@ -217,7 +262,8 @@ export function render(page, ctx) {
   // what was added leaves the box, so reading the note again cannot add it twice; once every entry is handled the
   // sentences read go too, and only what was not read yet (or was typed since) stays
   function tidy(added) {
-    text = withoutSentences(text, added.map((p) => p.source));
+    // (a sentence another entry still listed came from stays: a debt and the money spent said beside it)
+    text = withoutSentences(text, added.map((p) => p.source).filter((src) => !entries.some((e) => e.source === src)));
     if (!entries.length) { text = withoutSentences(text, readPart); readPart = []; unread = 0; advice = null; }
   }
   // one full stop at the end of a message, even when it ends with "Acme Inc."
@@ -225,6 +271,7 @@ export function render(page, ctx) {
   const leftOver = () => (!entries.length && text.trim() ? " What is left of your note is still in the box: tap Read my note to read it." : "");
 
   function skipOne(e) {
+    letUndoGo();
     const at = entries.findIndex((x) => x.uid === e.uid);
     focus = (entries[at + 1] ?? entries[at - 1])?.uid ?? null;
     entries = entries.filter((x) => x.uid !== e.uid);
@@ -233,6 +280,7 @@ export function render(page, ctx) {
   }
 
   function add(e, v) {
+    letUndoGo();
     const p = finish({ ...e, ...v }, plan, today, text);
     const at = entries.findIndex((x) => x.uid === e.uid);
     typed.delete(e.uid);
@@ -251,10 +299,11 @@ export function render(page, ctx) {
   }
 
   function addAll() {
+    letUndoGo();
     // each one checked again with what was typed into it, against the plan as it is now (an account may be gone)
     const todo = [], missed = [];
     entries = entries.map((e) => {
-      if (!e.ready) return e;
+      if (!e.ready || e.kind === "debt") return e;
       const p = { uid: e.uid, ...finish({ ...e, ...typed.get(e.uid) }, plan, today, text) };
       typed.delete(e.uid);
       (p.ready ? todo : missed).push(p);
@@ -273,6 +322,113 @@ export function render(page, ctx) {
       if (missed.length) pending.push(notAdded());
       focus = entries[0]?.uid ?? null;
     });
+  }
+
+  // ---- debts: each one to check, its boxes one tap away (Edit), all added with one tap and taken back with Undo
+  function debtFields(values) {
+    const inPlan = debtAccounts(plan);
+    const which = inPlan.length ? { key: "accountId", label: "In your plan", type: "select", options: [{ value: "", label: "A new debt" }, ...inPlan.map((a) => ({ value: a.id, label: a.name || "Debt" }))] } : null;
+    const isNew = !values.accountId;
+    return [which,
+      isNew ? { key: "name", label: "What it is called", help: "for example, Visa or Car loan" } : null,
+      // (never folded: it always holds the kind read from the words, so a fold would open by itself, and a kind hidden
+      // behind one would mislead: R21)
+      isNew ? { key: "type", label: "Kind of debt", type: "select", options: Object.entries(DEBT_TYPES).map(([value, label]) => ({ value, label })) } : null,
+      { key: "owed", label: "How much you owe", type: "money", min: 0 },
+      { key: "rate", label: "Interest rate a year", type: "percent", min: 0, max: 100, help: "on the statement; type 24 for 24%" },
+      { key: "payment", label: "Payment a month", type: "money", min: 0, help: "the least the lender asks for" }].filter(Boolean);
+  }
+  // what is typed into a debt's boxes, read as the kit reads them (money and a percent as numbers; blank is null)
+  function readDebt(form) {
+    const v = {};
+    for (const el of form.querySelectorAll("[name]")) {
+      const blank = String(el.value ?? "").trim() === "";
+      if (el.name === "owed" || el.name === "payment") v[el.name] = blank ? null : ui.moneyValue(el);
+      else if (el.name === "rate") v.rate = blank ? null : ui.pctValue(el);
+      else v[el.name] = el.value;
+    }
+    return v;
+  }
+  // the one or two boxes a debt that is not ready needs, shown on their own (fix round 1, 2026-11-16: an unnamed debt
+  // opened all five boxes and an orange "Still needed" at once); a need with no box of its own opens them all
+  function needFields(e) {
+    const f = [];
+    if (e.problems.includes("what it is called")) f.push({ key: "name", label: "What is this debt called?", help: "for example, Student loan or Car loan" });
+    if (e.problems.includes("how much you owe")) f.push({ key: "owed", label: "How much you owe", type: "money", min: 0 });
+    return f.length === e.problems.length ? f : [];
+  }
+  function debtView(e, twice = false) {
+    const t = typedInto(e, typed.get(e.uid) ?? {});
+    const values = { accountId: t.accountId, name: t.name, type: t.type, owed: t.owed, rate: t.rate, payment: t.payment };
+    const need = !e.ready && !open.has(e.uid) ? needFields(e) : [];
+    const full = open.has(e.uid) || (!e.ready && !need.length);
+    const skip = ui.button("Skip", () => skipOne(e), { class: "secondary small" });
+    // "Edit" opens every box, as on the other records (the line for a figure not said says "Tap Edit")
+    const more = ui.button("Edit", () => { letUndoGo(); open.add(e.uid); focus = e.uid; redraw(); }, { class: "secondary small" });
+    let form = null;
+    if (full || need.length) {
+      form = ui.form(full ? debtFields(values) : need, values, (v) => doneEditing(e, v), { submitLabel: "Done" });
+      // the card's one filled button is "Add these debts": Done is outlined
+      form.querySelector("button[type=submit]")?.classList.add("secondary");
+      const keep = (ev) => { if (ev.target.name !== "accountId") typed.set(e.uid, { ...typed.get(e.uid), ...readDebt(form) }); };
+      form.addEventListener("input", keep);
+      form.addEventListener("change", keep);
+      // a debt in the plan or a new one: the boxes change (name and kind only for a new one), what was typed stays
+      form.querySelector("select[name=accountId]")?.addEventListener("change", (ev) => {
+        const at = entries.findIndex((x) => x.uid === e.uid);
+        if (at >= 0) { const v = { ...typed.get(e.uid), ...readDebt(form) }; entries[at] = { uid: e.uid, ...finishD({ ...e, ...v, accountId: ev.target.value, name: v.name ?? e.name, heard: "" }) }; typed.delete(e.uid); open.add(e.uid); focus = e.uid; redraw(); }
+      });
+      form.querySelector(".form-actions")?.append(...(full ? [skip] : [more, skip]));
+    }
+    const money = (x) => fmt.money(x, cur, undefined, Number.isInteger(x) ? 0 : 2);
+    const sub = [e.accountId ? `Updates ${e.name} in your plan` : DEBT_TYPES[e.type], e.rate !== null ? `${Number((e.rate * 100).toPrecision(10))}% a year` : null, e.payment !== null ? `${money(e.payment)} a month` : null].filter(Boolean).join(" · ");
+    const missing = missingWords(e, cur);
+    return ui.h("div", {},
+      // left out at the last "Add these debts": said first, where the screen comes back to (fix round 1: it sat under the list)
+      e.notAdded ? (() => { const n = ui.notice("error", notAddedWords(e, e.notAdded === "twice")); n.classList.add("vn-left"); return n; })() : null,
+      ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, e.name || "Name this debt"), ui.h("span", { class: "rec-value" }, e.owed !== null ? money(e.owed) : e.accountId ? "owed: as in your plan" : "owed: not said")),
+      ui.h("div", { class: "rec-sub" }, sub),
+      missing ? ui.h("p", { class: "small vn-missing" }, missing) : null,
+      full && e.problems.length ? ui.notice("warn", `Still needed: ${e.problems.join(", ")}.`) : null,
+      twice && !e.notAdded ? ui.notice("warn", twiceWords(e)) : null,
+      e.warnings.map((w) => ui.notice("warn", w)),
+      form ?? ui.h("div", { class: "rec-foot" }, ui.button("Edit", () => { letUndoGo(); open.add(e.uid); focus = e.uid; redraw(); }, { class: "secondary small" }), skip));
+  }
+  function doneEditing(e, v) {
+    letUndoGo();
+    const at = entries.findIndex((x) => x.uid === e.uid);
+    const t = { ...typed.get(e.uid), ...v };
+    // the person has looked at it: "Is this your Visa card?" goes
+    const p = finishD({ ...typedInto(e, t), heard: "" });
+    typed.delete(e.uid);
+    focus = e.uid;
+    if (at >= 0) entries[at] = { uid: e.uid, ...p };
+    if (p.ready) open.delete(e.uid);
+    redraw();
+  }
+  function addDebts() {
+    // each checked again with what was typed into it, against the plan as it is now (a debt may have been removed); one
+    // aiming at the same debt as another above is left out, said on it
+    const list = entries.filter((e) => e.kind === "debt").map((e) => ({ uid: e.uid, ...finishD(typedInto(e, typed.get(e.uid) ?? {})) }));
+    const twice = repeats(list), todo = [], missed = [];
+    list.forEach((p, i) => { if (twice.has(i)) { p.notAdded = "twice"; missed.push(p); } else if (p.ready) todo.push(p); else { p.notAdded = "need"; missed.push(p); } });
+    entries = entries.map((e) => (e.kind === "debt" ? list.find((p) => p.uid === e.uid) : e));
+    for (const p of todo) typed.delete(p.uid);
+    if (!todo.length) { focus = missed[0]?.uid ?? null; redraw(); return; }
+    let r = null;
+    const undo = ui.undoable(store, (draft) => { r = applyDebts(draft, todo, { id: ui.uid, today, guess: debtOpts.guess }); });
+    const gone = new Set(todo.map((p) => p.uid));
+    entries = entries.filter((x) => !gone.has(x.uid));
+    for (const uid of gone) open.delete(uid);
+    tidy(todo);
+    const toDebts = ["bare", "guessed", "dropped"].some((k) => (r?.[k] ?? []).length > 0);
+    debtDone = { text: [doneWords(r, cur), leftWords(missed.map((p) => ({ name: p.name, twice: p.notAdded === "twice" })))].filter(Boolean).join(" ") + leftOver(), undo, debts: toDebts, line: payoffLine(store.get(), today).text, back: todo };
+    if (!undo) redraw();
+  }
+  // Undo: the plan as it was, and the debts listed again to change or add
+  function undone(d, r) {
+    debtDone = { text: ui.undoneWords(r, undoWords({ added: d.back.filter((p) => !p.accountId).map((p) => p.name), updated: d.back.filter((p) => p.accountId).map((p) => p.name) })) };
+    if (r?.done) entries = [...d.back.map((p) => ({ ...p, uid: ++n })), ...entries];
   }
 
   // the notes kept so far (the plan's notes), editable

@@ -9,6 +9,9 @@ import { saveReminder, REPEATS } from "../../household/calendar/compute.js";
 import { saveBalance } from "../../balance/accounts/compute.js";
 import { ACCOUNT_TYPES } from "../../balance/net-worth/compute.js";
 import { aliases, accountAliases, hideTerms, hide, restore, findList, cut } from "../critic/compute.js";
+import { isDebtSentence, readDebts, finishDebt, matchOf, debtAccounts, debtType } from "./debts.js";
+// the debt case (gap list, next 60, item 59): a note that describes debts becomes debts to check (debts.js)
+export { numberWords, isDebtSentence, readDebts, finishDebt, applyDebts, matchDebt, matchOf, repeats, debtAccounts, debtName, debtType, debtKey, missingWords, unplacedWords, paidWords, doneWords, notAddedWords, twiceWords, leftWords, undoWords, payoffLine, payoffWords, DEBT_TYPES } from "./debts.js";
 
 /** What a note can become, in plain words. */
 export const KINDS = { spend: "Money spent", income: "Money in", reminder: "Reminder", balance: "Account balance", note: "Note" };
@@ -586,10 +589,31 @@ export function quickRead(text, plan, today) {
       out.push({ kind: "reminder", name: upperFirst(name), date: day?.date ?? "", amount: money?.amount ?? null, repeat: /\bevery month|\bmonthly\b/.test(low) ? "monthly" : /\bevery year|\byearly\b|\bannual/.test(low) ? "yearly" : "none", source: s });
       continue;
     }
+    // debts said ("I owe 4,000 on my Visa at 24 percent and 12,000 on the car at 6, paying 300 and 410 a month"): one
+    // entry per debt, kind "debt" (debts.js); the figures no debt took, and money said as paid, ride on the first. Money
+    // spent or received in the same sentence keeps the entry it was before, beside the debt, when that entry's amount
+    // is the money said as paid ("Spent 45 at the dentist, owe 20 more": the $45 spent and the $20 owed; fix round 1,
+    // 2026-11-16: the spend was dropped)
+    if (isDebtSentence(s)) {
+      const r = readDebts(s, plan);
+      if (r.debts.length) {
+        const before = r.paid.length ? plain(s, low, money) : null;
+        const kept = before && (before.kind === "spend" || before.kind === "income") && r.paid.some((x) => Number(x.replace(/[$,\s]/g, "")) === before.amount) ? before : null;
+        const paid = kept ? r.paid.filter((x) => Number(x.replace(/[$,\s]/g, "")) !== kept.amount) : r.paid;
+        if (kept) out.push(kept);
+        r.debts.forEach((d, i) => out.push({ kind: "debt", ...d, source: s, ...(i === 0 ? { unplaced: r.unplaced, paid } : {}) }));
+        continue;
+      }
+    }
+    out.push(plain(s, low, money));
+  }
+  return out.map((p) => (p.kind === "debt" ? finishDebt(p, plan, text) : finish(p, plan, today, text)));
+
+  // a sentence that is no reminder and no debt: a balance, money in or out, else a note
+  function plain(s, low, money) {
     const acct = findAccount(s, plan);
     if (acct.named && money && BALANCE.test(low) && !NOT_BALANCE.test(low)) {
-      out.push({ kind: "balance", accountId: acct.account?.id ?? "", amount: money.amount, date: dayOf(s, today)?.date ?? today, source: s });
-      continue;
+      return { kind: "balance", accountId: acct.account?.id ?? "", amount: money.amount, date: dayOf(s, today)?.date ?? today, source: s };
     }
     const sure = IN_SURE.test(low), paidOut = OUT_WORDS.test(low.replace(new RegExp(IN_SURE.source, "g"), " "));
     const feeOut = !sure && FEE_OUT.test(low) && !NO_FEE.test(low) && /\bdeposit/.test(low) && !IN_NOT_DEPOSIT.test(low);
@@ -599,12 +623,15 @@ export function quickRead(text, plan, today) {
       const payee = readPayee(withoutAccount(s, acct), [day?.match, money.phrase]) || (kind === "income" && PAYCHECK.test(low) ? "Paycheck" : "");
       // an account the note names but that fits none (or several) is asked for, never swapped for the usual one
       const into = acct.account ?? (acct.named ? null : defaultAccount(plan, kind));
-      out.push({ kind, amount: money.amount, date: day?.date ?? today, payee, accountId: into?.id ?? "", source: s });
-      continue;
+      return { kind, amount: money.amount, date: day?.date ?? today, payee, accountId: into?.id ?? "", source: s };
     }
-    out.push({ kind: "note", text: s, source: s });
+    return { kind: "note", text: s, source: s };
   }
-  return out.map((p) => finish(p, plan, today, text));
+}
+
+/** The sentences of the part read (notePart) that the plain rules read as debts: a debt sentence that is no reminder. */
+export function debtSentences(text, today) {
+  return notePart(text).read.filter((s) => !isReminder(s, s.toLowerCase(), today) && isDebtSentence(s));
 }
 
 // a day the note talks about that readDate could not read ("2 weeks before", "on Veterans Day", "on the first of the
@@ -674,15 +701,19 @@ export function buildPrompt(text, plan, today) {
   const read = notePart(text).read.map((s) => (/[.!?;:]$/.test(s) ? s : `${s}.`)).join(" ");
   // "with the Visa card" -> "with the the credit card" -> "with the credit card"
   const note = cut(hide(read, terms).replace(/\b(the|my|our|your)\s+the\s+/gi, "$1 "), MAX_NOTE);
+  // the debt entry is described only when the part read holds a debt sentence (debtSentences), so every other note is
+  // asked exactly as before
+  const debts = debtSentences(text, today).length > 0;
   const system = `You turn a short note, spoken or typed, into entries for a household money app. Reply with only a JSON list. Each entry is one of:
 {"kind":"spend","amount":42.17,"date":"YYYY-MM-DD","payee":"who it was paid to","account":"one of the accounts listed, or null"}
 {"kind":"income","amount":1950,"date":"YYYY-MM-DD","payee":"who it came from","account":"one of the accounts listed, or null"}
 {"kind":"reminder","name":"what to remember","date":"YYYY-MM-DD","amount":85 or null,"repeat":"none" or "monthly" or "yearly"}
 {"kind":"balance","account":"one of the accounts listed","amount":12400,"date":"YYYY-MM-DD"}
-{"kind":"note","text":"anything else worth keeping, in the note's own words"}
-Use only what the note says. Never guess an amount or a day the note does not give: use null. Amounts are positive numbers without a currency sign. Today is ${today}; words such as yesterday, last Friday or next month are counted from today. People are called Adult 1, Adult 2, Child 1 and so on; keep those names. At most ${MAX_ENTRIES} entries.`;
+{"kind":"note","text":"anything else worth keeping, in the note's own words"}${debts ? `
+{"kind":"debt","name":"the debt as the note names it, or one of the accounts listed","type":"card" or "loan" or "mortgage" or "student" or "other","owed":4000 or null,"rate":24 (the interest rate a year, in percent) or null,"payment":300 (a month) or null}` : ""}
+Use only what the note says. Never guess an amount or a day the note does not give: use null.${debts ? " A debt is money owed on a card or a loan: one debt entry for each, and never a balance or a note for it as well; never guess what is owed, a rate or a payment the note does not give: use null." : ""} Amounts are positive numbers without a currency sign. Today is ${today}; words such as yesterday, last Friday or next month are counted from today. People are called Adult 1, Adult 2, Child 1 and so on; keep those names. At most ${MAX_ENTRIES} entries.`;
   const user = `ACCOUNTS: ${list.length ? list.map((a) => `${a.alias} (${a.label}${a.owner ? `, belongs to ${a.owner}` : ""})`).join("; ") : "none yet"}\nNOTE: ${note}`;
-  return { messages: [{ role: "system", content: system }, { role: "user", content: user }], names: [...people.filter((p) => p.name), ...accts.filter((a) => a && a.name)], accounts: list };
+  return { messages: [{ role: "system", content: system }, { role: "user", content: user }], names: [...people.filter((p) => p.name), ...accts.filter((a) => a && a.name)], accounts: list, ...(debts ? { debts: true } : {}) };
 }
 
 /**
@@ -701,8 +732,19 @@ export function readAnswer(content, plan, today, note, prompt) {
     return hit ? hit.id : readAccount(v, plan)?.id ?? "";
   };
   const back = (v) => restore(typeof v === "string" ? v : "", prompt?.names ?? []);
-  return arr.filter(isObj).slice(0, MAX_ENTRIES).map((x) => finish({ ...x, accountId: accountOf(x.account, x.kind), payee: back(x.payee), name: back(x.name), text: back(x.text), source: "" }, plan, today, note));
+  // a debt, only when the question asked for debts: its account from its stand-in or its name (a debt in the plan), else a
+  // new one; its rate in percent, as asked
+  const debtOf = (x) => {
+    const hit = (prompt?.accounts ?? []).find((a) => typeof x.name === "string" && norm(a.alias) === norm(x.name));
+    const name = back(x.name), type = AI_TYPES[x.type] ?? debtType(name);
+    const acct = hit && debtAccounts(plan).some((a) => a.id === hit.id) ? { accountId: hit.id } : matchOf({ name, type }, plan);
+    const rate = x.rate === null || x.rate === undefined || x.rate === "" || !Number.isFinite(Number(x.rate)) ? null : Number((Number(x.rate) / 100).toPrecision(12));
+    return finishDebt({ name, type, owed: x.owed, rate, payment: x.payment, ...acct, source: "" }, plan, note);
+  };
+  return arr.filter(isObj).slice(0, MAX_ENTRIES).map((x) => (x.kind === "debt" && prompt?.debts ? debtOf(x) : finish({ ...x, accountId: accountOf(x.account, x.kind), payee: back(x.payee), name: back(x.name), text: back(x.text), source: "" }, plan, today, note)));
 }
+/** The AI's words for a kind of debt, as the question names them. */
+const AI_TYPES = { card: "credit", loan: "loan", mortgage: "mortgage", student: "student_loan", other: "other_liability" };
 
 /**
  * Add one entry to the plan draft, through the page that owns it; changes `draft` in place. -> { ok, text, go }

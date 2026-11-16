@@ -233,7 +233,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `ai/reader` | Document reader | usable | 8 | Paste a pay stub, a statement, a Social Security statement, an advisor's plan, a W-2, a 1099 or last year's tax return: the figures it holds and what each would change, accepted one by one. | pdf.js; W-2, 1099 and Form 1040 read by box and line words (gap #23, forms.js) |
 | `ai/critic` | Plan critic | usable | 10 | Asks the AI to list the gaps and risks it sees in your plan, each linked to the page where you can fix it. | - |
 | `ai/glossary` | Glossary | usable | 10 | Explains every money word used in the app in plain words, with an example and the pages that use it, and lets you search for any of them. | - |
-| `ai/notes` | Voice notes | usable | 10 | Say or type a note and the app turns it into entries for you to check: money spent or received, a reminder, an account balance or a note. | - |
+| `ai/notes` | Voice notes | usable | 10 | Say or type a note and the app turns it into entries for you to check: money spent or received, a reminder, an account balance, a debt or a note. | - |
 
 ## system
 | key | title | status | phase | purpose | seeds |

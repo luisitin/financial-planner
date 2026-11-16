@@ -250,9 +250,11 @@ test("the plain rules: money in or out by what was done, balances only for a bal
   // a payment, a fee or a rate is no balance
   assert.deepEqual(one("The car loan payment is 410 a month").slice(0, 2), ["spend", 410]);
   assert.equal(quickRead("The car loan payment is 410 a month", p, T)[0].ready, false, "who it was paid to is asked for");
+  // a card's rate describes the debt (gap next-60 #59): the debt in the plan is updated, after a tap (a payment a month
+  // alone is no debt sentence, fix round 1: the line above reads as before)
   assert.equal(one("The mortgage payment is 1,980")[0], "spend");
   assert.equal(one("My checking account fee is 12")[0], "note");
-  assert.equal(one("The Visa card interest rate is 23.9%")[0], "note");
+  { const [x] = quickRead("The Visa card interest rate is 23.9%", p, T); assert.deepEqual([x.kind, x.accountId, x.rate, x.owed, x.payment, x.ready], ["debt", "a-visa", 0.239, null, null, true]); }
   assert.deepEqual(one("The balance on my Visa card is 6,400"), ["balance", 6400, T, "", "a-visa", true]);
   assert.deepEqual(one("My savings account is at 12,400"), ["balance", 12400, T, "", "a-sav", true]);
   assert.deepEqual(one("My Roth has 31,500"), ["balance", 31500, T, "", "a-roth", true]);
@@ -642,4 +644,425 @@ test("a reminder's name stops at its day when a remark follows after a comma", (
   assert.equal(quickRead("Rent is due to the landlord on the 1st, as discussed", p, T)[0].name, "Rent is due to the landlord");
   assert.equal(quickRead("Visa payment due to Chase on the 15th, it is automated", p, T)[0].name, "Visa payment due to Chase");
   assert.equal(quickRead("Remind me to buy milk, eggs and bread tomorrow", p, T)[0].name, "Buy milk eggs and bread");   // a comma before the day stays
+});
+
+// ---------------------------------------------------------------- gap next-60 #59 (2026-11-16): invariance
+// A note that says nothing about debts reads exactly as before. Over every invented household (qa/fixtures/*-plan.mjs,
+// the 14 households, the phone-built ones, the empty plan), the page's compute(), the plain rules (quickRead) on every
+// note of the corpus (the notes this file's tests used at dca545e, and since fix round 1 eighteen more with a card or
+// loan word and a payment a month, none of them a debt sentence: the test below the digests says so), the AI question
+// for each (buildPrompt), fixed AI answers read back (readAnswer) and every ready entry
+// added (applyEntry) give the very output they gave at dca545e: a digest per plan written down from that commit's code
+// (invariance.json). To write them again after a deliberate change: PRINT=1 node --test modules/ai/notes/module.test.mjs
+import * as NOTES from "./compute.js";
+const INV_T = "2026-11-16";
+async function invariancePlans() {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const out = [];
+  const dir = path.join(ROOT, "qa", "fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push({ name: `fixture ${f}:${name}`, plan: fn(INV_T) });
+  }
+  for (const a of ARCHETYPES) out.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push({ name: `phone ${name}`, plan: fn() });
+  out.push({ name: "empty plan", plan: emptyPlan() });
+  return out.map((x) => ({ ...x, plan: migrate(structuredClone(x.plan)) }));
+}
+const INV = JSON.parse((await import("node:fs")).readFileSync(new URL("./invariance.json", import.meta.url), "utf8"));
+async function invarianceDigests() {
+  const crypto = await import("node:crypto");
+  const dig = (x) => crypto.createHash("sha256").update(JSON.stringify(x)).digest("base64url").slice(0, 22);
+  // fixed answers of the AI helper: money, a reminder, a balance, a note, a kind it does not know, a debt (not asked for)
+  const ANSWERS = [
+    `[{"kind":"spend","amount":42.17,"date":"${INV_T}","payee":"Corner Market","account":null},{"kind":"reminder","name":"Pay the car registration","date":"2026-12-01","amount":85,"repeat":"yearly"}]`,
+    `[{"kind":"balance","account":"the checking account","amount":12400,"date":"${INV_T}"},{"kind":"note","text":"Adult 1 likes the new budget"},{"kind":"debt","name":"Visa","owed":4000,"rate":24,"payment":300}]`,
+    "no list here",
+  ];
+  const out = {};
+  for (const { name, plan } of await invariancePlans()) {
+    const draft = structuredClone(plan);
+    let n = 0;
+    const reads = [], prompts = [], applied = [];
+    for (const note of INV.corpus) {
+      const got = NOTES.quickRead(note, plan, INV_T);
+      reads.push(got);
+      const q = NOTES.buildPrompt(note, plan, INV_T);
+      prompts.push(q.messages.map((m) => m.content).join("\n"));
+      for (const p of got) if (p.ready) applied.push(NOTES.applyEntry(draft, p, { id: `v${++n}`, today: INV_T }));
+    }
+    const q = NOTES.buildPrompt(INV.corpus[0], plan, INV_T);
+    const answers = ANSWERS.map((a) => NOTES.readAnswer(a, plan, INV_T, INV.corpus[0], q));
+    out[name] = dig({ compute: NOTES.compute(plan), reads, prompts, answers, applied, plan: { transactions: draft.transactions, reminders: draft.reminders, accounts: draft.accounts, notes: draft.notes, debts: draft.debts } });
+  }
+  return out;
+}
+test("invariance: a note with no debt in it reads, asks, answers and adds exactly as at dca545e, in every invented household", async () => {
+  const now = await invarianceDigests();
+  if (process.env.PRINT) {
+    (await import("node:fs")).writeFileSync(new URL("./invariance.json", import.meta.url), `${JSON.stringify({ note: INV.note, corpus: INV.corpus, plans: now }, null, 1)}\n`);
+    return;
+  }
+  assert.ok(Object.keys(now).length >= 30, "the invented households are all here");
+  assert.deepEqual(Object.keys(now).sort(), Object.keys(INV.plans).sort(), "the same households as at dca545e");
+  for (const [k, v] of Object.entries(now)) assert.equal(v, INV.plans[k], `${k}: a note with no debt reads as before`);
+});
+
+// ---------------------------------------------------------------- gap next-60 #59 (2026-11-16): a debt plan from a spoken description
+import { numberWords, isDebtSentence, readDebts, finishDebt, applyDebts, matchDebt, matchOf, repeats, debtName, debtType, missingWords, unplacedWords, paidWords, doneWords, notAddedWords, twiceWords, leftWords, undoWords, payoffLine, payoffWords, debtSentences, DEBT_TYPES } from "./compute.js";
+import { renterDebtPlan } from "../../../qa/fixtures/renter-debt-plan.mjs";
+import { guessedPlan } from "../../../qa/fixtures/guessed-plan.mjs";
+import { isGuess } from "../../../core/estimate/index.js";
+import { changesOf, takeBack } from "../../../core/ui/undo.js";
+import { compute as debtsPage } from "../../balance/liabilities/compute.js";
+import { compute as payoffPage } from "../../debt/payoff/compute.js";
+const EXAMPLE = "I owe about four thousand on my Visa at 24 percent and twelve thousand on the car at 6, paying 300 and 410 a month";
+const D = (x) => ({ kind: x.kind, name: x.name, type: x.type, owed: x.owed, rate: x.rate, payment: x.payment, accountId: x.accountId, missing: x.missing, problems: x.problems, ready: x.ready });
+const counter = () => { let n = 0; return () => `t${++n}`; };
+// applyDebts' result: every list, empty unless given
+const R = (o) => ({ added: [], updated: [], bare: [], guessed: [], dropped: [], later: [], repeated: [], ...o });
+// our guesses as the app makes them (core/app.js ctx.guess): the guesses page's estimators and tables, on the plan given
+import * as EST from "../../../core/estimate/index.js";
+import { estimators as GUESS_EST, TABLES as GUESS_TABLES } from "../../overview/guesses/compute.js";
+const guess = (k, { plan: on, ...o } = {}) => EST.estimate(on, k, { estimators: GUESS_EST, tables: GUESS_TABLES, today: T, ...o });
+
+test("the example sentence: two debts to check, each with its name, kind, what is owed, the rate and the payment", () => {
+  const got = quickRead(EXAMPLE, emptyPlan(), T);
+  assert.deepEqual(got.map(D), [
+    { kind: "debt", name: "Visa", type: "credit", owed: 4000, rate: 0.24, payment: 300, accountId: "", missing: [], problems: [], ready: true },
+    { kind: "debt", name: "Car loan", type: "loan", owed: 12000, rate: 0.06, payment: 410, accountId: "", missing: [], problems: [], ready: true },
+  ]);
+  assert.equal(got[0].source, EXAMPLE, "each debt keeps the sentence it came from");
+  assert.deepEqual(got[0].warnings, [], "every figure is in the note as said");
+  assert.equal(isDebtSentence(EXAMPLE), true);
+  assert.deepEqual(debtSentences(EXAMPLE, T), [EXAMPLE]);
+  // in a plan that has them, the same note updates the Visa card and the Car loan instead of adding two more
+  assert.deepEqual(quickRead(EXAMPLE, renterDebtPlan(), T).map((x) => [x.name, x.accountId, x.owed, x.rate, x.payment]), [["Visa card", "setup-owe-credit", 4000, 0.24, 300], ["Car loan", "setup-owe-car-loan", 12000, 0.06, 410]]);
+});
+
+test("numbers said in words: units, tens, hundreds, thousands, halves and points; a lone 'one' or 'a', a day and a plan's name stay", () => {
+  const w = (s) => numberWords(s);
+  assert.equal(w("four thousand"), "4000");
+  assert.equal(w("twenty-four percent"), "24 percent");
+  assert.equal(w("three hundred and ten a month"), "310 a month");
+  assert.equal(w("twelve hundred"), "1200");
+  assert.equal(w("a hundred and fifty"), "150");
+  assert.equal(w("two thousand and five hundred"), "2500");
+  assert.equal(w("paying three hundred and four hundred ten"), "paying 300 and 410", "two numbers, not 30,410");
+  assert.equal(w("six and a half percent"), "6.5 percent");
+  assert.equal(w("four and a half thousand"), "4500");
+  assert.equal(w("twenty four point nine nine percent"), "24.99 percent");
+  assert.equal(w("zero percent for a year"), "0 percent for a year");
+  assert.equal(w("one percent"), "1 percent");
+  assert.equal(w("twelve grand, 12k, $4.5 thousand, 1.2 million"), "12000, 12000, $4500, 1200000");
+  assert.equal(w("the one on the car"), "the one on the car", "a lone 'one' is no number");
+  assert.equal(w("300 a month"), "300 a month", "'a month' is no number");
+  assert.equal(w("due the twenty fifth"), "due the twenty fifth", "a day said in words is left");
+  assert.equal(w("my 401k loan"), "my 401k loan", "a plan's name is no 401,000");
+  // a whole note in words
+  const [x] = quickRead("We owe two hundred fifty thousand on the house at six and a half percent, paying nineteen hundred a month", emptyPlan(), T);
+  assert.deepEqual(D(x), { kind: "debt", name: "Mortgage", type: "mortgage", owed: 250000, rate: 0.065, payment: 1900, accountId: "", missing: [], problems: [], ready: true });
+  assert.deepEqual(x.warnings, [], "figures said in words are in the note as written");
+});
+
+test("a missing rate or payment: the one said is kept with our guess for the other, said before the tap; with no guess, said as not kept", () => {
+  const note = "I owe 4,000 on my Visa, paying 120 a month";
+  const [x] = quickRead(note, emptyPlan(), T);
+  assert.deepEqual([x.owed, x.rate, x.payment, x.missing, x.canGuess, x.ready], [4000, null, 120, ["rate"], false, true]);
+  // no guess at hand (plain rules alone, or a plan outside US dollars): the payment said cannot be kept, and that is said
+  assert.equal(missingWords(x), "You did not say the interest rate. Tap Edit to type it: the Debts page needs it with the $120 payment, so without it the $120 payment is not kept.");
+  const bare = emptyPlan();
+  const r0 = applyDebts(bare, [x], { id: counter(), today: T });
+  assert.deepEqual(r0, R({ added: ["Visa"], dropped: [{ name: "Visa", what: "payment", value: 120 }] }));
+  assert.deepEqual(bare.accounts, [{ id: "t1", name: "Visa", type: "credit", institution: "", balance: 4000, asOf: T, ownerId: "", history: [], notes: "from a voice note" }]);
+  assert.deepEqual(bare.debts, [], "no rate and payment of $0: Debts shows it as needing its details");
+  assert.equal(debtsPage(bare, { today: T }).rows[0].detail, null);
+  assert.equal(doneWords(r0), "Added Visa to your debts. Visa's $120 payment is not kept: the Debts page needs the interest rate with it.");
+  // with our guesses (the app's ctx.guess): the payment is kept and the rate is our guess, marked, as Debts does for a box left blank
+  const y = finishDebt(x, emptyPlan(), note, { guess, today: T });
+  assert.equal(y.canGuess, true);
+  assert.equal(missingWords(y), "You did not say the interest rate. Tap Edit to type it, or add it now: the $120 payment is kept, and the rate is our guess until you type yours.");
+  const draft = emptyPlan();
+  const r = applyDebts(draft, [y], { id: counter(), today: T, guess });
+  const rate = guess("debt.credit.rate", { plan: draft, path: "debts[t2].rate" }).value;
+  assert.deepEqual(r, R({ added: ["Visa"], guessed: [{ name: "Visa", what: "rate", value: rate }] }));
+  assert.deepEqual([draft.debts[0].rate, draft.debts[0].minPayment], [rate, 120]);
+  assert.equal(isGuess(draft, "debts[t2].rate"), true, "the rate is our guess");
+  assert.equal(isGuess(draft, "debts[t2].minPayment"), false, "the payment said is the person's");
+  assert.deepEqual(debtsPage(draft, { today: T }).rows[0].guessed, ["rate"], "Debts says the rate is our guess");
+  assert.equal(doneWords(r), "Added Visa to your debts. Visa's interest rate is our guess for now: type the real one on the Debts page.");
+  // the page's own example (fix round 1, person F2): the 24% said is kept, the payment is our guess, 1% of 4,000 + 4,000 x 24% / 12 = $120
+  const n2 = "I owe 4,000 on my Visa at 24 percent";
+  const v = finishDebt(quickRead(n2, emptyPlan(), T)[0], emptyPlan(), n2, { guess, today: T });
+  assert.equal(missingWords(v), "You did not say the monthly payment. Tap Edit to type it, or add it now: the 24% is kept, and the payment is our guess until you type yours.");
+  const d2 = emptyPlan(), r2 = applyDebts(d2, [v], { id: counter(), today: T, guess });
+  assert.deepEqual([d2.debts[0].rate, d2.debts[0].minPayment, isGuess(d2, "debts[t2].rate"), isGuess(d2, "debts[t2].minPayment")], [0.24, 120, false, true]);
+  assert.equal(doneWords(r2), "Added Visa to your debts. Visa's monthly payment is our guess for now: type the real one on the Debts page.");
+  // a kind with no guess for the payment worked out from the plan (a student loan): said before the tap, and after
+  const n3 = "I owe 18,000 on my student loan at 5.5 percent";
+  const s3 = finishDebt(quickRead(n3, emptyPlan(), T)[0], emptyPlan(), n3, { guess, today: T });
+  assert.equal(s3.canGuess, false);
+  assert.equal(missingWords(s3), "You did not say the monthly payment. Tap Edit to type it: the Debts page needs it with the 5.5%, so without it the 5.5% is not kept.");
+  const r3 = applyDebts(emptyPlan(), [s3], { id: counter(), today: T, guess });
+  assert.deepEqual(r3.dropped, [{ name: "Student loan", what: "rate", value: 0.055 }]);
+  assert.equal(doneWords(r3), "Added Student loan to your debts. Student loan's 5.5% is not kept: the Debts page needs the monthly payment with it.");
+  // the other cases of the line
+  assert.equal(missingWords({ missing: ["rate", "payment"] }), "You did not say the interest rate or the monthly payment. Tap Edit to type them, or add it now: the Debts page will ask for both.");
+  assert.equal(missingWords({ missing: [] }), "");
+  assert.equal(doneWords(R({ added: ["A", "B"], bare: ["A", "B"] })), "Added A and B to your debts. A and B have no rate or payment yet: give them on the Debts page.");
+  assert.equal(doneWords(R({ added: ["A", "B"], guessed: [{ name: "A", what: "payment" }, { name: "B", what: "payment" }] })), "Added A and B to your debts. The monthly payments of A and B are our guesses for now: type the real ones on the Debts page.");
+  // a debt with no name, or nothing owed, is held back and says what it needs
+  const [z] = quickRead("I owe 4,000 at 24 percent", emptyPlan(), T);
+  assert.deepEqual([z.name, z.problems, z.ready], ["", ["what it is called"], false]);
+  assert.deepEqual(applyDebts(emptyPlan(), [z], { id: counter(), today: T }), R({}), "a debt not ready is never added");
+  // in a debt already in the plan, a figure not said keeps the plan's own: nothing is missing
+  const [w] = quickRead("My Visa is at 26 percent now", renterDebtPlan(), T);
+  assert.deepEqual([w.accountId, w.owed, w.rate, w.payment, w.missing, w.ready], ["setup-owe-credit", null, 0.26, null, [], true]);
+});
+
+test("updated only when something was written (fix round 1, money F3, F4): a rate with no loan detail, a balance dated later", () => {
+  const plan = () => ({ ...emptyPlan(), accounts: [{ id: "a1", name: "Visa", type: "credit", institution: "", balance: 2500, asOf: "2026-11-01", ownerId: "", history: [], notes: "" }, { id: "a2", name: "Car loan", type: "loan", institution: "", balance: 9000, asOf: "2026-12-01", ownerId: "", history: [], notes: "" }], debts: [{ id: "d2", accountId: "a2", rate: 0.05, minPayment: 300, extra: 0 }] });
+  const note = "my Visa is at 26 percent now";
+  // with our guess for the payment: the 26% goes in, the payment is ours, and it is updated
+  const p = plan(), x = finishDebt(quickRead(note, p, T)[0], p, note, { guess, today: T });
+  assert.deepEqual([x.accountId, x.rate, x.missing, x.canGuess, x.ready], ["a1", 0.26, ["payment"], true, true]);
+  const r = applyDebts(p, [x], { id: counter(), today: T, guess });
+  assert.deepEqual([r.updated, r.guessed.map((g) => g.what)], [["Visa"], ["payment"]]);
+  assert.deepEqual([p.debts[1].rate, isGuess(p, "debts[t1].minPayment")], [0.26, true]);
+  assert.equal(doneWords(r), "Updated Visa. Visa's monthly payment is our guess for now: type the real one on the Debts page.");
+  // no guess (outside US dollars, or no estimate): nothing it could keep, so it is held back before the tap
+  const q = plan(), held = finishDebt(quickRead(note, q, T)[0], q, note);
+  assert.deepEqual([held.problems, held.missing, held.ready], [["its payment a month too"], [], false]);
+  // and an entry that reaches the add with no guess writes nothing and is not called updated
+  const before = JSON.stringify(q), r2 = applyDebts(q, [{ ...held, problems: [], ready: true }], { id: counter(), today: T });
+  assert.equal(JSON.stringify(q), before, "the plan is as it was");
+  assert.deepEqual(r2, R({ dropped: [{ name: "Visa", what: "rate", value: 0.26 }] }));
+  assert.equal(doneWords(r2), "Visa's 26% is not kept: the Debts page needs the monthly payment with it.");
+  // a balance on file dated after today stays: today's point is kept, and that is said, not "Updated"
+  const c = plan(), car = quickRead("I owe 12000 on the car", c, T)[0];
+  const r3 = applyDebts(c, [car], { id: counter(), today: T });
+  assert.deepEqual(r3, R({ later: [{ name: "Car loan", owed: 12000, onFile: 9000, asOf: "2026-12-01" }] }));
+  assert.deepEqual([c.accounts[1].balance, c.accounts[1].history], [9000, [{ date: T, balance: 12000 }]]);
+  assert.equal(doneWords(r3), "Car loan's $12,000 is kept for today, but the plan goes on using the balance dated 12/1/2026 ($9,000), which is later.");
+  // said with a rate too: the rate is written, so it is updated, and the later balance is said
+  const r4 = applyDebts(plan(), [quickRead("I owe 12000 on the car at 7 percent", plan(), T)[0]], { id: counter(), today: T });
+  assert.equal(doneWords(r4), "Updated Car loan. Car loan's $12,000 is kept for today, but the plan goes on using the balance dated 12/1/2026 ($9,000), which is later.");
+});
+
+test("an older plan's guess flags on a loan detail go when the figure is said, even equal to the guess (money F5: not real, pinned)", () => {
+  const p = { ...emptyPlan(), accounts: [{ id: "a1", name: "Visa card", type: "credit", institution: "", balance: 2500, asOf: "2026-11-01", ownerId: "", history: [], notes: "" }], debts: [{ id: "d1", accountId: "a1", rate: 0.2, rateGuessed: 0.2, minPayment: 60, paymentGuessed: 60, extra: 0 }] };
+  assert.equal(isGuess(p, "debts[d1].rate"), true);
+  const [x] = quickRead("My Visa card is at 20 percent, paying 60 a month", p, T);
+  applyDebts(p, [x], { id: counter(), today: T });
+  assert.deepEqual(p.debts[0], { id: "d1", accountId: "a1", rate: 0.2, minPayment: 60, extra: 0 }, "clearGuess drops rateGuessed and paymentGuessed");
+  assert.equal(isGuess(p, "debts[d1].rate"), false);
+  assert.equal(isGuess(p, "debts[d1].minPayment"), false);
+});
+
+test("one debt, one entry (money F7, F8): a repeat is left out and said; a malformed plan does not stop the add", () => {
+  const p = renterDebtPlan();
+  const a = finishDebt({ name: "Visa", type: "credit", owed: 100, rate: null, payment: null, accountId: "" }, emptyPlan(), "");
+  assert.deepEqual([...repeats([a, a])], [1]);
+  const u1 = finishDebt({ owed: 100, accountId: "setup-owe-credit" }, p, ""), u2 = finishDebt({ owed: 200, accountId: "setup-owe-credit" }, p, "");
+  assert.deepEqual([...repeats([u1, a, u2])], [2], "the same debt in the plan twice");
+  const d = emptyPlan(), r = applyDebts(d, [a, a], { id: counter(), today: T });
+  assert.deepEqual([r.added, r.repeated, d.accounts.length], [["Visa"], ["Visa"], 1]);
+  assert.equal(doneWords(r), "Added Visa to your debts. Visa has no rate or payment yet: give them on the Debts page. Visa was given twice: only the first is in.");
+  const q = renterDebtPlan(), r2 = applyDebts(q, [u1, u2], { id: counter(), today: "2026-12-31" });
+  assert.deepEqual([r2.updated, r2.repeated, Math.abs(q.accounts.find((x) => x.id === "setup-owe-credit").balance)], [["Visa card"], ["Visa card"], 100], "the first one wins, never the last");
+  assert.equal(twiceWords({ name: "Visa card" }), "Another debt above is also Visa card: skip one of them, or tap Edit and pick another under \"In your plan\".");
+  assert.equal(notAddedWords({ name: "Visa card" }, true), "Not added: another entry is also Visa card. Skip this one, or tap Edit and pick another under \"In your plan\".");
+  assert.equal(notAddedWords({ name: "", problems: ["what it is called"] }), "Not added yet: type its name below, then tap Add again.");
+  assert.equal(notAddedWords({ name: "Car loan", problems: ["how much you owe"] }), "Not added yet: it still needs how much you owe. Type it below, then tap Add again.");
+  assert.equal(leftWords(["Car loan"]), "Car loan is not added yet: it says below what to change.");
+  assert.equal(leftWords(["", "Car loan"]), "The debt with no name and Car loan are not added yet: each says below what to change.");
+  assert.equal(leftWords([]), "");
+  assert.equal(leftWords([{ name: "Visa card", twice: true }]), "The other Visa card is not added yet: it says below what to change.");
+  // a plan whose lists are not lists (a hand-edited file): the add makes them lists instead of throwing
+  for (const bad of [{ accounts: null, debts: "x" }, { accounts: "y" }, {}]) {
+    const out = applyDebts(bad, [a], { id: counter(), today: T });
+    assert.deepEqual([out.added, Array.isArray(bad.accounts), Array.isArray(bad.debts)], [["Visa"], true, true]);
+  }
+});
+
+test("which plan debt a sentence is about (person F1, money F6): a name with its own amount, and a cue when found by kind alone", () => {
+  const fam = familyPlan(T);
+  const note = "I have a student loan of 18000 at 5.5 percent and my mortgage is 250k";
+  assert.deepEqual(quickRead(note, fam, T).map((x) => [x.name, x.type, x.accountId, x.owed, x.rate, x.warnings.length]), [["Student loan", "student_loan", "", 18000, 0.055, 0], ["Mortgage", "mortgage", "a-mort", 250000, null, 0]], "the student loan is never the plan's mortgage");
+  assert.deepEqual(quickRead("I owe 18000 at 5.5 percent and my mortgage is 250k", fam, T).map((x) => [x.name, x.accountId, x.owed]), [["", "", 18000], ["Mortgage", "a-mort", 250000]], "a name with its own amount names no earlier debt");
+  assert.equal(matchDebt({ name: "", type: "other_liability" }, { accounts: [{ id: "o", name: "Loan from Mom", type: "other_liability" }] }), null, "a debt with no name is never matched by kind");
+  // found by its kind alone: the plan's one credit card, asked plainly
+  const [c] = quickRead("Credit card interest rate 22 percent", fam, T);
+  assert.deepEqual([c.accountId, c.heard, c.rate], ["a-visa", "Credit card", 0.22]);
+  assert.ok(c.warnings.includes("Is this your Visa card? It is the one credit card in your plan. If not, tap Edit and pick \"A new debt\" under \"In your plan\"."));
+  assert.deepEqual(matchOf({ name: "the card", type: "credit" }, fam), { accountId: "a-visa", heard: "the card" });
+  assert.deepEqual(matchOf({ name: "my Visa", type: "credit" }, fam), { accountId: "a-visa" }, "found by its name: no cue");
+  assert.equal(finishDebt({ ...c, heard: "" }, fam, "").warnings.some((w) => w.startsWith("Is this your")), false, "once looked at (Done), the cue goes");
+  // "Other debt", not Net worth's longer words, under "Kind of debt" (person F3)
+  assert.equal(DEBT_TYPES.other_liability, "Other debt");
+});
+
+test("money spent said beside a debt keeps the entry it was before (money F1); a payment a month alone is no debt (money F2)", () => {
+  const p = plan();
+  const [spend, debt] = quickRead("Spent 45 at the dentist, owe 20 more", p, T);
+  assert.deepEqual([spend.kind, spend.amount, spend.payee, spend.date], ["spend", 45, "Dentist", T], "the $45 spent, as at dca545e");
+  assert.deepEqual([debt.kind, debt.name, debt.owed, debt.paid], ["debt", "Dentist", 20, []], "the $20 owed, and no line saying the $45 is not added");
+  const [s2, d2] = quickRead("Paid 300 on my Visa, still owe 4,000 at 24%", emptyPlan(), T);
+  assert.deepEqual([s2.kind, s2.amount, d2.name, d2.owed, d2.rate, d2.paid], ["spend", 300, "Visa", 4000, 0.24, []]);
+  // these read exactly as before: a payment a month (or a card or loan word) without "owe", a rate or "minimum"
+  for (const s of ["Netflix 15 a month on my Visa card", "Rent is 1500 a month, car payment 300 a month", "Put 25 a month toward the loan", "The car loan payment is 410 a month"]) assert.equal(isDebtSentence(s), false, s);
+  assert.equal(isDebtSentence("The Visa minimum payment is 35"), true, "a minimum payment is a debt's");
+  // a verb at the start is no name
+  assert.deepEqual(quickRead("Put 25 a month toward the loan, I owe 3,000 on it", emptyPlan(), T).map((x) => [x.kind, x.name, x.owed]), [["debt", "Loan", 3000]]);
+});
+
+test("two debts in one note: in one sentence, in two, as lists said in order, and with a name said again", () => {
+  const p = emptyPlan();
+  const two = quickRead("I owe 4,000 on my Visa at 24% with a 120 minimum. The car loan is 12,000 at 6 percent, 410 a month.", p, T);
+  assert.deepEqual(two.map((x) => [x.name, x.owed, x.rate, x.payment]), [["Visa", 4000, 0.24, 120], ["Car loan", 12000, 0.06, 410]]);
+  assert.deepEqual(quickRead("I owe 4,000 on the Visa and 12,000 on the car at 24 and 6 percent", p, T).map((x) => [x.name, x.rate]), [["Visa", 0.24], ["Car loan", 0.06]], "rates said as a list go in order");
+  assert.deepEqual(quickRead("I owe 4,000 on the Visa and 12,000 on the car, paying 300 a month on the Visa and 410 on the car", p, T).map((x) => [x.name, x.owed, x.payment]), [["Visa", 4000, 300], ["Car loan", 12000, 410]], "a name said again points at its debt");
+  assert.deepEqual(quickRead("Visa: 4,000 at 24%, Mastercard 2,000 at 19%", p, T).map((x) => [x.name, x.owed, x.rate]), [["Visa", 4000, 0.24], ["Mastercard", 2000, 0.19]]);
+  assert.deepEqual(quickRead("I am about 5k in debt on credit cards", p, T).map((x) => [x.name, x.owed]), [["Credit cards", 5000]], "'in debt' names no debt");
+  assert.deepEqual(quickRead("I owe my mom 2,000 and twelve thousand in student loans at five and a half percent", p, T).map((x) => [x.name, x.type, x.owed, x.rate]), [["Mom", "other_liability", 2000, null], ["Student loans", "student_loan", 12000, 0.055]]);
+  // figures that fit no debt are never guessed into one, and money said as paid is the Ledger's: both said plainly
+  const [a] = quickRead("I owe 4,000 on the Visa, paying 300 and 410 a month", p, T);
+  assert.deepEqual([a.payment, a.unplaced], [null, ["300", "410"]]);
+  assert.equal(unplacedWords(a.unplaced), "The app could not tell which debt 300 and 410 go with: tap Edit on each debt to type them.");
+  assert.equal(unplacedWords(["24%"]), "The app could not tell which debt 24% goes with: tap Edit on the right debt to type it.");
+  assert.equal(paidWords(["300"]), "Money paid (300) is not added here: say it in a sentence of its own to add it to the Ledger.");
+  assert.equal(paidWords(["300", "45"]), "Money paid (300 and 45) is not added here: say each in a sentence of its own to add it to the Ledger.");
+  // what is no debt sentence: a small debt to a friend, money paid, a card's balance alone, insurance a month
+  for (const s of ["I owe Bo 20 for lunch", "Paid 300 on the card", "The balance on my Visa card is 6,400", "Car insurance is 120 a month", "Spent 40 at the dentist a month ago today"]) assert.equal(isDebtSentence(s), false, s);
+  assert.equal(quickRead("Remind me I owe 4,000 on the Visa on the 15th", p, T)[0].kind, "reminder", "a reminder stays a reminder");
+  // names and kinds
+  assert.deepEqual(["the car", "house", "credit card debt", "my Amex", "student loans", "Chase Sapphire"].map((n) => [debtName(n), debtType(n)]),
+    [["Car loan", "loan"], ["Mortgage", "mortgage"], ["Credit card", "credit"], ["Amex", "credit"], ["Student loans", "student_loan"], ["Chase Sapphire", "other_liability"]]);
+});
+
+test("a debt made safe: figures in range, a debt in the plan by its name or its kind, and what to check before adding", () => {
+  const p = renterDebtPlan();
+  assert.equal(matchDebt({ name: "Visa", type: "credit" }, p)?.id, "setup-owe-credit", "'Visa' is the Visa card");
+  assert.equal(matchDebt({ name: "Car loan", type: "loan" }, p)?.id, "setup-owe-car-loan");
+  assert.equal(matchDebt({ name: "Credit card", type: "credit" }, p), null, "three cards: which one is asked");
+  assert.equal(matchDebt({ name: "Discover", type: "credit" }, p), null, "a card by another name is a new one");
+  const f = (x) => finishDebt(x, p, "");
+  assert.deepEqual([f({ name: "Discover", type: "credit", owed: -5, rate: 1.5, payment: 0 }).owed, f({ name: "Discover", type: "credit", owed: -5, rate: 1.5, payment: 0 }).rate, f({ name: "Discover", type: "credit", owed: -5, rate: 1.5, payment: 0 }).payment], [null, null, null]);
+  const odd = finishDebt({ name: "Discover", type: "credit", owed: 2000, rate: 1.5, payment: 50 }, p, "");
+  assert.ok(odd.warnings.includes("The rate read is above 100% a year: type the rate from the statement."));
+  assert.ok(odd.warnings.includes("Your plan already has Visa card, Mastercard and Store card. If this is one of them, tap Edit and pick it under \"In your plan\"."));
+  assert.ok(finishDebt({ name: "Discover", type: "credit", owed: 4000, rate: 0.24, payment: 50 }, emptyPlan(), "").warnings.includes("At $50 a month this debt never pays off: its interest is about $80 a month. Check the payment."), "4,000 x 24% / 12 = $80 of interest a month");
+  assert.ok(finishDebt({ name: "Bo", owed: 200, rate: 0, payment: 300 }, emptyPlan(), "").warnings.includes("The payment is more than what is owed: check both."));
+  assert.deepEqual(finishDebt({ name: "Visa", type: "credit", owed: 4000, rate: 0.24, payment: 300 }, emptyPlan(), "I owe 4,000 at 24 percent").warnings, ["A figure here is not in your note as written: check it."], "the 300 is not in the note");
+  assert.deepEqual(finishDebt({ accountId: "setup-owe-credit" }, p, "").problems, ["a figure to change"]);
+  assert.equal(finishDebt({ name: "x", accountId: "k401", owed: 5 }, p, "").accountId, "", "only a debt of the plan can be updated");
+});
+
+test("adding: a new debt as Net worth and Debts keep one; a debt in the plan updated through Account detail, its guess marks cleared", () => {
+  const draft = emptyPlan();
+  const r = applyDebts(draft, quickRead(EXAMPLE, emptyPlan(), T), { id: counter(), today: T });
+  assert.deepEqual(r, R({ added: ["Visa", "Car loan"] }));
+  assert.deepEqual(draft.debts, [{ id: "t2", accountId: "t1", rate: 0.24, minPayment: 300, extra: 0 }, { id: "t4", accountId: "t3", rate: 0.06, minPayment: 410, extra: 0 }]);
+  const li = debtsPage(draft, { today: T });
+  assert.deepEqual(li.rows.map((x) => [x.name, x.owed, x.rate, x.payment]), [["Visa", 4000, 0.24, 300], ["Car loan", 12000, 0.06, 410]], "Debts reads them as its own");
+  assert.equal(li.interestMonthly, 4000 * 0.24 / 12 + 12000 * 0.06 / 12, "$80 + $60 of interest a month");
+  assert.equal(payoffPage(draft, { today: T }).hasData, true, "Pay off debts has both");
+  assert.equal(doneWords(r), "Added Visa and Car loan to your debts.");
+  // an update: the card said with its new balance and rate, in the plan that guessed its rate and payment
+  const g = guessedPlan(T);
+  assert.equal(isGuess(g, "debts[setup-debt-credit].rate"), true, "the card's rate is our guess before");
+  const [x] = quickRead("I owe 3,000 on the card at 21 percent", g, T);
+  assert.deepEqual([x.name, x.accountId, x.owed, x.rate, x.payment, x.ready], ["Credit cards", "setup-owe-credit", 3000, 0.21, null, true]);
+  const u = applyDebts(g, [x], { id: counter(), today: T });
+  assert.deepEqual(u, R({ updated: ["Credit cards"] }));
+  const acct = g.accounts.find((a) => a.id === "setup-owe-credit"), row = g.debts.find((d) => d.accountId === "setup-owe-credit");
+  assert.deepEqual([acct.balance, acct.asOf, acct.typedOn, acct.history.at(-1)], [3000, T, T, { date: T, balance: 3000 }], "a point that day and the balance on file, typed today");
+  assert.deepEqual([row.rate, row.minPayment], [0.21, 103], "the rate said; the payment not said is kept");
+  assert.equal(isGuess(g, "debts[setup-debt-credit].rate"), false, "a rate said is the person's, no longer our guess");
+  assert.equal(isGuess(g, "debts[setup-debt-credit].minPayment"), true, "the payment not said stays our guess");
+  assert.equal(doneWords(u), "Updated Credit cards.");
+  assert.equal(doneWords({ added: ["Car loan"], updated: ["Visa card"], bare: [] }), "Added Car loan and updated Visa card.");
+  assert.equal(doneWords(R({})), "Nothing was added.");
+});
+
+test("nothing is saved before the tap: reading a debt note, asking and reading the AI change no plan", () => {
+  const deep = (o) => { if (o && typeof o === "object") { Object.freeze(o); for (const v of Object.values(o)) deep(v); } return o; };
+  for (const make of [emptyPlan, () => renterDebtPlan(), () => plan()]) {
+    const p = deep(make()), before = JSON.stringify(p);
+    const read = quickRead(EXAMPLE, p, T);
+    readDebts(EXAMPLE, p);
+    for (const x of read) finishDebt(x, p, EXAMPLE);
+    const q = buildPrompt(EXAMPLE, p, T);
+    readAnswer('[{"kind":"debt","name":"Visa","type":"card","owed":4000,"rate":24,"payment":300}]', p, T, EXAMPLE, q);
+    payoffLine(p, T);
+    assert.equal(JSON.stringify(p), before);
+  }
+});
+
+test("Undo takes the debts back out: the plan is as it was before the tap", () => {
+  for (const make of [emptyPlan, () => renterDebtPlan(), () => guessedPlan(T)]) {
+    const before = make();
+    const list = quickRead(`${EXAMPLE}. I owe 3,000 on the card at 21 percent.`, before, T);
+    const after = structuredClone(before);
+    applyDebts(after, list, { id: counter(), today: T });
+    const changes = changesOf(before, after);
+    assert.ok(changes.length > 0, "the tap changed the plan");
+    const back = structuredClone(after);
+    const r = takeBack(back, changes);
+    assert.equal(r.kept, 0);
+    assert.deepEqual(back, before, "Undo puts back exactly the plan before");
+  }
+  assert.equal(undoWords({ added: ["Visa", "Car loan"], updated: [] }), "Taken back: Visa and Car loan are out of your plan again. They are listed below to change or add.");
+  assert.equal(undoWords({ added: ["Visa"], updated: [] }), "Taken back: Visa is out of your plan again. It is listed below to change or add.");
+  assert.equal(undoWords({ added: ["Car loan"], updated: ["Visa card"] }), "Taken back: Car loan and Visa card are as they were. They are listed below to change or add.");
+});
+
+test("the line to Pay off debts: one sentence for each case, with the plan as it is after the add", () => {
+  const p = emptyPlan();
+  const acct = (id, name, type, balance) => ({ id, name, type, institution: "", balance, asOf: T, ownerId: "", history: [], notes: "" });
+  p.accounts.push(acct("v", "Visa", "credit", 4000));
+  assert.deepEqual(payoffLine(p, T), { kind: "notyet", text: "Once your debts have a rate and a payment, Pay off debts compares paying the highest interest rate first with the smallest balance first." });
+  p.debts.push({ id: "dv", accountId: "v", rate: 0.24, minPayment: 300, extra: 0 });
+  assert.equal(payoffLine(p, T).text, "Pay off debts shows the month your debt is paid off and what paying a little more would change.");
+  // the smaller debt has the higher rate: both orders pay it first
+  p.accounts.push(acct("c", "Car loan", "loan", 12000));
+  p.debts.push({ id: "dc", accountId: "c", rate: 0.06, minPayment: 410, extra: 0 });
+  assert.deepEqual(payoffLine(p, T), { kind: "same", text: "Pay off debts compares paying the highest interest rate first with the smallest balance first: with your debts now, both cost about the same in interest." });
+  // the renter's three cards and car loan: the highest rate first saves $163
+  const r = payoffLine(renterDebtPlan(), T);
+  const po = payoffPage(renterDebtPlan(), { today: T });
+  assert.equal(r.saves, Math.round(po.plans.snowball.totalInterest - po.plans.avalanche.totalInterest));
+  assert.deepEqual(r, { kind: "rate", saves: 163, text: "Pay off debts compares paying the highest interest rate first with the smallest balance first: with your debts now, the highest rate first saves about $163 in interest." });
+  // payments under their interest: even with one's payment moved onto the other, they never pay off
+  const n = structuredClone(p); n.debts[0].minPayment = 50; n.debts[1].minPayment = 50;
+  assert.equal(payoffLine(n, T).text, "Pay off debts compares paying the highest interest rate first with the smallest balance first. One payment does not cover its interest yet: that page shows which.");
+  assert.equal(payoffWords("smallest", 40), "Pay off debts compares paying the highest interest rate first with the smallest balance first: with your debts now, the smallest balance first saves about $40 in interest.");
+});
+
+test("the AI is asked about debts only for a debt note, and its debts are read back as proposals, every figure checked", () => {
+  const p = renterDebtPlan();
+  const q = buildPrompt(EXAMPLE, p, T);
+  assert.equal(q.debts, true);
+  assert.match(q.messages[0].content, /"kind":"debt"/);
+  assert.match(q.messages[0].content, /never guess what is owed, a rate or a payment/);
+  const plain = buildPrompt("spent 42 dollars at Corner Market yesterday", p, T);
+  assert.equal(plain.debts, undefined);
+  assert.doesNotMatch(plain.messages[0].content, /debt/, "a note with no debt is asked as before");
+  const visa = q.accounts.find((a) => a.id === "setup-owe-credit").alias;
+  const got = readAnswer(JSON.stringify([{ kind: "debt", name: visa, type: "card", owed: 4000, rate: 24, payment: 300 }, { kind: "debt", name: "car loan", type: "loan", owed: 12000, rate: 6, payment: 999 }, { kind: "debt", name: "Discover", type: "card", owed: 500, rate: null, payment: null }]), p, T, EXAMPLE, q);
+  assert.deepEqual(got.map((x) => [x.kind, x.name, x.accountId, x.owed, x.rate, x.payment]), [["debt", "Visa card", "setup-owe-credit", 4000, 0.24, 300], ["debt", "Car loan", "setup-owe-car-loan", 12000, 0.06, 999], ["debt", "Discover", "", 500, null, null]]);
+  assert.deepEqual(got[0].warnings, []);
+  assert.ok(got[1].warnings.includes("A figure here is not in your note as written: check it."), "999 is not in the note");
+  assert.deepEqual(got[2].missing, ["rate", "payment"], "a figure the AI leaves out stays blank");
+  // a debt from the AI when the question did not ask for one is read as before: an unknown kind, a note
+  assert.equal(readAnswer('[{"kind":"debt","name":"Visa","owed":4000}]', p, T, "spent 42 dollars", plain)[0].kind, "note");
+});
+
+test("the invariance corpus holds no debt sentence (so the digests above cover only notes that say nothing about debts)", () => {
+  for (const note of INV.corpus) for (const s of sentencesOf(note)) assert.equal(isDebtSentence(s), false, s);
+  assert.ok(INV.corpus.length > 500);
 });
