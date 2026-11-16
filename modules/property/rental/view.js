@@ -4,7 +4,7 @@
 // one quiet row drawn by core/ui/more.js, "The year's rent and costs" (the bank lines tied to each rental, laid out like
 // Schedule E, with a CSV and a printout for a tax preparer: books.js); another rental behind "+ Add another rental".
 import { compute, DEFAULTS, DSCR_MIN, RECOVERY_YEARS, addToNetWorth, keepLoanDetails, livedIn, linkedWords } from "./compute.js";
-import { books, booksSentence, rentalSentence, depSentence, mortgageSentence, loanSentence, untiedSentence, booksStatus, booksFile, booksCsv, formRows, shownRentals, BOOKS_TITLE, PASSIVE_LINE, PREPARER_LINE, SORT_LINES, NOT_IN_PLAN } from "./books.js";
+import { books, booksSentence, rentalSentence, rentBridge, depSentence, mortgageSentence, loanSentence, untiedSentence, booksStatus, booksFile, booksCsv, formRows, shownRentals, howLines, BOOKS_TITLE, HOW_STATUS, PASSIVE_LINE, PREPARER_LINE, SCREEN_PREPARER, NOT_IN_PLAN } from "./books.js";
 import { parts, links, choice } from "../../../core/ui/more.js";
 import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
 
@@ -14,7 +14,7 @@ let bookYear = null;  // the year picked on "The year's rent and costs" (this vi
 /** The visit a picked year belongs to: the address drawn (a new one on every arrival, Back included; the same one on the
  *  redraw after a save or a pick) and the plan (another household loaded in the same tab). Either changes: the pick goes. */
 let visit = { route: null, plan: null };
-let booksKeep = false; // a year was just picked: the part stays open on the redraw that follows (R17)
+let booksKeep = false; // a year was just picked with no shell redraw at hand: the part stays open on the redraw that follows (R17)
 
 const STYLE = `
 .rn-root .rn-lines { list-style: none; margin: 0; padding: 0; }
@@ -50,8 +50,7 @@ export function render(page, ctx) {
 
   if (!d.ready) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Rental property"),
-      ui.h("p", { class: "lede" }, "What a rental really earns: rent less empty months and running costs, less the loan, less tax, and what it adds to your wealth as the loan shrinks and the value grows."),
-      ui.h("p", { class: "muted small" }, "Add the property below: its value, the rent and the main costs are enough to start.")));
+      ui.h("p", { class: "lede" }, "What a rental really earns after empty months, its costs, the loan and tax. Its value and the rent are enough to start.")));
     // an empty list keeps its add form open (docs/OPTIONAL.md R20): five boxes, the rest under "More details (optional)"
     root.append(ui.card("Add a rental", editor(null)));
     return;
@@ -158,9 +157,16 @@ export function render(page, ctx) {
     root.append(ui.card("What it adds to your wealth", ui.h("p", {}, `${signed(r.cashFlow)} of cash, ${money(r.principal)} of loan paid down and about ${money(r.growth)} of growth in value (${pct(src.appreciation ?? DEFAULTS.appreciation)} a year): ${money(r.totalReturn)}${r.returnOnEquity !== null ? `, ${pct(r.returnOnEquity)} on your ${money(r.equity)} of equity` : ""}.`)));
   }
 
-  // one quiet row: the year's books from the bank lines tied to each rental (books.js), shut until tapped
+  // one quiet row: the year's books from the bank lines tied to each rental (books.js), shut until tapped; once a line is
+  // tied, "How this is worked out" beside it says how lines tie and sort (review P5: parts never nest, R11, so it is a row of
+  // the same card, not a fold inside the books)
   const b = books(plan, { today, year: bookYear });
-  root.append(parts(ctx, { id: "books", kind: "item", title: BOOKS_TITLE, says: booksStatus(b), open: booksKeep || undefined, body: () => booksBody(b) }));
+  // the printout is drawn here on "Print this list", beside the part and not in it (shown only by the printer): drawn inside,
+  // its sheet made the shell lose the part's open state on the next save's redraw (walk, 2026-11-16)
+  const sheetHost = ui.h("div");
+  root.append(parts(ctx,
+    b.case === "some" && { id: "books-how", kind: "how", says: HOW_STATUS, body: () => howLines(b).map((t) => ui.h("p", {}, t)) },
+    { id: "books", kind: "item", title: BOOKS_TITLE, says: booksStatus(b), open: booksKeep || undefined, body: () => booksBody(b) }), sheetHost);
   booksKeep = false;
   // another rental: behind an outlined button while the list has one (docs/OPTIONAL.md R20)
   root.append(ui.card(null, opensUnder("+ Add another rental", (shut) => editor(null, shut))));
@@ -169,40 +175,48 @@ export function render(page, ctx) {
     { href: "#/taxes/federal", ask: "What do your rentals add to this year's tax?" },
   ]));
 
+  // a year picked: the shell's redraw (ctx.redraw) carries the sections the person opened, so the part stays open now and
+  // after a later save's redraw (core/place.js); without it (a test's stand-in) the part is opened for the next draw (R17)
+  function redrawBooks() { if (typeof ctx.redraw === "function") ctx.redraw(); else { booksKeep = true; redraw(); } }
   // "The year's rent and costs": the case's sentence, each rental's lines of the form, depreciation and interest, the file and
-  // the printout for a tax preparer, and how lines are sorted. Nothing in it is saved; a year picked is for this visit.
+  // the printout for a tax preparer. Nothing in it is saved; a year picked is for this visit.
   function booksBody(b) {
     const h = ui.h, out = [];
     const first = booksSentence(b);
     const toLedger = (one) => h("a", { href: one ? `#/transactions/ledger?q=${encodeURIComponent(`#${one.tag}`)}` : "#/transactions/ledger", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, one ? `See ${one.name}'s lines on Transactions ›` : "Open Transactions ›");
     // years: every year with a tied line, and the one shown, low to high
     const years = [...new Set([...b.years, b.year])].sort((x, y) => x - y);
-    const yearChips = years.length > 1 ? choice(ctx, { id: "books-year", label: "Which year", presets: years.map((y) => ({ value: y, label: String(y) })), value: b.year, onPick: (y) => { bookYear = y; booksKeep = true; redraw(); } }) : null;
-    if (first) return [h("p", {}, first), yearChips, toLedger(null), h("p", { class: "muted small" }, SORT_LINES[0])];
+    const yearChips = years.length > 1 ? choice(ctx, { id: "books-year", label: "Which year", presets: years.map((y) => ({ value: y, label: String(y) })), value: b.year, onPick: (y) => { bookYear = y; redrawBooks(); } }) : null;
+    if (first) return [h("p", {}, first), yearChips, toLedger(null)];
     out.push(yearChips);
     const many = b.rentals.length > 1;
     for (const r of b.rentals) {
       if (many) out.push(h("h3", {}, r.name));
       out.push(h("p", {}, rentalSentence(r, b.year, money, b.thisYear)));
       if (!r.count) continue;
-      out.push(h("ul", { class: "records" }, [
-        ...r.rows.map((x) => h("li", {},
-          h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, x.label), h("span", { class: "rec-value" }, x.key === "rents" ? signed(x.amount) : signed(-x.amount))),
-          h("div", { class: "rec-sub" }, `line ${x.line}${x.about ? " · about, from the loan" : x.key === "depreciation" ? ` · ${RECOVERY_YEARS} years` : x.from.length ? ` · ${x.from.join(", ")}` : ""}`))),
-        h("li", {}, h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, "Costs in all"), h("span", { class: "rec-value" }, money(r.expenses))), h("div", { class: "rec-sub" }, "line 20")),
-        h("li", {}, h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, h("strong", {}, "Profit or loss")), h("span", { class: "rec-value" }, h("strong", {}, signed(r.net)))), h("div", { class: "rec-sub" }, "line 21")),
+      // the rent above is a full year at the rent typed; these are the bank lines' (review P2): one sentence between the two
+      const bridge = rentBridge(r, d.rentals.find((x) => x.id === r.id)?.rent, b.year, b.thisYear, money, many);
+      if (bridge) out.push(h("p", { class: "rn-d" }, bridge));
+      // one line each, like "The year, line by line" above, costs indented, no line of the form on the phone (review P3: the
+      // file and the printout carry them); Other names the categories in it (the form asks for the list); "estimate" on an
+      // interest worked from the loan
+      const tag = (x) => (x.key === "other" && x.from.length ? ` · ${x.from.join(", ")}` : x.about ? " · estimate" : "");
+      out.push(h("ul", { class: "rn-lines" }, [
+        ...r.rows.map((x) => h("li", { class: x.key === "rents" ? null : "rn-sub" }, h("span", {}, x.label, tag(x) ? h("small", { class: "rn-d" }, tag(x)) : null), h("span", {}, x.key === "rents" ? signed(x.amount) : signed(-x.amount)))),
+        h("li", { class: "rn-sub" }, h("span", {}, "Costs in all"), h("span", {}, signed(-r.expenses))),
+        h("li", { class: "rn-tot" }, h("span", {}, "Profit or loss"), h("span", {}, signed(r.net))),
       ]));
-      for (const t of [depSentence(r, b.year, money), mortgageSentence(r, b.year, money), loanSentence(r, money)]) if (t) out.push(h("p", { class: "rn-d" }, t));
+      // a full year's depreciation is the row above and the Tax card's own sentence: said here only when it is partial or missing
+      for (const t of [r.dep.state === "counted" ? null : depSentence(r, b.year, money), mortgageSentence(r, b.year, money), loanSentence(r, money)]) if (t) out.push(h("p", { class: "rn-d" }, t));
     }
-    if (b.rentals.some((r) => r.count && r.net <= -0.5)) out.push(h("p", { class: "rn-d" }, PASSIVE_LINE));
+    // the loss line only for a loss the books call one: not for a year that is over with months missing (review P1)
+    if (b.rentals.some((r) => r.count && r.net <= -0.5 && (r.whole || b.year >= b.thisYear))) out.push(h("p", { class: "rn-d" }, PASSIVE_LINE));
     const u = untiedSentence(b, money);
     if (u) out.push(h("p", {}, u));
-    const say = h("div", { "aria-live": "polite" }), sheetHost = h("div");
-    out.push(h("p", { class: "muted small" }, PREPARER_LINE), say,
+    const say = h("div", { "aria-live": "polite" });
+    out.push(h("p", { class: "muted small" }, SCREEN_PREPARER), say,
       ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(b, say), { class: "secondary" }), ui.button("Print this list", () => printList(b, sheetHost), { class: "secondary" })),
-      toLedger(b.rentals.length === 1 ? b.rentals[0] : null),
-      ...SORT_LINES.map((t) => h("p", { class: "muted small" }, t)),
-      sheetHost);
+      toLedger(b.rentals.length === 1 ? b.rentals[0] : null));
     return out;
   }
   // the file for a tax preparer (core/csv.js through books.js; made on this phone, nothing sent anywhere): Tax lots' way

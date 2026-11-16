@@ -183,20 +183,48 @@ same rule: a rental ended that way counts no rent, costs or loan in the month. N
   rental"**; an empty page keeps "Add a rental" open in its card (R20).
 - "More on this" is `links()`: "What is everything you own worth?" (Net worth) and "What do your rentals add to this year's
   tax?" (Federal estimate).
+- The empty page's hero is one sentence of two ("What a rental really earns after empty months, its costs, the loan and
+  tax. Its value and the rent are enough to start."), so "Add rental" is wholly on the first screen at 390 px (it was not:
+  `qa/first-view.known.json` had `noStart` for the empty plan; the browser check now finds it and the entry is gone).
 - First view (`node qa/first-view-node.mjs property/rental`; no invented plan household has a rental, so every one draws the
-  empty page): with a plan 223 words, 21 boxes, 1 section before; 104 words, 5 boxes, 0 sections after. Empty plan 165 words
-  and 20 boxes before; 74 and 5 after. The page is inside the list budget now, so its entry left
+  empty page): with a plan 223 words, 21 boxes, 1 section before; 79 words, 5 boxes, 0 sections after. Empty plan 165 words
+  and 20 boxes before; 49 and 5 after. The page is inside the list budget now, so its entry left
   `tests/first-view.known.json`.
 
 ## The year's rent and costs: books from your bank lines, laid out like Schedule E (gap list, next 60, item 20; map V1; 2026-11-16, claude-b)
 **On screen.** One quiet row after the rentals, "The year's rent and costs", shut, its status the year and how many bank
-lines ("2026 · 41 lines"), or "none tied yet". Opened: the case's sentence; chips for the years with lines (only when there
-is more than one year to show; a pick is for this visit, never saved); for each rental its lines of the form in the form's
-order (only lines with an amount), "Costs in all (line 20)" and "Profit or loss (line 21)"; the depreciation sentence, the
-mortgage interest sentence, loan payments "not on the form", the passive-loss line (a loss only), rent tied to no single
-rental; "For your tax preparer ... It is not a filing."; outlined "Save as a spreadsheet (CSV)" and "Print this list";
-"See Condo's lines on Transactions ›" (`#/transactions/ledger?q=%23condo`); how lines are sorted. Nothing in it writes
-the plan; opening or shutting it changes nothing.
+lines ("2026 · 41 lines"), or "no bank lines yet" / "none tagged yet". Opened: the case's sentence; chips for the years with
+lines (only when there is more than one year to show; a pick is for this visit, never saved); for each rental the verdict,
+then one sentence that bridges the rent above and the rent here when they differ (`rentBridge`: "The rent in “The year,
+line by line” above, $25,200, is a full year at the rent you typed; your bank lines show $21,050 so far."; review P2); its
+lines of the form in the form's order, one row each like "The year, line by line" above, in plain words and with no line
+number of the form ("Repairs −$400"; only lines with an amount; Other names its categories, "Other costs · HOA dues";
+interest worked from the loan says "· estimate"), "Costs in all" and "Profit or loss"; the depreciation sentence when the
+year's is partial or missing (a full year's is the row, and the Tax card above says it), the mortgage interest sentence
+("your lender's year-end interest statement (Form 1098)"), "Loan payments of $8,510 are left out: only the interest in them
+is a cost.", the passive-loss line (a loss the books call one: not for a year that is over with months missing), lines tied
+to no single rental; "The file and the printout follow the tax form for rental income (Schedule E), for your tax preparer.
+They are not a filing."; outlined "Save as a spreadsheet (CSV)" and "Print this list"; "See Condo's lines on Transactions
+›" (`#/transactions/ledger?q=%23condo`). The form's line numbers and form names (line 12, Form 8582, Part I) are in the
+file and the printout only (review P3). Nothing in it writes the plan; opening or shutting it changes nothing.
+- **How this is worked out** (kind `how`, status "the year's books"), a row of the same card beside the books once a line is
+  tied (`howLines`; review P5: two always-shown paragraphs made the opened part about three screens long, and parts never
+  nest, R11, so it is a sibling row, before the books row by the helper's fixed order): how a bank line ties ("A bank line
+  counts for a rental when its Tags box on Transactions holds the rental's word (“condo”); with one rental, rent filed under
+  Rent you collect counts too. ..."), how lines sort, plus the repairs-and-improvements line when a rental has a repair or
+  cleaning line and the escrow line when it has a loan and no insurance or tax line (`sortLines`). With nothing tied the
+  books part says only what to do first and links to Transactions.
+- A year picked asks for the shell's redraw (`ctx.redraw`), which carries the sections the person opened, so the part stays
+  open then and after a later save's redraw (R17); a test's stand-in without it opens the part on the next draw instead.
+- The printout is drawn beside the part, not in it: drawn inside, its sheet made the shell lose the part's open state on the
+  next save's redraw (found in the walk, 2026-11-16; Tax lots draws its sheet inside its part and may do the same).
+- Open, the part is 1,316 px tall at 390 px for Sam and Lee's ten months (11 lines of the form, the bridge, the loss line;
+  1,341 before the review moved how lines sort out of it); R15 asks 1,300 for a part, with an exception for a part that is
+  the page's own list, which this is (the form's lines). 821 px for 2025's two lines; 233 px with no bank lines (362
+  before). "How this is worked out" open: 521 px.
+- The year chips: the selected year is the kit's selected-chip style (filled, `aria-pressed="true"`), the other outlined;
+  neither is an action button (review P6: a screen check that counts any button with a background listed both; their
+  computed backgrounds are the accent for the picked year and the card's own for the other, light and dark).
 
 **Tying a bank line to a rental: a tag, no new field** (`books.js` `tieOf`). Ledger lines already carry tags (gap #24: the
 Tags box under the line's "More details (optional)", `#tag` in the search, a rule can add one). A line is a rental's when it
@@ -240,9 +268,11 @@ refund) takes off that line. A split purchase counts by its parts (`allLines`), 
   no price is typed; builder's choice, said on screen as "not counted: it needs what you paid").
 - Line 12, mortgage interest: tied lines filed under a category named "Mortgage interest" when there are any; otherwise, for
   the year still running only, **about** a year of the page's own loan (`rentalsFor(...).interest`: twelve months of payments
-  on today's balance, rate and payment, `core/math/finance.js yearOfPayments`; the condo: $6,677.70), said with "the
-  lender's Form 1098 (box 1) has the exact figure"; for a year that is over it is not counted ("copy it from box 1 of the
-  lender's Form 1098"), since today's balance would understate that year. Instructions for Schedule E (2025), lines 12 and
+  on today's balance, rate and payment, `core/math/finance.js yearOfPayments`; the condo: $6,677.70), said on the phone as
+  "Mortgage interest is an estimate, about $6,678 ... Your lender's year-end interest statement (Form 1098) has the exact
+  figure" and in the file as "about: ... the lender's Form 1098 (box 1) has the exact figure"; for a year that is over it is
+  not counted ("copy it from your lender's year-end interest statement (Form 1098) for 2025"), since today's balance would
+  understate that year. Instructions for Schedule E (2025), lines 12 and
   13: "enter on line 12 the amount of interest you paid for 2025 to banks or other financial institutions" and Form 1098
   (https://www.irs.gov/pub/irs-pdf/i1040se.pdf, read 2026-11-16). Loan payments (principal and interest) are listed apart,
   "not on the form".
@@ -260,8 +290,8 @@ refund) takes off that line. A split purchase counts by its parts (`allLines`), 
   file's line 3 note says the same ("the year so far: bank lines 01/2026 to 10/2026"; "not the whole year: bank lines in 2
   of its months only, 11/2025 to 12/2025"). Builder's choice: nothing is prorated; the form's figure for the year is the
   year's depreciation, and a guess of the missing months' rent would be a figure no bank line holds.
-- The passive activity rules are named, not worked out: "A rental loss may not all count this year: the passive activity
-  rules (Form 8582) can hold part of it back. The Tax card above works out this year's share; these books do not." (Pub 527:
+- The passive activity rules are named, not worked out, in plain words on the phone (review P3): "A tax rule can limit how
+  much of a rental loss counts; the Tax card above works out how much for this year." (Pub 527:
   "Generally, rental real estate activities are considered passive activities and losses aren't deductible unless you have
   income from other passive activities to offset them"; the Tax card's netting and allowance are above.)
 - No current figure (a rate, a limit, a price) is used. The standard mileage rate in the instructions (70 cents a mile for
@@ -273,11 +303,14 @@ refund) takes off that line. A split purchase counts by its parts (`allLines`), 
 - Repairs and improvements, escrow: "A repair keeps the place as it was; an improvement (a new roof, a remodel) is not
   counted in one year but depreciated" (Instructions, line 14: "Amounts paid to improve your property must generally be
   capitalized and depreciated"; Pub 527, Repairs and Improvements); tax and insurance paid from the loan (escrow) are on the
-  lender's year-end statement and belong on lines 9 and 16.
+  lender's year-end statement and belong on lines 9 and 16 (said on the phone as "give them to your preparer for Taxes and
+  Insurance").
 
 **The file and the printout.** `booksCsv(b)`: "Line", "Schedule E for 2026", a column per rental with lines tied that year,
 "Notes"; lines 3, 5 to 19 in the form's words, blank where the form would be empty, 20 and 21 always, two decimals, no $,
-a loss with a minus; the notes say how line 12 and line 18 were found and what is under Other. Names go through Tax lots'
+a loss with a minus; the notes say how line 12 and line 18 were found and what is under Other (line 12: "about: a year
+of payments on the loan's balance, rate and payment as they stand; the lender's Form 1098 (box 1) has the exact figure",
+the loan being the Net worth mortgage the rental picks or the one typed on this page). Names go through Tax lots'
 `csvText` (a name a spreadsheet would run as a formula gets an apostrophe) and `core/csv.js` `toCsv`, the same helpers Tax
 lots' "Sales for your tax return" uses; the download and the printout (`modules/reports/report-kit.js` `reportFrame`,
 `rtable`, `printSheet`) are drawn the way that page draws them. File: `rental-books-2026.csv`, made on the phone, sent
@@ -287,8 +320,10 @@ nowhere.
 several; each says the two steps in the words Transactions shows: add the lines, then type the rental's word in each one's
 Tags box), `rentalSentence` (profit, loss, even, for a whole year that is over and "so far" with the months covered and
 what is the whole year's; a year that is over with months missing; nothing tied to this one), `untiedSentence` (rent,
-costs, both), `depSentence` (a full year, the first year, no price, no date, not yet, written off), `mortgageSentence` (from lines, about
-from the loan, no loan on the page, Form 1098, nothing), `loanSentence`, `PASSIVE_LINE`, `booksStatus`.
+costs, both), `depSentence` (a full year, the first year, no price, no date, not yet, written off), `mortgageSentence` (from lines, an
+estimate from the loan, no loan on the page, Form 1098, nothing), `loanSentence`, `PASSIVE_LINE`, `rentBridge` (this year,
+a past year, several rentals, nothing to bridge), `howLines` (`tieLine`, `sortLines`), `booksStatus`. None on the phone
+names a line of the form (a test reads them all).
 
 **Invariance.** `compute.js` and `running.js` are not changed; `books()` only reads (a test checks the plan's bytes). Over
 the 14 invented households, the four fixture plans, the empty plan and the round 8 rental plans, compute() and rentalsFor()

@@ -311,31 +311,46 @@ export function rentalSentence(r, year, money = dollars, thisYear = null) {
   if (r.net <= -0.5) return `${r.name}'s books for ${year} show a loss of ${money(-r.net)}: ${rent} of rent less ${costs} of costs.`;
   return `${r.name}'s books for ${year} break even: ${rent} of rent and ${costs} of costs.`;
 }
-/** Depreciation (line 18): counted (a full year or the first), or why not. */
+/**
+ * Depreciation (line 18): counted (a full year or the first), or why not. The words on the phone name no line of the form
+ * (review P3): the file and the printout carry the line numbers.
+ */
 export function depSentence(r, year, money = dollars) {
   const d = r.dep, yrs = String(RECOVERY_YEARS);
   switch (d.state) {
-    case "counted": return `Depreciation (line 18): ${money(d.amount)} for ${year}, the building's ${money(d.basis)} over ${yrs} years.`;
-    case "first": return `Depreciation (line 18): ${money(d.amount)} for ${year}, its first year: ${12 - d.from.month + 0.5} of 12 months, from the middle of ${MONTHS[d.from.month - 1]}.`;
-    case "noPrice": return `Depreciation (line 18) is not counted: it needs what you paid for ${r.name}, under Change ${r.name}.`;
-    case "noDate": return `Depreciation (line 18) is not counted: it needs the month ${r.name} was first rented out, under Change ${r.name}.`;
+    case "counted": return `Depreciation: ${money(d.amount)} for ${year}, the building's ${money(d.basis)} over ${yrs} years.`;
+    case "first": return `Depreciation: ${money(d.amount)} for ${year}, its first year: ${12 - d.from.month + 0.5} of 12 months, from the middle of ${MONTHS[d.from.month - 1]}.`;
+    case "noPrice": return `Depreciation is not counted: it needs what you paid for ${r.name}, under Change ${r.name}.`;
+    case "noDate": return `Depreciation is not counted: it needs the month ${r.name} was first rented out, under Change ${r.name}.`;
     case "notYet": return `No depreciation for ${year}: ${r.name} was first rented out in ${d.from.year}.`;
     default: return `No depreciation for ${year}: the building's cost was written off over ${yrs} years.`;
   }
 }
-/** Mortgage interest (line 12): from tied lines, about from the page's loan, from Form 1098, or nothing to say (null). */
+/** The lender's statement in plain words, its form named once (review P3). */
+const STATEMENT = "your lender's year-end interest statement (Form 1098)";
+/** Mortgage interest (line 12): from tied lines, an estimate from the page's loan, from Form 1098, or nothing to say (null). */
 export function mortgageSentence(r, year, money = dollars) {
   const m = r.mortgage;
-  if (m.state === "lines") return `Mortgage interest (line 12): ${money(m.amount)}, from your lines filed as mortgage interest.`;
-  if (m.state === "loan") return `Mortgage interest (line 12): about ${money(m.amount)}, a year of payments on the loan as it stands; the lender's Form 1098 (box 1) has the exact figure.`;
-  if (m.state === "noLoan") return `Mortgage interest is not counted: this page has no loan for ${r.name}. Add it under Change ${r.name}, or copy the interest from box 1 of the lender's Form 1098.`;
-  if (m.state === "form1098") return `Mortgage interest for ${year} is not counted here: copy it from box 1 of the lender's Form 1098 for ${year}.`;
+  if (m.state === "lines") return `Mortgage interest: ${money(m.amount)}, from your lines filed as mortgage interest.`;
+  if (m.state === "loan") return `Mortgage interest is an estimate, about ${money(m.amount)}: a year of payments on the loan as it stands. ${STATEMENT.charAt(0).toUpperCase()}${STATEMENT.slice(1)} has the exact figure.`;
+  if (m.state === "noLoan") return `Mortgage interest is not counted: this page has no loan for ${r.name}. Add it under Change ${r.name}, or copy the interest from ${STATEMENT}.`;
+  if (m.state === "form1098") return `Mortgage interest for ${year} is not counted here: copy it from ${STATEMENT} for ${year}.`;
   return null;
 }
 /** Loan payments tied to the rental: not a cost on the form (principal is not an expense), or null. */
-export const loanSentence = (r, money = dollars) => (r.loanPaid > 0.5 ? `Loan payments of ${money(r.loanPaid)} are not on the form: only their interest counts (line 12).` : null);
-/** The passive activity rules, named and not worked out (a loss only). */
-export const PASSIVE_LINE = "A rental loss may not all count this year: the passive activity rules (Form 8582) can hold part of it back. The Tax card above works out this year's share; these books do not.";
+export const loanSentence = (r, money = dollars) => (r.loanPaid > 0.5 ? `Loan payments of ${money(r.loanPaid)} are left out: only the interest in them is a cost.` : null);
+/** The passive activity rules, named and not worked out (a loss only), in plain words (review P3). */
+export const PASSIVE_LINE = "A tax rule can limit how much of a rental loss counts; the Tax card above works out how much for this year.";
+/**
+ * The rent the books show against the rent of "The year, line by line" above (review P2: two rents on one screen with no
+ * bridge): that card counts a full year at the rent typed; the books count the bank lines. Null when they agree within a
+ * dollar, when nothing is tied, or with no rent typed.
+ */
+export function rentBridge(r, cardRent, year, thisYear = null, money = dollars, many = false) {
+  if (!r.count || !(Number(cardRent) > 0) || Math.abs(Number(cardRent) - r.rents) < 1) return null;
+  const now = thisYear !== null && year >= thisYear;
+  return `${many ? `${r.name}'s rent` : "The rent"} in “The year, line by line” above, ${money(cardRent)}, is a full year at the rent you typed; your bank lines ${now ? `show ${money(r.rents)} so far` : `for ${year} show ${money(r.rents)}`}.`;
+}
 /** Bank lines for a rental that no single rental holds (several rentals): rent, costs or both, or null (F4: costs too). */
 export function untiedSentence(b, money = dollars) {
   const u = b.untied, nIn = u.count > 0 ? u.count : 0, nOut = u.outCount > 0 ? u.outCount : 0, n = nIn + nOut;
@@ -349,16 +364,41 @@ export function untiedSentence(b, money = dollars) {
 export const BOOKS_TITLE = "The year's rent and costs";
 /** What the printout says the plan does not hold. */
 export const NOT_IN_PLAN = "Lines 1 and 2 of the form (the address, the kind of property, the days rented and the days you used it) are not in the plan.";
-/** What the part is, said once inside it. */
-export const PREPARER_LINE = "For your tax preparer: the lines you tied, laid out like Schedule E (Form 1040), Part I. It is not a filing.";
-/** How lines are sorted, and the two things a bank line cannot say (Schedule E instructions 2025, lines 14 and 12). */
+/** What the printout is, said on it (the printout is for the preparer: the form's own name). */
+export const PREPARER_LINE = "For your tax preparer, laid out like Schedule E (Form 1040), Part I. It is not a filing.";
+/** What the file and the printout are, said once in the part on the phone (review P3: the form named once, in plain words). */
+export const SCREEN_PREPARER = "The file and the printout follow the tax form for rental income (Schedule E), for your tax preparer. They are not a filing.";
+/**
+ * How lines are sorted, and the two things a bank line cannot say (Schedule E instructions 2025, lines 14 and 12): said under
+ * the page's "How this is worked out" (review P5: they made the opened part three screens long), in plain words (P3).
+ */
 export const SORT_LINES = Object.freeze([
-  "Each line goes to the form by its category. A category of your own named like a line of the form (Repairs, Cleaning, Property management, Advertising) goes to that line; Utilities, Insurance, Car, gas, transit and Taxes go to theirs; anything else is listed under Other.",
+  "Each bank line goes to a line of the tax form by its category: a category named like one of them (Repairs, Cleaning, Advertising, Utilities) goes there; any other goes to Other costs, with its name.",
   "A repair keeps the place as it was; an improvement (a new roof, a remodel) is not counted in one year but depreciated: file it under a category such as Improvements and tell your preparer.",
-  "If the lender pays the property tax and insurance from the loan payment, its year-end statement lists them: they belong on lines 9 and 16.",
+  "If the lender pays the property tax and insurance from the loan payment, its year-end statement lists them: give them to your preparer for Taxes and Insurance.",
 ]);
-/** The row's status: the year and how many bank lines, or that none is tied yet. */
-export const booksStatus = (b) => (b.case === "some" ? `${b.year} · ${b.lines} ${b.lines === 1 ? "line" : "lines"}` : "none tied yet");
+/**
+ * The lines of SORT_LINES the page says for these books: how lines are sorted, always; repairs and improvements when a rental
+ * has a repairs or cleaning line; escrow when a rental has a loan and no insurance or no tax line (its lender may pay them).
+ */
+export function sortLines(b) {
+  const rs = shownRentals(b), has = (r, k) => r.rows.some((x) => x.key === k);
+  const loan = (r) => r.loanPaid > 0.5 || ["loan", "form1098", "noLoan"].includes(r.mortgage.state);
+  return [SORT_LINES[0],
+    rs.some((r) => has(r, "repairs") || has(r, "cleaning")) ? SORT_LINES[1] : null,
+    rs.some((r) => loan(r) && (!has(r, "insurance") || !has(r, "taxes"))) ? SORT_LINES[2] : null].filter(Boolean);
+}
+/** How a bank line comes to count for a rental: the first line of "How this is worked out" for the books. */
+export function tieLine(b) {
+  const one = b.rentals.length === 1;
+  return `A bank line counts for a rental when its Tags box on Transactions holds the rental's word (${tagList(b)})${one ? "; with one rental, rent filed under Rent you collect counts too" : ""}. Moves between your own accounts and lines left out of the totals do not count.`;
+}
+/** Everything "How this is worked out" says for the books (only once a line is tied): how lines tie, then how they sort. */
+export const howLines = (b) => [tieLine(b), ...sortLines(b)];
+/** The status of "How this is worked out" for the books (S3: at most 20 characters). */
+export const HOW_STATUS = "the year's books";
+/** The row's status: the year and how many bank lines, or what is missing (review P4: "no bank lines yet", not "none tied"). */
+export const booksStatus = (b) => (b.case === "some" ? `${b.year} · ${b.lines} ${b.lines === 1 ? "line" : "lines"}` : b.case === "noLines" ? "no bank lines yet" : "none tagged yet");
 /** The file's name. */
 export const booksFile = (b) => `rental-books-${b.year}.csv`;
 
@@ -382,7 +422,7 @@ export function formRows(b) {
   const note = (r, text) => (text ? (many ? `${r.name}: ${text}` : text) : null);
   const amountOf = (r, key) => (key === "rents" ? r.rents : r.rows.find((x) => x.key === key)?.amount ?? 0);
   const notesFor = (key) => rs.map((r) => {
-    if (key === "mortgage") return note(r, r.mortgage.state === "loan" ? "about: a year of payments on the loan typed on Rental analysis; the lender's Form 1098 (box 1) has the exact figure"
+    if (key === "mortgage") return note(r, r.mortgage.state === "loan" ? "about: a year of payments on the loan's balance, rate and payment as they stand; the lender's Form 1098 (box 1) has the exact figure"
       : r.mortgage.state === "form1098" || r.mortgage.state === "noLoan" ? "not counted: copy box 1 of the lender's Form 1098" : null);
     if (key === "depreciation") {
       const d = r.dep;

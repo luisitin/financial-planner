@@ -556,11 +556,11 @@ test("books: a year with no tied lines says what to do first (no bank lines at a
   const { landlordPlan } = await import("../../../qa/fixtures/round8-households.mjs");
   const p = landlordPlan();
   let b = B.books(p, { today: BOOKS_TODAY });
-  assert.equal(b.case, "noLines"); assert.equal(B.booksStatus(b), "none tied yet");
+  assert.equal(b.case, "noLines"); assert.equal(B.booksStatus(b), "no bank lines yet");
   assert.equal(B.booksSentence(b), "No bank lines are in the plan yet. Add them on Transactions, then type “condo” in the Tags box of Condo's lines: its rent and costs add up here, ready for the tax form for rental income.");
   p.transactions = [tx("groceries", "2026-06-10", -40, "groceries", [])];
   b = B.books(p, { today: BOOKS_TODAY });
-  assert.equal(b.case, "noneTied"); assert.equal(B.booksStatus(b), "none tied yet");
+  assert.equal(b.case, "noneTied"); assert.equal(B.booksStatus(b), "none tagged yet");
   assert.equal(B.booksSentence(b), "No bank lines are tied to Condo for 2026 yet. On Transactions, type “condo” in the Tags box of its rent and bills (a rule can do it for you): they then add up here, ready for the tax form for rental income.");
   p.property.push({ id: "r2", kind: "rental", name: "Duplex on Elm", value: 320000, rentMonthly: 2600 });
   b = B.books(p, { today: BOOKS_TODAY });
@@ -594,18 +594,19 @@ test("books: every sentence, one per case (R5)", async () => {
   assert.equal(B.rentalSentence(r({ months: [5], whole: false, dep: { state: "noPrice", amount: 0 } }), 2024, undefined, 2026), "Only one month of 2024 has bank lines for Condo (May), so these are not the whole year's books: $12,000 of rent less $9,000 of costs.");
   assert.equal(B.monthWords([1, 2, 3, 5]), "January to May, with gaps"); assert.equal(B.monthWords([]), "");
   assert.equal(B.rentalSentence(r({ count: 0, name: "Duplex on Elm", tag: "duplex on elm" }), 2026, undefined, 2026), "No bank lines are tied to Duplex on Elm for 2026 yet: type “duplex on elm” in the Tags box of its lines on Transactions.");
-  assert.equal(B.depSentence(r({}), 2026), "Depreciation (line 18): $6,109 for 2026, the building's $168,000 over 27.5 years.");
-  assert.equal(B.depSentence(r({ dep: { state: "first", amount: 2290.91, basis: 168000, from: { year: 2019, month: 8 } } }), 2019), "Depreciation (line 18): $2,291 for 2019, its first year: 4.5 of 12 months, from the middle of August.");
-  assert.equal(B.depSentence(r({ dep: { state: "noPrice", amount: 0 } }), 2026), "Depreciation (line 18) is not counted: it needs what you paid for Condo, under Change Condo.");
-  assert.equal(B.depSentence(r({ dep: { state: "noDate", amount: 0 } }), 2026), "Depreciation (line 18) is not counted: it needs the month Condo was first rented out, under Change Condo.");
+  // the words on the phone name no line of the form (review P3): the file and the printout carry them
+  assert.equal(B.depSentence(r({}), 2026), "Depreciation: $6,109 for 2026, the building's $168,000 over 27.5 years.");
+  assert.equal(B.depSentence(r({ dep: { state: "first", amount: 2290.91, basis: 168000, from: { year: 2019, month: 8 } } }), 2019), "Depreciation: $2,291 for 2019, its first year: 4.5 of 12 months, from the middle of August.");
+  assert.equal(B.depSentence(r({ dep: { state: "noPrice", amount: 0 } }), 2026), "Depreciation is not counted: it needs what you paid for Condo, under Change Condo.");
+  assert.equal(B.depSentence(r({ dep: { state: "noDate", amount: 0 } }), 2026), "Depreciation is not counted: it needs the month Condo was first rented out, under Change Condo.");
   assert.equal(B.depSentence(r({ dep: { state: "notYet", amount: 0, from: { year: 2027, month: 3 } } }), 2026), "No depreciation for 2026: Condo was first rented out in 2027.");
   assert.equal(B.depSentence(r({ dep: { state: "done", amount: 0 } }), 2050), "No depreciation for 2050: the building's cost was written off over 27.5 years.");
-  assert.equal(B.mortgageSentence(r({ mortgage: { state: "lines", amount: 6500 } }), 2026), "Mortgage interest (line 12): $6,500, from your lines filed as mortgage interest.");
-  assert.equal(B.mortgageSentence(r({ mortgage: { state: "loan", amount: 6677.7 } }), 2026), "Mortgage interest (line 12): about $6,678, a year of payments on the loan as it stands; the lender's Form 1098 (box 1) has the exact figure.");
-  assert.equal(B.mortgageSentence(r({ mortgage: { state: "noLoan", amount: 0 } }), 2026), "Mortgage interest is not counted: this page has no loan for Condo. Add it under Change Condo, or copy the interest from box 1 of the lender's Form 1098.");
-  assert.equal(B.mortgageSentence(r({ mortgage: { state: "form1098", amount: 0 } }), 2025), "Mortgage interest for 2025 is not counted here: copy it from box 1 of the lender's Form 1098 for 2025.");
+  assert.equal(B.mortgageSentence(r({ mortgage: { state: "lines", amount: 6500 } }), 2026), "Mortgage interest: $6,500, from your lines filed as mortgage interest.");
+  assert.equal(B.mortgageSentence(r({ mortgage: { state: "loan", amount: 6677.7 } }), 2026), "Mortgage interest is an estimate, about $6,678: a year of payments on the loan as it stands. Your lender's year-end interest statement (Form 1098) has the exact figure.");
+  assert.equal(B.mortgageSentence(r({ mortgage: { state: "noLoan", amount: 0 } }), 2026), "Mortgage interest is not counted: this page has no loan for Condo. Add it under Change Condo, or copy the interest from your lender's year-end interest statement (Form 1098).");
+  assert.equal(B.mortgageSentence(r({ mortgage: { state: "form1098", amount: 0 } }), 2025), "Mortgage interest for 2025 is not counted here: copy it from your lender's year-end interest statement (Form 1098) for 2025.");
   assert.equal(B.mortgageSentence(r({}), 2026), null);
-  assert.equal(B.loanSentence(r({ loanPaid: 8510 })), "Loan payments of $8,510 are not on the form: only their interest counts (line 12).");
+  assert.equal(B.loanSentence(r({ loanPaid: 8510 })), "Loan payments of $8,510 are left out: only the interest in them is a cost.");
   assert.equal(B.loanSentence(r({})), null);
   const b = { year: 2026, rentals: [{ tag: "condo" }, { tag: "duplex on elm" }], untied: { count: 3, total: 6300, outCount: 0, out: 0 } };
   assert.equal(B.untiedSentence(b), "3 rent lines for 2026 ($6,300) are not tied to one rental: type the rental's word in their Tags box (“condo”, “duplex on elm”).");
@@ -615,9 +616,34 @@ test("books: every sentence, one per case (R5)", async () => {
   assert.equal(B.untiedSentence({ ...b, untied: { count: 0, total: 0, outCount: 2, out: 740 } }), "2 cost lines for 2026 ($740) are not tied to one rental: type the rental's word in their Tags box (“condo”, “duplex on elm”).");
   assert.equal(B.untiedSentence({ ...b, untied: { count: 3, total: 6300, outCount: 2, out: 500 } }), "5 bank lines for 2026 ($6,300 in, $500 out) are not tied to one rental: type the rental's word in their Tags box (“condo”, “duplex on elm”).");
   assert.equal(B.untiedSentence({ ...b, untied: { count: 0, total: 0, outCount: 0, out: 0 } }), null);
-  assert.match(B.PASSIVE_LINE, /^A rental loss may not all count this year: the passive activity rules \(Form 8582\)/);
+  assert.equal(B.PASSIVE_LINE, "A tax rule can limit how much of a rental loss counts; the Tax card above works out how much for this year.");
+  // the rent above against the bank lines' (review P2), one sentence per case
+  assert.equal(B.rentBridge(r({ rents: 21050 }), 25200, 2026, 2026), "The rent in “The year, line by line” above, $25,200, is a full year at the rent you typed; your bank lines show $21,050 so far.");
+  assert.equal(B.rentBridge(r({ rents: 4200 }), 25200, 2025, 2026), "The rent in “The year, line by line” above, $25,200, is a full year at the rent you typed; your bank lines for 2025 show $4,200.");
+  assert.equal(B.rentBridge(r({ rents: 21050 }), 25200, 2026, 2026, undefined, true), "Condo's rent in “The year, line by line” above, $25,200, is a full year at the rent you typed; your bank lines show $21,050 so far.");
+  assert.equal(B.rentBridge(r({ rents: 25200.4 }), 25200, 2025, 2026), null, "they agree: nothing to bridge");
+  assert.equal(B.rentBridge(r({ count: 0 }), 25200, 2026, 2026), null); assert.equal(B.rentBridge(r({}), 0, 2026, 2026), null);
+  // no line of the form, no form number but Schedule E and Form 1098 named once in plain words, in any sentence on the phone
+  for (const t of [B.depSentence(r({}), 2026), B.mortgageSentence(r({ mortgage: { state: "loan", amount: 1 } }), 2026), B.loanSentence(r({ loanPaid: 1 })), B.PASSIVE_LINE, B.SCREEN_PREPARER, ...B.SORT_LINES])
+    assert.doesNotMatch(t, /\bline \d|\(line|box 1|Form 8582|Form 1040|Part I\b/, t);
   assert.equal(B.booksStatus({ case: "some", year: 2026, lines: 1 }), "2026 · 1 line");
   assert.ok(B.booksStatus({ case: "some", year: 2026, lines: 41 }).length <= 20, "a status fits one row at 320 px");
+});
+
+test("books: the part says how lines are sorted, and the repair and escrow lines only when they apply", async () => {
+  const B = await import("./books.js");
+  const p = await landlordBooksPlan();
+  assert.deepEqual(B.sortLines(B.books(p, { today: BOOKS_TODAY })), B.SORT_LINES.slice(0, 2), "repairs tied; tax and insurance tied too: no escrow line");
+  p.transactions = p.transactions.filter((t) => !["insurer", "plumber", "plumber-back", "cleaner"].includes(t.id));
+  assert.deepEqual(B.sortLines(B.books(p, { today: BOOKS_TODAY })), [B.SORT_LINES[0], B.SORT_LINES[2]], "a loan and no insurance line: the lender may pay it");
+  p.transactions = p.transactions.filter((t) => t.category === "income-rental");
+  p.property[0].loanAccountId = null;
+  assert.deepEqual(B.sortLines(B.books(p, { today: BOOKS_TODAY })), [B.SORT_LINES[0]]);
+  // "How this is worked out" for the books: how a line ties first, then how lines sort
+  const b1 = B.books(await landlordBooksPlan(), { today: BOOKS_TODAY });
+  assert.equal(B.howLines(b1)[0], "A bank line counts for a rental when its Tags box on Transactions holds the rental's word (“condo”); with one rental, rent filed under Rent you collect counts too. Moves between your own accounts and lines left out of the totals do not count.");
+  assert.deepEqual(B.howLines(b1).slice(1), B.SORT_LINES.slice(0, 2));
+  assert.ok(B.HOW_STATUS.length <= 20);
 });
 
 test("books: past years count no interest from today's loan (Form 1098), two rentals keep their own lines, rent tied to neither is said", async () => {
@@ -658,7 +684,7 @@ test("books: the CSV for a tax preparer: the form's lines 3 and 5 to 21, a colum
   assert.deepEqual(row("3"), ["3", "Rents received", "21050.00", "the year so far: bank lines 01/2026 to 10/2026"]);
   assert.deepEqual(row("5"), ["5", "Advertising", "", ""], "blank where the form would be empty");
   assert.deepEqual(row("12").slice(0, 2), ["12", "Mortgage interest paid to banks, etc."]);
-  assert.match(row("12")[3], /^about: a year of payments on the loan typed on Rental analysis; the lender's Form 1098 \(box 1\) has the exact figure$/);
+  assert.match(row("12")[3], /^about: a year of payments on the loan's balance, rate and payment as they stand; the lender's Form 1098 \(box 1\) has the exact figure$/);
   assert.deepEqual(row("18"), ["18", "Depreciation expense or depletion", "6109.09", "27.5 years straight line, mid-month, from 08/2019; basis 168000.00"]);
   assert.deepEqual(row("19"), ["19", "Other (list)", "3500.00", "HOA dues"]);
   assert.equal(row("20")[2], b.rentals[0].expenses.toFixed(2)); assert.equal(row("21")[2], (Math.round(b.rentals[0].net * 100) / 100).toFixed(2));
@@ -728,7 +754,7 @@ const visibleBoxes = (root) => root.all().filter((b) => /^(INPUT|SELECT|TEXTAREA
 
 test("the page: one quiet row \"The year's rent and costs\", shut, its status the year and the lines; no fold by hand; opening writes nothing", async () => {
   const { root, saved, textOf } = await drawRental(await landlordBooksPlan());
-  assert.deepEqual(partsOpen(root), { books: false });
+  assert.deepEqual(partsOpen(root), { "books-how": false, books: false }, "the books and, beside them once a line is tied, How this is worked out (review P5)");
   const part = partEl(root, "books");
   assert.equal(textOf(part.querySelector(".fold-title")), "The year's rent and costs");
   assert.equal(textOf(part.querySelector(".fold-status")), "2026 · 41 lines");
@@ -737,9 +763,19 @@ test("the page: one quiet row \"The year's rent and costs\", shut, its status th
   assert.equal(visibleBoxes(root).length, 0, "a list with rows shows no box (R20)");
   const t = textOf(part);
   assert.match(t, /Condo's books for 2026 so far \(bank lines for January to October\) show a loss of \$[\d,]+: \$21,050 of rent less \$[\d,]+ of costs, among them all of 2026's depreciation and loan interest\./);
-  assert.match(t, /Depreciation \(line 18\): \$6,109 for 2026, the building's \$168,000 over 27\.5 years\./);
-  assert.match(t, /Loan payments of \$8,510 are not on the form: only their interest counts \(line 12\)\./);
-  assert.match(t, /A rental loss may not all count this year/);
+  assert.doesNotMatch(t, /Depreciation \(line 18\): \$6,109 for 2026/, "a full year's depreciation is the row (and the Tax card's sentence above)");
+  assert.match(t, /Depreciation\s*−\$6,109/); assert.match(t, /Mortgage interest · estimate\s*−\$6,678/); assert.match(t, /Other costs · HOA dues\s*−\$3,500/);
+  assert.match(t, /Loan payments of \$8,510 are left out: only the interest in them is a cost\./);
+  assert.match(t, /A tax rule can limit how much of a rental loss counts; the Tax card above works out how much for this year\./);
+  // review P2: the rent above and the rent here, bridged; P3: no line of the form and no form but Schedule E and Form 1098
+  assert.match(t, /The rent in “The year, line by line” above, \$25,200, is a full year at the rent you typed; your bank lines show \$21,050 so far\./);
+  assert.doesNotMatch(t, /\bline\s\d|\(line|box 1|Form 8582|Part I\b/, "the form's line numbers are in the file and the printout, not on the phone");
+  // review P5: how lines tie and sort is one tap away beside the books, not always shown inside them
+  assert.doesNotMatch(t, /Each bank line goes to a line of the tax form|A repair keeps the place as it was/);
+  const how = partEl(root, "books-how");
+  assert.equal(textOf(how.querySelector(".fold-title")), "How this is worked out"); assert.equal(textOf(how.querySelector(".fold-status")), "the year's books");
+  assert.match(textOf(how), /A bank line counts for a rental when its Tags box on Transactions holds the rental's word \(“condo”\)/);
+  assert.match(textOf(how), /A repair keeps the place as it was/);
   for (const words of ["Save as a spreadsheet (CSV)", "Print this list"]) assert.equal(buttonNamed(part, words)?.className, "secondary", `${words}: outlined`);
   assert.equal(part.querySelectorAll("a").find((a) => /See Condo's lines on Transactions/.test(textOf(a)))?.getAttribute("href"), "#/transactions/ledger?q=%23condo");
   part.setAttribute("open", ""); part.dispatch("toggle"); part.removeAttribute("open"); part.dispatch("toggle");
@@ -775,7 +811,7 @@ test("S11 (R17): saving a rental's changes opens no part and shuts none; the gre
   assert.equal(a.saved[0].property[0].rentMonthly, 2150);
   assert.deepEqual(a.saved[0].transactions, a.plan.transactions, "the ledger is untouched");
   const b = await drawRental(a.saved[0]);
-  assert.deepEqual(partsOpen(b.root), { books: false }, "no part opens or shuts after the save");
+  assert.deepEqual(partsOpen(b.root), { "books-how": false, books: false }, "no part opens or shuts after the save");
   assert.match(b.textOf(b.root), /Saved\./);
   // a new rental: the boxes left empty save as nothing typed (null), which every page counts as the defaults
   const c = await drawRental(await landlordBooksPlan());
@@ -797,14 +833,22 @@ test("the year's chips: picking 2025 shows 2025 and keeps the part open; the pla
   assert.ok(chip, "a chip for each year with lines");
   chip.click();
   assert.equal(a.saved.length, 0, "a year picked is never saved");
-  assert.deepEqual(partsOpen(a.root), { books: true }, "the part just used stays open (R17)");
+  assert.deepEqual(partsOpen(a.root), { "books-how": false, books: true }, "the part just used stays open (R17)");
   const p2 = partEl(a.root, "books");
   assert.equal(a.textOf(p2.querySelector(".fold-status")), "2025 · 2 lines");
   assert.match(a.textOf(p2), /Only 2 months of 2025 have bank lines for Condo \(November and December\), so these are not the whole year's books: \$4,200 of rent less \$6,109 of costs, among them all of 2025's depreciation\./);
-  assert.doesNotMatch(a.textOf(p2), /show a loss/, "two months of rent against a year of depreciation is not called a loss (P1)");
-  assert.match(a.textOf(p2), /Mortgage interest for 2025 is not counted here: copy it from box 1 of the lender's Form 1098 for 2025\./);
+  assert.doesNotMatch(a.textOf(p2), /show a loss|A tax rule can limit how much of a rental loss/, "two months of rent against a year of depreciation is not called a loss (P1)");
+  assert.match(a.textOf(p2), /Mortgage interest for 2025 is not counted here: copy it from your lender's year-end interest statement \(Form 1098\) for 2025\./);
+  assert.match(a.textOf(p2), /The rent in “The year, line by line” above, \$25,200, is a full year at the rent you typed; your bank lines for 2025 show \$4,200\./);
   // back to 2026 for the other tests of this file (the pick is kept for the visit)
   p2.querySelectorAll("button").find((x) => x.className.includes("chip") && x.textContent === "2026").click();
+  // in the app the shell's redraw is asked for (it carries the sections the person opened, core/place.js): nothing is saved
+  let asked = 0;
+  const b = await drawRental(await landlordBooksPlan(), { redraw: () => { asked++; } });
+  partEl(b.root, "books").querySelectorAll("button").find((x) => x.className.includes("chip") && x.textContent === "2025").click();
+  assert.deepEqual([asked, b.saved.length], [1, 0]);
+  b.ctx.redraw = undefined;
+  partEl(b.root, "books").querySelectorAll("button").find((x) => x.className.includes("chip") && x.textContent === "2026").click();
 });
 
 test("review F6: a year picked is for the visit: a new arrival, another plan, or a year with no lines left starts from the year shown by itself", async () => {
@@ -834,7 +878,9 @@ test("the books row with nothing tied says what to do first, and links to Transa
   const { landlordPlan } = await import("../../../qa/fixtures/round8-households.mjs");
   const { root, textOf } = await drawRental(landlordPlan());
   const part = partEl(root, "books");
-  assert.equal(textOf(part.querySelector(".fold-status")), "none tied yet");
+  assert.equal(textOf(part.querySelector(".fold-status")), "no bank lines yet");
+  assert.equal(partEl(root, "books-how"), undefined, "nothing tied: no How this is worked out for the books yet");
+  assert.doesNotMatch(textOf(part), /Each bank line goes to/, "the empty part says what to do first and nothing else");
   assert.match(textOf(part), /› No bank lines are in the plan yet\. Add them on Transactions, then type “condo” in the Tags box of Condo's lines/);
   assert.equal(part.querySelectorAll("a").find((x) => textOf(x) === "Open Transactions ›")?.getAttribute("href"), "#/transactions/ledger");
   assert.equal(buttonNamed(part, "Save as a spreadsheet (CSV)"), undefined, "no file before there is a line");
