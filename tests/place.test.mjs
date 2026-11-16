@@ -857,3 +857,47 @@ test("typing the page took: a chip picked since, then 'Type my own' again, says 
   assert.deepEqual(said(), []);
   place.forgetAll();
 });
+
+// ---------------------------------------------------------------- invariance: nothing new happens where nothing new is typed or drawn
+// The rules as they were at 67dfd25, written out: every case they decided the same way is decided the same way now.
+const OLD_VERDICT = (d, v, now) => (now === v ? "same" : now === d ? "fill" : "changed");
+test("invariance: a box drawn again is decided as before unless two of its texts are one amount written two ways", () => {
+  const texts = ["", "0", "3,900", "9,999", "380,000", "391,000", "395,000", "Weekend tutoring", "2026-11-16", "02139", "2139", "7%", "Store card", "12.5"];
+  let n = 0;
+  for (const d of texts) for (const v of texts) for (const now of texts) {
+    const twoWays = [[d, v], [d, now], [v, now]].some(([a, b]) => a !== b && place.sameFigure(a, b));
+    assert.equal(twoWays, false, "the grid holds no amount written two ways");
+    assert.equal(boxVerdict(d, v, now), OLD_VERDICT(d, v, now), `${JSON.stringify([d, v, now])}`);
+    n++;
+  }
+  assert.equal(n, texts.length ** 3);
+  // text that only looks like an amount once its commas and spaces are dropped: as before, every way
+  const loose = ["1,5", "15", "1,23", "123", "12 34", "1234", "555 1234", "5551234"];
+  for (const d of loose) for (const v of loose) for (const now of loose) {
+    assert.equal(boxVerdict(d, v, now), OLD_VERDICT(d, v, now), `${JSON.stringify([d, v, now])}`);
+    n++;
+  }
+  assert.equal(n, 2744 + 512);
+  // only the same amount written two ways reads otherwise: the page's own writing of the typing
+  assert.deepEqual([OLD_VERDICT("600,000", "50000", "50,000"), boxVerdict("600,000", "50000", "50,000")], ["changed", "same"]);
+  assert.deepEqual([OLD_VERDICT("3,900", "9999", "3900"), boxVerdict("3,900", "9999", "3900")], ["changed", "fill"]);
+});
+test("invariance: sections the page draws as before go back exactly as before (Back, a reload, a save's redraw)", async () => {
+  agreeing();
+  // drawn as before: the reading parts' own memory on this phone is cleared before each draw, so the page draws every part
+  // shut as it did when the record was made (with it, the page draws them open itself: the case above, R17's kin)
+  const LIST = [MORE, READ, BOXES, ITEM, BO];
+  for (const tapped of [["how"], ["numbers", "ana"], ["itemized", "bo", "how"]]) {
+    let p = draw(LIST);
+    for (const id of tapped) await tapFold(p[id]);
+    const entry = foldsOf(dom.root);
+    moreKept.clear("all");
+    for (const f of entry) assert.equal(f.drew, "shut", "each was drawn shut and opened by hand");
+    p = draw(LIST); applyFolds(dom.root, entry);
+    assert.deepEqual(Object.entries(p).filter(([, d]) => d.open).map(([k]) => k).sort(), [...tapped].sort(), "the same ones open");
+    assert.deepEqual(foldsOf(dom.root).map((f) => [f.loc.k, f.by, f.drew]), entry.map((f) => [f.loc.k, f.by, f.drew]), "the same record");
+    for (const id of tapped) await tapFold(p[id]);   // shut again: nothing kept
+    assert.deepEqual(record(), []);
+    moreKept.clear("all");
+  }
+});
