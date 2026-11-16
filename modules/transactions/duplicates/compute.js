@@ -4,6 +4,7 @@
 // the near misses, e.g. a pending line that posted a day later with a slightly different text.
 import { normalizePayee } from "../rules/compute.js";
 import { daysBetween } from "../../../core/math/dates.js";
+import { commentOf } from "../ledger/compute.js";
 
 const similar = (a, b) => { const x = normalizePayee(a), y = normalizePayee(b); if (!x || !y) return x === y; if (x === y || x.includes(y) || y.includes(x)) return true; const wa = new Set(x.split(" ")), wb = y.split(" "); const common = wb.filter((w) => wa.has(w)).length; return common >= 2 && common / Math.min(wa.size, wb.length) >= 0.6; };
 
@@ -24,6 +25,34 @@ export function findDuplicates(txs) {
     }
   }
   return out;
+}
+/**
+ * dropCopies(txs, pairs) -> { transactions, moved, lost }: the list without each pair's copy (`drop`), the rest untouched.
+ * A comment on a copy (someone in the household's words, ledger `commentOf`) is never dropped in silence: it moves to the
+ * line that stays when that line has none (`moved` counts them); when both carry one, the kept line keeps its own and
+ * `lost` lists the copy's words, which the green line says (gap list next 60, item 58).
+ */
+export function dropCopies(txs, pairs) {
+  const list = [...(txs ?? [])], gone = new Set(), lost = [];
+  let moved = 0;
+  for (const p of pairs ?? []) {
+    const drop = list.find((t) => t?.id === p?.drop?.id);
+    if (!drop || gone.has(drop.id)) continue;
+    gone.add(drop.id);
+    const c = commentOf(drop);
+    if (!c) continue;
+    const at = list.findIndex((t) => t?.id === p?.keep?.id && !gone.has(t.id));
+    if (at >= 0 && !commentOf(list[at])) { list[at] = { ...list[at], comment: structuredClone(drop.comment) }; moved++; }
+    else lost.push(c.text);
+  }
+  return { transactions: list.filter((t) => !gone.has(t?.id)), moved, lost };
+}
+/** The sentence after "Removed ...", for what dropCopies did with the copies' comments; "" when none had one. */
+export function commentsKept({ moved = 0, lost = [] } = {}, one = true) {
+  const n = lost.length;
+  const said = [moved ? (one ? "Its comment moved to the one that stays." : `${moved === 1 ? "A comment" : `${moved} comments`} moved to the lines that stay.`) : "",
+    n ? (one ? `Its comment, “${lost[0]}”, went with it: the one that stays has its own.` : `${n === 1 ? `A comment, “${lost[0]}”,` : `${n} comments`} went with ${n === 1 ? "its copy" : "their copies"}: the lines that stay have their own.`) : ""];
+  return said.filter(Boolean).join(" ");
 }
 export function compute(plan) {
   const accounts = plan.accounts ?? [];

@@ -1,6 +1,6 @@
 // modules/transactions/duplicates/view.js -- DOM only. Each likely duplicate pair with
 // "Remove the copy" and "Keep both".
-import { compute } from "./compute.js";
+import { compute, dropCopies, commentsKept } from "./compute.js";
 
 const dismissed = new Set();   // pairs the person said are not duplicates (this session)
 let pending = null;   // the confirmation shown on the next render (stress test T4, x-duplicates)
@@ -27,8 +27,9 @@ export function render(root, ctx) {
       ui.h("div", { class: "d" }, `copy: ${line(p.drop)}`),
       ui.h("div", { class: "muted small" }, p.why)),
     ui.h("span", { class: "st", style: { display: "flex", gap: "8px", flex: "1 1 100%", marginTop: "6px" } },
-      ui.button("Remove the copy", () => { pending = `Removed the copy: ${p.drop.payee}, ${fmt.date(p.drop.date)}, ${fmt.money(Math.abs(Number(p.drop.amount)), cur, undefined, 2)}. The one from ${fmt.date(p.keep.date)} stays.`; store.update((pl) => { pl.transactions = (pl.transactions ?? []).filter((t) => t.id !== p.drop.id); }); }, { class: "small" }),
+      // a comment on the copy moves to the line that stays (or is said, when that line has its own): dropCopies
+      ui.button("Remove the copy", () => { pending = `Removed the copy: ${p.drop.payee}, ${fmt.date(p.drop.date)}, ${fmt.money(Math.abs(Number(p.drop.amount)), cur, undefined, 2)}. The one from ${fmt.date(p.keep.date)} stays.`; store.update((pl) => { const r = dropCopies(pl.transactions, [p]); pl.transactions = r.transactions; const more = commentsKept(r, true); if (more) pending += ` ${more}`; }); }, { class: "small" }),
       ui.button("Keep both", () => { dismissed.add(p.keep.id + "|" + p.drop.id); pending = `Kept both ${p.keep.payee} lines.`; root.innerHTML = ""; render(root, ctx); }, { class: "secondary small" })),
   )))));
-  if (pairs.length > 1) root.append(ui.card(null, ui.row(ui.button(`Remove all ${pairs.length} copies`, () => { if (ui.confirm(`Remove ${pairs.length} duplicate transactions?`)) { const ids = new Set(pairs.map((p) => p.drop.id)); pending = `Removed ${pairs.length} copies.`; store.update((pl) => { pl.transactions = (pl.transactions ?? []).filter((t) => !ids.has(t.id)); }); } }, { class: "danger" }))));
+  if (pairs.length > 1) root.append(ui.card(null, ui.row(ui.button(`Remove all ${pairs.length} copies`, () => { if (ui.confirm(`Remove ${pairs.length} duplicate transactions?`)) { pending = `Removed ${pairs.length} copies.`; store.update((pl) => { const r = dropCopies(pl.transactions, pairs); pl.transactions = r.transactions; const more = commentsKept(r, false); if (more) pending += ` ${more}`; }); } }, { class: "danger" }))));
 }

@@ -1426,3 +1426,379 @@ test("gap #32 on the page: money moved between your own accounts is offered the 
   const f = openRow(await ledgerPage(samplePlan()), "Transfer");
   assert.equal(named(f, "markKind"), null); assert.ok(named(f, "flag"));
 });
+
+// ---- a comment from someone in the household (gap list next 60, item 58; X9) --------------------------------------------------
+const { commentOf, writers, commentsOffered, commentsOn, writerChoices, realDay, dayWords, commentWords, commentHelp, nextComment, commentSaid, commentUndone, commentedCount, COMMENT_MAX, LONG_LIST, PICK_WRITER, PICK_LABEL, GONE_LABEL } = await import("./compute.js");
+const { writer, WRITER_KEY, forgetWriter } = await import("./writer.js");
+const TODAY58 = "2026-11-13";   // renderPage's day
+const couple = (p = samplePlan()) => { p.household = { ...(p.household ?? {}), people: [{ id: "p-ana", name: "Ana", role: "self" }, { id: "p-bo", name: "Bo", role: "partner" }, { id: "p-cy", name: "Cy", role: "dependent" }] }; return p; };
+const said58 = { text: "What was this?", by: "p-bo", on: "2026-11-12" };
+const wait700 = () => new Promise((res) => setTimeout(res, 720));   // the page's own guard: a row opens again 700 ms after a save
+
+test("item 58: a comment is read only as an object with words; who can write one; offered with two or more adults", () => {
+  assert.equal(commentOf({}), null); assert.equal(commentOf({ comment: "hi" }), null); assert.equal(commentOf({ comment: { text: "   " } }), null); assert.equal(commentOf({ comment: [] }), null);
+  assert.deepEqual(commentOf({ comment: { text: "  What   was\nthis? ", by: "p-bo", on: "2026-11-12" } }), said58);
+  assert.deepEqual(commentOf({ comment: { text: "x", by: 7, on: "Nov 12" } }), { text: "x", by: null, on: null });
+  assert.equal(commentOf({ comment: { text: "y".repeat(400) } }).text.length, COMMENT_MAX);
+  assert.equal(COMMENT_MAX, 140); assert.equal(LONG_LIST, 6);
+  const p = couple();
+  assert.deepEqual(writers(p), [{ value: "p-ana", label: "Ana" }, { value: "p-bo", label: "Bo" }], "the adults, never a child");
+  assert.equal(commentsOffered(p), true);
+  assert.equal(commentsOffered(samplePlan()), false, "no one in the plan: no comments");
+  const one = couple(); one.household.people = [{ id: "me", name: "", role: "self" }];
+  assert.equal(commentsOffered(one), false, "one adult: the note is enough");
+  one.household.people.push({ id: "sp", name: "My spouse", role: "partner" });
+  assert.deepEqual(writers(one), [{ value: "me", label: "Me" }, { value: "sp", label: "My spouse" }]);
+});
+
+test("item 58: the line under a row's note, one sentence per case", () => {
+  const p = couple();
+  const line = (c) => ({ comment: c });
+  assert.equal(commentWords({}, p), "");
+  assert.equal(commentWords(line(said58), p, { today: TODAY58 }), "Bo wrote on Nov 12: “What was this?”");
+  assert.equal(commentWords(line({ ...said58, on: "2025-12-30" }), p, { today: TODAY58 }), "Bo wrote on Dec 30, 2025: “What was this?”", "another year: the year is said");
+  assert.equal(commentWords(line({ ...said58, by: "gone" }), p, { today: TODAY58 }), "Someone wrote on Nov 12: “What was this?”", "someone no longer in the plan");
+  assert.equal(commentWords(line({ text: "Ok" }), p), "Someone wrote: “Ok”", "no one and no day kept");
+  const me = couple(); me.household.people = [{ id: "me", name: "Me", role: "self" }, { id: "sp", name: "My spouse", role: "partner" }];
+  assert.equal(commentWords(line({ text: "School trip", by: "me", on: "2026-11-01" }), me, { today: TODAY58 }), "You wrote on Nov 1: “School trip”");
+  assert.equal(commentWords(line({ text: "School trip", by: "sp", on: "2026-11-01" }), me, { today: TODAY58 }), "Your spouse wrote on Nov 1: “School trip”");
+  assert.equal(commentHelp({}, p), "For the others in the household to read. It keeps who wrote it and the day. Up to 140 letters.");
+  assert.equal(commentHelp(line(said58), p, { today: TODAY58 }), "Bo wrote this on Nov 12. Clear the box to remove it.");
+  assert.equal(dayWords("2026-02-03", "2026-11-13"), "Feb 3"); assert.equal(dayWords("x"), "");
+});
+
+test("item 58: what Save keeps, and the sentence that says it, one per case", () => {
+  const p = couple();
+  assert.deepEqual(nextComment(null, { text: "", by: "p-bo" }, { today: TODAY58, plan: p }), { comment: null }, "nothing typed: none");
+  assert.deepEqual(nextComment(null, { text: "What was this?", by: "" }, { today: TODAY58, plan: p }), { error: PICK_WRITER });
+  assert.equal(PICK_WRITER, "Pick who is writing this comment.");
+  assert.deepEqual(nextComment(null, { text: "What was this?", by: "p-cy" }, { today: TODAY58, plan: p }), { error: PICK_WRITER }, "a child is not among the writers");
+  assert.deepEqual(nextComment(null, { text: " What was  this? ", by: "p-bo" }, { today: TODAY58, plan: p }), { comment: { text: "What was this?", by: "p-bo", on: TODAY58 } });
+  assert.equal(nextComment(said58, { text: "What was this?", by: "p-bo" }, { today: TODAY58, plan: p }).comment, said58, "unchanged: the same comment, its day kept");
+  assert.deepEqual(nextComment(said58, { text: "Gift for Cy", by: "p-ana" }, { today: TODAY58, plan: p }), { comment: { text: "Gift for Cy", by: "p-ana", on: TODAY58 } });
+  assert.deepEqual(nextComment(said58, { text: "", by: "p-bo" }, { today: TODAY58, plan: p }), { comment: null }, "cleared: removed");
+  assert.equal(nextComment(null, { text: "z".repeat(300), by: "p-ana" }, { today: TODAY58, plan: p }).comment.text.length, COMMENT_MAX);
+  assert.equal(commentSaid(null, null, p), "");
+  assert.equal(commentSaid(null, said58, p), "Bo's comment was added.");
+  assert.equal(commentSaid(said58, null, p), "Bo's comment was removed.");
+  assert.equal(commentSaid(said58, { ...said58, text: "Gift" }, p), "The comment was changed.");
+  assert.equal(commentSaid(said58, { ...said58, by: "p-ana" }, p), "The comment was changed.");
+  assert.equal(commentSaid(said58, { ...said58 }, p), "", "the same words by the same person: nothing to say");
+  assert.equal(commentSaid(null, { ...said58, by: "gone" }, p), "The comment was added.");
+  const me = couple(); me.household.people = [{ id: "me", name: "Me", role: "self" }, { id: "sp", name: "My spouse", role: "partner" }];
+  assert.equal(commentSaid(null, { text: "x", by: "me" }, me), "Your comment was added.");
+  assert.equal(commentSaid(null, { text: "x", by: "sp" }, me), "Your spouse's comment was added.");
+  assert.equal(commentUndone("Kroger"), "Undone. Kroger is back as it was before this save.");
+});
+
+test("item 58: Only lines with a comment, the count, and search; a comment is in no total", () => {
+  const p = couple();
+  const base = compute(p, { today: TODAY58 });
+  for (const id of ["t4", "t2"]) p.transactions.find((t) => t.id === id).comment = { ...said58, text: id === "t4" ? "Party food" : "What was this?" };
+  assert.equal(commentedCount(p), 2);
+  const all = compute(p, { today: TODAY58 });
+  for (const k of ["in", "out", "net", "matched", "total", "uncategorised", "uncategorisedAll", "matchedIn", "matchedOut", "cardsOut"]) assert.equal(all[k], base[k], k);
+  assert.deepEqual(Object.keys(all), Object.keys(base), "no new key: a plan with comments reads as one without");
+  assert.deepEqual(all.rows.map((r) => r.id), base.rows.map((r) => r.id));
+  const only = compute(p, { today: TODAY58, commented: true });
+  assert.deepEqual(only.rows.map((r) => r.id).sort(), ["t2", "t4"]);
+  assert.equal(only.matched, 2);
+  assert.equal(compute(p, { today: TODAY58, q: "party" }).rows.map((r) => r.id).join(), "t4", "search reads a comment's words");
+  assert.equal(compute(p, { today: TODAY58, q: "#party" }).matched, 0, "a #word is a tag search");
+});
+
+test("item 58 invariance: no comment and the tick off, every Ledger result is what it was, over every household and fixture plan", async () => {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+  const plans = [["sample", samplePlan()], ["sample couple", couple()], ["empty", emptyPlan()]];
+  for (const f of fs.readdirSync(path.join(ROOT, "qa", "fixtures")).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(ROOT, "qa", "fixtures", f)).href);
+    for (const [n, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(n)) plans.push([`${f}:${n}`, fn(TODAY58)]);
+  }
+  for (const a of ARCHETYPES) plans.push([a.id, a.build()]);
+  for (const [n, fn] of Object.entries(phone)) if (typeof fn === "function") plans.push([`phone ${n}`, fn()]);
+  assert.ok(plans.length >= 25 && plans.filter(([, p]) => (p.transactions ?? []).length > LONG_LIST).length >= 2);
+  const KEYS = ["rows", "shown", "matched", "matchedIn", "matchedOut", "total", "in", "out", "net", "cardsOut", "cardsOutNames", "months", "accounts", "uncategorised", "uncategorisedAll", "hasMore"];
+  for (const [name, p0] of plans) {
+    const p = migrate(structuredClone(p0)), snap = JSON.stringify(p);
+    assert.equal(commentedCount(p), 0, `${name}: no invented household has a comment`);
+    const months = [...new Set((p.transactions ?? []).map((t) => String(t.date).slice(0, 7)))].slice(0, 2);
+    for (const params of [{}, { q: "a" }, { category: "none" }, { dir: "out" }, { only: "left" }, ...months.map((month) => ({ month }))]) {
+      const was = compute(p, { ...params, today: TODAY58 });
+      assert.deepEqual(Object.keys(was).filter((k) => k !== "leftOut"), KEYS, name);
+      // the page now passes commented: false with its filters (state.commented): the same result, key for key
+      assert.equal(JSON.stringify(compute(p, { ...params, commented: false, today: TODAY58 })), JSON.stringify(was), `${name} ${JSON.stringify(params)}`);
+      assert.ok(was.rows.every((r) => !("comment" in r)), name);
+    }
+    assert.equal(JSON.stringify(p), snap, `${name}: nothing written`);
+  }
+});
+
+test("item 58 on the page: Comment and Who is writing wait under More details (optional), right under Note, only on a saved line of a plan with two adults", async () => {
+  writer.forget();
+  const f = openRow(await ledgerPage(couple()), "Kroger", "86.40");
+  const more = f.querySelector(".form-more");
+  assert.ok(more && !more.hasAttribute("open"), "shut: no comment yet");
+  const names = more.all().filter((c) => c.tagName === "INPUT" || c.tagName === "SELECT").map((c) => c.getAttribute("name"));
+  assert.deepEqual(names.filter((n) => ["note", "commentText", "commentBy", "tagsText"].includes(n)), ["note", "commentText", "commentBy", "tagsText"], "right under Note");
+  assert.equal(named(f, "commentText").getAttribute("maxlength"), "140");
+  assert.equal(named(f, "commentBy").value, "p-ana", "starts on the plan's Me (Ana, marked as you): nobody has to pick on every save");
+  assert.deepEqual(named(f, "commentBy").querySelectorAll("option").map((o) => textIn(o)), ["Ana", "Bo"], "the one picked first, so the fold does not open for it");
+  assert.match(textIn(more), /For the others in the household to read\. It keeps who wrote it and the day\. Up to 140 letters\./, "the 140 is said, not a silent stop");
+  // no adults (the sample plan), or a new line: no comment boxes, the form as it was
+  assert.equal(named(openRow(await ledgerPage(samplePlan()), "Kroger", "86.40"), "commentText"), null);
+  const r = await ledgerPage(couple());
+  r.root.querySelectorAll("button").find((b) => textIn(b) === "Add a transaction by hand").click();
+  assert.equal(named(r.root.querySelector("form"), "commentText"), null, "a new line: the note is yours");
+  // a line with a comment opens its fold with it, said who and when
+  const p = couple(); p.transactions.find((t) => t.id === "t4").comment = said58;
+  const g = openRow(await ledgerPage(p), "Kroger", "86.40");
+  assert.ok(g.querySelector(".form-more").hasAttribute("open"));
+  assert.equal(named(g, "commentText").value, "What was this?"); assert.equal(named(g, "commentBy").value, "p-bo");
+  assert.match(textIn(g), /Bo wrote this on Nov 12\. Clear the box to remove it\./);
+});
+
+test("item 58 on the page: Save adds the comment (today's day, who wrote it), the row shows it under the note, the green line says so with Undo", async () => {
+  await wait700();
+  const r = await ledgerPage(couple());
+  const f = openRow(r, "Kroger", "86.40");
+  named(f, "commentText").value = "  What was   this? "; named(f, "commentBy").value = "p-bo";
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1, "one save");
+  const t = r.saved[0].transactions.find((x) => x.id === "t4");
+  assert.deepEqual(t.comment, { text: "What was this?", by: "p-bo", on: TODAY58 });
+  assert.equal(t.amount, -86.4); assert.equal(t.category, "groceries"); assert.equal(t.key, txKey(t), "the rest of the line as it was");
+  const r2 = await ledgerPage(r.saved[0]);
+  const ok = r2.root.querySelectorAll(".notice.ok");
+  assert.deepEqual(ok.map((n) => textIn(n.firstChild ?? n)), ["Saved Kroger: $86.40 out, Groceries. Bo's comment was added."]);
+  assert.ok(ok[0].querySelectorAll("button").some((b) => textIn(b) === "Undo"), "with Undo");
+  const row = rowsOf(r2.root).find((l) => textIn(l).includes("Kroger") && textIn(l).includes("86.40"));
+  assert.match(textIn(row), /Bo wrote on Nov 13: “What was this\?”/);
+  const lines = row.querySelectorAll(".d").map((d) => textIn(d));
+  assert.equal(lines.length, 2, "one more grey line, under the note's"); assert.equal(lines[1], "Bo wrote on Nov 13: “What was this?”");
+  // a row without a comment draws as before: one grey line
+  assert.equal(rowsOf(r2.root).find((l) => textIn(l).includes("Shell")).querySelectorAll(".d").length, 1);
+});
+
+test("item 58 on the page (P1): a first comment saves at the first try, under the plan's Me; a comment kept without a writer asks who before new words", async () => {
+  await wait700();
+  writer.forget();
+  const r = await ledgerPage(couple());
+  const f = openRow(r, "Kroger", "86.40");
+  named(f, "commentText").value = "What was this?";   // Who is writing not touched
+  f.dispatch("submit");
+  assert.equal(r.saved.length, 1, "saved at the first try");
+  assert.deepEqual(r.saved[0].transactions.find((x) => x.id === "t4").comment, { text: "What was this?", by: "p-ana", on: TODAY58 });
+  assert.match(textIn((await ledgerPage(r.saved[0])).root.querySelectorAll(".notice.ok")[0]), /Ana's comment was added\./, "the green line names who wrote it");
+  // a comment kept without a writer (an older or hand-made plan): its line saves as it is; new words need someone picked
+  await wait700();
+  const p = couple(); p.transactions.find((t) => t.id === "t4").comment = { text: "Ok", on: "2026-11-01" };
+  const r2 = await ledgerPage(p);
+  const g = openRow(r2, "Kroger", "86.40");
+  assert.equal(named(g, "commentBy").value, ""); assert.equal(textIn(named(g, "commentBy").querySelectorAll("option")[0]), PICK_LABEL);
+  g.dispatch("submit");
+  assert.equal(r2.saved.length, 1, "nothing changed in it: saved as before");
+  assert.deepEqual(r2.saved[0].transactions.find((x) => x.id === "t4").comment, { text: "Ok", on: "2026-11-01" });
+  await wait700();
+  const r3 = await ledgerPage(p);
+  const h = openRow(r3, "Kroger", "86.40");
+  named(h, "commentText").value = "What was this?";
+  h.dispatch("submit");
+  assert.equal(r3.saved.length, 0, "new words with no one picked are held at the box");
+});
+
+test("item 58 on the page: clearing the box removes the comment, said in green with Undo; a save that touches no comment is as before (no Undo)", async () => {
+  await wait700();
+  const p = couple(); p.transactions.find((t) => t.id === "t4").comment = said58;
+  const r = await ledgerPage(p);
+  const f = openRow(r, "Kroger", "86.40");
+  named(f, "commentText").value = "";
+  f.dispatch("submit");
+  assert.equal("comment" in r.saved[0].transactions.find((x) => x.id === "t4"), false);
+  const ok = (await ledgerPage(r.saved[0])).root.querySelectorAll(".notice.ok");
+  assert.equal(textIn(ok[0].firstChild ?? ok[0]), "Saved Kroger: $86.40 out, Groceries. Bo's comment was removed.");
+  assert.ok(ok[0].querySelectorAll("button").some((b) => textIn(b) === "Undo"));
+  await wait700();
+  const r3 = await ledgerPage(p);
+  const g = openRow(r3, "Kroger", "86.40");
+  named(g, "note").value = "party";
+  g.dispatch("submit");
+  assert.deepEqual(r3.saved[0].transactions.find((x) => x.id === "t4").comment, said58, "the comment kept as it was, its day too");
+  const ok3 = (await ledgerPage(r3.saved[0])).root.querySelectorAll(".notice.ok");
+  assert.deepEqual(ok3.map((n) => textIn(n)), ["Saved Kroger: $86.40 out, Groceries."], "the green line of before, no Undo");
+});
+
+/** The page with a store that keeps what it is given (Undo needs one), drawn again after each save as the shell does. */
+async function livePage(plan0) {
+  const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js"), { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const s = { p: migrate(structuredClone(plan0)), saved: [] };
+  const store = { get: () => s.p, update: (fn) => { const d = structuredClone(s.p); fn(d); s.p = d; s.saved.push(d); } };
+  s.draw = () => { s.root = new FakeElement("main"); render(s.root, { ui, fmt: { ...fmt, today: () => TODAY58 }, plan: s.p, route: { rest: [], query: {} }, store }); return s; };
+  return s.draw();
+}
+
+test("item 58 on the page: Undo puts the line back as it was before that save, and says so", async () => {
+  await wait700();
+  const s = await livePage(couple());
+  const before = JSON.stringify(s.p.transactions.find((x) => x.id === "t4"));
+  const f = openRow(s, "Kroger", "86.40");
+  named(f, "commentText").value = "What was this?"; named(f, "commentBy").value = "p-ana"; named(f, "category").value = "dining";
+  f.dispatch("submit");
+  assert.equal(s.p.transactions.find((x) => x.id === "t4").comment.by, "p-ana");
+  s.draw();
+  const undo = s.root.querySelectorAll(".notice.ok")[0].querySelectorAll("button").find((b) => textIn(b) === "Undo");
+  undo.click();
+  assert.equal(JSON.stringify(s.p.transactions.find((x) => x.id === "t4")), before, "the comment and the category of that save, both back");
+  s.draw();
+  assert.deepEqual(s.root.querySelectorAll(".notice.ok").map((n) => textIn(n)), ["Undone. Kroger is back as it was before this save."]);
+});
+
+test("item 58 on the page: Only lines with a comment waits shut in Showing, only while there are comments and the list is long; S11 nothing else opens", async () => {
+  const none = await ledgerPage(couple());
+  assert.equal(none.root.querySelector('[name="commented"]'), null, "no comment yet: no tick");
+  const p = couple(); p.transactions.find((t) => t.id === "t4").comment = said58; p.transactions.find((t) => t.id === "t2").comment = { ...said58, text: "Ok" };
+  const r = await ledgerPage(p);
+  const showing = r.root.querySelectorAll("details").find((d) => /lg-show/.test(d.getAttribute("class")));
+  assert.equal(showing.hasAttribute("open"), false, "Showing stays shut: the first view is as it was");
+  const tick = r.root.querySelector('[name="commented"]');
+  assert.ok(tick && showing.querySelectorAll("input").includes(tick), "inside Showing");
+  assert.match(textIn(tick.closest("label")), /^Only lines with a comment \(2\)$/);
+  assert.equal(r.root.querySelectorAll("details").filter((d) => d.hasAttribute("open")).length, 0);
+  tick.checked = true; tick.dispatch("change");
+  assert.equal(rowsOf(r.root).length, 2, "the two lines with a comment");
+  const shown = r.root.querySelectorAll("details").find((d) => /lg-show/.test(d.getAttribute("class")));
+  assert.match(textIn(shown.querySelector("summary")), /all months · all accounts · all categories · with a comment only/);
+  assert.equal(shown.hasAttribute("open"), true, "a filter set keeps Showing open, as the others do");
+  assert.equal(r.saved.length, 0, "the tick writes nothing");
+  // the comments gone (or a short list): no tick, and the filter is off by itself
+  const short = couple(); short.transactions = short.transactions.slice(0, LONG_LIST); short.transactions[0].comment = said58;
+  const r2 = await ledgerPage(short);
+  assert.equal(r2.root.querySelector('[name="commented"]'), null, "six lines or fewer: no tick");
+  assert.equal(rowsOf(r2.root).length, LONG_LIST, "and every line listed");
+});
+
+// ---- item 58, after the critics (u2 fix): who wrote it, a comment that can always be cleared, days and words read with care
+const sam2 = () => { const p = couple(); p.household.people = [{ id: "p1", name: "Sam" }, { id: "p2", name: "" }, { id: "p3", name: "Kid", role: "dependent" }]; return p; };
+
+test("item 58 (M1): an unnamed adult is named as Who is writing lists them, in every sentence (never 'You' for someone else)", () => {
+  const p = sam2(), c = { text: "hi", by: "p2", on: "2025-03-01" };
+  assert.deepEqual(writers(p), [{ value: "p1", label: "Sam" }, { value: "p2", label: "Person 2" }]);
+  assert.equal(commentWords({ comment: c }, p, { today: TODAY58 }), "Person 2 wrote on Mar 1, 2025: “hi”");
+  assert.equal(commentHelp({ comment: c }, p, { today: TODAY58 }), "Person 2 wrote this on Mar 1, 2025. Clear the box to remove it.");
+  assert.equal(commentSaid(null, c, p), "Person 2's comment was added.");
+  assert.equal(commentSaid(c, null, p), "Person 2's comment was removed.");
+  // the adult marked as you keeps "Me" (and "You wrote") wherever they sit in the list; Get started's own names as before
+  const q = couple(); q.household.people = [{ id: "a", name: "", role: "partner" }, { id: "b", name: "", role: "self" }];
+  assert.deepEqual(writers(q), [{ value: "a", label: "Person 1" }, { value: "b", label: "Me" }]);
+  assert.equal(commentWords({ comment: { text: "x", by: "a" } }, q), "Person 1 wrote: “x”");
+  assert.equal(commentWords({ comment: { text: "x", by: "b" } }, q), "You wrote: “x”");
+  const me = couple(); me.household.people = [{ id: "me", name: "Me", role: "self" }, { id: "sp", name: "My spouse", role: "partner" }];
+  assert.equal(commentWords({ comment: { text: "x", by: "sp" } }, me), "Your spouse wrote: “x”");
+  // someone who is now a child in the plan is not among the writers: "Someone", as for a person no longer in the plan
+  assert.equal(commentWords({ comment: { text: "x", by: "p3" } }, p), "Someone wrote: “x”");
+});
+
+test("item 58 (M4, M5): a day that does not exist is no day, and words that are not text are no comment", () => {
+  for (const bad of ["2026-13-45", "0000-00-00", "2026-02-30", "2026-00-10", "0999-01-01", "2026-1-5", 20261101, null]) {
+    assert.equal(realDay(bad), false, String(bad));
+    assert.equal(commentOf({ comment: { text: "hi", by: "p-bo", on: bad } }).on, null, String(bad));
+    assert.equal(dayWords(bad, TODAY58), "", String(bad));
+    assert.equal(commentWords({ comment: { text: "hi", by: "p-bo", on: bad } }, couple(), { today: TODAY58 }), "Bo wrote: “hi”", String(bad));
+  }
+  for (const good of ["2026-11-13", "2024-02-29", "1999-12-31"]) assert.equal(realDay(good), true, good);
+  assert.equal(realDay("2025-02-29"), false, "not a leap year");
+  for (const text of [{}, [], 123, true, null]) assert.equal(commentOf({ comment: { text, by: "p-bo", on: "2026-11-12" } }), null, JSON.stringify(text));
+  assert.equal(commentWords({ comment: { text: {} } }, couple()), "");
+  // a save never keeps a day that does not exist: the comment's own day, else none
+  assert.deepEqual(nextComment(null, { text: "x", by: "p-bo" }, { today: "2026-13-45", plan: couple() }), { comment: { text: "x", by: "p-bo", on: null } });
+});
+
+test("item 58 (P1): Who is writing starts on whoever last wrote on this phone, else the plan's Me, else the first adult; a comment's own writer first", () => {
+  const p = couple();
+  assert.deepEqual(writerChoices(p, { id: "t4" }), { options: [{ value: "p-ana", label: "Ana" }, { value: "p-bo", label: "Bo" }], value: "p-ana" }, "the plan's Me");
+  assert.deepEqual(writerChoices(p, { id: "t4" }, { last: "p-bo" }), { options: [{ value: "p-bo", label: "Bo" }, { value: "p-ana", label: "Ana" }], value: "p-bo" }, "this phone last wrote as Bo");
+  assert.equal(writerChoices(p, { id: "t4" }, { last: "p-cy" }).value, "p-ana", "a child is never picked");
+  assert.equal(writerChoices(p, { id: "t4" }, { last: "gone" }).value, "p-ana", "someone no longer in the plan is not picked");
+  assert.equal(writerChoices(sam2(), { id: "t4" }).value, "p1", "no one marked as you: the first adult");
+  const withBo = { id: "t4", comment: said58 };
+  assert.deepEqual(writerChoices(p, withBo, { last: "p-ana" }), { options: [{ value: "p-bo", label: "Bo" }, { value: "p-ana", label: "Ana" }], value: "p-bo" }, "the comment's writer, so a save that leaves it keeps it");
+  assert.deepEqual(writerChoices(p, { id: "t4", comment: { ...said58, by: "gone" } }), { options: [{ value: "gone", label: GONE_LABEL }, { value: "p-ana", label: "Ana" }, { value: "p-bo", label: "Bo" }], value: "gone" });
+  assert.deepEqual(writerChoices(p, { id: "t4", comment: { text: "Ok" } }).options[0], { value: "", label: PICK_LABEL });
+  assert.equal(GONE_LABEL, "Someone no longer in the plan"); assert.equal(PICK_LABEL, "Pick who is writing...");
+});
+
+test("item 58 (P1): this phone remembers who last wrote, in its own key (the sandbox's twin in the sandbox); a broken value is nothing; Erase forgets it", () => {
+  const disk = new Map(), was = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem: (k) => (disk.has(k) ? disk.get(k) : null), setItem: (k, v) => { disk.set(k, String(v)); }, removeItem: (k) => { disk.delete(k); } } });
+  try {
+    assert.equal(WRITER_KEY, "planner.writer");
+    writer._reset(); assert.equal(writer.last, null, "a new phone: nothing kept");
+    writer.set("p-bo");
+    assert.deepEqual(JSON.parse(disk.get("planner.writer")), { fmt: 1, by: "p-bo" }, "an id, never a name");
+    writer._reset(); assert.equal(writer.last, "p-bo", "read back after a reload");
+    for (const raw of ["{", "null", "[]", '"p-bo"', '{"by":"p-bo"}', '{"fmt":2,"by":"p-bo"}', '{"fmt":1,"by":7}', '{"fmt":1,"by":""}']) { disk.set("planner.writer", raw); writer._reset(); assert.equal(writer.last, null, raw); }
+    writer.set("p-ana"); forgetWriter();
+    assert.equal(disk.has("planner.writer"), false); assert.equal(writer.last, null);
+  } finally {
+    if (was) Object.defineProperty(globalThis, "localStorage", was); else delete globalThis.localStorage;
+    writer._reset(); writer.forget();
+  }
+});
+
+test("item 58 (P1): on the page, Who is writing starts on the person this phone last wrote as; the fold stays shut for it", async () => {
+  await wait700();
+  writer.forget();
+  const r = await ledgerPage(couple());
+  const f = openRow(r, "Kroger", "86.40");
+  named(f, "commentText").value = "Party food"; named(f, "commentBy").value = "p-bo";
+  f.dispatch("submit");
+  assert.equal(writer.last, "p-bo", "remembered on this phone");
+  await wait700();
+  const g = openRow(await ledgerPage(r.saved[0]), "Shell");
+  assert.equal(named(g, "commentBy").value, "p-bo");
+  assert.equal(g.querySelector(".form-more").hasAttribute("open"), false, "More details stays shut: nothing on this line to show");
+  // a save that only removes a comment does not change who this phone remembers
+  writer.set("p-ana");
+  const p = couple(); p.transactions.find((t) => t.id === "t4").comment = said58;
+  await wait700();
+  const r2 = await ledgerPage(p);
+  const h = openRow(r2, "Kroger", "86.40");
+  named(h, "commentText").value = "";
+  h.dispatch("submit");
+  assert.equal(r2.saved.length, 1); assert.equal(writer.last, "p-ana");
+  writer.forget();
+});
+
+test("item 58 (M3): with one adult left, a comment the other wrote can still be changed or cleared; with none, no boxes as before", async () => {
+  const one = (p = couple()) => { p.household.people = p.household.people.filter((x) => x.id !== "p-bo"); return p; };
+  const p = one(); p.transactions.find((t) => t.id === "t4").comment = said58;
+  assert.equal(commentsOffered(p), false);
+  assert.equal(commentsOn(p, p.transactions.find((t) => t.id === "t4")), true, "the line with a comment");
+  assert.equal(commentsOn(p, p.transactions.find((t) => t.id !== "t4")), false, "the others: the note is enough");
+  assert.equal(commentsOn(p, { comment: said58 }), false, "a line being typed has no comment boxes");
+  await wait700();
+  const r = await ledgerPage(p);
+  const f = openRow(r, "Kroger", "86.40");
+  assert.equal(named(f, "commentText").value, "What was this?");
+  assert.deepEqual(named(f, "commentBy").querySelectorAll("option").map((o) => textIn(o)), [GONE_LABEL, "Ana"]);
+  assert.match(textIn(f), /Someone wrote this on Nov 12\. Clear the box to remove it\./);
+  named(f, "commentText").value = "";
+  f.dispatch("submit");
+  assert.equal("comment" in r.saved[0].transactions.find((x) => x.id === "t4"), false, "cleared");
+  assert.match(textIn((await ledgerPage(r.saved[0])).root.querySelectorAll(".notice.ok")[0]), /The comment was removed\./);
+  // another line on the one-adult plan: no comment boxes, the form as it was
+  await wait700();
+  assert.equal(named(openRow(await ledgerPage(p), "Shell"), "commentText"), null);
+});
+
+test("item 58: Settings' Erase the copy on this device also forgets who last wrote a comment here", async () => {
+  const fs = await import("node:fs");
+  const view = fs.readFileSync(new URL("../../system/settings/view.js", import.meta.url), "utf8");
+  assert.match(view, /forgetWriter\(\);[^\n]*\n\s*forgetTalk\(\);/);
+  assert.match(view, /import \{ forgetWriter \} from "\.\.\/\.\.\/transactions\/ledger\/writer\.js";/);
+});

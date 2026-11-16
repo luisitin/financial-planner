@@ -4,18 +4,26 @@
 // categories" beside them; search reads tags ("#trip"); a split purchase is one row naming its parts.
 // Gap #32 (2026-11-14): under the same line, "How this counts" (paid back later, the money back, a refund of a purchase,
 // left out of reports) and "Flag to look at later"; a row says its mark, and the totals say how many lines are left out.
+// Gap list next 60, item 58 (2026-11-16): on a plan with two or more adults, a line's form has "Comment" and "Who is writing"
+// under the same line, right under Note; a row shows the comment under its grey line ("Bo wrote on Nov 14: “What was
+// this?”"); a save that adds, changes or removes one says so in green with Undo; "Only lines with a comment" waits in Showing.
+// "Who is writing" starts on whoever last wrote a comment on this phone (writer.js), else the plan's "Me".
 import { compute, txKey, theCard, signedAmount, directionOf, monthLabel, makeSplit, splitForm, splitWords, restWords, cleanTags, tagsOf,
-  markOf, markChoices, applyMark, unlinkGone, markHelp, markSaid, backGap, notCounted, lineWords, MARK_LABELS } from "./compute.js";
+  markOf, markChoices, applyMark, unlinkGone, markHelp, markSaid, backGap, notCounted, lineWords, MARK_LABELS,
+  commentOf, commentsOn, writerChoices, commentWords, commentHelp, nextComment, commentSaid, commentUndone, commentedCount, COMMENT_MAX, LONG_LIST } from "./compute.js";
 import { categoriesOf } from "../categories/compute.js";
+import { writer } from "./writer.js";
 
 // filter state survives the re-render the shell does after every save
-const state = { month: "", accountId: "", category: "", q: "", dir: "", only: "", limit: 100 };
+const state = { month: "", accountId: "", category: "", q: "", dir: "", only: "", commented: false, limit: 100 };
 // a new line to open on arrival (the Monthly review's "Add Chase checking's lines by hand": ?add=<first missing day>)
 let addOn = null;
 // a line to open on arrival (Categorize's flagged list: ?edit=<its id>), gap #32
 let editOn = null;
 // the confirmation shown on the next render (the shell re-renders after store.update): "Added Corner cafe: $6.25 out."
 let pending = null;
+// with it, the Undo of a save that added, changed or removed a comment (item 58): { undo, payee }
+let pendingUndo = null;
 // arrived from a link that set the filters (a category on Where the money goes, an account, a month): bring the list up once
 let toList = false;
 // when the last add, save or delete happened: a second tap within 700 ms lands on whatever moved under the thumb (the
@@ -33,7 +41,7 @@ const STYLE = `.lg-show > summary .fold-status { white-space: normal; text-align
 .lg-count .lg-flag .field-label { order: 2; margin: 0; }
 .lg-left { margin-top: 12px; }`;
 
-const FIELDS = (plan) => [
+const FIELDS = (plan, line = null, today = null, who = null) => [
   { key: "date", label: "Date", type: "date", required: true },
   { key: "payee", label: "Who or what", type: "text", required: true, placeholder: "e.g. Kroger" },
   // which way, never a sign: an iPhone's number pad has no minus key (stress test T3, 2026-11-11)
@@ -45,6 +53,12 @@ const FIELDS = (plan) => [
   { key: "category", label: "Category", type: "select", options: [{ value: "", label: "Uncategorized" }, ...categoriesOf(plan).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))] },
   // optional, one tap away: a saved note or tag opens the line by itself (ui.form `more`)
   { key: "note", label: "Note", type: "text", more: true },
+  // a comment from someone in the household, right under the note: on a line already saved, with two or more adults, and
+  // on any line that has one (so it can be changed or cleared with one adult left); `who` is writerChoices
+  ...(who ? [
+    { key: "commentText", label: "Comment", type: "text", more: true, placeholder: "e.g. What was this?", help: commentHelp(line, plan, { today }) },
+    { key: "commentBy", label: "Who is writing", type: "select", more: true, options: who.options },
+  ] : []),
   { key: "tagsText", label: "Tags", type: "text", more: true, placeholder: "e.g. trip, kids", help: "A word to find these by later, with commas between. Where the money goes adds up each tag." },
 ];
 
@@ -57,7 +71,7 @@ export function render(root, ctx) {
   const query = ctx.route.query ?? {};
   if (rest.length) {
     // a link shows what it names and nothing left over from an earlier visit
-    Object.assign(state, { month: "", accountId: "", category: "", q: "", dir: "", only: "", limit: 100 });
+    Object.assign(state, { month: "", accountId: "", category: "", q: "", dir: "", only: "", commented: false, limit: 100 });
     if (rest[0] === "uncategorised") { state.category = "none"; }
     if (rest[0] === "month" && rest[1]) { state.month = rest[1]; }
     // a category with it (?category=groceries, or none for the unfiled lines): "Groceries in Sep 2026", not the whole month
@@ -82,6 +96,9 @@ export function render(root, ctx) {
     (ctx.replace ?? ((h) => location.replace(h)))(hrefOf(ledgerQuery(query)));   // through the router: Safari keeps the old entry's state otherwise
     return;
   }
+  // "Only lines with a comment" is drawn only while there are comments and the list is long: with none left, it is off
+  const commentsN = commentedCount(plan), commentTick = commentsN > 0 && (plan.transactions ?? []).length > LONG_LIST;
+  if (!commentTick) state.commented = false;
   let d = compute(plan, { ...state, today: fmt.today() });
   const hasAccounts = (plan.accounts ?? []).length > 0;
   let editing = addOn ? { date: addOn.date, accountId: addOn.accountId, category: "", amount: null } : editOn ? (plan.transactions ?? []).find((x) => x.id === editOn) ?? null : null;
@@ -130,14 +147,18 @@ export function render(root, ctx) {
       state.q ? `“${state.q}”` : null,
       state.dir === "out" ? "money out only" : state.dir === "in" ? "money in only" : null,
       state.only === "left" ? "not counted only" : null,
+      state.commented ? "with a comment only" : null,
     ].filter(Boolean).join(" · ");
     const status = ui.h("span", { class: "fold-status" }, showingText());
     refreshTop = () => { totalsHost.replaceChildren(totals()); status.textContent = showingText(); };
     // "not counted only" has its own line and way back under the fold, so it does not open the four boxes
-    const filtered = !!(state.month || state.accountId || state.category || state.q || state.dir);
+    const filtered = !!(state.month || state.accountId || state.category || state.q || state.dir || state.commented);
     root.append(ui.h("details", { class: "card fold fold-card lg-show", open: filtered && !showShut ? true : null, onToggle: (e) => { if (e.currentTarget.open) showShut = false; } },
       ui.h("summary", {}, ui.h("h2", {}, "Showing"), status, ui.h("span", { class: "fold-chev", "aria-hidden": "true" }, "›")),
-      ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Month", monthSel), ui.field("Account", acctSel), ui.field("Category", catSel), ui.field("Search", search)))));
+      ui.h("div", { class: "fold-body" }, ui.h("div", { class: "form" }, ui.field("Month", monthSel), ui.field("Account", acctSel), ui.field("Category", catSel), ui.field("Search", search),
+        // one quiet tick, only while some lines carry a comment and the list is long (item 58)
+        commentTick ? ui.h("label", { class: "toggle-row" }, ui.h("input", { type: "checkbox", name: "commented", checked: state.commented ? true : null, onChange: (e) => { state.commented = !!e.target.checked; redraw(); } }),
+          ui.h("span", { class: "toggle-text" }, `Only lines with a comment (${commentsN})`)) : null))));
     // money out only (a spending page's link): say so, with the way to see both; unfiled lines with money in among them:
     // say how many, since the spending pages count only the money going out (review N3, 2026-11-11)
     if (state.only === "left") root.append(ui.notice("info", [ui.h("div", {}, "Showing only the lines not counted in your spending or income: paid back, or left out."), ui.row(ui.button("Show every line", () => { state.only = ""; redraw(); }, { class: "secondary" }))]));
@@ -153,7 +174,12 @@ export function render(root, ctx) {
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!editing) {
-      if (pending) { formHost.append(ui.notice("ok", pending)); pending = null; }
+      if (pending) {
+        // a save that added, changed or removed a comment carries Undo: the line goes back as it was before that save
+        const back = pendingUndo;
+        formHost.append(ui.notice("ok", pending, back ? { undo: back.undo, undone: (r) => { pending = ui.undoneWords(r, commentUndone(back.payee)); } } : {}));
+        pending = null; pendingUndo = null;
+      }
       // outlined: the hero's Import is the filled first step; with no account there is nothing to add a line to (T2)
       if (hasAccounts) formHost.append(ui.row(ui.button("Add a transaction by hand", () => { editing = { date: fmt.today(), accountId: (plan.accounts ?? [])[0]?.id ?? "", category: "", amount: null }; drawForm(); }, { class: "secondary" })));
       return;
@@ -161,6 +187,9 @@ export function render(root, ctx) {
     const isNew = !editing.id;
     // the box shows the size, the choice above it the way (a new line starts on Money out, the common case)
     const values = { ...editing, dir: isNew && editing.amount === null ? "out" : directionOf(editing.amount), amount: editing.amount === null || editing.amount === undefined ? null : Math.abs(Number(editing.amount)), tagsText: tagsOf(editing).join(", ") };
+    // "Who is writing" starts on the comment's writer, else on whoever last wrote on this phone, else the plan's "Me"
+    const who = !isNew && commentsOn(plan, editing) ? writerChoices(plan, editing, { last: writer.last }) : null, commenting = !!who;
+    if (commenting) { values.commentText = commentOf(editing)?.text ?? ""; values.commentBy = who.value; }
     // a split purchase opens on the category that kept the rest; its other parts sit under "More details (optional)"
     const saved = splitForm(editing);
     if (saved.parts.length) values.category = saved.category;
@@ -173,7 +202,7 @@ export function render(root, ctx) {
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, isNew ? "New transaction" : `Edit: ${editing.payee}`),
       editing.rawPayee && editing.rawPayee !== editing.payee ? ui.h("p", { class: "muted small" }, `The bank wrote: ${editing.rawPayee}`) : null,
-      (ledgerForm = ui.form(FIELDS(plan), values, (v) => {
+      (ledgerForm = ui.form(FIELDS(plan, editing, fmt.today(), who), values, (v) => {
         if (isNew && !(Math.abs(Number(v.amount)) > 0)) {
           // the message goes right above the box, where the eyes are (at the top of the form it was off screen; under the box the
           // phone's keyboard covers it)
@@ -196,6 +225,10 @@ export function render(root, ctx) {
         // "How this counts": a choice that names another line needs the line picked (gap #32)
         const mk = count.read();
         if ((mk.kind === "back" || mk.kind === "refund") && !mk.of) return ui.fieldError(count.pickBox(), "Pick the purchase, or choose “As usual” above.");
+        // the comment (item 58): words with no one picked are held at the box; the green line says what changed, with Undo
+        const nc = commenting ? nextComment(editing.comment, { text: v.commentText, by: v.commentBy }, { today: fmt.today(), plan }) : { comment: editing.comment };
+        if (nc.error) return ui.fieldError(ledgerForm.querySelector('[name="commentBy"]'), nc.error);
+        const commentLine = commenting ? commentSaid(commentOf(editing) ? editing.comment : null, nc.comment, plan) : "";
         const said = `${fmt.money(Math.abs(clean.amount), cur, undefined, 2)}${clean.amount > 0 ? " in" : clean.amount < 0 ? " out" : ""}`;   // $0.00 has no way
         const catName = clean.category ? (categoriesOf(plan).find((c) => c.id === clean.category)?.label ?? null) : null;
         committedAt = Date.now();
@@ -205,13 +238,17 @@ export function render(root, ctx) {
         pending = parts ? `${isNew ? "Added" : "Saved"} ${clean.payee}: ${said}, split: ${parts}.`
           : isNew ? `Added ${clean.payee}: ${said}.` : `Saved ${clean.payee}: ${said}${catName ? `, ${catName}` : ""}${was ? ", no longer split" : ""}.`;
         if (left) pending = `${pending.slice(0, -1)}${left}.`;
-        store.update((p) => {
+        const write = (p) => {
           p.transactions = p.transactions ?? [];
           let id = editing.id;
           if (isNew) { const t = { id: (id = ui.uid()), ...clean, rawPayee: clean.payee, ...(sp.splits ? { splits: sp.splits } : {}) }; t.key = txKey(t); p.transactions.push(t); }
           else {
             const i = p.transactions.findIndex((t) => t.id === editing.id);
-            if (i >= 0) { const t = { ...p.transactions[i], ...clean }; if (sp.splits) t.splits = sp.splits; else delete t.splits; t.key = txKey(t); p.transactions[i] = t; }
+            if (i >= 0) {
+              const t = { ...p.transactions[i], ...clean }; if (sp.splits) t.splits = sp.splits; else delete t.splits; t.key = txKey(t);
+              if (commentLine) { if (nc.comment) t.comment = structuredClone(nc.comment); else delete t.comment; }
+              p.transactions[i] = t;
+            }
           }
           // the mark, and the pair kept true on both lines; the green line says what it did (one sentence a case: markSaid)
           const res = applyMark(p.transactions, id, mk);
@@ -219,7 +256,14 @@ export function render(root, ctx) {
           const more = markSaid({ kind: res.kind, was: markWas.kind, of: res.kind === "refund" ? mk.of : res.partner?.id ?? null, wasOf: markWas.of, out: clean.amount < 0, line: clean, other, freed: res.freed,
             category: other && catName && clean.category === other.category ? catName : "", flag: mk.flag, flagWas }, { money: money2 });
           if (more) pending += more;
-        });
+        };
+        // a save that touches no comment writes as it always did; one that does can be undone from its green line
+        if (commentLine) {
+          // this phone remembers who wrote, so "Who is writing" starts on them next time (writer.js)
+          if (nc.comment?.by) writer.set(nc.comment.by);
+          const undo = ui.undoable(store, write); pendingUndo = undo ? { undo, payee: clean.payee } : null; pending += ` ${commentLine}`;
+        }
+        else store.update(write);
         editing = null;
       }, { submitLabel: isNew ? "Add transaction" : "Save changes", onCancel: () => { editing = null; drawForm(); }, ...(saved.parts.length || markWas.kind !== "usual" || flagWas ? { moreOpen: true } : {}) })),
       isNew ? null : ui.h("p", { style: { marginTop: "12px" } }, ui.button("Delete this transaction", () => {
@@ -234,6 +278,7 @@ export function render(root, ctx) {
     ));
     // "Split this across categories" sits with Note and Tags under the form's "More details (optional)" line; money moved
     // between your own accounts is never split
+    ledgerForm.querySelector('[name="commentText"]')?.setAttribute("maxlength", String(COMMENT_MAX));
     if (!editing.transferId) split.mount(ledgerForm);
     count.mount(ledgerForm);
   };
@@ -264,7 +309,9 @@ export function render(root, ctx) {
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, t.transfer ? "🔁" : t.icon),
         ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, t.payee, t.category || t.mark ? null : ui.h("span", { class: "pill warn" }, "no category"), t.mark ? ui.h("span", { class: "pill" }, t.mark) : null, t.flag ? ui.h("span", { class: "pill accent" }, "flagged") : null),
-          ui.h("div", { class: "d" }, [fmt.date(t.date), t.transfer ? "transfer" : t.splitLabel ? `split: ${t.splitLabel}` : (t.category ? t.categoryLabel : null), t.refundLabel ?? null, d.accounts.length > 1 ? t.accountName : null, t.note || null, tagsOf(t).map((g) => `#${g}`).join(" ") || null].filter(Boolean).join(" · "))),
+          ui.h("div", { class: "d" }, [fmt.date(t.date), t.transfer ? "transfer" : t.splitLabel ? `split: ${t.splitLabel}` : (t.category ? t.categoryLabel : null), t.refundLabel ?? null, d.accounts.length > 1 ? t.accountName : null, t.note || null, tagsOf(t).map((g) => `#${g}`).join(" ") || null].filter(Boolean).join(" · ")),
+          // the comment, under the note (item 58); nothing at all for a line without one
+          commentOf(t) ? ui.h("div", { class: "d lg-comment" }, commentWords(t, plan, { today: fmt.today() })) : null),
         ui.h("span", { class: "st", style: { fontWeight: "600", color: a > 0 && !t.transfer && !t.mark ? "var(--ok)" : "inherit" } }, (a > 0 ? "+" : "-") + fmt.money(Math.abs(a), cur, undefined, 2)),
       ));
     }

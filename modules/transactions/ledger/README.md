@@ -160,7 +160,7 @@ callers that want the whole span; these sit next to it:
   `monthsWords` ("July and August", "July to October"), `bringWords`, `fileWord`, `shortDate`.
 
 ## Transaction shape
-`{ id, date, amount (+ in, - out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key, splits?: [{ category, amount }], reimb?, exclude?, flag?, refundOf? }` (`splits`: gap #24, below; the last four: gap #32, at the end).
+`{ id, date, amount (+ in, - out), payee, rawPayee (the bank's text), accountId, category ("" = none), tags[], note, transferId?, importId?, key, splits?: [{ category, amount }], reimb?, exclude?, flag?, refundOf?, comment?: { text, by, on } }` (`splits`: gap #24, below; `reimb` to `refundOf`: gap #32; `comment`: item 58, at the end).
 
 ## Money in, money out, kept (re-check 4)
 The page's totals follow the Income statement's rule, so the Ledger, the Income statement and the Annual review give the same
@@ -453,3 +453,87 @@ fixture plans, invariance (spec test 5: no mark, same lines, same output from al
 every total on every page losing exactly the lines left out, and a flag or refund link changing no figure; the monthly
 check-in, bills that come back, the calendar and the spending page's months leaving the same lines out. The flag in
 the inbox (3) is in `../categorize/module.test.mjs`.
+
+## A comment from someone in the household (gap list next 60, item 58; X9; 2026-11-16, claude-b)
+**What the person sees first: nothing new.** No invented household has a comment, the list and the totals are as they were,
+and the form is shut until a row is tapped (the first-view count is unchanged: 47 words with a plan, 40 empty).
+
+**One quiet tap away**, on a plan with two or more adults (people who are not dependents: with one, the note is enough), on
+a line already saved (a line being typed is the typist's own note), and on any line that already has a comment (so it can
+always be changed or cleared, also once the second adult is gone from the plan: `commentsOn`): the form's "More details
+(optional)" holds, right under Note, **Comment** (help: "For the others in the household to read. It keeps who wrote it
+and the day. Up to 140 letters.") and **Who is writing** (each adult as named; `writerChoices`). The one filled button
+stays "Save changes".
+- **Who is writing starts on someone** (critic P1: an empty choice cost every first comment an error): on a line with a
+  comment, its writer (so a save that leaves it keeps it as it was); otherwise the person this phone last wrote a comment as
+  (`writer.js`, below), else the adult marked as you (Get started's "Me"), else the first adult. The list stays there to
+  change it, and the green line after the save names who wrote it ("Ana's comment was added."). The one picked is the
+  list's first line, so "More details (optional)" does not open by itself for it (core/ui/checks.js `holdsSomething`).
+- A comment kept without a writer (an older or hand-made plan) starts on "Pick who is writing..."; new words with no one
+  picked: "Pick who is writing this comment." at the box, nothing saved; the line saved without touching it keeps it.
+- Save adds it, with today's day: the green line is the usual one and one sentence more, "Saved Kroger: $86.40 out,
+  Groceries. Bo's comment was added.", with **Undo** (the kit's `ui.undoable`), which puts the line back as it was before
+  that save ("Undone. Kroger is back as it was before this save."). The row then shows, under its grey line, one more:
+  "Bo wrote on Nov 13: “What was this?”".
+- A line with a comment opens its fold with it, the help saying "Bo wrote this on Nov 12. Clear the box to remove it."
+  Clearing the box and saving removes it ("Bo's comment was removed.", with Undo); other words or another person: "The
+  comment was changed." A save that leaves the comment as it was keeps its day and is said and written exactly as before
+  (no Undo: the ledger's saves had none).
+- **"Only lines with a comment (N)"**: a tick inside the shut "Showing" fold, drawn only while some lines carry a comment
+  and the ledger holds more than 6 lines (`LONG_LIST`, the rows one phone screen shows, core/ui/more.js `FIRST_ROWS`). On,
+  the list shows only those lines, Showing stays open (as for any filter) and its status ends "with a comment only". With
+  the last comment gone, or six lines or fewer, the tick is not drawn and the filter is off by itself. Search also reads a
+  comment's words (plain words; "#word" stays a tag search).
+
+**The words, one per case** (`compute.js`; a test each): every sentence names the writer by the label "Who is writing"
+lists them (`writers`: the name as typed; with none, "Me" for the adult marked as you, "Person 2", "Person 3" for the
+others), through core/words.js: `commentWords` "Bo wrote on Nov 12: “...”", "Dec 30, 2025" when not this year, "You wrote
+..." for Get started's "Me", "Your spouse wrote ..." for "My spouse", "Person 2 wrote ..." for another adult with no name
+(it read "You wrote" before the critics' round: M1), "Someone wrote ..." for a person no longer among the adults, "Someone
+wrote: “...”" with no one and no day; `commentHelp` (none / one saved); `commentSaid` added ("Bo's", "Your", "Your
+spouse's", "Person 2's", "The" for someone gone) / removed / changed / "" unchanged; `commentUndone`; `PICK_WRITER`.
+
+**"You" means the plan's "Me", as on every page** (builder's choice, critic M1's second point): a comment by Get started's
+unnamed "Me" reads "You wrote" on every phone, also a partner's, because the whole app speaks to the plan's "Me" ("your
+spouse's pay", core/words.js) and a phone cannot tell who holds it; any other label for an unnamed "Me" ("Person 1") would
+make the owner, who reads the app, not recognise their own comment. With names typed (Get started asks for them), every
+comment names its writer on any phone. "Who is writing" remembering the person on each phone keeps the pick right there.
+
+**What is kept** (`nextComment`): the words tidied (spaces) and cut to 140 characters (`COMMENT_MAX`, about two lines on
+a 390 px phone; the box has `maxlength` 140 and its help says "Up to 140 letters."), the id of the adult picked, and the
+day of the save (only a day that exists: `realDay`); unchanged words by the same person keep the comment as it was, its
+day too; empty words remove it. `commentOf` reads anything else (not an object, words that are not text such as a number
+or an object, no words) as no comment, and a day that does not exist ("2026-13-45", "0000-00-00", Feb 30) as no day.
+
+**On this phone: who last wrote** (`writer.js`): `localStorage planner.writer` (`planner.writer.sandbox` in the sandbox),
+`{ fmt: 1, by: "<a person's id>" }`, set by a save that adds or changes a comment; a removal leaves it. An id, never a name
+or a figure; never in the plan or a downloaded copy; Settings' "Erase the copy on this device" forgets it. Two partners on
+two phones each find themselves already picked after their first comment.
+
+**Duplicates** (`transactions/duplicates` `dropCopies`): removing a copy that carries a comment moves the comment to the
+line that stays when that line has none ("Its comment moved to the one that stays."), and says the copy's words when it
+has its own; before, the comment went with the copy in silence (critic M2). No formula: a comment is in no total and no figure (`compute()` gives the same totals,
+counts and keys with or without comments; `commentedCount(plan)` gives the tick's count, so the result has no new key),
+and it never reaches the AI helper (`ai/explain` SKIP has `comment`; its test: every page offered reads the same with
+comments). Data: `docs/DATA_MODEL.md`, transactions row.
+
+**Builder's choices.** One comment per line, not a thread: the gap is "settle what was this?", and a second person's line
+under the note does that; a reply replaces it (the green line says "The comment was changed."). Offered from two adults,
+never to a child. No hand-written fold: the boxes are the form kit's own optional fields, and the tick sits in the page's
+existing "Showing" fold (this view does not import the shared parts helper; doing so would make the first-view check
+refuse "Showing", which the owner chose on 2026-09-15). Honeydue's comments on a transaction were the idea (gap map X9);
+nothing taken from it.
+
+**Tests** (`module.test.mjs`, "item 58"): `commentOf`, `writers`, `commentsOffered`; every sentence case above; `nextComment`
+per case (none, no one picked, a child, tidied, unchanged keeps its day, changed, cleared, cut); `commented: true`, the count,
+search, no total and no key changed; invariance over every fixture plan, the 14 households, the phone-built plans and the
+empty plan (each of the page's filters gives the same result with `commented: false`, no row has a comment, nothing is
+written); on the page: the boxes under More details right under Note only with two adults and a saved line, the fold open
+with a comment; Save adds it (the rest of the line as it was), the green line with Undo, the row's second grey line;
+clearing removes, with Undo; a save that touches no comment as before; Undo (a store that keeps what it is given) puts
+back the comment and the category of that save; the tick only with comments on a long list, inside Showing, filtering,
+writing nothing (S11: no other fold opens). After the critics (u2 fix): "Person 2" in every sentence for an unnamed second
+adult (M1); a day that does not exist and words that are not text read as none (M4, M5); `writerChoices` per case and the
+page saving a first comment at the first try under the plan's "Me", then starting on whoever this phone last wrote as,
+the fold staying shut for it, a writer-less comment asking before new words (P1); `writer.js` storage, broken values and
+Erase; one adult left: the boxes on the line with a comment, clearing it (M3); "Up to 140 letters." (P2).

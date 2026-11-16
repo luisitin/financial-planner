@@ -7,6 +7,7 @@ import { conn } from "../../../core/api.js";
 import { howMuchCard, forgetShown } from "./show.js";
 import { lookCard, forgetLook } from "./looks.js";
 import { talkCard, forgetTalk } from "./talk.js";
+import { forgetWriter } from "../../transactions/ledger/writer.js";
 import { planShapeProblem } from "./compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 import { aiHealth, healthWord, healthWords } from "../../ai/health.js";
@@ -115,6 +116,7 @@ export function render(root, ctx) {
           : "Erase your plan from this device? This is the only copy and it cannot be undone. Download a copy first if you may want it back.";
         if (!ui.confirm(ask)) return;
         try { sessionStorage.setItem("planner.erased", onPc ? "pc" : store.sandbox() ? "sandbox" : "only"); } catch { }
+        forgetWriter();  // who last wrote a comment on this phone goes too (the Ledger's "Who is writing" starts on the plan's "Me")
         forgetTalk();    // how the helper talks goes too: plainly again
         forgetLook();    // how this phone looks goes too: amounts show again
         forgetShown();   // how much this phone shows goes too: both ticks and the rows kept open (the sandbox's own in the sandbox)

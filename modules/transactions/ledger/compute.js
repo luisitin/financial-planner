@@ -5,11 +5,13 @@
 //     tags: [], note, transferId?, importId?, key, splits?: [{ category, amount }] }
 // Gap #32 (2026-11-14), all optional: reimb? (true: a purchase that will be paid back; an id: the other line of the pair),
 // exclude? (left out of reports), flag? (to look at later), refundOf? (the purchase this money in is a refund of).
+// Gap list next 60, item 58 (2026-11-16), optional: comment? { text, by (a person's id), on "YYYY-MM-DD" } (commentOf).
 // A purchase split across categories (gap #24, 2026-11-14) keeps its one amount; the pages that total by category read its
 // parts through allLines(plan) / linesOf(t), whose amounts always add up to the purchase: nothing is ever counted twice.
 import { normalizePayee, payeeWords } from "../rules/compute.js";
 import { centsOf, splitsOf, linesOf, partsOf as partsIn, leftOut, leftOutIn, wholeCount, countOnce, mainCategory, cleanTags, tagsOf } from "../splits.js";
 import { categoryLabel, categoryIcon, categoryById, categoriesOf } from "../categories/compute.js";
+import { NameIn, NameOf } from "../../../core/words.js";
 
 /** The identity of a bank line for duplicate detection: account + date + amount + cleaned payee. */
 export const txKey = (t) => `${t.accountId ?? ""}|${t.date ?? ""}|${(Math.round((Number(t.amount) || 0) * 100) / 100).toFixed(2)}|${normalizePayee(t.rawPayee ?? t.payee)}`;
@@ -352,6 +354,128 @@ export function flagged(plan) {
 }
 /** Search text against tags: "#trip" finds a tag that starts with trip; plain words match inside a tag too. */
 const tagHit = (t, qq) => { const tags = tagsOf(t); if (!tags.length) return false; const w = qq.replace(/^#+/, "").trim(); return qq.startsWith("#") ? !!w && tags.some((g) => g.startsWith(w)) : tags.some((g) => g.includes(qq)); };
+
+// ---------------------------------------------------------------- a comment from someone in the household (gap list next 60, item 58; X9)
+// Optional, on a transaction: comment = { text, by, on }: a short line for the others in the household ("What was this?"),
+// who wrote it (the id of one of household.people) and the day it was written. Kept under the note, never counted in any
+// figure, never sent to the AI helper (ai/explain SKIP). Read as absent when it is not an object with words in it.
+/** At most this many characters: about two lines on a 390 px phone (the builder's size; README). */
+export const COMMENT_MAX = 140;
+/** "With comments" is offered once the ledger holds more lines than one phone screen shows (core/ui/more.js FIRST_ROWS). */
+export const LONG_LIST = 6;
+const squashed = (x) => String(x ?? "").replace(/\s+/g, " ").trim();
+/** A day that exists, "YYYY-MM-DD" (a month 1 to 12, a day that month has, a four-digit year): "2026-13-45" and "0000-00-00" are not. */
+export const realDay = (iso) => {
+  if (typeof iso !== "string" || !ISO.test(iso)) return false;
+  const y = Number(iso.slice(0, 4)), m = Number(iso.slice(5, 7)), d = Number(iso.slice(8, 10)), at = new Date(Date.UTC(y, m - 1, d));
+  return y >= 1000 && at.getUTCFullYear() === y && at.getUTCMonth() === m - 1 && at.getUTCDate() === d;
+};
+/** commentOf(t) -> { text, by, on } | null: the comment as the pages read it (words tidied and cut to COMMENT_MAX). Words
+ * that are not text (a number, an object) are no comment; a day that does not exist is no day. */
+export function commentOf(t) {
+  const c = t?.comment;
+  if (!c || typeof c !== "object" || Array.isArray(c) || typeof c.text !== "string") return null;
+  const text = squashed(c.text).slice(0, COMMENT_MAX);
+  if (!text) return null;
+  return { text, by: typeof c.by === "string" && c.by ? c.by : null, on: realDay(c.on) ? c.on : null };
+}
+/** How many lines carry a comment (the filter's count). */
+export const commentedCount = (plan) => (plan?.transactions ?? []).filter((t) => commentOf(t)).length;
+/** Search text against a comment's words (item 58): plain words only; "#trip" stays a tag search. */
+const commentHit = (t, qq) => !qq.startsWith("#") && !!commentOf(t)?.text.toLowerCase().includes(qq);
+const adultsOf = (plan) => (plan?.household?.people ?? []).filter((p) => p && typeof p.id === "string" && p.id && p.role !== "dependent");
+/**
+ * The people who can write one: the plan's adults (not a child), labelled as "Who is writing" lists them and as every
+ * sentence about a comment names them: the name as typed; with none, "Me" for the adult marked as you (else the first),
+ * "Person 2", "Person 3" for the others (their place among the adults).
+ */
+export function writers(plan) {
+  const people = adultsOf(plan), you = Math.max(0, people.findIndex((p) => p.role === "self"));
+  return people.map((p, i) => ({ value: p.id, label: squashed(p.name) || (i === you ? "Me" : `Person ${i + 1}`) }));
+}
+/** A comment is offered on a plan with two or more adults: with one, the note is enough (README). */
+export const commentsOffered = (plan) => writers(plan).length >= 2;
+/** The boxes are on a saved line while comments are offered, and on any line that has one, so it can always be changed or
+ * cleared (the second adult removed from the plan leaves the comment on the line). */
+export const commentsOn = (plan, line) => !!line?.id && (commentsOffered(plan) || !!commentOf(line));
+/** Who wrote it, as a sentence says it: the label "Who is writing" gave them (core/words turns Get started's "Me" into
+ * "you" and "My spouse" into "your spouse"), or null when they are no longer among the adults. */
+const writerName = (plan, id) => writers(plan).find((w) => w.value === id)?.label ?? null;
+/** The choice list's first line while a comment has no writer kept, and the line for a writer no longer in the plan. */
+export const PICK_LABEL = "Pick who is writing...";
+export const GONE_LABEL = "Someone no longer in the plan";
+/**
+ * writerChoices(plan, line, { last }) -> { options: [{ value, label }], value }: "Who is writing", on its first choice.
+ * A line with a comment: its writer first (one no longer in the plan as GONE_LABEL; none kept: PICK_LABEL), so a save that
+ * does not touch the comment keeps it as it was. Otherwise the person this phone last wrote as (`last`, writer.js) when
+ * still an adult, else the adult marked as you, else the first: nobody has to pick on every save, and the list is still
+ * there to change it (the green line after the save names who wrote it). The one picked comes first, so the form's
+ * "More details (optional)" does not open by itself for it (core/ui/checks.js holdsSomething).
+ */
+export function writerChoices(plan, line = null, { last = null } = {}) {
+  const list = writers(plan), c = commentOf(line);
+  const first = (id) => { const own = list.find((w) => w.value === id) ?? { value: id, label: GONE_LABEL }; return { options: [own, ...list.filter((w) => w.value !== id)], value: id }; };
+  if (c) return c.by ? first(c.by) : { options: [{ value: "", label: PICK_LABEL }, ...list], value: "" };
+  if (!list.length) return { options: [{ value: "", label: PICK_LABEL }], value: "" };
+  const you = adultsOf(plan).find((p) => p.role === "self")?.id;
+  return first(list.some((w) => w.value === last) ? last : list.some((w) => w.value === you) ? you : list[0].value);
+}
+/** "Nov 14", or "Nov 14, 2025" when the day is not in today's year; "" for a day that does not exist. */
+export const dayWords = (iso, today = null) => {
+  if (!realDay(iso)) return "";
+  const m = MONTHS[Number(iso.slice(5, 7)) - 1], d = Number(iso.slice(8, 10));
+  return `${m} ${d}${today && String(today).slice(0, 4) !== iso.slice(0, 4) ? `, ${iso.slice(0, 4)}` : ""}`;
+};
+/**
+ * commentWords(t, plan, { today }) -> the line under a row's note, one written sentence per case, or "" with no comment:
+ *   "Sam wrote on Nov 14: “What was this?”"; Get started's "Me" (or the adult marked as you, unnamed) "You wrote ...", "My
+ *   spouse" "Your spouse wrote ...", another unnamed adult "Person 2 wrote ..." (as "Who is writing" lists them); someone
+ *   no longer in the plan "Someone wrote ..."; no day kept (or one that does not exist) "Sam wrote: “...”".
+ */
+export function commentWords(t, plan, { today = null } = {}) {
+  const c = commentOf(t);
+  if (!c) return "";
+  const who = c.by ? writerName(plan, c.by) : null, when = dayWords(c.on, today);
+  return `${who === null ? "Someone" : NameIn(who)} wrote${when ? ` on ${when}` : ""}: “${c.text}”`;
+}
+/** The help under the Comment box: what it is for, or, with one saved, who wrote it and how to remove it. */
+export function commentHelp(t, plan, { today = null } = {}) {
+  const c = commentOf(t);
+  if (!c) return `For the others in the household to read. It keeps who wrote it and the day. Up to ${COMMENT_MAX} letters.`;
+  const who = c.by ? writerName(plan, c.by) : null, when = dayWords(c.on, today);
+  return `${who === null ? "Someone" : NameIn(who)} wrote this${when ? ` on ${when}` : ""}. Clear the box to remove it.`;
+}
+/** Asked at Save when words are typed and no one is picked. */
+export const PICK_WRITER = "Pick who is writing this comment.";
+/**
+ * nextComment(was, { text, by }, { today }) -> { comment } (what to keep: null for none; `was` itself when nothing changed,
+ * so its day stays) or { error } (words typed, no one picked; or someone not among the writers).
+ */
+export function nextComment(was, { text = "", by = "" } = {}, { today = null, plan = null } = {}) {
+  const old = was && typeof was === "object" ? commentOf({ comment: was }) : null;
+  const words = squashed(text).slice(0, COMMENT_MAX);
+  if (!words) return { comment: null };
+  const who = typeof by === "string" ? by : "";
+  // the same words by the same person (no one, for a comment kept without a writer): kept as it was, its day too
+  if (old && old.text === words && (old.by ?? "") === who) return { comment: was };
+  if (!who || (plan && !writers(plan).some((w) => w.value === who) && who !== old?.by)) return { error: PICK_WRITER };
+  return { comment: { text: words, by: who, on: realDay(today) ? today : old?.on ?? null } };
+}
+/**
+ * commentSaid(was, now, plan) -> the sentence after the save's "Saved ...", one per case, or "" when the comment did not change:
+ *   added "Sam's comment was added." ("Your comment ...", "Your spouse's comment ..."); removed "Sam's comment was removed.";
+ *   changed (other words, or another person) "The comment was changed."
+ */
+export function commentSaid(was, now, plan) {
+  const a = was ? commentOf({ comment: was }) : null, b = now ? commentOf({ comment: now }) : null;
+  const whose = (c) => { const n = c?.by ? writerName(plan, c.by) : null; return n === null ? "The" : NameOf(n); };
+  if (!a && !b) return "";
+  if (!a) return `${whose(b)} comment was added.`;
+  if (!b) return `${whose(a)} comment was removed.`;
+  return a.text === b.text && a.by === b.by ? "" : "The comment was changed.";
+}
+/** The green line after Undo of a save that added, changed or removed a comment. */
+export const commentUndone = (payee) => `Undone. ${payee || "The transaction"} is back as it was before this save.`;
 
 // ---------------------------------------------------------------- coverage per account (2026-11-02)
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -1043,9 +1167,12 @@ export const isQuietImport = (im) => !!im && !im.fileName && !Number(im.rows) &&
  * and in `matched`, and is in neither `in` nor `out`; `leftOut` says how many of the matched lines are (the key is absent
  * with none). A row carries `mark` ("to be paid back", "paid back", "money back", "left out") and `refundLabel` when set.
  * `only: "left"` lists just those lines (the totals' "2 not counted" link); a line is left out as leftOutIn reads it.
+ * Item 58 (X9): `commented: true` lists just the lines with a comment (commentOf), and search also reads a comment's words;
+ * a comment is in no total, and the result has no key of its own for it (commentedCount gives the count), so a plan with
+ * comments gives the same figures as without.
  */
 export function compute(plan, params = {}) {
-  const { month = "", accountId = "", category = "", q = "", dir = "", only = "", limit = 100, offset = 0, today = null } = params;
+  const { month = "", accountId = "", category = "", q = "", dir = "", only = "", commented = false, limit = 100, offset = 0, today = null } = params;
   const all = plan.transactions ?? [];
   const isOut = leftOutIn(all);
   const accounts = plan.accounts ?? [];
@@ -1058,7 +1185,8 @@ export function compute(plan, params = {}) {
   const matched = all.filter((t) => (!month || monthOf(t.date) === month) && (!accountId || t.accountId === accountId)
     && (!category || (t.splits ? partsOf(t).some(inCat) : inCat(t)))
     && (dir !== "out" || Number(t.amount) < 0) && (dir !== "in" || Number(t.amount) > 0) && (only !== "left" || isOut(t))
-    && (!qq || String(t.payee ?? "").toLowerCase().includes(qq) || String(t.rawPayee ?? "").toLowerCase().includes(qq) || String(t.note ?? "").toLowerCase().includes(qq) || tagHit(t, qq)))
+    && (commented !== true || !!commentOf(t))
+    && (!qq || String(t.payee ?? "").toLowerCase().includes(qq) || String(t.rawPayee ?? "").toLowerCase().includes(qq) || String(t.note ?? "").toLowerCase().includes(qq) || tagHit(t, qq) || commentHit(t, qq)))
     .sort((a, b) => String(b.date).localeCompare(String(a.date)) || Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)));
   let inn = 0, out = 0, cardsOut = 0;
   const outCards = new Set();
