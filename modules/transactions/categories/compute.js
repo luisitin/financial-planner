@@ -6,7 +6,7 @@
 // every page that adds money up by category counts it inside that one (rollUp), so every total stays the same.
 import { CATEGORIES as EXPENSE } from "../../cashflow/expenses/compute.js";
 import { INCOME_TYPES } from "../../cashflow/income/compute.js";
-import { partsOf } from "../splits.js";   // where a category is used: a line left out of the totals (gap #32) still carries its category
+import { partsOf, splitsOf } from "../splits.js";   // where a category is used: a line left out of the totals (gap #32) still carries its category
 
 export const KINDS = { expense: "Spending", income: "Income", transfer: "Transfer between my accounts" };
 export const UNCATEGORISED = "";   // a transaction with category "" is waiting for one
@@ -188,4 +188,132 @@ export function unnest(draft, id) {
   const out = [];
   for (const c of Array.isArray(draft.categories) ? draft.categories : []) if (c && c.parent === id) { delete c.parent; out.push(c.id); }
   return out;
+}
+
+// ---------------------------------------------------------------- combine two categories into one (gap list next 60 #16)
+/** The built-in categories the plan reads by name for a job of their own: each can be kept in a combine, never moved into
+ * another (the rest of the plan would lose what it finds with it). The bank lines' readers by id (critic M3, 2026-11-16):
+ * Dividends (`income-investment`, dividends/compute.js dividendCategories), Rental analysis (`income-rental`,
+ * property/rental/books.js), Forecast and the Transactions page's paycheck (`income-salary`), Subscriptions (`subscriptions`). */
+export const KEEPS_ITS_JOB = Object.freeze({
+  transfer: "it is how the plan tells money you moved apart from money you spent",
+  debt: "the plan matches those payments to your debts with it",
+  housing: "the plan finds your mortgage payment with it",
+  taxes: "the plan keeps taxes you pay yourself apart from your bills with it",
+  childcare: "the plan leaves it out of your spending in retirement with it",
+  subscriptions: "the Subscriptions page finds your subscriptions with it",
+  "income-salary": "the plan finds your paychecks with it",
+  "income-investment": "the Dividends page finds what your investments paid with it",
+  "income-rental": "the Rental analysis page finds the rent you collect with it",
+});
+/** The part's words above its two picks (critic P2: no page names, no "envelope"). */
+export const MERGE_LEAD = "Everything filed under the first one moves to the second: its transactions, sorting rules, budget and bills. Undo puts it all back.";
+/**
+ * mergeRefused(plan, from, to) -> null, or the one sentence that says why everything under `from` can't move into `to`.
+ */
+export function mergeRefused(plan, from, to) {
+  if (!from || !to) return "Pick the category to move from and the one to move into.";
+  if (from === to) return "Pick two different categories.";
+  const byId = new Map(categoriesOf(plan, { all: true }).map((c) => [c.id, c]));
+  const a = byId.get(from), b = byId.get(to);
+  if (!a || a.hidden) return `${a?.label ?? from} is not on your list any more.`;
+  if (!b || b.hidden) return `${b?.label ?? to} is not on your list any more.`;
+  if (a.kind !== b.kind) return `${a.label} is ${KIND_WORDS[a.kind] ?? a.kind} and ${b.label} is ${KIND_WORDS[b.kind] ?? b.kind}: pick two of the same kind.`;
+  if (a.builtIn && KEEPS_ITS_JOB[a.id]) return `${a.label} can't be moved into another category: ${KEEPS_ITS_JOB[a.id]}. Move the other one into it instead.`;
+  const links = parentsOf(plan);
+  if (links.get(to) === from) return `${a.label} can't move into ${b.label}: ${b.label} is inside ${a.label}. Move ${b.label} into ${a.label} instead, or take it out of ${a.label} first.`;
+  if (links.has(to) && [...links.values()].includes(from)) return `${a.label} has categories inside it, and ${b.label} is inside ${byId.get(links.get(to))?.label ?? links.get(to)}: pick one that stands on its own.`;
+  return null;
+}
+const centsSum = (a, b) => Math.round(((Number(a) || 0) + (Number(b) || 0)) * 100) / 100;
+/** Envelopes for `from` join `to`'s (its amount added; the kept one's other settings stay, its rollover too), or become
+ * `to`'s. -> { n: how many, rollover: "" | "from" | "to" (the one of the two joined that carried what was left into the next
+ * month when the other did not: the joined one carries as the kept one did, and the words say so, critic M2) }. */
+function mergeEnvelopes(list, from, to) {
+  if (!Array.isArray(list)) return { n: 0, rollover: "" };
+  let n = 0, rollover = "", kept = list.find((b) => b?.category === to) ?? null;
+  for (let i = 0; i < list.length; i++) {
+    const b = list[i];
+    if (b?.category !== from) continue;
+    n++;
+    if (kept) { if (!!b.rollover !== !!kept.rollover) rollover = b.rollover ? "from" : "to"; kept.amount = centsSum(kept.amount, b.amount); list.splice(i, 1); i--; }
+    else { b.category = to; kept = b; }
+  }
+  return { n, rollover };
+}
+/** Moves between envelopes from or to `from` now name `to`; a move from one envelope to the same one goes. */
+function mergeMoves(list, from, to) {
+  if (!Array.isArray(list)) return;
+  for (const m of list) { if (m?.from === from) m.from = to; if (m?.to === from) m.to = to; }
+  for (let i = list.length - 1; i >= 0; i--) if (list[i] && list[i].from === list[i].to) list.splice(i, 1);
+}
+/**
+ * mergeCategories(draft, { from, to }) -> { transactions, rules, envelopes, bills, billsStay, inside, builtIn }: moves
+ * everything filed under `from` to `to`, in the draft (one store.update; ui.undoable takes it back exactly):
+ *   transactions (and each part of a split purchase; a split whose parts all end in one category is one line again),
+ *   rules, budget envelopes (joined: the amounts added; also in kept budgets and in moves between envelopes), bills on
+ *   Expenses (only when Expenses' own list has both), the categories inside `from` (now inside `to`), a watched `from`,
+ *   a bank file's remembered choice of `from`; then `from` is removed (yours) or hidden (built-in).
+ * Call it only when mergeRefused(plan, from, to) is null.
+ */
+export function mergeCategories(draft, { from, to } = {}) {
+  const n = { transactions: 0, rules: 0, envelopes: 0, rollover: "", bills: 0, billsStay: 0, inside: 0, builtIn: defaultCategories().some((c) => c.id === from) };
+  for (const t of Array.isArray(draft.transactions) ? draft.transactions : []) {
+    if (!t) continue;
+    let hit = false;
+    if (Array.isArray(t.splits)) {
+      // the parts move too; only a split that is used (splitsOf: it adds up) counts here or becomes one line again. One that
+      // does not add up counts whole under its own category, which stays as it is unless it is `from` (critic M1)
+      const used = !!splitsOf(t);
+      for (const s of t.splits) if (s && s.category === from) { s.category = to; if (used) hit = true; }
+      if (used && hit && t.splits.every((s) => s?.category === to)) { delete t.splits; t.category = to; }
+    }
+    if (t.category === from) { t.category = to; hit = true; }
+    if (hit) n.transactions++;
+  }
+  for (const r of Array.isArray(draft.rules) ? draft.rules : []) if (r && r.category === from) { r.category = to; n.rules++; }
+  ({ n: n.envelopes, rollover: n.rollover } = mergeEnvelopes(draft.budgets, from, to));
+  if (draft.budgetPlan && typeof draft.budgetPlan === "object") mergeMoves(draft.budgetPlan.moves, from, to);
+  for (const h of Array.isArray(draft.budgetHistory) ? draft.budgetHistory : []) { if (!h || typeof h !== "object") continue; mergeEnvelopes(h.lines, from, to); mergeMoves(h.moves, from, to); }
+  const bills = (Array.isArray(draft.expenses) ? draft.expenses : []).filter((x) => x && x.category === from);
+  if (EXPENSE[from] && EXPENSE[to]) { for (const x of bills) x.category = to; n.bills = bills.length; } else n.billsStay = bills.length;
+  draft.categories = Array.isArray(draft.categories) ? draft.categories : [];
+  for (const c of draft.categories) if (c && c.parent === from) { c.parent = to; n.inside++; }
+  if (Array.isArray(draft.spendingWatch)) {
+    const watched = draft.spendingWatch.some((w) => w?.kind === "category" && w.key === to);
+    draft.spendingWatch = draft.spendingWatch.filter((w) => !(watched && w?.kind === "category" && w.key === from));
+    for (const w of draft.spendingWatch) if (w?.kind === "category" && w.key === from) w.key = to;
+  }
+  for (const prof of Object.values(draft.importProfiles && typeof draft.importProfiles === "object" ? draft.importProfiles : {})) {
+    const ch = prof?.categories;
+    if (ch && typeof ch === "object") for (const k of Object.keys(ch)) if (ch[k] === from) ch[k] = to;
+  }
+  const i = draft.categories.findIndex((c) => c?.id === from);
+  if (n.builtIn) { if (i >= 0) { draft.categories[i].hidden = true; delete draft.categories[i].parent; } else draft.categories.push({ id: from, hidden: true }); }
+  else if (i >= 0) draft.categories.splice(i, 1);
+  return n;
+}
+/** mergeCount(plan, from, to) -> what mergeCategories would move (worked on a copy: the count is the move). */
+export const mergeCount = (plan, from, to) => mergeCategories(structuredClone(plan), { from, to });
+const counted = (k, one, many) => `${k} ${k === 1 ? one : many}`;
+/**
+ * mergeWords(plan, from, to, n = mergeCount(...)) -> { line, ask, done, undone }: the count under the two picks, the
+ * question before the save, the green line after it and the line after its Undo.
+ */
+export function mergeWords(plan, from, to, n = mergeCount(plan, from, to)) {
+  const all = categoriesOf(plan, { all: true });
+  const a = all.find((c) => c.id === from)?.label ?? from, b = all.find((c) => c.id === to)?.label ?? to;
+  const items = [n.transactions ? counted(n.transactions, "transaction", "transactions") : "", n.rules ? counted(n.rules, "sorting rule", "sorting rules") : "",
+    n.envelopes ? counted(n.envelopes, "budget", "budgets") : "", n.bills ? counted(n.bills, "bill", "bills") : "",
+    n.inside ? counted(n.inside, "category inside it", "categories inside it") : ""].filter(Boolean);
+  const what = listOf(items), one = items.length === 1 && /^1 /.test(items[0]);
+  // the joined budget carries what is left into the next month as the kept one did: said when the two differed (critic M2)
+  const roll = n.rollover === "from" ? ` The budget for ${a} carries what is left into the next month and the one for ${b} does not, so the joined budget will not.`
+    : n.rollover === "to" ? ` The budget for ${b} carries what is left into the next month, so the joined budget will carry what is left of both.` : "";
+  const stay = (n.billsStay ? ` ${n.billsStay === 1 ? "The bill" : `The ${n.billsStay} bills`} filed under ${a} on your Expenses page ${n.billsStay === 1 ? "stays" : "stay"} there: that page keeps its own list.` : "") + roll;
+  const after = `${a} is then ${n.builtIn ? "hidden" : "removed"}.`;
+  if (!items.length) return { line: `Nothing is filed under ${a} yet; it just leaves your list.${stay}`, ask: `Combine ${a} into ${b}? Nothing is filed under ${a} yet. ${after}${stay}`,
+    done: `Done: ${a} is ${n.builtIn ? "hidden" : "removed"}.`, undone: `Undone: ${a} is back.` };
+  return { line: `${what} ${one ? "moves" : "move"} from ${a} into ${b}.${stay}`, ask: `Move ${what} from ${a} into ${b}? ${after}${stay}`,
+    done: `Done: ${what} moved from ${a} into ${b}.`, undone: `Undone: ${a} is back with everything that was filed under it.` };
 }

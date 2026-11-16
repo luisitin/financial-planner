@@ -1,11 +1,12 @@
 // modules/transactions/categories/view.js -- DOM only. The category list grouped by kind, tap to rename / change icon /
 // hide, add your own, and a count of how many transactions use each. Gap list next 60 #16 (2026-11-16): each group shows
 // its first six, the rest one quiet tap away ("N more categories"); a category may sit inside another one (one level),
-// set under the form's "More details (optional)", asked first and with Undo; it is listed right under that one.
+// set under the form's "More details (optional)", asked first and with Undo; it is listed right under that one. One quiet
+// row, "Combine two categories": everything filed under one moves to another in one save, with a count, a question and Undo.
 import { compute, KINDS, slug, parentsOf, parentChoices, childrenOf, nestRefused, nestWords, readAs, addedInsideWords, onTheirOwnWords, nowOnTheirOwnWords, holdsOthersWords, unnest,
-  INSIDE_HELP, ON_ITS_OWN } from "./compute.js";
+  INSIDE_HELP, ON_ITS_OWN, MERGE_LEAD, mergeRefused, mergeWords, mergeCategories } from "./compute.js";
 import { dropCategory, splitsUsing, splitLossWords, splitBackWords } from "../ledger/compute.js";
-import { rest } from "../../../core/ui/more.js";
+import { rest, parts } from "../../../core/ui/more.js";
 
 const ICONS = ["📦", "🏠", "💡", "🛒", "🚗", "🛡️", "🩺", "💳", "🧒", "📱", "🧾", "📺", "🍽️", "🎉", "🛍️", "✈️", "🎁", "💇", "🐾", "💼", "🎯", "🛠️", "🏘️", "🏛️", "📈", "💵", "🔁", "🎓", "🏋️", "🍺", "☕", "🚌", "🏥", "🧴", "🎮", "📚", "🌳", "🏦"];
 /** The choices of the box "Inside another category" for a category of `kind` (`id`: null for a new one). */
@@ -24,7 +25,8 @@ const FIELDS = (plan, editing) => [
 const GROUP_IDS = { expense: "spending", income: "income", transfer: "transfer" };
 
 // the confirmation shown on the next render (the shell re-renders after store.update; stress test T4):
-// { text, undo?, undone? } -- the green line, and an Undo with the words after it
+// { text, undo?, undone?, part? } -- the green line, an Undo with the words after it, and the part it was saved in (it stays
+// open there, R17)
 let pending = null;
 
 export function render(root, ctx) {
@@ -45,13 +47,16 @@ export function render(root, ctx) {
   const formCard = ui.card(null);
   const formHost = ui.h("div");
   // the green line, with its Undo when the save can be taken back (a category put inside another, taken out or moved)
-  const okLine = (s) => ui.notice("ok", s.text, s.undo ? { undo: s.undo, undone: (r) => { pending = { text: ui.undoneWords(r, s.undone) }; } } : {});
+  const okLine = (s) => ui.notice("ok", s.text, s.undo ? { undo: s.undo, undone: (r) => { pending = { text: ui.undoneWords(r, s.undone), ...(s.part ? { part: s.part } : {}) }; } } : {});
   // The add form folds behind a button; tapping a category opens it filled in (design log 2026-09-15).
   let showForm = false;
-  const drawForm = () => {
+  // one filled button on the screen: while this form is open, the Combine part's button is outlined (critic P6)
+  let mergeSave = null;
+  const oneFilled = () => { if (mergeSave) mergeSave.classList.toggle("secondary", !!(showForm || editing)); };
+  const drawBody = () => {
     formHost.innerHTML = "";
     if (!showForm && !editing) {
-      if (said) { formHost.append(okLine(said)); said = null; }
+      if (said && !said.part) { formHost.append(okLine(said)); said = null; }
       formHost.append(ui.button("+ Add a category", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
     }
@@ -127,6 +132,7 @@ export function render(root, ctx) {
           }, { class: "danger" })) : null,
     ));
   };
+  const drawForm = () => { drawBody(); oneFilled(); };
   drawForm();
 
   const open = (c) => { editing = c; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); };
@@ -157,4 +163,58 @@ export function render(root, ctx) {
 
   formCard.append(formHost);
   root.append(formCard);
+  // offered once something is filed under a category: a bank line, a rule, an envelope, a bill or a category of your own
+  // (on an empty plan, combining would only hide one; the first view stays as short as it was)
+  const filed = (plan.transactions ?? []).length || (plan.rules ?? []).length || (plan.budgets ?? []).length || (plan.expenses ?? []).length || d.custom;
+  if (filed || said?.part === "merge") {
+    const host = ui.h("div", {}, parts(ctx, mergePart(ctx, d, said?.part === "merge" ? said : null)));
+    root.append(host);
+    mergeSave = Array.from(host.querySelectorAll("button")).find((b) => b.getAttribute("type") === "submit") ?? null;   // a NodeList in a browser
+    oneFilled();
+  }
+}
+
+/**
+ * "Combine two categories" (gap list next 60 #16): two picks and the part's own Save. The count (or why not) is said under
+ * the picks as they change (nothing is saved until "Combine them"); the save asks first and comes back with Undo, in the
+ * part, which stays open (R17). Two picks, no figure to type: its title is pinned (qa/first-view-lib.mjs PINNED_TITLES).
+ */
+function mergePart(ctx, d, said) {
+  const { ui, store, plan } = ctx;
+  const all = d.categories.filter((c) => !c.hidden && c.kind !== "transfer"), kindOf = new Map(all.map((c) => [c.id, c.kind]));
+  const optionsOf = (list) => [{ value: "", label: "Pick one..." }, ...list.map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))];
+  const options = optionsOf(all);
+  // the count (or why not), right above "Combine them" so it is read before the tap; nothing while a pick is missing
+  const line = ui.h("p", { class: "small", "aria-live": "polite", hidden: true });
+  let f = null;
+  const pick = () => ({ from: f?.querySelector('[name="from"]')?.value ?? "", to: f?.querySelector('[name="to"]')?.value ?? "" });
+  const say = () => {
+    const { from, to } = pick(), text = !from || !to ? "" : mergeRefused(plan, from, to) ?? mergeWords(plan, from, to).line;
+    line.textContent = text;
+    if (text) line.removeAttribute("hidden"); else line.setAttribute("hidden", "");
+  };
+  f = ui.form([
+    { key: "from", label: "Move everything from", type: "select", options },
+    { key: "to", label: "Into", type: "select", options },
+  ], { from: "", to: "" }, (v) => {
+    const no = mergeRefused(plan, v.from, v.to);
+    if (no) return ui.fieldError(f.querySelector(`[name="${v.from ? "to" : "from"}"]`), no);
+    const words = mergeWords(plan, v.from, v.to);
+    if (!ui.confirm(words.ask)) return false;
+    const undo = ui.undoable(store, (dr) => { mergeCategories(dr, { from: v.from, to: v.to }); });
+    pending = { part: "merge", text: words.done, undo, undone: words.undone };
+  }, { submitLabel: "Combine them" });
+  // once the first is picked, "Into" lists only the others of its kind (spending or income; critic P1); a pick there that no
+  // longer fits goes back to "Pick one..."
+  const fromBox = f.querySelector('[name="from"]'), toBox = f.querySelector('[name="to"]');
+  if (fromBox && toBox) fromBox.addEventListener("change", () => {
+    const k = kindOf.get(fromBox.value), keep = toBox.value, opts = optionsOf(k ? all.filter((c) => c.kind === k && c.id !== fromBox.value) : all);
+    toBox.replaceChildren(...opts.map((o) => ui.h("option", { value: o.value }, o.label)));
+    toBox.value = opts.some((o) => o.value === keep) ? keep : "";
+  });
+  for (const box of f.querySelectorAll("select")) box.addEventListener("change", say);
+  const actions = f.querySelector(".form-actions");
+  if (actions) actions.before(line);
+  const okLine = said ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (r) => { pending = { part: "merge", text: ui.undoneWords(r, said.undone) }; } } : {}) : null;
+  return { id: "merge", kind: "own", title: "Combine two categories", open: !!said, holds: ["from", "to"], body: [ui.h("p", { class: "muted small" }, MERGE_LEAD), okLine, f, actions ? null : line] };
 }

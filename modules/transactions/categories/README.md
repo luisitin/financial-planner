@@ -10,7 +10,8 @@ Plan sections read (`needs`): `categories`, `transactions`. Writes: `categories`
 ## Outputs
 `compute(plan)` -> `{ categories[] (every category incl. hidden, with count and total over transactions, and `inside` (the category it sits inside) when that link counts), byKind, uncategorised, custom, total }`. Each category's count and total are its own lines only: the page lists the ones inside another under it.
 Helpers used by every transaction page: `categoriesOf(plan, { all })` (defaults with edits, hidden dropped unless `all`; spending, then income, then transfer; alphabetical, a category inside another right under it), `categoryById`, `categoryLabel` ("" -> "Uncategorised"), `categoryIcon` ("" -> a question mark), `slug(label)`, `KINDS`, `defaultCategories()`.
-For the pages that add up by category: `parentsOf(plan)` (child id -> parent id, the links that count), `rollUp(plan)` (id -> the one it sits inside, else itself), `rollUpInto(plan, known)` (for a page with its own list), `childrenOf(plan, id)`, `parentChoices(plan, { id, kind })`, `nestRefused`, `nestWords`, `unnest(draft, id)`.
+Combining two (gap list next 60 #16): `mergeRefused(plan, from, to)`, `mergeCategories(draft, { from, to })`, `mergeCount`, `mergeWords`, `KEEPS_ITS_JOB`, `MERGE_LEAD`.
+For the pages that add up by category: `parentsOf(plan)` (child id -> parent id, the links that count), `rollUp(plan)` (id -> the one it sits inside, else itself), `rollUpInto(plan, known)` (for a page with its own list), `childrenOf(plan, id)`, `parentChoices(plan, { id, kind })`, `nestRefused`, `nestWords`, `readAs`/`READ_AS`, `holdsOthersWords`, `unnest(draft, id)`.
 
 ## Defaults
 The Expenses page's `CATEGORIES` (kind expense, with their must-pay flag), the Income page's `INCOME_TYPES` as `income-<id>` (kind income), and `transfer`. So the three pages always agree on names.
@@ -22,7 +23,6 @@ Hiding or removing a category with transactions asks first and sets those transa
 `module.test.mjs`: defaults, rename/hide/add, labels and icons for unknown ids, ordering, usage counts.
 
 ## Ideas / not yet
-- Merging two categories into one (gap list next 60 #16, part b).
 - Subscriptions could count a category inside Subscriptions as one (it reads the id "subscriptions" as a signal, not a sum).
 - The selects on Transactions, Categorize and Rules could say "Groceries (in Food)"; today they list a category inside
   another right under it, by its own name.
@@ -107,3 +107,93 @@ why), hiding a parent, a change of kind, S11; the critics' findings of 2026-11-1
 sit inside on the family's bank lines, where a total read by id moves (the spending guesses, the bank against the plan,
 Dividends) the question must say so (M4); the box follows the kind picked and a new income category goes inside an income
 one (M5); "Hide Eating out?" first (P3); a row inside another set in (P4); why a parent has no box (P5).
+
+## Combine two categories (gap list next 60 #16, 2026-11-16)
+**What the person sees.** One quiet row at the foot of the page, **"Combine two categories"** (an `own` part; its title is
+pinned in qa/first-view-lib.mjs `PINNED_TITLES`: two picks and a Save, no figure to type, so "Set my own numbers" would be
+untrue). It is offered once something is filed under a category (a bank line, a rule, an envelope, a bill on Expenses or a
+category of the person's own); on an empty plan combining would only hide one, so the page stays as short as it was.
+Inside: "Everything filed under the first one moves to the second: its transactions, sorting rules, budget and bills. Undo
+puts it all back.", two picks ("Move everything from", "Into"; every spending and income category on the list, never the
+transfer kind; once the first is picked, "Into" lists only the others of its kind, and a pick there of the other kind goes
+back to "Pick one..."), and under them, right above the button, as the picks change and before any save, the count or the
+reason it can't be done (nothing while a pick is missing). "Combine them" (the part's own Save) asks first and saves once,
+with the green line and Undo in the part, which stays open (R17); after Undo the part says so. While a category's form is
+open above, "Combine them" is outlined, so the screen has one filled button (the form's).
+
+**Sentences** (`mergeWords`, `mergeRefused`; one test per case):
+- count: "4 transactions, 1 sorting rule, 1 budget and 1 category inside it move from Coffee into Eating out." (one thing:
+  "1 transaction moves ..."; bills: "1 bill"); nothing filed: "Nothing is filed under Travel yet; it just leaves your list."
+- bills that stay: "The bill filed under Eating out on your Expenses page stays there: that page keeps its own list." (or
+  "The 2 bills ... stay")
+- the two budgets carry what is left differently (one has "rollover" and the other not): the joined budget keeps the kept
+  one's way, and the line and the question say so: "The budget for Coffee carries what is left into the next month and
+  the one for Eating out does not, so the joined budget will not." / "The budget for Coffee carries what is left into the
+  next month, so the joined budget will carry what is left of both." (critic M2: a $100 Cafes budget that carried $23.81
+  into October, combined into a $60 Coffee one that does not carry, lost the $23.81 without a word. It is still not
+  carried, the kept budget's way, but it is said before the save; carrying both instead would add what Coffee had left,
+  money the person never chose to carry.)
+- question: "Move ... from Coffee into Eating out? Coffee is then removed." (a built-in: "is then hidden"), then the two
+  sentences above when they apply; nothing filed: "Combine Travel into Fun and hobbies? Nothing is filed under Travel yet.
+  Travel is then hidden."
+- green: "Done: ... moved from Coffee into Eating out." / "Done: Travel is hidden."; Undo: "Undone: Coffee is back with
+  everything that was filed under it." / "Undone: Travel is back."
+- refusals: "Pick the category to move from and the one to move into."; "Pick two different categories."; "Coffee is not on
+  your list any more."; "Coffee is spending and Pay from a job is income: pick two of the same kind."; "Coffee can't move
+  into Beans: Beans is inside Coffee. Move Beans into Coffee instead, or take it out of Coffee first."; "Coffee has
+  categories inside it, and Fun and hobbies is inside Shopping and clothes: pick one that stands on its own."; and nine
+  built-ins the plan finds things with, which can be kept but never moved into another: "Transfer between my accounts
+  can't be moved into another category: it is how the plan tells money you moved apart from money you spent. Move the
+  other one into it instead." (Loan and card payments: "the plan matches those payments to your debts with it"; Rent or
+  mortgage: "the plan finds your mortgage payment with it"; Taxes not withheld: "the plan keeps taxes you pay yourself
+  apart from your bills with it"; Childcare and school: "the plan leaves it out of your spending in retirement with it";
+  Subscriptions: "the Subscriptions page finds your subscriptions with it"; Pay from a job: "the plan finds your paychecks
+  with it"; Dividends and interest: "the Dividends page finds what your investments paid with it"; Rent you collect: "the
+  Rental analysis page finds the rent you collect with it").
+
+**What moves** (`mergeCategories`, one `store.update`; `ui.undoable` diffs the plan and puts back exactly what it changed,
+leaving a line changed again since as it is):
+- every transaction filed under it, and every part of a split purchase; a split whose parts then all sit in one category
+  is one line again (same amount; Undo brings the split back). A split whose parts do not add up to the purchase is not
+  used anywhere (`splitsOf`: the purchase counts whole under its own category): its parts follow too, as typed, but its
+  own category stays as it is unless it is the one moved, and it is not counted as moving (critic M1: a -$50 Groceries
+  purchase with two -$20 Cafes parts became Coffee, October's Groceries $110.81 -> $60.81);
+- every rule that files under it;
+- its budget envelope: renamed, or, when the kept one has an envelope, its amount added to that one (the kept envelope's
+  other settings stay, its rollover too, said as above); the same in each kept budget (`budgetHistory`), and a move
+  between envelopes names the kept one (a move from one envelope to itself is dropped);
+- its bills on Expenses, only when Expenses' own list has both (a built-in into a built-in). Expenses files a bill only
+  under its own list (Bills maps any other to "other"), and Get started, the retirement plan and the debt matching read
+  those kinds by name: so a built-in moved into one of the person's own keeps its bills where they are, and says so;
+- the categories inside it now sit inside the kept one; a watched category becomes the kept one (once); a bank file's
+  remembered choice (`importProfiles[*].categories`) names the kept one;
+- the one moved is removed (the person's own) or hidden (a built-in: it can be shown again under Hidden).
+
+**Why nine built-ins are never moved.** Each is read by its id for a job: `transfer` is the kind every page leaves out of
+spending; `debt` lets Expenses match a bill to its debt on Debts (moved away, the payment would be counted twice);
+`housing` finds the mortgage payment (the same); `taxes` keeps taxes paid by hand apart (Forecast's quarterly payments,
+Sharing costs); `childcare` is left out of the spending carried into retirement. The bank lines' other readers by id
+(critic M3, grep of `category === "..."` over modules/, 2026-11-16): `subscriptions` (Subscriptions finds a recurring
+charge filed there even when its name says nothing), `income-salary` (Forecast's paychecks, the Transactions page's
+"a paycheck"), `income-investment` (Dividends: moved into Other income, $41.50 received became nothing) and
+`income-rental` (Rental analysis' rent from the bank, property/rental/books.js). Moving another category into any of them
+is fine. The other built-ins carry their meaning by their name in the guesses' rows only, which roll up the same way. Not
+refused, and noted: Expenses' bills are also read by id on a few pages (Vehicle goal: `transport`; the retirement plan's
+health premium: `health`; the home's insurance guess: `insurance`; the federal child care credit leaves `pets` out), which
+matters only when one built-in is combined into another built-in, where the bills move with the person's say-so.
+
+**No outside figure** is used (no rate, cost or limit), so there is nothing to source or date.
+
+**Checks.** `module.test.mjs`: the move (transactions, split parts and the split made whole, rules, joined and renamed
+envelopes, kept budgets, moves, bills moved and kept, the ones inside, the watch, a bank file's choices, removed or
+hidden) and that the count is the move on a copy; Undo exactly back for four combines, and a line changed since left as
+it is; Where the money goes and Budget after a combine (the kept one is the two together, every total the same); every
+sentence above; on the page: the part shut and offered only once something is filed, two picks and no number box, the
+count and a refusal as the picks change, a refusal and a no saving nothing, one save, the part open alone after it with
+its green line (S11), Undo on a store that keeps what was saved putting the plan back exactly, and saying so in the part.
+The critics' findings of 2026-11-16: a split that does not add up keeps its category (M1); the joined budget's rollover and
+its sentence, with Budget's available off by exactly what was carried (M2); every built-in combined into the catch-all of
+its kind either refused for its job or leaving Dividends and Subscriptions exactly as they were (M3); "Into" follows the
+first pick (P1); "Combine them" outlined while a form is open (P6); and, found on a phone while checking those, view.js
+calls no array method on a `querySelectorAll` answer (a NodeList in a browser; the fake DOM gives an array, so the page
+tests could not see "This page could not open").
