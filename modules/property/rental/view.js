@@ -1,10 +1,20 @@
 // modules/property/rental/view.js -- DOM only. Each rental from rent to cash in hand: the headline figures,
-// the year line by line, the checks a lender makes, the tax with depreciation, the whole return; editing in a
-// fold; adding another behind an outlined button.
+// the year line by line, the checks a lender makes, the tax with depreciation, the whole return; its details under an
+// outlined "Change <name>" (the form opens under the button: five boxes, the rest under "More details (optional)"); then
+// one quiet row drawn by core/ui/more.js, "The year's rent and costs" (the bank lines tied to each rental, laid out like
+// Schedule E, with a CSV and a printout for a tax preparer: books.js); another rental behind "+ Add another rental".
 import { compute, DEFAULTS, DSCR_MIN, RECOVERY_YEARS, addToNetWorth, keepLoanDetails, livedIn, linkedWords } from "./compute.js";
+import { books, booksSentence, rentalSentence, depSentence, mortgageSentence, loanSentence, untiedSentence, booksStatus, booksFile, booksCsv, formRows, shownRentals, BOOKS_TITLE, PASSIVE_LINE, PREPARER_LINE, SORT_LINES, NOT_IN_PLAN } from "./books.js";
+import { parts, links, choice } from "../../../core/ui/more.js";
+import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
 
 let pending = null;   // the confirmation shown on the next render
 let askNo = null;     // the rental whose "No, a different place" waits for "Add a second home" (review 2026-11-06, UX 1)
+let bookYear = null;  // the year picked on "The year's rent and costs" (this visit only: never in the plan)
+/** The visit a picked year belongs to: the address drawn (a new one on every arrival, Back included; the same one on the
+ *  redraw after a save or a pick) and the plan (another household loaded in the same tab). Either changes: the pick goes. */
+let visit = { route: null, plan: null };
+let booksKeep = false; // a year was just picked: the part stays open on the redraw that follows (R17)
 
 const STYLE = `
 .rn-root .rn-lines { list-style: none; margin: 0; padding: 0; }
@@ -28,6 +38,10 @@ export function render(page, ctx) {
   const signed = (n) => (n < -0.5 ? `−${money(-n)}` : money(n));
   const pct = (x, dp = 1) => `${(x * 100).toFixed(dp).replace(/\.0$/, "")}%`;
   const today = fmt.today();
+  const planKey = plan?.meta?.createdAt ?? null;
+  if (visit.route !== (ctx.route ?? null) || visit.plan !== planKey) { bookYear = null; visit = { route: ctx.route ?? null, plan: planKey }; }
+  // a year picked that no longer has a line tied (lines removed meanwhile): back to the year shown by itself
+  if (bookYear !== null && books(plan, { today, year: bookYear }).case !== "some") bookYear = null;
   const d = compute(plan, { today });
   const root = ui.h("div", { class: "rn-root" }, ui.h("style", {}, STYLE));
   page.append(root);
@@ -38,8 +52,24 @@ export function render(page, ctx) {
     root.append(ui.h("section", { class: "card accent hero" }, ui.h("h1", {}, "Rental property"),
       ui.h("p", { class: "lede" }, "What a rental really earns: rent less empty months and running costs, less the loan, less tax, and what it adds to your wealth as the loan shrinks and the value grows."),
       ui.h("p", { class: "muted small" }, "Add the property below: its value, the rent and the main costs are enough to start.")));
-    root.append(editor(null, true));
+    // an empty list keeps its add form open (docs/OPTIONAL.md R20): five boxes, the rest under "More details (optional)"
+    root.append(ui.card("Add a rental", editor(null)));
     return;
+  }
+
+  // a form that opens under its outlined button (the kit's openUnder; a plain node after it on the test stand-in): the button
+  // stays, a second tap or Cancel shuts the form and the focus goes back to the button (the vehicles page's pattern)
+  function opensUnder(label, build) {
+    let close = null;
+    const shut = () => { const c = close; close = null; c?.(); btn.setAttribute?.("aria-expanded", "false"); };
+    const btn = ui.button(label, () => {
+      if (close) { shut(); return; }
+      if (ui.openUnder && row.parentElement) close = ui.openUnder(row, (holder) => holder.append(build(shut)));
+      else { const holder = ui.h("div"); row.after(holder); holder.append(build(shut)); close = () => holder.remove(); }
+      btn.setAttribute?.("aria-expanded", "true");
+    }, { class: "secondary", "aria-expanded": "false" });
+    const row = ui.row(btn);
+    return row;
   }
 
   const P = d.passive, many = d.rentals.length > 1;
@@ -94,7 +124,7 @@ export function render(page, ctx) {
       ui.stat("Cash flow a year", signed(r.cashFlow), `${signed(r.cashFlow / 12)} a month, before tax`),
       ui.stat("Cap rate", r.capRate === null ? "—" : pct(r.capRate), "income after costs ÷ value"),
       r.cashOnCash !== null ? ui.stat("Cash-on-cash", pct(r.cashOnCash), `cash flow ÷ ${money(r.cashIn)} put in`) : null,
-    )));
+    ), opensUnder(`Change ${r.name}`, (shut) => editor(src, shut))));
     const lines = [
       ["Rent", r.rent], [`Empty months (${pct(src.vacancy ?? DEFAULTS.vacancy, 0)})`, -r.vacancy, true],
       ...r.costs.map((c) => [c.label, -c.amount, true]),
@@ -126,13 +156,91 @@ export function render(page, ctx) {
       ui.h("p", { class: "rn-d" }, `${r.depreciationTaken > 0.5 ? `Depreciation taken so far: about ${money(r.depreciationTaken)}, since ${src.purchaseDate ? new Date(`${String(src.purchaseDate).slice(0, 7)}-15T12:00:00`).toLocaleDateString(plan.meta.locale, { month: "long", year: "numeric" }) : "it was first rented"}. When you sell, that part of the gain is taxed at up to 25%, and any loss still waiting can then be used.` : "When you sell, the depreciation taken is taxed back at up to 25%, and any loss still waiting can then be used."} The federal estimate counts your rentals as they are worked here, after costs, interest and depreciation${d.incomeRent > 0 ? `, in place of the ${money(d.incomeRent)} of rent the Income page lists` : ""}.`)));
 
     root.append(ui.card("What it adds to your wealth", ui.h("p", {}, `${signed(r.cashFlow)} of cash, ${money(r.principal)} of loan paid down and about ${money(r.growth)} of growth in value (${pct(src.appreciation ?? DEFAULTS.appreciation)} a year): ${money(r.totalReturn)}${r.returnOnEquity !== null ? `, ${pct(r.returnOnEquity)} on your ${money(r.equity)} of equity` : ""}.`)));
-    root.append(editor(src, false));
   }
-  root.append(editor(null, false));
-  root.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Net worth"), ui.h("a", { class: "btn secondary", href: "#/taxes/federal" }, "Federal tax"))));
+
+  // one quiet row: the year's books from the bank lines tied to each rental (books.js), shut until tapped
+  const b = books(plan, { today, year: bookYear });
+  root.append(parts(ctx, { id: "books", kind: "item", title: BOOKS_TITLE, says: booksStatus(b), open: booksKeep || undefined, body: () => booksBody(b) }));
+  booksKeep = false;
+  // another rental: behind an outlined button while the list has one (docs/OPTIONAL.md R20)
+  root.append(ui.card(null, opensUnder("+ Add another rental", (shut) => editor(null, shut))));
+  root.append(links(ctx, [
+    { href: "#/balance/net-worth", ask: "What is everything you own worth?" },
+    { href: "#/taxes/federal", ask: "What do your rentals add to this year's tax?" },
+  ]));
+
+  // "The year's rent and costs": the case's sentence, each rental's lines of the form, depreciation and interest, the file and
+  // the printout for a tax preparer, and how lines are sorted. Nothing in it is saved; a year picked is for this visit.
+  function booksBody(b) {
+    const h = ui.h, out = [];
+    const first = booksSentence(b);
+    const toLedger = (one) => h("a", { href: one ? `#/transactions/ledger?q=${encodeURIComponent(`#${one.tag}`)}` : "#/transactions/ledger", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, one ? `See ${one.name}'s lines on Transactions ›` : "Open Transactions ›");
+    // years: every year with a tied line, and the one shown, low to high
+    const years = [...new Set([...b.years, b.year])].sort((x, y) => x - y);
+    const yearChips = years.length > 1 ? choice(ctx, { id: "books-year", label: "Which year", presets: years.map((y) => ({ value: y, label: String(y) })), value: b.year, onPick: (y) => { bookYear = y; booksKeep = true; redraw(); } }) : null;
+    if (first) return [h("p", {}, first), yearChips, toLedger(null), h("p", { class: "muted small" }, SORT_LINES[0])];
+    out.push(yearChips);
+    const many = b.rentals.length > 1;
+    for (const r of b.rentals) {
+      if (many) out.push(h("h3", {}, r.name));
+      out.push(h("p", {}, rentalSentence(r, b.year, money, b.thisYear)));
+      if (!r.count) continue;
+      out.push(h("ul", { class: "records" }, [
+        ...r.rows.map((x) => h("li", {},
+          h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, x.label), h("span", { class: "rec-value" }, x.key === "rents" ? signed(x.amount) : signed(-x.amount))),
+          h("div", { class: "rec-sub" }, `line ${x.line}${x.about ? " · about, from the loan" : x.key === "depreciation" ? ` · ${RECOVERY_YEARS} years` : x.from.length ? ` · ${x.from.join(", ")}` : ""}`))),
+        h("li", {}, h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, "Costs in all"), h("span", { class: "rec-value" }, money(r.expenses))), h("div", { class: "rec-sub" }, "line 20")),
+        h("li", {}, h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, h("strong", {}, "Profit or loss")), h("span", { class: "rec-value" }, h("strong", {}, signed(r.net)))), h("div", { class: "rec-sub" }, "line 21")),
+      ]));
+      for (const t of [depSentence(r, b.year, money), mortgageSentence(r, b.year, money), loanSentence(r, money)]) if (t) out.push(h("p", { class: "rn-d" }, t));
+    }
+    if (b.rentals.some((r) => r.count && r.net <= -0.5)) out.push(h("p", { class: "rn-d" }, PASSIVE_LINE));
+    const u = untiedSentence(b, money);
+    if (u) out.push(h("p", {}, u));
+    const say = h("div", { "aria-live": "polite" }), sheetHost = h("div");
+    out.push(h("p", { class: "muted small" }, PREPARER_LINE), say,
+      ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(b, say), { class: "secondary" }), ui.button("Print this list", () => printList(b, sheetHost), { class: "secondary" })),
+      toLedger(b.rentals.length === 1 ? b.rentals[0] : null),
+      ...SORT_LINES.map((t) => h("p", { class: "muted small" }, t)),
+      sheetHost);
+    return out;
+  }
+  // the file for a tax preparer (core/csv.js through books.js; made on this phone, nothing sent anywhere): Tax lots' way
+  function saveCsv(b, say) {
+    const name = booksFile(b);
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([booksCsv(b)], { type: "text/csv;charset=utf-8" }));
+      a.download = name; a.click();
+      setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch { /* gone */ } }, 5000);
+      say.replaceChildren(ui.notice("ok", `${name} is downloading. Open it with Excel, Numbers or Google Sheets, or send it to your tax preparer.`));
+    } catch (e) { say.replaceChildren(ui.notice("error", `The file could not be made: ${e.message}. Reload the page and try again.`)); }
+  }
+  // the printout: the report kit's sheet, drawn on the tap and shown only by the printer (scoped to this page's own class)
+  function printList(b, host) {
+    const title = `Rental books for ${b.year}, for your tax preparer`;
+    const { wrap, sheet } = reportFrame(ui, { title });
+    wrap.className = `${wrap.className} rn-print`;
+    wrap.append(ui.h("style", {}, ".rn-print { display: none; } @media print { .rn-print { display: block !important; } }"));
+    const rs = shownRentals(b), rows = formRows(b);
+    const cell = (x, v) => (x.key === "net" ? signed(v) : x.total ? money(v) : Math.abs(v) < 0.005 ? "" : x.key === "rents" ? signed(v) : signed(-v).replace(/^−/, ""));
+    const cols = [{ label: "Line", get: (x) => x.line }, { label: "Schedule E", get: (x) => x.form }, ...rs.map((r, i) => ({ label: r.name, num: true, get: (x) => cell(x, x.amounts[i]) }))];
+    const notes = rows.filter((x) => x.notes.length).map((x) => `Line ${x.line}: ${x.notes.join("; ")}.`);
+    sheet.append(ui.h("h1", {}, title), ui.h("p", { class: "rp-sub" }, `From the plan on ${fmt.date(today)}: the bank lines tied to ${rs.map((r) => r.name).join(" and ")} on Transactions.`),
+      ui.h("p", { class: "rp-lead" }, rs.map((r) => rentalSentence(r, b.year, money, b.thisYear)).join(" ")),
+      rtable(ui, cols, rows),
+      ...notes.map((t) => ui.h("p", { class: "rp-foot" }, t)),
+      ui.h("p", { class: "rp-foot" }, `${PREPARER_LINE} ${NOT_IN_PLAN}`));
+    host.replaceChildren(wrap);
+    if (typeof window !== "undefined" && typeof window.print === "function") printSheet(title, sheet);
+  }
 
   // add or edit one rental
-  function editor(r, open) {
+  // add or change one rental (the form opens under its outlined button, or in the empty page's card): the five boxes most
+  // rentals need first (opt spec 6.1, property/rental: "five boxes and More details (optional) · other costs, the loan"), every
+  // required box among them; the rest folded under "More details (optional)". The defaults are not typed into the boxes (a
+  // typed default opened the fold by itself): an empty box saves nothing and counts what its help line says (running.js).
+  function editor(r, onCancel) {
     const mortgages = (plan.accounts ?? []).filter((a) => a.type === "mortgage");
     // the Real estate accounts no other property entry names: "Its value" (round 8 batch 6)
     // never the home you live in (review 2026-11-06, UX 3: picking Home made the home you live in the rental), unless it is
@@ -140,30 +248,33 @@ export function render(page, ctx) {
     const lived = livedIn(plan);
     const homes = (plan.accounts ?? []).filter((a) => a.type === "property" && !(plan.property ?? []).some((e) => e.accountId === a.id && e.id !== r?.id) && (!lived.has(a.id) || a.id === r?.accountId));
     const pctOf = (v) => (v === null || v === undefined || v === "" ? "" : v);
-    const values = r ? { ...r, loanAccountId: r.loanAccountId ?? "", accountId: r.accountId ?? "" } : { vacancy: DEFAULTS.vacancy, maintenance: DEFAULTS.maintenance, landShare: DEFAULTS.landShare, appreciation: DEFAULTS.appreciation, loanAccountId: "", accountId: "" };
+    const values = r ? { ...r, loanAccountId: r.loanAccountId ?? "", accountId: r.accountId ?? "" } : { loanAccountId: "", accountId: "" };
+    const left = (what) => `Left empty, we count ${what}.`;
+    const pc = (x) => `${Number((x * 100).toPrecision(12))}%`;   // 0.035 is "3.5%", never "3.5000000000000004%"
     const form = ui.form([
       { key: "name", label: "Name", type: "text", placeholder: "e.g. Duplex on Elm" },
       { key: "value", label: "What it is worth today", type: "money", min: 0, required: !homes.length, help: homes.length ? "used unless you pick the home from Net worth below" : null },
       homes.length ? { key: "accountId", label: "Its value on Net worth", type: "select", options: [{ value: "", label: "Not on Net worth" }, ...homes.map((a) => ({ value: a.id, label: `${a.name} (${money(Math.abs(Number(a.balance) || 0))})` }))], help: "pick it if Net worth already lists this home: it is then counted once, at the value there" } : null,
-      { key: "purchasePrice", label: "What you paid", type: "money", min: 0 },
-      { key: "purchaseDate", label: "When it was first rented out", type: "date", help: "the yearly tax write-off for wear and tear (depreciation) starts then" },
       // needed: the browser says so at the box (DP-2: the message went 1,200 px above the button); worth is needed only without a home picked
       { key: "rentMonthly", label: "Rent a month", type: "money", min: 1, required: true },
-      { key: "vacancy", label: "Allowance for empty months", type: "percent", min: 0, max: 50 },
       { key: "propertyTax", label: "Property tax a year", type: "money", min: 0 },
-      { key: "insurance", label: "Insurance a year", type: "money", min: 0 },
-      { key: "hoaMonthly", label: "Association dues a month", type: "money", min: 0 },
-      { key: "maintenance", label: "Repairs and upkeep, a year, as a share of the value", type: "percent", min: 0, max: 10 },
-      { key: "management", label: "Property manager, as a share of rent", type: "percent", min: 0, max: 20 },
-      { key: "utilitiesMonthly", label: "Utilities you pay, a month", type: "money", min: 0 },
-      { key: "otherMonthly", label: "Other costs a month", type: "money", min: 0 },
-      { key: "cashIn", label: "Cash you put in (down payment, closing, repairs)", type: "money", min: 0 },
-      { key: "loanAccountId", label: "Its mortgage", type: "select", options: [{ value: "", label: mortgages.length ? "Not one of my accounts (type it below)" : "Type it below" }, ...mortgages.map((a) => ({ value: a.id, label: a.name }))], help: mortgages.length ? "a mortgage picked here uses its balance from Net worth; its rate and payment come from Debts, or from below when Debts has none yet" : null },
-      { key: "loanBalance", label: "Loan owed", type: "money", min: 0 },
-      { key: "loanRate", label: "Loan rate", type: "percent", min: 0, max: 20 },
-      { key: "loanPayment", label: "Loan payment a month (principal and interest)", type: "money", min: 0 },
-      { key: "landShare", label: "Land's share of the price (not depreciated)", type: "percent", min: 0, max: 90, help: "the county's assessment splits land and building" },
-      { key: "appreciation", label: "Value grows each year", type: "percent", min: -10, max: 15 },
+      // the fifth box: insurance, unless "Its value on Net worth" took the place
+      { key: "insurance", label: "Insurance a year", type: "money", min: 0, more: homes.length > 0 },
+      { key: "purchasePrice", label: "What you paid", type: "money", min: 0, more: true, help: "the yearly tax write-off for wear and tear (depreciation) is worked from it" },
+      { key: "purchaseDate", label: "When it was first rented out", type: "date", more: true, help: "the yearly tax write-off for wear and tear (depreciation) starts then" },
+      { key: "vacancy", label: "Allowance for empty months", type: "percent", min: 0, max: 50, more: true, help: left(`${pc(DEFAULTS.vacancy)} of the rent`) },
+      { key: "hoaMonthly", label: "Association dues a month", type: "money", min: 0, more: true },
+      { key: "maintenance", label: "Repairs and upkeep, a year, as a share of the value", type: "percent", min: 0, max: 10, more: true, help: left(`${pc(DEFAULTS.maintenance)} of the value a year`) },
+      { key: "management", label: "Property manager, as a share of rent", type: "percent", min: 0, max: 20, more: true, help: "Leave it empty if you manage it yourself." },
+      { key: "utilitiesMonthly", label: "Utilities you pay, a month", type: "money", min: 0, more: true },
+      { key: "otherMonthly", label: "Other costs a month", type: "money", min: 0, more: true },
+      { key: "cashIn", label: "Cash you put in (down payment, closing, repairs)", type: "money", min: 0, more: true },
+      { key: "loanAccountId", label: "Its mortgage", type: "select", more: true, options: [{ value: "", label: mortgages.length ? "Not one of my accounts (type it below)" : "Type it below" }, ...mortgages.map((a) => ({ value: a.id, label: a.name }))], help: mortgages.length ? "a mortgage picked here uses its balance from Net worth; its rate and payment come from Debts, or from below when Debts has none yet" : null },
+      { key: "loanBalance", label: "Loan owed", type: "money", min: 0, more: true },
+      { key: "loanRate", label: "Loan rate", type: "percent", min: 0, max: 20, more: true },
+      { key: "loanPayment", label: "Loan payment a month (principal and interest)", type: "money", min: 0, more: true },
+      { key: "landShare", label: "Land's share of the price (not depreciated)", type: "percent", min: 0, max: 90, more: true, help: `The county's assessment splits land and building. ${left(pc(DEFAULTS.landShare))}` },
+      { key: "appreciation", label: "Value grows each year", type: "percent", min: -10, max: 15, more: true, help: left(`${pc(DEFAULTS.appreciation)} a year`) },
     ].filter(Boolean), { ...values, vacancy: pctOf(values.vacancy), maintenance: pctOf(values.maintenance), management: pctOf(values.management) }, (v) => {
       if (!(v.value > 0 || v.accountId) || !(v.rentMonthly > 0)) { form.prepend(ui.notice("error", "Type what it is worth and the monthly rent first.")); return; }
       // an account picked whose name and value are both far from this rental's: asked once before it is linked (UX 3)
@@ -181,13 +292,13 @@ export function render(page, ctx) {
         // a mortgage picked with no rate or payment on Debts takes the ones typed here, so the loan is not dropped (landlord-2)
         if (keepLoanDetails(p, item, ui.uid)) pending = `${pending.replace(/\.$/, "")}. Its rate and payment are on Debts now too.`;
       });
-    }, { submitLabel: r ? "Save" : "Add rental" });
-    const remove = r ? ui.row(ui.button("Remove this rental", () => {
+    }, { submitLabel: r ? "Save" : "Add rental", onCancel });
+    if (!r) return form;
+    const remove = ui.row(ui.button("Remove this rental", () => {
       if (!ui.confirm(`Remove ${r.name || "this rental"}?`)) return;
       pending = `${r.name || "Rental"} removed.`;
       store.update((p) => { p.property = (p.property ?? []).filter((x) => x.id !== r.id); });
-    }, { class: "secondary" })) : null;
-    const title = r ? `Change ${r.name || "this rental"}` : d.ready ? "+ Add another rental" : "Add a rental";
-    return ui.h("details", { class: "card fold fold-card", open: open ? true : null }, ui.h("summary", {}, ui.h("h2", {}, title), ui.h("span", { class: "fold-chev" }, "›")), form, remove);
+    }, { class: "secondary" }));
+    return ui.h("div", {}, form, remove);
   }
 }

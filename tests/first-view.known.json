@@ -60,7 +60,6 @@
   "property/purchase": {"plan":{"words":200,"figs":11,"boxes":5},"empty":{"words":200,"figs":9,"tiles":2}},
   "property/renovation": {"plan":{"words":380,"figs":30,"boxes":3},"empty":{"words":260,"figs":13,"tiles":2}},
   "property/rent-vs-buy": {"plan":{"words":270,"figs":15,"boxes":5},"empty":{"words":270,"figs":15,"tiles":2}},
-  "property/rental": {"plan":{"boxes":21},"empty":{"words":170,"boxes":20}},
   "property/vehicles": {"plan":{"figs":27}},
   "reports/annual-review": {"empty":{"words":190}},
   "reports/export": {"empty":{"words":330}},

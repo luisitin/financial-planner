@@ -166,3 +166,146 @@ the IRS's Table A-6 differs by up to $19 in a year, both lawful (Pub. 946).
 the name and "rent" / "rental income"; never a part of the other; names under three letters never match). Moved here from
 Will the money last? (projection `rentalLines`, unchanged in effect) so the month (budget-percent `yearTaxes`) reads the
 same rule: a rental ended that way counts no rent, costs or loan in the month. Nothing on this page changes.
+
+## Simple first (opt spec 6.1, property/rental, class B; done here with gap item 20, 2026-11-16, claude-b)
+- The page adopts `core/ui/more.js` (the gap spec 3.1: a design on a page whose opt commit has not landed does the
+  conversion in the same commit; the opt commit then skips this page). No `<details>` is written by hand any more.
+- **Add a rental** asks for five boxes first: Name, What it is worth today, Rent a month, Property tax a year, Insurance a
+  year; with a Real estate account to pick, "Its value on Net worth" takes the fifth place and Insurance folds. Every
+  required box is among them. The other 15 wait under the form kit's "More details (optional)".
+- **The defaults are no longer typed into the boxes.** The form used to open with 5%, 1%, 20% and 3.5% in four boxes, which
+  made "More details (optional)" open by itself (the kit opens it for a box that holds something). The boxes now open empty
+  and say what an empty box counts ("Left empty, we count 5% of the rent.", "1% of the value a year", "20%", "3.5% a
+  year"); an empty box saves null, which every reader counts as the same default (`running.js` `n(v, DEFAULTS.x)`,
+  `buildingBasis`, `analyse`). A test adds a rental both ways to every invented household and compares compute().
+- Each rental's details open under an outlined **"Change <name>"** in its first card (the vehicles page's pattern: the
+  kit's `openUnder`, Cancel puts the focus back on the button); another rental under the outlined **"+ Add another
+  rental"**; an empty page keeps "Add a rental" open in its card (R20).
+- "More on this" is `links()`: "What is everything you own worth?" (Net worth) and "What do your rentals add to this year's
+  tax?" (Federal estimate).
+- First view (`node qa/first-view-node.mjs property/rental`; no invented plan household has a rental, so every one draws the
+  empty page): with a plan 223 words, 21 boxes, 1 section before; 104 words, 5 boxes, 0 sections after. Empty plan 165 words
+  and 20 boxes before; 74 and 5 after. The page is inside the list budget now, so its entry left
+  `tests/first-view.known.json`.
+
+## The year's rent and costs: books from your bank lines, laid out like Schedule E (gap list, next 60, item 20; map V1; 2026-11-16, claude-b)
+**On screen.** One quiet row after the rentals, "The year's rent and costs", shut, its status the year and how many bank
+lines ("2026 · 41 lines"), or "none tied yet". Opened: the case's sentence; chips for the years with lines (only when there
+is more than one year to show; a pick is for this visit, never saved); for each rental its lines of the form in the form's
+order (only lines with an amount), "Costs in all (line 20)" and "Profit or loss (line 21)"; the depreciation sentence, the
+mortgage interest sentence, loan payments "not on the form", the passive-loss line (a loss only), rent tied to no single
+rental; "For your tax preparer ... It is not a filing."; outlined "Save as a spreadsheet (CSV)" and "Print this list";
+"See Condo's lines on Transactions ›" (`#/transactions/ledger?q=%23condo`); how lines are sorted. Nothing in it writes
+the plan; opening or shutting it changes nothing.
+
+**Tying a bank line to a rental: a tag, no new field** (`books.js` `tieOf`). Ledger lines already carry tags (gap #24: the
+Tags box under the line's "More details (optional)", `#tag` in the search, a rule can add one). A line is a rental's when it
+carries the rental's name as a tag ("condo" for Condo), compared on letters, marks and digits only, in any script (`tagKey`:
+"Duplex on Elm", "duplex-on-elm" and "duplexonelm" are one; "アパート" keeps its letters). The tag is the whole name (`rentalTag`):
+a "#" or a comma, which Transactions reads as the start of another tag, becomes a space ("Unit #1" is "unit 1", "A,B" is
+"a b"); a name with no letter or digit at all ("🏠", none) is "rental". No two rentals share a tag (`rentalTags`): a name that
+gives one an earlier rental has gets the first free "<tag> 2", "<tag> 3" that no other rental's name gives ("Condo" and
+"condo": "condo" and "condo 2"), and the part shows each tag in quotes. With exactly one rental, the tags "rental" /
+"rentals" and the category "Rent you collect" (`income-rental`) tie a line to it too; with two or more they cannot say
+which, so such lines, money in or out, are counted as "not tied to one rental" and said (so is rent under Rent you collect
+tagged only "unit" when the rentals are "Unit #1" and "Unit #2"). A line of $0.00 (or no number) is not a line: it ties nothing and counts nowhere (review
+2026-11-16, F1, F3, F4, F7). Builder's choice (the brief: "find
+what exists, and add the smallest optional way ... if none"): a tag exists, so nothing was added to the plan.
+
+**Which line of the form** (`lineFor`): money in under an income category or none is rent (line 3), and so is money in
+under a loan category (rent filed under "Rent or mortgage"); a move between your own accounts and a line left out of the
+totals (gap #32) are not counted; every other line goes by the words in its category's name (`WORDS`, first match: interest
+with car, auto, vehicle, card or student → 13; interest with mortgage, loan or HELOC ("Mortgage interest", "Loan interest",
+"Interest on mortgage", "Home loan interest") → 12, so it is never read as a loan payment (review F2); mortgage, loan → a
+loan payment; advertis, listing, marketing → 5; clean, maint, lawn, landscap, garden,
+pest, snow → 7; commission → 8; insur → 9; legal, lawyer, attorney, accountant, bookkeep, tax prep, professional → 10;
+manag → 11; interest → 13; repair, plumb, electrician, handyman, roof → 14; suppl → 15; tax → 16; utilit, water, sewer,
+trash, garbage, electric, internet → 17; travel, mileage, auto, car → 6), then by the built-in id (`BUILT_IN`: Rent or
+mortgage and Loan and card payments → a loan payment; Phone and internet → 17; Shopping and clothes → 15; Car, gas,
+transit and Travel → 6), else Other (19), with the category names listed beside it. Money back under a cost's category (a
+refund) takes off that line. A split purchase counts by its parts (`allLines`), and once in the line count.
+
+**Formulas.**
+- Line 3 = the tied money in that is rent, less tied money out under an income category. Each cost line = −(the tied
+  amounts filed to it). Line 20 = lines 5 to 19; line 21 = line 3 − line 20.
+- Line 18, depreciation: the page's own `depreciation(basis, purchaseDate, year)`, basis = what you paid × (1 − land share,
+  20% when empty, kept between 0 and 100%) + improvements; straight line over 27.5 years; the first year (12 − month + 0.5) / 12 of a year (IRS
+  Publication 527 (2025), "Residential rental property. You must use the straight line method and a mid-month convention
+  for residential rental property" and "Mid-month convention ... you treat all property placed in service ... during any
+  month as placed in service ... at the midpoint of that month", https://www.irs.gov/pub/irs-pdf/p527.pdf, read
+  2026-11-16). Hand check from Pub 527's own example (Table 2-2d): a $160,000 building placed in service in February,
+  160,000 / 27.5 × 10.5 / 12 = $5,090.91, Pub 527 says $5,091. The condo: 168,000 / 27.5 = $6,109.09 a year; 2019 from
+  mid-August 4.5 months, $2,290.91; 2047 the $763.64 left; nothing from 2048. **Counted only when "What you paid" and "When
+  it was first rented out" are typed**: a preparer needs the cost, not today's value (the Tax card above uses the value when
+  no price is typed; builder's choice, said on screen as "not counted: it needs what you paid").
+- Line 12, mortgage interest: tied lines filed under a category named "Mortgage interest" when there are any; otherwise, for
+  the year still running only, **about** a year of the page's own loan (`rentalsFor(...).interest`: twelve months of payments
+  on today's balance, rate and payment, `core/math/finance.js yearOfPayments`; the condo: $6,677.70), said with "the
+  lender's Form 1098 (box 1) has the exact figure"; for a year that is over it is not counted ("copy it from box 1 of the
+  lender's Form 1098"), since today's balance would understate that year. Instructions for Schedule E (2025), lines 12 and
+  13: "enter on line 12 the amount of interest you paid for 2025 to banks or other financial institutions" and Form 1098
+  (https://www.irs.gov/pub/irs-pdf/i1040se.pdf, read 2026-11-16). Loan payments (principal and interest) are listed apart,
+  "not on the form".
+- The year shown: the year asked, else this year, else last year when nothing is tied to this year and something is to last
+  year (a preparer asks for last year in the spring). A year picked is for the visit: a new arrival on the page (Back
+  included) or another plan in the tab starts from the year shown by itself, and so does a picked year whose lines are gone
+  (module state keyed on the route object and `meta.createdAt`, as Rebalance's "Try a trade"; review F6).
+- The months covered (review P1, F5): each rental's `months` are the months of the year with a bank line tied to it; a year
+  that is over is `whole` when every month it was rented has one (from its month first rented when that was in the year:
+  August to December is the whole of 2025 for a rental first rented in August 2025). The bank lines are what they are, but
+  depreciation and the interest worked from the loan are always the whole year's: so the verdict says which months the
+  lines cover and that the costs hold all of the year's depreciation and loan interest, and a year that is over with months
+  missing is not called a profit or a loss ("Only 2 months of 2025 have bank lines for Condo (November and December), so
+  these are not the whole year's books: $4,200 of rent less $6,109 of costs, among them all of 2025's depreciation."). The
+  file's line 3 note says the same ("the year so far: bank lines 01/2026 to 10/2026"; "not the whole year: bank lines in 2
+  of its months only, 11/2025 to 12/2025"). Builder's choice: nothing is prorated; the form's figure for the year is the
+  year's depreciation, and a guess of the missing months' rent would be a figure no bank line holds.
+- The passive activity rules are named, not worked out: "A rental loss may not all count this year: the passive activity
+  rules (Form 8582) can hold part of it back. The Tax card above works out this year's share; these books do not." (Pub 527:
+  "Generally, rental real estate activities are considered passive activities and losses aren't deductible unless you have
+  income from other passive activities to offset them"; the Tax card's netting and allowance are above.)
+- No current figure (a rate, a limit, a price) is used. The standard mileage rate in the instructions (70 cents a mile for
+  2025, line 6) is not used: only actual lines count.
+- Line names and numbers: Schedule E (Form 1040) 2025, Part I, lines 3 and 5 to 21, in the form's own words in the file and
+  the printout (`LINES`, `TOTALS`), in plain words on the phone ("Rent received", "Car and travel", "Cleaning and upkeep",
+  "Legal and tax help", "Property manager") (https://www.irs.gov/pub/irs-pdf/f1040se.pdf, read 2026-11-16). Lines 1 and 2
+  (the address, the kind of property, the days rented and used) are not in the plan and the printout says so.
+- Repairs and improvements, escrow: "A repair keeps the place as it was; an improvement (a new roof, a remodel) is not
+  counted in one year but depreciated" (Instructions, line 14: "Amounts paid to improve your property must generally be
+  capitalized and depreciated"; Pub 527, Repairs and Improvements); tax and insurance paid from the loan (escrow) are on the
+  lender's year-end statement and belong on lines 9 and 16.
+
+**The file and the printout.** `booksCsv(b)`: "Line", "Schedule E for 2026", a column per rental with lines tied that year,
+"Notes"; lines 3, 5 to 19 in the form's words, blank where the form would be empty, 20 and 21 always, two decimals, no $,
+a loss with a minus; the notes say how line 12 and line 18 were found and what is under Other. Names go through Tax lots'
+`csvText` (a name a spreadsheet would run as a formula gets an apostrophe) and `core/csv.js` `toCsv`, the same helpers Tax
+lots' "Sales for your tax return" uses; the download and the printout (`modules/reports/report-kit.js` `reportFrame`,
+`rtable`, `printSheet`) are drawn the way that page draws them. File: `rental-books-2026.csv`, made on the phone, sent
+nowhere.
+
+**Sentences** (`books.js`, one per case, each with a test): `booksSentence` (no bank lines; none tied: one rental and
+several; each says the two steps in the words Transactions shows: add the lines, then type the rental's word in each one's
+Tags box), `rentalSentence` (profit, loss, even, for a whole year that is over and "so far" with the months covered and
+what is the whole year's; a year that is over with months missing; nothing tied to this one), `untiedSentence` (rent,
+costs, both), `depSentence` (a full year, the first year, no price, no date, not yet, written off), `mortgageSentence` (from lines, about
+from the loan, no loan on the page, Form 1098, nothing), `loanSentence`, `PASSIVE_LINE`, `booksStatus`.
+
+**Invariance.** `compute.js` and `running.js` are not changed; `books()` only reads (a test checks the plan's bytes). Over
+the 14 invented households, the four fixture plans, the empty plan and the round 8 rental plans, compute() and rentalsFor()
+are byte-identical before and after books() runs and with every ledger line tagged with each rental's name; a rental saved
+with the four boxes left empty counts what one saved with the defaults typed. Against 67dfd25 (a scratch comparison, not in
+the repo): the rental page's, the Federal estimate's, Income's, Net worth's and What you own's compute() over 23 plans,
+tied and not, 230 outputs, all byte-identical.
+
+**Example (the invented couple Sam and Lee, their Condo, round 8's `landlordPlan` with 2026 bank lines; tests
+`module.test.mjs` "books: ...").** January to October: ten rents of $2,100 under Rent you collect (untagged: one rental) and
+a $50 late fee tagged condo: line 3 $21,050. Ten loan payments of $851 under Rent or mortgage: $8,510 "not on the form".
+Ten HOA dues of $350 under their own category "HOA dues": Other, $3,500. Insurance $1,200 (9); two county bills of $2,350
+(16, $4,700); a plumber $480 less $80 back under "Rental repairs" (14, $400); a cleaner $150 (7); $64.50 of hardware and the
+$120 part of a split store receipt under Shopping and clothes (15, $184.50); a $300 tax preparer under "Tax prep" (10); $90
+of power and the $80 part of the receipt under Utilities (17, $170). Line 12 about $6,678 (the loan), line 18 $6,109.
+Costs in all $23,391; **a loss of $2,341 so far** ("Condo's books for 2026 so far (bank lines for January to October) show a
+loss of $2,341: $21,050 of rent less $23,391 of costs, among them all of 2026's depreciation and loan interest."). 2025
+holds only the November and December rents: "Only 2 months of 2025 have bank lines for Condo (November and December), so
+these are not the whole year's books: $4,200 of rent less $6,109 of costs, among them all of 2025's depreciation." 41 bank
+lines; a transfer, a line left out and two of their own home's lines are not counted.
