@@ -1988,3 +1988,14 @@ that page is one more outlined link among the deeper pages inside "N more number
   The h1 ("The money lasts") stays the verdict word: the mark goes beside the figure that is ours. The line never folded,
   "Retirement spending is set to what you spend today; change it under Retirement settings below.", says where it comes
   from. The retired couple's first view rose by those two words (156 to 158 of the answer budget's 160).
+
+## Pay held for later: deferred pay plans' payouts (2026-11-16, gap list next 60 #30; tests `modules/career/equity/module.test.mjs`, `tests/deferred-pay-invariance.test.mjs`)
+`buildInputs` adds, after every other line, one income line per deferred pay plan on Equity compensation
+(`equity.deferred`; `modules/career/equity/deferred.js` `deferredIncomes`, its formulas in that page's README): its equal
+yearly part in today's dollars, raised with prices, from its first year to its last, marked `pretax` (taxed like money out
+of a pre-tax account: with the one simple rate at that rate, with the brackets as ordinary income) and `notInMonth` (paid
+before the household retires, it is saved after its tax). `type: "other"`, so it is "other income" among what pays for
+retirement; `deferred` marks it (the plan's id), so "Income counted" (`incomeWords`) says a payout all in one year as
+"Pay held for later: X: $100,000 in 2060 (Ana is 70)" rather than "a year from 2060 ... to 2060", and Retire early leaves it
+out of its yearly other income (it is paid in set years, often one). With no plan no line is added and the inputs are the
+same, byte for byte, over 46 invented plans.

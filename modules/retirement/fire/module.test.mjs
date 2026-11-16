@@ -806,3 +806,17 @@ test("S11: the page saves nothing; opening a part writes nothing and moves no ot
   assert.deepEqual(states(), [["rule", false], ["rates", true]]);
   assert.equal(s.saved.length, 0);
 });
+
+test("pay held for later is not yearly other income in the words, while the ages still count it (2026-11-16)", async () => {
+  // a $100,000 payout in 2060 read "$100,000 a year of other income" with no end (money critic F1, gap next 60 #30)
+  const { incomeAnswer } = await import("./compute.js");
+  const { buildInputs } = await import("../projection/compute.js");
+  const T = "2026-11-16";
+  const base = incomeAnswer(familyPlan(T), T);
+  for (const deferred of [[{ id: "d", name: "X", balance: 100000, years: 1, startYear: 2060 }], [{ id: "d", balance: 300000, years: 5, startYear: 2050 }], [{ balance: 50000, years: 2, startYear: 2045 }]]) {
+    const p = familyPlan(T); p.equity = { deferred };
+    assert.ok(buildInputs(p, { today: T }).inputs.incomes.some((x) => x.deferred), "the projection counts it");
+    const w = incomeAnswer(p, T);
+    assert.deepEqual([w.otherYearly, w.otherKinds, w.otherEnding], [base.otherYearly, base.otherKinds, base.otherEnding]);
+  }
+});

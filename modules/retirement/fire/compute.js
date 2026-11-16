@@ -261,7 +261,10 @@ export function incomeAnswer(plan, today) {
   // counts only while its owner works (projection otherIncome), so it is not income after work either
   // (round 8 batch 6 verify: a rental's loan payment that the spending gives back once the loan is paid off, projection
   // rentalLines "loan back", is spending no longer needed from that year, not rent: it read "$21,452 a year of rent")
-  const other = I.incomes.filter((x) => x.kind !== "social" && x.yearly > 0 && x.type !== "pay" && !x.whileWorking && x.part !== "loan back");
+  // pay held for later (career/equity's deferred pay plans) is paid in set years, often one: not income that pays every year
+  // after work, so it is left out of these words (a $100,000 payout in 2060 read "$100,000 a year of other income"); the
+  // projection, and so every age here, still counts it
+  const other = I.incomes.filter((x) => x.kind !== "social" && x.yearly > 0 && x.type !== "pay" && !x.whileWorking && x.part !== "loan back" && !x.deferred);
   const KIND = { pension: "pension", rental: "rent", investment: "dividends", support: "other", other: "other" };
   const said = plan.guide?.setup?.ss ?? {};
   const adults = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");

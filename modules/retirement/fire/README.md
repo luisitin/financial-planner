@@ -41,7 +41,10 @@ under "The 25-times rule, a quick check".
 - `otherYearly`: pensions, rent and other income the engine counts after work stops (not anyone's pay, nor support counted
   only while its owner works; never dividends since the recheck of 2026-11-05); `otherKinds` which of those kinds it holds
   (the page names them in one order: pensions, rent, other income). `left`: income not counted after work stops
-  (projection `otherLeft`). `ssPaidNow`, `strategy`: see the recheck below.
+  (projection `otherLeft`). `ssPaidNow`, `strategy`: see the recheck below. Pay held for later (Equity compensation's
+  deferred pay plans, 2026-11-16) is not in `otherYearly`: it is paid in set years, often one (a $100,000 payout in 2060
+  read "$100,000 a year of other income" with no end), so the words leave it out while the projection, and every age
+  worked out here, still counts it.
 - null when there is no adult or date. Who it is about: the adult marked self while they still work, else the next adult
   who still works, by exact age today (`ageOn(birthDate, today) < retirement age`, as goal seek searches); with everyone
   stopped the page says whether the money lasts (`retired`, `lasts`, `failYear`).

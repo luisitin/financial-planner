@@ -324,7 +324,7 @@ export const DEFERRED = Object.freeze({
   intro: "Pay your employer keeps back now and pays you later, in one year or in yearly parts (a deferred pay plan). Add each plan to see the years it pays out and the federal tax on each payout.",
   how: "In today's dollars. Federal tax only, at this year's tables, on top of your household's other income now (less the pay of anyone who has stopped work by then). Social Security and Medicare tax was taken when the pay went in.",
   risk: "Until it is paid, this money is the company's: if the company fails, you wait in line with everyone else it owes.",
-  retirement: "Will the money last? does not count these payouts yet.",
+  retirement: "The Will the money last? page counts each payout as income in the year it is paid.",
 });
 const taxSaid = (tax, money, each = false) => (tax >= 0.5 ? `with about ${money(tax)} of federal tax${each ? " each year" : ""}` : "with no federal tax");
 /** One plan's lines: the case's sentence (one per run for "runs"), and a line when its first year was moved to this year. */

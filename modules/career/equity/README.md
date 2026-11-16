@@ -239,8 +239,29 @@ back on the list."
 - The base is today's return, with the pay of anyone stopped by then taken out; Social Security and pensions that start
   later are not added, so a payout in retirement may be taxed a little low. The deferral itself is not taken off this
   year's wages here (Income may hold pay before it); the Federal estimate owns that.
-- A plan typed here and also as an account on Net worth would be counted twice by Will the money last? once it counts these
-  payouts; the plan's balance belongs here only.
+- A plan typed here and also as an account on Net worth is counted twice by Will the money last?; the plan's balance
+  belongs here only.
 - The row is shut on every visit except right after a save in it; it is not open for a plan with deferred pay only.
 
-**Will the money last?** does not count these payouts yet (the row says so).
+**Will the money last?** counts each payout as income in the year it is paid (once a plan has a year to pay in, the row
+says "The Will the money last? page counts each payout as income in the year it is paid."; the page's name is not left
+mid-sentence with its question mark). `deferred.js` `deferredIncomes` gives one engine line a placed plan:
+`{ name: "Pay held for later: <name>", yearly: P, fromYear: S, untilYear: S + N - 1, startAge: 0, cola: true, taxable: true,
+pretax: true, notInMonth: true, type: "other", deferred: <the plan's id, or true> }`, pushed last in `retirement/projection` `buildInputs`, so every page that
+starts there counts it (Year by year, Chance the money lasts, the stress tests). The engine (`core/math/retirement.js`):
+- with the brackets it is ordinary income in its year, like every taxable line (the flag changes nothing there);
+- with the one simple tax rate, which taxes no income line, the flag taxes it at that rate, like money out of a pre-tax
+  account (it is pay set aside before tax): in retirement as part of the year's tax, which savings pay; before the
+  household retires the income pays it and the rest goes into savings (`incomeSaved`), as new money does with the brackets;
+- `notInMonth`: today's month does not hold it, so a payout before the household retires is saved after its tax, whatever
+  the owner's switch for pensions says (no plan held one before, so no frozen figure moves);
+- in "Income counted" it reads "Pay held for later: 2026 deferral: $26,000 a year from 2031 (you are 51) to 2035", or for
+  a payout all in one year "Pay held for later: X: $100,000 in 2060 (Ana is 70)", and among what pays for retirement it
+  is "other income";
+- Retire early leaves it out of its "a year of other income" words (it is paid in set years, often one: a $100,000 payout
+  in 2060 read "$100,000 a year of other income" with no end); its ages still count it, through the projection.
+Invariance: `tests/deferred-pay-invariance.test.mjs` digests Equity compensation's compute, the projection's inputs, the
+engine's six ways in the flat and the brackets setting, the projection and Year by year over 46 invented plans (every qa
+fixture plan, the 14 households' base plans, the phone-built and round 8 households, the empty plan and the family with
+stock pay) and finds each byte for byte as at 7d9ca39. Tests: "the engine: a pretax line ..." and "Will the money last?
+counts each payout ...".

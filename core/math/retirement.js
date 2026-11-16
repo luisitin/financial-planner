@@ -129,6 +129,10 @@ export function strategyWords(key, guard = null) {
  *   contributions[].own (today's dollars, grows like the row): the row's own money out of an `ownSaving` pay line (not the match),
  *   incomes[].notInMonth: new money today's month does not hold: in a working year, paid once its owner has stopped work (any
  *     time for a line that is not Social Security), it goes into the taxable bucket after the tax it adds (row `incomeSaved`),
+ *   incomes[].pretax: true: pay set aside before tax and paid out now (career/equity's deferred pay plans, gap list next 60 #30,
+ *     2026-11-16): with the one simple tax rate it is taxed at that rate like money out of a pre-tax account (before the household
+ *     retires, new money is saved after it, as with the brackets; in retirement it is part of the year's tax); with the brackets it
+ *     is ordinary income like every taxable line. No line has it unless a plan holds deferred pay, so every figure is as before.
  *   incomes[].ownSaving + payrollRate: a partner's pay: its owner's `own` saving comes off it in retired years (their pre-tax part
  *     is never taxed), and in brackets mode payrollRate of it (Social Security and Medicare tax),
  *   incomePaysTaxFirst: true: in retired years with the same spending every year, income pays spending, health cover and the tax
@@ -313,6 +317,7 @@ export function project(inputs, options = {}) {
     // 2026-11-13: it was dropped with the month's income). A line marked `ownSaving` (a partner's pay) pays its owner's own saving
     // (`ownBy`) and, in brackets mode, Social Security and Medicare tax (`payrollRate` of it) in the household's retired years
     let income = 0, incomeTaxable = 0, incomeSocial = 0, incomeNew = 0, newTaxable = 0, newSocial = 0, incomeExempt = 0;
+    let flatIncome = 0, newFlat = 0;   // lines marked `pretax`: what the one simple rate taxes (and of it, the new money)
     const incomeLines = [];
     const ownLeft = ownBy.slice(), pretaxLeft = pretaxOwnBy.slice();
     for (const inc of I.incomes ?? []) {
@@ -329,6 +334,7 @@ export function project(inputs, options = {}) {
       if (isNew) incomeNew += amt;
       if (inc.taxable === false) { if (inc.type === "investment") incomeExempt += amt; continue; }   // tax-exempt interest: no tax, but counted by a conversion ceiling
       if (inc.kind === "social") { incomeSocial += amt; if (isNew) newSocial += amt; } else { incomeTaxable += taxAmt; if (isNew) newTaxable += taxAmt; }
+      if (inc.pretax === true && inc.kind !== "social") { flatIncome += taxAmt; if (isNew) newFlat += taxAmt; }
     }
     // 3. spending in retirement (nominal), by strategy. The same spending every year sets spending; the other ways set the
     // year's withdrawal (draw) or, for guardrails, a spending target (floor) whose withdrawal is worked out with the year's tax below
@@ -442,7 +448,8 @@ export function project(inputs, options = {}) {
     // (money moved this year counts as that kind coming out: mvDeferred as a pre-tax withdrawal, mvTaxable's gain share as
     // qualified income; both 0 with no move, so every sum is the same to the bit)
     const taxFor = () => {
-      if (!brackets) return flatRate * (withdrawn.deferred + mvDeferred) + early();
+      // (a `pretax` line, flatIncome, is taxed at the simple rate on top; with none the sum is the one before, to the bit)
+      if (!brackets) { const t = flatRate * (withdrawn.deferred + mvDeferred) + early(); return flatIncome > 0 ? t + flatRate * flatIncome : t; }
       const r = federalTax({ filingStatus: tax.filingStatus, otherOrdinary: incomeTaxable + withdrawn.deferred + conversion + mvDeferred, qualifiedIncome: withdrawn.taxable * gainShare + (retired ? taxableStart * dividendYield : 0) + mvTaxable * gainShare, socialSecurity: incomeSocial, itemized: tax.itemized ?? 0, ages65plus }, params);
       taxInfo = { ordinary: r.income.ordinary, qualified: r.income.qualified, socialSecurity: incomeSocial, taxableSocialSecurity: r.income.taxableSocialSecurity, taxableIncome: r.taxableIncome, ordinaryTaxable: r.ordinaryTaxable, bracketRate: r.bracketRate, effectiveRate: r.effectiveRate, deduction: r.deduction.amount };
       return Math.max(0, r.totalTax) + early();
@@ -457,6 +464,10 @@ export function project(inputs, options = {}) {
         const on = (ordinary, social) => Math.max(0, federalTax({ filingStatus: tax.filingStatus, otherOrdinary: ordinary, qualifiedIncome: 0, socialSecurity: social, itemized: tax.itemized ?? 0, ages65plus }, params).totalTax);
         tInc = on(incomeTaxable, incomeSocial);
         tMonth = incomeNew > 0 ? on(incomeTaxable - newTaxable, incomeSocial - newSocial) : tInc;
+      } else if (!brackets && flatIncome > 0) {
+        // the simple rate on `pretax` lines: the income pays it, as with the brackets (new money is saved after it)
+        tInc = flatRate * flatIncome;
+        tMonth = flatRate * (flatIncome - newFlat);
       }
       if (incomeNew > 0) buckets.taxable += Math.max(0, incomeNew - (tInc - tMonth));
     }

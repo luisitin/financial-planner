@@ -33,6 +33,7 @@ import { isYou, nameIn, nameOf, verbFor, namesIn, NamesIn } from "../../../core/
 // things that will happen (a home sold, working less, money in or out once, spending that changes; gap design #1): turned into
 // the engine's own hooks at the end of buildInputs, so every page that starts here counts them (calls inside functions only)
 import { apply as applyHappenings } from "../happenings.js";
+import { deferredIncomes } from "../../career/equity/deferred.js";
 
 /** The withdrawal orders a plan can choose (after cash, which always goes first). */
 export const WITHDRAWAL_ORDERS = {
@@ -1197,6 +1198,10 @@ export function buildInputs(plan, params = {}) {
   const soldBy = new Map();
   const rentalOwn = rentalLines(plan, people, retireYear, today ?? `${year}-01-01`, { inSpending, fixed: !!today, soldBy });
   for (const x of rentalOwn) incomes.push({ ...x, personIndex: personIndex(x.personId) });
+  // pay held for later (career/equity's deferred pay plans, gap list next 60 #30): each plan's payouts as income in its years, in
+  // today's dollars raised with prices, taxed like money out of a pre-tax account (`pretax`) and saved after its tax when paid
+  // before the household retires (`notInMonth`); no plan, no line, so every other plan's inputs are as before
+  for (const x of deferredIncomes(plan, { year })) incomes.push({ ...x, personIndex: personIndex(x.personId) });
   // every loan the spending carries, a rental's too (fix round 1, 2026-11-11, money review D4): its payment stays in it only until
   // Debts' payoff (or the rental's sale), as a fixed amount (spendingLoans)
   const loans = carriedLoans ? spendingLoans(plan, [...carriedLoans].map(([accountId, monthly]) => ({ accountId, monthly })), { today, endBy: soldBy }) : [];
@@ -1549,6 +1554,8 @@ export function incomeWords(I, money = (n) => `$${Math.round(n).toLocaleString("
       if (x.part === "loan rest") return `${x.rental}'s loan payments beyond what your spending holds, ${money(x.monthly)} a month, come off from ${from} until ${until}`;
       if (x.part === "loan back") return `${x.sold ? `${x.rental} is sold in ${x.sold}` : `${x.rental}'s loan ends in ${monthWords(x.loanEnds)}`}: the ${money(x.monthly)} a month for it in your spending is free again from ${start <= I.startYear ? "now" : start} (${money(x.yearly)} a year)`;
     }
+    // pay held for later paid all in one year: "in 2060 (you are 70)", not "a year from 2060 to 2060"
+    if (x.deferred && endYear === start) return `${x.name}: ${money(x.yearly)} in ${start <= I.startYear ? I.startYear : `${start} (${at(start)})`}`;
     return `${x.name}${x.type === "rental" && !x.afterCosts ? " (before its costs)" : ""}: ${money(x.yearly)} a year from ${from}${ends}`;
   }), ...held];
 }

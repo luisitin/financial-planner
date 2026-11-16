@@ -681,3 +681,66 @@ test("the form refuses at its box: nothing in it and nothing going in; a last ye
   f.dispatch("submit");
   assert.equal(a.saved.length, 0, "a last year before this one is refused");
 });
+
+// ---------------------------------------------------------------- Will the money last? counts the payouts (core/math/retirement.js `pretax`)
+test("the engine: a pretax line is taxed at the simple rate (in retirement in the year's tax; before it, saved after it); the brackets are unchanged", async () => {
+  const { project } = await import("../../../core/math/retirement.js");
+  const { paramsFor } = await import("../../../core/math/tax.js");
+  const base = (retireYear, line) => ({
+    startYear: 2026, endYear: 2029, retireYear, people: [{ name: "Me", birthYear: 1960, retireAge: retireYear - 1960, endAge: 95 }],
+    balances: { cash: 0, taxable: 500000, deferred: 0, free: 0 }, contributions: [], spending: { yearly: 40000 },
+    incomes: [{ name: "Pay held for later", yearly: 26000, personIndex: 0, startAge: 0, fromYear: 2027, untilYear: 2027, cola: true, taxable: true, notInMonth: true, type: "other", ...line }],
+    rates: { inflation: 0, cash: 0, salaryGrowth: 0, taxRate: 0.15, stocksNow: 0.6, stocksRetired: 0.6 }, returns: { stocks: 0, bonds: 0 },
+  });
+  // retired: the year's tax holds 15% of the payout, and savings pay it
+  const on = project(base(2026, { pretax: true })), off = project(base(2026, {}));
+  const y = (r, yr) => r.rows.find((x) => x.year === yr);
+  near(y(on, 2027).taxes - y(off, 2027).taxes, 0.15 * 26000, 1e-6);
+  near(y(off, 2027).total - y(on, 2027).total, 3900, 1e-6);
+  near(y(on, 2026).taxes, y(off, 2026).taxes, 0); near(y(on, 2028).taxes, y(off, 2028).taxes, 0);
+  // working: new money goes into savings after its tax, 26,000 x 0.85
+  const won = project(base(2040, { pretax: true })), woff = project(base(2040, {}));
+  near(y(won, 2027).incomeSaved, 26000 * 0.85, 1e-6); near(y(woff, 2027).incomeSaved, 26000, 1e-6);
+  near(y(woff, 2027).total - y(won, 2027).total, 3900, 1e-6);
+  // with the brackets the flag changes nothing: the line is ordinary income either way
+  const cache = new Map(), FED = (await import("../../taxes/federal/data/federal.js")).FEDERAL;
+  const tax = { mode: "brackets", filingStatus: "single", paramsFor: (yr) => { if (!cache.has(yr)) cache.set(yr, paramsFor(FED, yr, { inflation: 0 })); return cache.get(yr); }, gainShare: 0.5, dividendYield: 0.02, itemized: 0 };
+  for (const ry of [2026, 2040]) assert.equal(JSON.stringify(project({ ...base(ry, { pretax: true }), tax }).rows), JSON.stringify(project({ ...base(ry, {}), tax }).rows));
+});
+
+test("Will the money last? counts each payout as income in its year, raised with prices; the row says so", async () => {
+  const { buildInputs, compute: projection } = await import("../../retirement/projection/compute.js");
+  const p = solo([PLAN]);
+  p.accounts = [{ id: "a1", name: "Savings", type: "savings", balance: 60000, asOf: T16 }];
+  p.retirement = { ...(p.retirement ?? {}), spendingMonthly: 4000 };
+  const b = buildInputs(p, { today: T16 });
+  const line = b.inputs.incomes.find((x) => x.deferred === "d1");
+  assert.deepEqual({ yearly: line.yearly, fromYear: line.fromYear, untilYear: line.untilYear, pretax: line.pretax, personIndex: line.personIndex }, { yearly: 26000, fromYear: 2031, untilYear: 2035, pretax: true, personIndex: 0 });
+  const d = projection(p, { today: T16 });
+  const inf = Number(p.assumptions?.inflation ?? 0.03);
+  for (const yr of [2031, 2035]) {
+    const row = d.rows.find((r) => r.year === yr);
+    near(row.incomeLines.find((l) => l.name === "Pay held for later: 2026 deferral").amount, 26000 * (1 + inf) ** (yr - 2026), 1e-6);
+  }
+  assert.equal(d.rows.find((r) => r.year === 2036).incomeLines.some((l) => /Pay held for later/.test(l.name)), false);
+  const without = solo([]); without.accounts = p.accounts; without.retirement = p.retirement;
+  // paid while at work (to 2041), each payout is new money saved after its tax: 2036 starts with them all in savings
+  const w = projection(without, { today: T16 });
+  const at = (r) => r.rows.find((x) => x.year === 2035);
+  assert.ok(at(d).incomeSaved > 0 && at(w).incomeSaved === undefined, "saved in the working years");
+  assert.ok(at(d).total > at(w).total + 100000, "more in savings once they are paid");
+  // the page's name is not left mid-sentence with its question mark (person critic F5)
+  assert.equal(DEFERRED.retirement, "The Will the money last? page counts each payout as income in the year it is paid.");
+});
+
+test("Income counted: a payout all in one year says the year once; parts say from and to", async () => {
+  // "a year from 2060 (Ana is 70) to 2060" for a one-year payout (money critic F3)
+  const { buildInputs, incomeWords } = await import("../../retirement/projection/compute.js");
+  const words = (deferred) => { const p = familyPlan(T16); p.equity = { deferred }; return incomeWords(buildInputs(p, { today: T16 }).inputs, money0).filter((t) => t.startsWith("Pay held for later")); };
+  assert.deepEqual(words([{ id: "d", name: "X", balance: 100000, years: 1, startYear: 2060 }]), ["Pay held for later: X: $100,000 in 2060 (Ana is 70)"]);
+  assert.deepEqual(words([{ id: "d", name: "X", balance: 300000, years: 5, startYear: 2050 }]), ["Pay held for later: X: $60,000 a year from 2050 (Ana is 60) to 2054"]);
+  assert.deepEqual(words([{ id: "d", balance: 5000, years: 1, startYear: 2026 }]), ["Pay held for later: $5,000 in 2026"]);
+  // a plan stored without an id is still marked as pay held for later
+  const p = familyPlan(T16); p.equity = { deferred: [{ balance: 5000, years: 1, startYear: 2030 }] };
+  assert.equal(buildInputs(p, { today: T16 }).inputs.incomes.find((x) => /^Pay held for later/.test(x.name)).deferred, true);
+});

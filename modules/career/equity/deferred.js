@@ -88,11 +88,12 @@ export function deferredPlans(plan, { year } = {}) {
  * The payouts as Will the money last?'s income lines (core/math/retirement.js `incomes`), one per placed plan: in today's
  * dollars, raised with prices (`cola`), from its first year to its last; `pretax`: taxed like money out of a pre-tax account
  * (the plan's one simple rate, or ordinary income with the brackets); `notInMonth`: new money today's month does not hold,
- * so a payout before the household retires is saved after its tax. No plan, no line.
+ * so a payout before the household retires is saved after its tax; `deferred`: the plan's id (true for one stored without an
+ * id), the mark Retire early and "Income counted" read these lines by. No plan, no line.
  */
 export function deferredIncomes(plan, { year } = {}) {
   return deferredPlans(plan, { year }).filter((d) => d.placed && d.part > 0).map((d) => ({
     name: `Pay held for later${d.name ? `: ${d.name}` : ""}`, yearly: d.part, personId: d.personId, startAge: 0,
-    fromYear: d.startYear, untilYear: d.startYear + d.years - 1, cola: true, taxable: true, pretax: true, notInMonth: true, type: "other", deferred: d.id,
+    fromYear: d.startYear, untilYear: d.startYear + d.years - 1, cola: true, taxable: true, pretax: true, notInMonth: true, type: "other", deferred: d.id || true,
   }));
 }
