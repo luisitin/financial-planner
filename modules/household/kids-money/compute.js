@@ -284,6 +284,12 @@ export function savedWords(m, own, money) {
   const parts = PLACES.filter((p) => m[p.key] > 0).map((p) => `${money(m[p.key])} ${p.short}`);
   return parts.length === 1 ? `${money(own)} saved ${PLACES.find((p) => m[p.key] > 0).short}` : `${money(own)} saved: ${parts.join(", ")}`;
 }
+/** A listed child as the row reads once `childMoney` is saved (null: nothing), for the green line after the save. */
+export function withMoney(k, childMoney) {
+  const money = moneyOf({ childMoney: childMoney ?? {} });
+  const monthly = monthlyOf(money), own = ownOf(money);
+  return { ...k, money, monthly, own, hasAny: monthly > 0 || own > 0 || !!money.covers };
+}
 /** The green line after a child's form is saved (R7: it names what the row now says). */
 export function savedLine(k, money) {
   if (!k || !k.hasAny) return `Saved. Nothing is set for ${k?.name ?? "this child"} now.`;
@@ -294,6 +300,8 @@ export function savedLine(k, money) {
   return `Saved: what ${poss(k.name)} allowance is meant to cover. No amount entered yet.`;
 }
 export const undoneLine = (name) => `${poss(name)} money is back as it was.`;
+/** A Save with nothing changed writes nothing and says so. */
+export const unchangedLine = (name) => `Nothing changed: ${poss(name)} money is as it was.`;
 /** The one line on who owns a custodial account (shown when any child has one). */
 export const CUSTODIAL_LINE = "Money in a custodial account belongs to the child: you manage it for them until the age your state sets, and then it is theirs.";
 export const CUSTODIAL_HELP = (name) => `It belongs to ${name}: you manage it until the age your state sets, then it is ${poss(name)}.`;
@@ -367,6 +375,13 @@ export function growLine(k, money) {
   const when = `in ${yearsMonthsWords(k.months18)}`;
   const parts = [k.own > 0 ? `${money(k.own)} now` : null, k.grow.monthlyIn > 0 ? `${money(k.grow.monthlyIn)} a month saved` : null].filter(Boolean);
   return { title: `${k.name}: about ${money(k.grow.value)} by 18`, sub: `${when}: ${parts.length ? parts.join(" and ") : "nothing now and nothing saved"}, in today's dollars` };
+}
+/** The green line after a chip under "Growing it" (R7: it names the new answer, each child's figure by 18). */
+export function growSaved(d, money) {
+  const kids = d.kids.filter((k) => k.grow && (k.monthly > 0 || k.own > 0));   // a child with nothing typed has nothing to grow
+  const picks = `${SHARE_WORDS[d.pick.share]} of the allowance saved, at ${pctWords(d.pick.rate)}`;
+  if (!kids.length) return `Saved: ${picks}.`;
+  return `Saved: ${picks}. By 18: ${listWords(kids.map((k) => `${k.name} about ${money(k.grow.value)}`))}.`;
 }
 /** The kiddie tax line, only when a custodial account could earn the 2026 threshold in a year before 18; else null. */
 export function kiddieLine(d, money) {

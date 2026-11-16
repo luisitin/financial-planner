@@ -50,12 +50,12 @@ export const MOVED_NOTICES = {};
 export const SHARDS = 6;
 /** Every usable page: [kind, shard]. A usable page missing here fails shard 1. */
 export const KINDS = {
-  // shard 1: the start, the household and what you own and owe (27 pages)
+  // shard 1: the start, the household and what you own and owe (28 pages)
   "balance/accounts": ["list", 1], "balance/assets": ["list", 1], "balance/liabilities": ["list", 1],
   "balance/liquidity": ["answer", 1], "balance/net-worth": ["list", 1], "balance/projection": ["answer", 1],
   "balance/statement": ["report", 1], "balance/update": ["form", 1], "household/calendar": ["list", 1],
   "household/contacts": ["list", 1], "household/documents": ["list", 1], "household/life-events": ["list", 1],
-  "household/people": ["list", 1], "overview/alerts": ["list", 1], "overview/benchmarks": ["answer", 1],
+  "household/people": ["list", 1], "household/kids-money": ["list", 1], "overview/alerts": ["list", 1], "overview/benchmarks": ["answer", 1],
   "overview/dashboard": ["answer", 1], "overview/guesses": ["settings", 1], "overview/guide": ["settings", 1],
   "overview/health-score": ["answer", 1], "overview/monthly-review": ["form", 1],
   "overview/next-best-action": ["answer", 1], "overview/pages": ["report", 1], "overview/plan": ["answer", 1],

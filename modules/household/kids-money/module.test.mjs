@@ -5,7 +5,8 @@ import assert from "node:assert/strict";
 import {
   compute, childrenOf, moneyOf, monthlyOf, ownOf, monthsTo18, grow, kiddieAge, pickOf, spendingOf, applySpending, cleanMoney,
   answerFor, olderLine, rowWords, savedWords, savedLine, undoneLine, spendLine, spendConfirm, spendDone, SPEND_UNDONE,
-  growStatus, growLabels, growLine, kiddieLine, howSteps, listWords, KIDDIE, SHARES, GROWS, EXPENSE_PREFIX, CUSTODIAL_LINE, CUSTODIAL_HELP,
+  growStatus, growLabels, growLine, growSaved, unchangedLine, kiddieLine, howSteps, listWords, withMoney, KIDDIE, SHARES, GROWS, EXPENSE_PREFIX,
+  CUSTODIAL_LINE, CUSTODIAL_HELP, GROW_INTRO, GROW_EXAMPLE,
 } from "./compute.js";
 import { emptyPlan, migrate } from "../../../core/schema/migrate.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
@@ -293,6 +294,7 @@ test("the green line after a save names the row's new figures; nothing left says
   const e = run(family());
   assert.equal(savedLine(e.kids[0], usd), "Saved. Nothing is set for Mia now.");
   assert.equal(undoneLine("Mia"), "Mia's money is back as it was.");
+  assert.equal(unchangedLine("Mia"), "Nothing changed: Mia's money is as it was.");
   assert.equal(CUSTODIAL_LINE, "Money in a custodial account belongs to the child: you manage it for them until the age your state sets, and then it is theirs.");
   assert.equal(CUSTODIAL_HELP("Mia"), "It belongs to Mia: you manage it until the age your state sets, then it is Mia's.");
 });
@@ -364,6 +366,21 @@ test("Growing it: the status, the chip labels with the plan's rates, each child'
   // turning 18 this month
   const late = family({ more: [{ id: "k-t", name: "Tia", role: "dependent", birthDate: "2008-12-01", childMoney: { jar: 100 } }] });
   assert.deepEqual(growLine(run(late).kids[2], usd), { title: "Tia: about $100 at 18", sub: "18 this month: $100 now" });
+});
+
+test("the green line after a chip names each child's new figure by 18; withMoney reads a saved field as the row will", () => {
+  const d = run(family({ mia: { allowance: 20, period: "weekly", jar: 40, bank: 300 }, leo: { jar: 15 }, more: [{ id: "k-x", name: "Sam", role: "dependent" }], picks: { share: 1, grow: "stocks" } }));
+  assert.equal(growSaved(d, usd), `Saved: all of the allowance saved, at 7%. By 18: Mia about ${usd(d.kids[0].grow.value)} and Leo about ${usd(d.kids[1].grow.value)}.`);
+  const nb = run(family({ more: [{ id: "k-x", name: "Sam", role: "dependent" }] })); nb.kids = nb.kids.filter((k) => !k.grow);
+  assert.equal(growSaved(nb, usd), "Saved: half of the allowance saved, at 2%.");
+  // a child with nothing typed has nothing to grow: not "Leo about $0"
+  const only = run(family({ mia: { jar: 40 }, picks: { share: 1, grow: "stocks" } }));
+  assert.equal(growSaved(only, usd), `Saved: all of the allowance saved, at 7%. By 18: Mia about ${usd(only.kids[0].grow.value)}.`);
+  const k = run(family()).kids[0];
+  assert.deepEqual([withMoney(k, { allowance: 20, period: "weekly", bank: 5 }).monthly, withMoney(k, { allowance: 20, period: "weekly", bank: 5 }).own, withMoney(k, null).hasAny], [20 * 52 / 12, 5, false]);
+  assert.equal(withMoney(k, { covers: "books" }).hasAny, true);
+  assert.equal(GROW_INTRO, "What each child's money could become by 18 if they save part of their allowance, in today's dollars.");
+  assert.equal(GROW_EXAMPLE, "For example only: the savings and stock figures are the ones on Assumptions, and a stock fund can fall as well as rise.");
 });
 
 test("How this is worked out: the household's own sums and the IRS source with its date", () => {
@@ -441,4 +458,215 @@ test("invariance: nothing typed, nothing added; child money and picks typed on e
     for (const [k, fn] of computes) { assert.equal(out(fn, q, k), out(fn, p, k), `${name}: ${k} moved`); checked++; }
   }
   assert.ok(checked >= 600, `${checked} pages checked`);
+});
+
+// ---- the page, drawn on the stand-in DOM (the real UI kit; a store that keeps its saves, so Undo can be tapped)
+async function drawKids(plan0, { answer = true } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const asked = [];
+  let cur = migrate(structuredClone(plan0)); const saved = [];
+  const store = { get: () => cur, update: (fn) => { const dft = structuredClone(cur); fn(dft); cur = dft; saved.push(dft); } };
+  const draw = () => {
+    const root = new FakeElement("main");
+    const ctx = { ui: { ...ui, confirm: (q) => { asked.push(q); return answer; } }, fmt: { ...fmt, today: () => T }, plan: cur, route: { rest: [], query: {} }, module: { group: "household", id: "kids-money" }, computeOf: () => null, store };
+    render(root, ctx);
+    return root;
+  };
+  const text = (el) => textOf(el).replace(/\.km-root[^}]*\}/g, "").replace(/\s+/g, " ").trim();
+  return { draw, saved, asked, text, textOf, plan: () => cur };
+}
+const partsOf = (root) => root.querySelectorAll("details").filter((x) => x.dataset?.part);
+const partsOpen = (root) => Object.fromEntries(partsOf(root).map((x) => [x.dataset.part, x.hasAttribute("open")]));
+const partEl = (root, id) => partsOf(root).find((x) => x.dataset.part === id);
+const btn = (root, words) => root.querySelectorAll("button").find((b) => b.textContent === words && !b.hidden);
+const boxes = (el) => el.all().filter((e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName));
+const filled = (root) => [...root.querySelectorAll("button"), ...root.querySelectorAll("a")].filter((b) => (b.tagName === "BUTTON" || /\bbtn\b/.test(b.className)) && !/secondary|chip|notice-action/.test(b.className) && !b.hidden && b.getAttribute("type") !== "submit");
+const outside = (root, textOf) => { const shut = new Set(partsOf(root).filter((x) => !x.hasAttribute("open"))); const walk = (n) => (n.childNodes ?? []).map((c) => (shut.has(c) ? textOf(c.childNodes[0]) : c.tagName === "STYLE" ? "" : c.data !== undefined ? c.data : walk(c))).join(" "); return walk(root).replace(/\s+/g, " ").trim(); };
+
+test("page: an empty plan and a plan with no children say what the page is for and how to add a child on People, nothing else", async () => {
+  for (const p of [emptyPlan(), (() => { const q = family(); q.household.people = q.household.people.slice(0, 2); return q; })()]) {
+    const a = await drawKids(p); const root = a.draw();
+    assert.equal(a.text(root), "Children's money This page is for families with children: each child's allowance and the money they have of their own. First add your child on People: where it asks “Who is this”, choose “Dependent”, the choice for a child you support. Add a child on People");
+    assert.deepEqual(filled(root).map((x) => [a.textOf(x), x.getAttribute("href")]), [["Add a child on People", "#/household/people"]]);
+    assert.equal(partsOf(root).length, 0); assert.equal(boxes(root).length, 0); assert.equal(a.saved.length, 0);
+  }
+  const older = family(); older.household.people = [...older.household.people.slice(0, 2), { id: "k-old", name: "Eli", role: "dependent", birthDate: "2002-05-15" }];
+  const o = await drawKids(older);
+  assert.match(o.text(o.draw()), /^Children's money This page is for children under 18, and everyone in your plan is 18 or older\. To add your child, go to People and choose “Dependent” where it asks “Who is this”\. Add a child on People$/);
+});
+
+test("page, nothing typed: the sentence, one filled button that opens the first child's form under their row and hides while it is open", async () => {
+  const a = await drawKids(family());
+  const root = a.draw();
+  assert.equal(outside(root, a.textOf), "Children's money Start with Mia's allowance: how much, how often and what it is meant to cover. What Mia has saved goes in the same place. Then the same for Leo. Set Mia's allowance Each child Mia, 9 No allowance Nothing saved yet Set allowance Leo, 5 No allowance Nothing saved yet Set allowance More on this Is everyone in your plan? People › What do you spend each month? Expenses › What will college cost? Education (529) ›");
+  assert.deepEqual(filled(root).map((x) => a.textOf(x)), ["Set Mia's allowance"]);
+  assert.equal(boxes(root).length, 0, "no box on the first view"); assert.equal(partsOf(root).length, 0, "nothing to grow yet");
+  btn(root, "Set Mia's allowance").click();
+  assert.equal(filled(root).length, 0, "while the form is open its Save is the one filled button");
+  const form = root.querySelector("form");
+  assert.equal(form.closest("li").className, "rec-form", "the form is under the row");
+  assert.equal(a.textOf(form.parentNode.querySelector("h3")), "Mia's money");
+  assert.deepEqual(boxes(form).map((b) => b.getAttribute("name")), ["allowance", "period", "covers", "jar", "bank", "custodial"]);
+  const fold = form.querySelector("details");
+  assert.ok(fold && /form-more/.test(fold.className) && boxes(fold).map((b) => b.getAttribute("name")).join() === "custodial", "the custodial box waits under its own line");
+  // a parent with a custodial account sees where it goes: the line names it, and the box says the word and what it means
+  assert.equal(a.textOf(fold.querySelector(".fold-title")), "An account in Mia's name (optional)");
+  assert.match(a.textOf(fold), /In an account in Mia's name \(custodial\)/);
+  assert.match(a.textOf(fold), /It belongs to Mia: you manage it until the age your state sets, then it is Mia's\./);
+  // the allowance box: a labelled example in its help line, and no grey text in the box (grey means our guess)
+  assert.match(a.textOf(form), /Allowance\s*\$?\s*For example, \$5 a week\. Leave it empty for none\./);
+  assert.equal(boxes(form).find((b) => b.getAttribute("name") === "allowance").getAttribute("placeholder") ?? null, null);
+  assert.equal(form.querySelector("select").value, "weekly");
+  // Cancel shuts it and the filled button is back
+  btn(form, "Cancel").click();
+  assert.equal(root.querySelector("form"), null); assert.deepEqual(filled(root).map((x) => a.textOf(x)), ["Set Mia's allowance"]);
+  assert.equal(a.saved.length, 0);
+});
+
+test("page: a child's Save writes childMoney on the child, the green line names the row's new figures under it, Undo puts it back", async () => {
+  const a = await drawKids(family());
+  let root = a.draw();
+  btn(root, "Set allowance").click();   // Mia's
+  const form = root.querySelector("form");
+  const set = (n, v) => { form.all().find((e) => e.getAttribute("name") === n).value = v; };
+  set("allowance", "20"); set("period", "weekly"); set("covers", " snacks and toys "); set("jar", "40"); set("bank", "300");
+  form.dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const mia = a.plan().household.people.find((x) => x.id === "k-mia");
+  assert.deepEqual(mia.childMoney, { allowance: 20, period: "weekly", covers: "snacks and toys", jar: 40, bank: 300 });
+  assert.deepEqual(a.plan().expenses, migrate(family()).expenses, "the budget is not touched");
+  root = a.draw();
+  const row = root.querySelectorAll("li").find((li) => li.dataset?.key === "k-mia");
+  assert.equal(a.text(row), "Mia, 9 $87 a month $20 every week · for snacks and toys $340 saved: $40 in a jar, $300 in a bank account Change Saved. Mia's allowance comes to $87 a month, and Mia has $340 saved. Undo");
+  assert.match(a.text(root), /Mia's allowance comes to \$87 a month, and Mia has \$340 saved\./);
+  btn(root, "Undo").click();
+  assert.equal(a.plan().household.people.find((x) => x.id === "k-mia").childMoney, undefined, "Undo takes it off again");
+  root = a.draw();
+  assert.match(a.text(root), /Mia's money is back as it was\./);
+  // an empty form removes the field; a form that changes nothing writes nothing
+  const b = await drawKids(family({ mia: { jar: 40 } }));
+  let r2 = b.draw(); btn(r2, "Change").click();
+  let f2 = r2.querySelector("form"); f2.all().find((e) => e.getAttribute("name") === "jar").value = "";
+  f2.dispatch("submit");
+  assert.equal(b.plan().household.people.find((x) => x.id === "k-mia").childMoney, undefined);
+  r2 = b.draw();
+  assert.match(b.text(r2), /Saved\. Nothing is set for Mia now\./);
+  btn(r2, "Set allowance").click(); f2 = r2.querySelector("form"); f2.dispatch("submit");
+  assert.equal(b.saved.length, 1, "nothing typed, nothing saved");
+  assert.equal(r2.querySelector("form"), null, "the form shuts");
+  // with the shell's redraw, it says so under the row
+  const c = await drawKids(family({ mia: { allowance: 20, period: "weekly" } }));
+  const r3 = c.draw(); btn(r3, "Change").click();
+  const said = []; const { render } = await import("./view.js"); const { FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"); const fmt = await import("../../../core/format.js");
+  const host = new FakeElement("main");
+  const ctx = { ui, fmt: { ...fmt, today: () => T }, plan: c.plan(), route: { rest: [], query: {} }, module: { group: "household", id: "kids-money" }, store: { get: () => c.plan(), update: () => said.push("update") }, redraw: () => { host.replaceChildren(); render(host, ctx); said.push("redraw"); } };
+  render(host, ctx);
+  btn(host, "Change").click(); host.querySelector("form").dispatch("submit");
+  assert.deepEqual(said, ["redraw"]);
+  assert.match(c.text(host), /Nothing changed: Mia's money is as it was\./);
+  // an allowance stored with no period (an imported plan) reads as monthly; Save with nothing changed writes nothing
+  const np = await drawKids(family({ mia: { allowance: 20 } }));
+  const r4 = np.draw(); btn(r4, "Change").click();
+  assert.equal(r4.querySelector("select").value, "monthly");
+  r4.querySelector("form").dispatch("submit");
+  assert.equal(np.saved.length, 0, "an unchanged Save writes nothing");
+});
+
+test("page, something typed: one line per child and no box; the custodial line; Growing it holds chips and no box; the parts shut", async () => {
+  const a = await drawKids(family({ mia: { allowance: 20, period: "weekly", jar: 40, bank: 300 }, leo: { custodial: 1200 } }));
+  const root = a.draw();
+  const first = outside(root, a.textOf);
+  assert.equal(first, "Children's money Mia's allowance comes to $87 a month, and the children have $1,540 saved. Each child Mia, 9 $87 a month $20 every week $340 saved: $40 in a jar, $300 in a bank account Change Leo, 5 No allowance $1,200 saved in a custodial account Change " +
+    "Money in a custodial account belongs to the child: you manage it for them until the age your state sets, and then it is theirs. Your budget does not count this allowance until you add it. Add the allowance to spending Growing it our guess · half, 2% › How this is worked out 5 steps › More on this Is everyone in your plan? People › What do you spend each month? Expenses › What will college cost? Education (529) ›");
+  assert.equal(boxes(root).length, 0, "no box on the first view of a list with rows");
+  assert.equal(filled(root).length, 0, "no filled button: the rows and the outlined actions");
+  assert.deepEqual(partsOf(root).map((x) => [x.dataset.part, x.dataset.kind, a.textOf(x.querySelector(".fold-title")), a.textOf(x.querySelector(".fold-status")), x.hasAttribute("open")]),
+    [["grow", "own", "Growing it", "our guess · half, 2%", false], ["how", "how", "How this is worked out", "5 steps", false]]);
+  const grow = partEl(root, "grow");
+  assert.equal(boxes(grow).length, 0, "Growing it holds no box: chips only (its pinned title, R24)");
+  assert.deepEqual(grow.querySelectorAll("button").map((b) => [a.textOf(b), b.getAttribute("aria-pressed")]), [["None", "false"], ["A quarter", "false"], ["Half", "true"], ["All of it", "false"], ["A jar: 0%", "false"], ["A savings account: 2%", "true"], ["A stock fund: 7%", "false"]]);
+  const d = run(family({ mia: { allowance: 20, period: "weekly", jar: 40, bank: 300 }, leo: { custodial: 1200 } }));
+  assert.match(a.text(grow), new RegExp(`Mia: about \\${usd(d.kids[0].grow.value)} by 18 in 8 years 5 months: \\$340 now and \\$43 a month saved, in today's dollars Leo: about \\${usd(d.kids[1].grow.value)} by 18 in 12 years 2 months: \\$1,200 now, in today's dollars`));
+  assert.doesNotMatch(a.text(grow), /kiddie/);
+  assert.equal(root.querySelectorAll("details").filter((x) => !x.dataset?.part && !/form-more/.test(x.className)).length, 0, "no fold by hand (R10)");
+});
+
+test("S11: a chip under Growing it saves the pick and keeps that part open with its green line; a child's Save opens no part", async () => {
+  const a = await drawKids(family({ mia: { allowance: 20, period: "weekly", jar: 40, bank: 300 } }));
+  let root = a.draw();
+  const before = partsOpen(root);
+  assert.deepEqual(before, { grow: false, how: false });
+  partEl(root, "grow").querySelectorAll("button").find((b) => a.textOf(b) === "A stock fund: 7%").click();
+  assert.deepEqual(a.plan().whatIfs.kidsMoney, { share: 0.5, grow: "stocks" });
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { ...before, grow: true });
+  const d = run(family({ mia: { allowance: 20, period: "weekly", jar: 40, bank: 300 }, picks: { share: 0.5, grow: "stocks" } }));
+  // Leo has nothing typed, so nothing to grow: he is not in the green line as "about $0"
+  assert.deepEqual(partEl(root, "grow").querySelectorAll(".notice").map((n) => a.textOf(n)), [`Saved: half of the allowance saved, at 7%. By 18: Mia about ${usd(d.kids[0].grow.value)}.`]);
+  assert.equal(a.textOf(partEl(root, "grow").querySelector(".fold-status")), "half, at 7%", "a chip tapped: the person's picks, no \"our guess\"");
+  partEl(root, "grow").querySelectorAll("button").find((b) => a.textOf(b) === "All of it").click();
+  assert.deepEqual(a.plan().whatIfs.kidsMoney, { share: 1, grow: "stocks" });
+  root = a.draw(); root = a.draw();
+  assert.deepEqual(partsOpen(root), before, "said once: the next draw is quiet again");
+  // a child's Save, outside every part
+  btn(root, "Change").click();
+  const form = root.querySelector("form"); form.all().find((e) => e.getAttribute("name") === "jar").value = "50"; form.dispatch("submit");
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), before, "a row's save moves no part");
+  assert.equal(partsOf(root).some((x) => x.querySelectorAll(".notice").length), false);
+});
+
+test("page: only what it covers typed shows no Growing it (nothing to grow); a child with nothing typed reads so inside it", async () => {
+  const a = await drawKids(family({ mia: { covers: "snacks" } }));
+  assert.equal(partsOf(a.draw()).length, 0, "no part with \"$0 by 18\"");
+  const b = await drawKids(family({ mia: { jar: 40 } }));
+  assert.match(b.text(partEl(b.draw(), "grow")), /Leo: no allowance or savings entered yet\./);
+});
+
+test("page: a bill on Expenses that looks like the same allowance is named on the spending line and in the question first", async () => {
+  const p = family({ mia: { allowance: 20, period: "weekly" } });
+  p.expenses.push({ id: "e-1", name: "Mia allowance", category: "other", amount: 20, period: "weekly" });
+  const a = await drawKids(p, { answer: false });
+  const root = a.draw();
+  assert.match(a.text(root), /Expenses already has “Mia allowance”\. If that is this allowance, your budget counts it already, and adding it here would count it twice\. Add the allowance to spending/);
+  btn(root, "Add the allowance to spending").click();
+  assert.match(a.asked[0], /^Expenses already has “Mia allowance”\. .* Add Mia's allowance, \$87 a month, to your spending on Expenses\?/);
+  assert.equal(a.saved.length, 0, "No writes nothing");
+});
+
+test("page: a custodial account big enough at the rate picked shows the kiddie tax line inside Growing it, with the IRS figure", async () => {
+  const a = await drawKids(family({ mia: { custodial: 40000 }, picks: { share: 0.5, grow: "stocks" } }));
+  const root = a.draw();
+  assert.match(a.text(partEl(root, "grow")), /The kiddie tax: in 2026, a child's interest, dividends and gains over \$2,700 a year can be taxed at your rate instead of the child's \(IRS\)\. Mia's custodial account could earn that much this year, at the rate picked\./);
+});
+
+test("page: Add allowances to spending asks first; No writes nothing; Yes puts each on Expenses with a green line and Undo", async () => {
+  const two = family({ mia: { allowance: 20, period: "weekly" }, leo: { allowance: 10, period: "monthly" } });
+  const no = await drawKids(two, { answer: false });
+  btn(no.draw(), "Add allowances to spending").click();
+  assert.deepEqual(no.asked, ["Add 2 allowances, $97 a month in all, to your spending on Expenses? Your budget and the other pages will count them from now on. Each stops at the 18th birthday."]);
+  assert.equal(no.saved.length, 0);
+  const a = await drawKids(two);
+  let root = a.draw();
+  assert.equal(btn(root, "Add allowances to spending").className, "secondary", "outlined");
+  btn(root, "Add allowances to spending").click();
+  assert.equal(a.saved.length, 1);
+  assert.deepEqual(a.plan().expenses.filter((x) => x.id.startsWith(EXPENSE_PREFIX)).map((x) => [x.name, x.amount, x.period, x.category, x.essential, x.endDate]), [["Mia's allowance", 20, "weekly", "other", false, "2035-05-10"], ["Leo's allowance", 10, "monthly", "other", false, "2039-01-20"]]);
+  root = a.draw();
+  assert.match(a.text(root), /These allowances are counted in your spending \(Expenses\)\. Added to your spending on Expenses: 2 allowances, \$97 a month in all\. Undo/);
+  assert.equal(btn(root, "Add allowances to spending"), undefined);
+  btn(root, "Undo").click();
+  assert.equal(a.plan().expenses.some((x) => x.id.startsWith(EXPENSE_PREFIX)), false, "Undo takes both lines off");
+  root = a.draw();
+  assert.match(a.text(root), /Your budget does not count these allowances until you add them\. Add allowances to spending Taken back: your spending is as it was\./);
+  // later a change: Update
+  const c = await drawKids(two); c.draw(); btn(c.draw(), "Add allowances to spending").click();
+  c.plan().household.people.find((x) => x.id === "k-mia").childMoney.allowance = 25;
+  root = c.draw();
+  assert.match(c.text(root), /Your spending on Expenses has other allowance amounts than these\. Update allowances in spending/);
+  btn(root, "Update allowances in spending").click();
+  assert.equal(c.plan().expenses.find((x) => x.id === "kids-money-k-mia").amount, 25);
 });

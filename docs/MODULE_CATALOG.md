@@ -33,7 +33,7 @@ When starting a planned page, copy `modules/_template`, then read the seed proje
 | `household/documents` | Document vault index | usable | 10 | Keeps track of where your will, insurance policies, deeds and tax returns are kept (the locations, not the files themselves). | - |
 | `household/contacts` | Contacts | usable | 10 | Lists your advisor, accountant, attorney and insurers, plus the last four digits of each account number. | - |
 | `household/calendar` | Money calendar | usable | 10 | Puts your bills, paydays, tax deadlines, open enrollment, required minimum distribution dates and policy renewals on one calendar. | - |
-| `household/kids-money` | Children's money | planned | 10 | Each child's allowance and what it is meant to cover, the money they have of their own, and what that could grow to by 18. | Greenlight-type allowance apps (map U10); IRS Topic 553 |
+| `household/kids-money` | Children's money | usable | 10 | Each child's allowance, their own money, and what it could grow to by 18. | Greenlight-type allowance apps (map U10); IRS Topic 553 |
 
 ## balance
 | key | title | status | phase | purpose | seeds |
