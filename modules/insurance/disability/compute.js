@@ -8,6 +8,7 @@ import { compute as computeLiquidity } from "../../balance/liquidity/compute.js"
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { compute as computePolicies } from "../policies/compute.js";
 import { TAKE_HOME } from "../../scenarios/stress-tests/compute.js";
+import { takeHomeOf as paycheckTakeHomeOf } from "../../cashflow/paycheck/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { nameIn, nameOf, verbFor } from "../../../core/words.js";
 
@@ -45,6 +46,11 @@ export function compute(plan, params = {}) {
   const people = plan.household?.people ?? [];
   const inc = computeIncome(plan, { today });
   const payOf = (id) => inc.active.filter((x) => x.personId === id && ["salary", "bonus", "business"].includes(x.type)).reduce((s, x) => s + x.yearly, 0);
+  // take-home: each salary and bonus as the Paycheck page works it out (cashflow/paycheck `takeHomeOf`: its `takeHome` share per
+  // income line: withholding, Social Security and Medicare, the 401(k) and the other deductions), so this page and Paycheck say the
+  // same figure (whole-app sweep x3, 2026-11-16: Ana's "about $6,338" here against "$6,257 a month" there); business income, every
+  // line when Paycheck cannot work it out (no salary tied to a person), and every line with no date given, at TAKE_HOME (75%)
+  const takeHomeOf = paycheckTakeHomeOf(plan, { today, fallback: TAKE_HOME });
   const exp = computeExpenses(plan, { today });
   const essentialMonthly = exp.essentialMonthly;
   const liq = computeLiquidity(plan, { today });
@@ -56,7 +62,7 @@ export function compute(plan, params = {}) {
   const warnings = [];
 
   const earners = adults.map((p) => ({ p, pay: payOf(p.id), age: p.birthDate && today ? ageOn(p.birthDate, today) : null })).filter((x) => x.pay > 0 && (x.age === null || x.age < retireAgeOf(x.p))).map(({ p, pay, age }) => {
-    const grossMonthly = pay / 12, takeHomeMonthly = grossMonthly * TAKE_HOME;
+    const grossMonthly = pay / 12, takeHomeMonthly = takeHomeOf(p.id);
     const policies = pol.items.filter((x) => !x.ended && x.kind === "disability" && x.personId === p.id).map((x) => {
       const monthly = Number(x.benefit) || 0, taxable = employerPaid(x);
       return { id: x.id, name: x.name, insurer: x.insurer, monthly, taxable, afterTax: afterTax(monthly, taxable), waitDays: Number.isFinite(Number(x.waitDays)) && x.waitDays !== null && x.waitDays !== "" ? Number(x.waitDays) : DEFAULT_WAIT_DAYS, untilAge: Number(x.untilAge) || DEFAULT_UNTIL_AGE, offset: x.offset ?? !!x.throughWork, throughWork: !!x.throughWork };
@@ -68,7 +74,7 @@ export function compute(plan, params = {}) {
     const withSsdiMonthly = ssdiMonthly + policies.reduce((s, x) => s + afterTax(x.offset ? Math.max(0, x.monthly - ssdiMonthly) : x.monthly, x.taxable), 0);
     const target = TARGET_SHARE * grossMonthly;
     const extraNeeded = Math.max(0, target - benefitMonthly);
-    const othersMonthly = adults.filter((q) => q.id !== p.id).reduce((s, q) => s + payOf(q.id) / 12 * TAKE_HOME, 0);
+    const othersMonthly = adults.filter((q) => q.id !== p.id).reduce((s, q) => s + takeHomeOf(q.id), 0);
     const shortMonthly = essentialMonthly - othersMonthly - afterTaxMonthly;
     const shortest = policies.length ? Math.min(...policies.map((x) => x.waitDays)) : null;
     const waitMonths = shortest === null ? SSDI_WAIT_MONTHS : shortest / DAYS_PER_MONTH;

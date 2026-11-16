@@ -34,6 +34,11 @@ all earners' take-home over their pay; a bonus by 1 - `SUPPLEMENTAL` (22%, IRS P
 the earner's state share; other income stays as typed. `monthly` counts what is active today. The Forecast, the Income statement
 and the Income page's tile read it, so take-home pay is worked out in one place. A salary of an adult who has no pay today (a first or new job that starts later) takes that adult's own share as this page works it out on the day the pay starts, not the household's (2026-11-01).
 
+`takeHomeOf(plan, { today, fallback, types })` -> `(personId) => monthly` (whole-app sweep x3, 2026-11-16): one person's take-home a
+month from their pay lines of `types` (salary, bonus, business) active today, a salary or bonus at `takeHome().ratio`, any other
+line, and every line when this page cannot work its share out or no `today` is given, at `fallback` (the callers pass 75%, the
+stress tests' `TAKE_HOME`). Disability and the Stress tests' job loss ask it, so their take-home is this page's.
+
 ## Formulas
 - **Pay a paycheck** = the person's salaries a year ÷ paychecks.
 - **Before tax**: the 401(k) (the plan's contributions ÷ paychecks); health, dental and vision insurance (typed); the HSA

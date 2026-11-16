@@ -293,6 +293,21 @@ export function takeHome(plan, params = {}) {
   return { ready: people.length > 0, monthly: inc.monthly - salaryGross + salaryNet, grossMonthly: inc.monthly, salaryGrossMonthly: salaryGross, salaryNetMonthly: salaryNet, ratio, people: people.map(({ id, name, ratio: r }) => ({ id, name, ratio: r })), household };
 }
 
+/**
+ * takeHomeOf(plan, { today, fallback, types }) -> (personId) => that person's take-home a month: each of their pay lines of
+ * `types` (salary, bonus and business income) active on `today`, a salary or a bonus at this page's own share (`takeHome().ratio`),
+ * every other line, and every line when this page cannot work its share out, at `fallback`. With no `today` no share is worked
+ * out (which pay is current needs a date; this never reads the clock) and every line is at `fallback`. Disability and the Stress
+ * tests' job loss ask it, so a take-home said on those pages is this page's (whole-app sweep x3, 2026-11-16: Disability said
+ * Ana's take-home is "about $6,338", 75% of her pay, and this page "$6,257 a month").
+ */
+export function takeHomeOf(plan, { today = null, fallback, types = ["salary", "bonus", "business"] } = {}) {
+  const inc = computeIncome(plan, { today });
+  let ratio = {};
+  if (today) { try { const th = takeHome(plan, { today }); if (th?.ready) ratio = th.ratio ?? {}; } catch { ratio = {}; } }
+  return (id) => inc.active.filter((x) => x.personId === id && types.includes(x.type)).reduce((s, x) => s + x.yearly * (ratio[x.id] ?? fallback), 0) / 12;
+}
+
 /** Whole-dollar shares of $100 that add up to 100: each part's floor, then the largest remainders take the dollars left. */
 export function hundred(parts, total) {
   const keys = Object.keys(parts);

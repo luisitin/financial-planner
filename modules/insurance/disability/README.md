@@ -11,7 +11,12 @@
 `{ id, name, age, retireAge, payYearly, grossMonthly, takeHomeMonthly, policies[], benefitMonthly, afterTaxMonthly, share, target, extraNeeded, costRange, ssdiMonthly, withSsdiMonthly, household: { essentialMonthly, othersMonthly, shortMonthly, coveredShare }, wait: { days, months, shortMonthly, needed, cash, covered, lastsMonths } }`.
 
 ## Formulas
-- Take-home = gross pay x `TAKE_HOME` (75%, the stress tests' assumption).
+- Take-home = the sum over the person's pay lines today of yearly / 12 x the share that reaches the bank: for a salary or a bonus the
+  Paycheck page's own share (`cashflow/paycheck` `takeHomeOf`, from `takeHome().ratio`: federal withholding by IRS Publication 15-T, Social Security
+  6.2% and Medicare 1.45%, the 401(k), health cover and the other deductions, as that page's README sets out); for business
+  income, for every line when Paycheck cannot work one out (no salary tied to a person), and for every line when no date is given
+  (which pay is current needs one; compute never reads the clock), `TAKE_HOME` (75%, the stress tests' planning assumption). The same for the other adults' take-home in the household's bills. (Whole-app sweep x3, 2026-11-16: this
+  page said Ana's take-home is "about $6,338" while Paycheck said "$6,257 a month"; now both say $6,257.)
 - A benefit is taxed when the employer pays the premium (IRS Publication 525, "Sickness and Injury Benefits"); bought with your own taxed pay it is tax-free. After tax = benefit x `TAKE_HOME` when taxed. Default: employer-paid when the policy is through work.
 - Share of pay = benefits / gross pay a month. Target = `TARGET_SHARE` (60%, the usual group long-term disability benefit) x gross; extra needed = target - benefits.
 - What closing the gap costs = 1% to 3% (`COST_RANGE`, an industry rule of thumb) of the pay the extra benefit covers (extra x 12 / 60%), a year.
@@ -38,3 +43,21 @@
 - Run the "never work again" stress test from here with the policy terms.
 
 Review 2026-11-06 (round 7): the card titles ("If you could not work"), "Nothing would replace your pay" and the warnings ("before you plan to retire", "All of your disability insurance comes with the job") say you/your for the unnamed first adult ("Me") and "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before (core/words.js). Words only: no figure or rule changed. Test: "the first adult left unnamed ("Me"): the warnings say you and your".
+
+## Take-home as Paycheck works it out (whole-app sweep x3, 2026-11-16; tests `module.test.mjs`)
+The sweep read the take-home on every page that shows one. For the invented family, this page said Ana's pay of $8,450 a month
+is "about $6,338 take-home pay" (75%) and Paycheck said "$6,257 a month". Each salary and bonus now uses Paycheck's own share
+(the formula above), so both pages say $6,257; Bo's take-home in the household's bills is his salary as Paycheck has it ($4,542)
+plus his $600 of business income at 75% ($450): $4,992, against $4,350 before. That covers the family's $4,768 of must-pay bills
+while Ana waits for a benefit, so "the wait" no longer asks the cash for anything there. Business income stays at 75% (Paycheck
+does not work out its tax; counting it whole would call the gross pay "take-home"). A household whose pay is all business income
+(the round 8 freelancer) reads as before.
+
+Fix round (critics F4, F5; tests `module.test.mjs` "with no date given, compute never reads the clock"):
+- With no `today`, Paycheck's own `takeHome` fell back to January 1 of the clock's year (a clock read in a compute that must be pure,
+  and a different answer for pay that starts or ends during the year). The shared helper `takeHomeOf` works out no share without a
+  date, so every line is at 75% then; the shell always gives the date, so no page moves.
+- Paycheck's take-home is net of the payroll 401(k), the HSA and health cover. That is the right figure for the household's bills:
+  the others' take-home pays them while they keep working, and their 401(k) and health cover keep coming out of their pay. For the
+  person who cannot work it is only said on screen ("about $6,257 take-home pay", as Paycheck says it); their own 401(k) stops with
+  their pay and is not counted anywhere here, so nothing is taken off twice.
