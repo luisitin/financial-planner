@@ -114,3 +114,7 @@ S11).
 ## Ideas / not yet
 - The actual figures from a 1099-DIV (the reader reads one for the tax pages; not tied to holdings).
 - A fund's own payout months, once a sourced table of them can be bundled.
+
+## A category inside another (gap list next 60 #16, 2026-11-16)
+`dividendCategories` also holds every category inside one of them (transactions/categories `parentsOf`), so money filed
+under "Fund payouts" inside Dividends and interest is counted. With none inside another nothing is added.

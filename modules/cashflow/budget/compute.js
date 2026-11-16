@@ -6,7 +6,7 @@
 // plan.budgetPlan (optional, gap #37 "Budget your way"): { method?: "zero" | "three" (absent: envelopes), carryOver?: true,
 // moves?: [{ id, month, from, to, amount }], hold?: { "YYYY-MM": amount } }. Absent, every figure here is what it was.
 import { allLines, isTransfer, monthOf, coverage, monthCover, COVER_SLACK, coverageByAccount, monthGaps, gapIssues, unimportedCardLines, unsureCardPayments, unsureWords, counted } from "../../transactions/ledger/compute.js";
-import { categoriesOf, categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
+import { categoriesOf, categoryById, categoryLabel, categoryIcon, rollUp } from "../../transactions/categories/compute.js";
 import { addMonths, daysBetween } from "../../../core/math/dates.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
 import { compute as computeSinking } from "../sinking-funds/compute.js";
@@ -33,7 +33,16 @@ const cardTotals = (lines) => {
   }
   return [...m.values()].map((c) => ({ ...c, months: c.months.sort() }));
 };
-const byCat = (txs) => { const m = new Map(); for (const t of txs) m.set(t.category || "", (m.get(t.category || "") ?? 0) - (Number(t.amount) || 0)); return m; };
+const byCat = (txs, key = (c) => c) => { const m = new Map(); for (const t of txs) { const k = key(t.category || ""); m.set(k, (m.get(k) ?? 0) - (Number(t.amount) || 0)); } return m; };
+/**
+ * The envelope a line's category counts in (gap next-60 #16): its own when it has one, else the category it sits inside
+ * (transactions/categories rollUp), whether that one has an envelope or not (then it is spending with no envelope, said
+ * under that one). Every line still counts once. With no category inside another it gives every category back as it is.
+ */
+export function envelopeKey(plan, budgets) {
+  const up = rollUp(plan), has = new Set((budgets ?? []).map((b) => b?.category));
+  return (c) => (has.has(c) ? c : up(c));
+}
 const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
 
 /**
@@ -66,17 +75,18 @@ export function compute(plan, params = {}) {
   const daysInMonth = daysIn(month);
   const dayOfMonth = today && today.slice(0, 7) === month ? Number(today.slice(8, 10)) : (today && today.slice(0, 7) > month ? daysInMonth : 0);
   const daysLeft = daysInMonth - dayOfMonth;
-  const monthTx = spendingOf(plan, month);
-  const spent = byCat(monthTx);
-  const count = new Map(); for (const t of monthTx) count.set(t.category || "", (count.get(t.category || "") ?? 0) + 1);
-  const prevYm = addMonths(`${month}-01`, -1).slice(0, 7);
-  const prevTx = spendingOf(plan, prevYm);
-  const prev = byCat(prevTx);
-  const prevCount = new Map(); for (const t of prevTx) prevCount.set(t.category || "", (prevCount.get(t.category || "") ?? 0) + 1);
   // a month before the budget was started over reads with the budget kept then (its envelopes and amounts, gap list, next 60,
   // item 40, critic M2: starting over never rewrites a past month); with no budgetHistory there is none and nothing differs
   const keptAt = keptFor(plan, month);
   const budgets = keptAt ? keptAt.lines : (plan.budgets ?? []).filter((b) => b.category);
+  const key = envelopeKey(plan, budgets);   // a category inside another without an envelope of its own counts in that one's
+  const monthTx = spendingOf(plan, month);
+  const spent = byCat(monthTx, key);
+  const count = new Map(); for (const t of monthTx) count.set(key(t.category || ""), (count.get(key(t.category || "")) ?? 0) + 1);
+  const prevYm = addMonths(`${month}-01`, -1).slice(0, 7);
+  const prevTx = spendingOf(plan, prevYm);
+  const prev = byCat(prevTx, key);
+  const prevCount = new Map(); for (const t of prevTx) prevCount.set(key(t.category || ""), (prevCount.get(key(t.category || "")) ?? 0) + 1);
   // a month the budget was started over in is fresh: nothing rolls over into it, no overspending carries in (gap list, next 60,
   // item 40); with no budgetHistory there is no such month and nothing below differs
   const fresh = freshMonths(plan), freshNow = fresh.has(month), freshPrev = fresh.has(prevYm);
@@ -86,7 +96,7 @@ export function compute(plan, params = {}) {
   const net = netOf(moves), netPrev = netOf(movesPrev);
   // what rolled into last month (only asked for when overspending comes out of next month: critic M1)
   let prev2 = null, netPrev2 = null;
-  if (bp?.carryOver) { const ym2 = addMonths(`${month}-01`, -2).slice(0, 7); prev2 = byCat(spendingOf(plan, ym2)); netPrev2 = netOf(movesIn(bp, ym2, budgets)); }
+  if (bp?.carryOver) { const ym2 = addMonths(`${month}-01`, -2).slice(0, 7); prev2 = byCat(spendingOf(plan, ym2), key); netPrev2 = netOf(movesIn(bp, ym2, budgets)); }
   const envelopes = budgets.map((b) => {
     const amount = Number(b.amount) || 0;
     // last month's money: the amount, plus or minus what was moved that month (one month back, as the rollover looks)
@@ -130,7 +140,7 @@ export function compute(plan, params = {}) {
     if (g.whole) suggestFrom.push(ym); else suggestSkipped.push({ ym, holes: g.holes, issues: gapIssues(plan, { ...g, cards: [] }, ym) });
   }
   const sums = new Map();
-  for (const ym of suggestFrom) for (const [c, v] of byCat(spendingOf(plan, ym))) sums.set(c, (sums.get(c) ?? 0) + v);
+  for (const ym of suggestFrom) for (const [c, v] of byCat(spendingOf(plan, ym), key)) sums.set(c, (sums.get(c) ?? 0) + v);
   const n = suggestFrom.length;
   const suggestions = n ? [...sums.entries()].filter(([c, v]) => c && !budgeted.has(c) && v > 0 && categoriesOf(plan).some((x) => x.id === c && x.kind === "expense")).map(([category, total]) => ({ category, label: categoryLabel(plan, category), icon: categoryIcon(plan, category), average: Math.round(total / n), months: n })).sort((a, b) => b.average - a.average) : [];
   const suggestCards = n ? cardTotals(suggestFrom.flatMap((ym) => unimportedCardLines(plan, ym, { today, covBy }))).map((c) => ({ cardId: c.cardId, name: c.name, label: c.label, average: Math.round(c.total / n), months: n, inMonths: c.months, total: Math.round(c.total * 100) / 100, before: c.before, first: c.first })) : [];
@@ -457,6 +467,7 @@ export function safeToSpend(plan, params = {}) {
   let paid = new Set();   // lines that pay a cost set aside for (plan mode)
   const flex = d.envelopes.filter((e) => !isBill(e.category));
   const enveloped = new Set(flex.map((e) => e.category));
+  const envOf = envelopeKey(plan, d.envelopes);   // a line inside a category with an envelope is in that envelope (gap next-60 #16)
   if (flex.length) {
     mode = "envelopes";
     envelopes = flex.map((e) => ({ label: e.label, available: e.available }));
@@ -486,7 +497,7 @@ export function safeToSpend(plan, params = {}) {
     else if (paid.has(t)) setAsidePaid += out;
     else {
       spent += out;   // not sorted yet counts as spent: the figure errs low
-      if (mode === "envelopes" && !enveloped.has(t.category)) noEnvelope += out;   // comes off the envelopes' money: said (critic 3)
+      if (mode === "envelopes" && !enveloped.has(envOf(t.category || ""))) noEnvelope += out;   // comes off the envelopes' money: said (critic 3)
     }
   }
   // a card whose own file is missing: what went to it this month is in no kind yet, so it is said, not guessed at

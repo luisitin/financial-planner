@@ -35,9 +35,9 @@ import { T as CELLS } from "../data/cells.js";
 import { STATE_NAME, STATE_REGION, READ_ON } from "../data/index.js";
 import { FEDERAL } from "../../../taxes/federal/data/federal.js";
 import { FLAT, NO_WAGE_TAX, flatTax } from "../../../taxes/state/compute.js";
-import { compute as computeExpenses, ROW_HOLDS, BANK_SPREAD, mortgageLines } from "../../../cashflow/expenses/compute.js";
+import { compute as computeExpenses, ROW_HOLDS, BANK_SPREAD, mortgageLines, CATEGORIES as EXPENSE_KINDS } from "../../../cashflow/expenses/compute.js";
 import { monthOf, coverage, coverageByAccount, monthCover, monthGaps, cardPayments, isCardAccount, monthsWords, counted } from "../../../transactions/ledger/compute.js";
-import { categoriesOf } from "../../../transactions/categories/compute.js";
+import { categoriesOf, rollUpInto } from "../../../transactions/categories/compute.js";
 import { federalTax, paramsFor } from "../../../../core/math/tax.js";
 import { interpLog, roundGuess } from "../../../../core/math/estimate.js";
 import { ageOn } from "../../../../core/math/dates.js";
@@ -303,6 +303,8 @@ const billsOf = (plan, today) => L(plan, "expenses").filter((x) => x && x.period
   .map((x) => ({ id: x.id, amount: Number(x.amount), times: x.period === "weekly" ? 5 : x.period === "biweekly" ? 3 : 1 }));
 function bankSpendOf(plan, today, rows, txs, bills) {
   const kinds = new Map(categoriesOf(plan, { all: true }).map((c) => [c.id, c.kind]));
+  // a category of the person's own inside one of Expenses' kinds counts as that kind (gap next-60 #16); none set: itself
+  const kindOf = rollUpInto(plan, (id) => !!EXPENSE_KINDS[id] || NOT_SPENDING.has(id));
   const accounts = L(plan, "accounts");
   const cardIds = new Set(accounts.filter(isCardAccount).map((a) => a.id));
   const transfer = (t) => !!t.transferId || t.category === "transfer" || (!!t.category && kinds.get(t.category) === "transfer");
@@ -329,7 +331,7 @@ function bankSpendOf(plan, today, rows, txs, bills) {
       const onCard = cardIds.has(t.accountId);
       if (!onCard && amt < 0) {
         // money to a card from checking: a known card's file covers it (monthGaps says when it does not), else it is held
-        const debtLine = t.category === "debt", unfiled = !t.category;
+        const debtLine = kindOf(t.category) === "debt", unfiled = !t.category;
         if (transfer(t)) { if (!t.transferId && cardishLine(t) && !toKnownCard(t)) unknown.push(t); continue; }
         if (debtLine || (unfiled && cardishLine(t))) {
           if (isLoanPay(t, -amt) && !cardishLine(t)) continue;               // a loan's payment, counted from Debts
@@ -349,8 +351,8 @@ function bankSpendOf(plan, today, rows, txs, bills) {
         }
       }
       if (transfer(t)) continue;
-      if (!spending(t, amt) || NOT_SPENDING.has(t.category ?? "")) continue;
-      counted.push({ t, row: bankRowOf(t.category ?? "", rows), v: -amt });
+      if (!spending(t, amt) || NOT_SPENDING.has(kindOf(t.category ?? ""))) continue;
+      counted.push({ t, row: bankRowOf(kindOf(t.category ?? ""), rows), v: -amt });
     }
     const out = counted.reduce((s, x) => s + x.v, 0);
     return { counted, out, loose, unknown, cardsOwed: [...(g?.cards ?? []).map((c) => ({ accountId: c.accountId, name: c.name, paid: c.paid })), ...cardsOwed], used };

@@ -537,3 +537,8 @@ adult (M1); a day that does not exist and words that are not text read as none (
 page saving a first comment at the first try under the plan's "Me", then starting on whoever this phone last wrote as,
 the fold staying shut for it, a writer-less comment asking before new words (P1); `writer.js` storage, broken values and
 Erase; one adult left: the boxes on the line with a comment, clearing it (M3); "Up to 140 letters." (P2).
+
+## A category inside another (gap list next 60 #16, 2026-11-16)
+The category filter shows the lines of the categories inside the one picked too, and its in and out are theirs
+(transactions/categories `rollUp`); picking one inside another shows its own lines. With none inside another the filter
+is what it was (modules/transactions/categories/invariance.json).

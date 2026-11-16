@@ -1,7 +1,7 @@
 // modules/cashflow/spending/compute.js -- PURE. Where the money went in one month: by
 // category with shares, against the month before, and the payees that took the most.
 import { allLines, counted, wholeCount, countOnce, tagsOf, isTransfer, monthOf, monthLabel, coverage, monthCover, coverageByAccount, monthHoles, monthGaps, gapIssues, unimportedCardLines, quietTooLong } from "../../transactions/ledger/compute.js";
-import { categoryById, categoryLabel, categoryIcon, categoriesOf } from "../../transactions/categories/compute.js";
+import { categoryById, categoryLabel, categoryIcon, categoriesOf, rollUp } from "../../transactions/categories/compute.js";
 import { payeeWords } from "../../transactions/rules/compute.js";
 import { addMonths } from "../../../core/math/dates.js";
 
@@ -24,8 +24,9 @@ const wholeLines = (lines) => {
   }
   return out;
 };
-/** A line's group: its category, or for a card's stand-in line that card (two missing cards are two lines). */
-const keyOf = (t) => (t.synthetic ? `${t.category}:${t.cardId}` : t.category || "");
+/** A line's group: its category (or the one it sits inside, `up` = rollUp: gap next-60 #16), or for a card's stand-in line
+ * that card (two missing cards are two lines). */
+const keyOf = (t, up) => (t.synthetic ? `${t.category}:${t.cardId}` : up(t.category || ""));
 
 /**
  * compute(plan, { month, today }) -> {
@@ -33,7 +34,9 @@ const keyOf = (t) => (t.synthetic ? `${t.category}:${t.cardId}` : t.category || 
  *     gaps monthGaps finds in it: a hole, an account whose lines stop early or start late, a payment counted for neither card;
  *     cardOnly: that payment is the only one, so no day is missing and the picker says "card purchases not all in", re-check 5),
  *     total, count, previous: { ym, label, total } | null, change,
- *   byCategory: [{ category, label, icon, total, share, count, previous, change }], topPayees: [{ payee, total, count, category }],
+ *   byCategory: [{ category, label, icon, total, share, count, previous, change, subs? }] (a category inside another counts in
+ *   that one, transactions/categories rollUp; `subs` [{ category, label, icon, total }] only on a row with spending inside it,
+ *   gap next-60 #16), topPayees: [{ payee, total, count, category }],
  *   biggest: [{ ...tx }] (5 largest), daily: [{ day, total }], hasData,
  *   cover: { from, to, firstDay, lastDay, days, daysInMonth, full } (the part of the month the bank files cover),
  *   sameDays: { lo, hi } | null (when either month is only partly covered: the days of the month both cover, which the change compares),
@@ -92,12 +95,15 @@ export function compute(plan, params = {}) {
   // signed: money out counts as spending, a refund filed under a spending category reduces it
   const sumAbs = (arr) => arr.reduce((s, t) => s - (Number(t.amount) || 0), 0);
   const total = sumAbs(txs), prevTotal = sumAbs(prevTxs), curTotalCmp = sumAbs(curCmp);
+  // a category inside another counts in that one (gap next-60 #16); what each one inside came to is kept (`subs`)
+  const up = rollUp(plan);
   const byCat = (arr) => {
     const m = new Map();
     for (const t of arr) {
-      const k = keyOf(t);
+      const k = keyOf(t, up);
       const c = m.get(k) ?? (t.synthetic ? { category: t.category, cardId: t.cardId, unimported: true, label: t.payee, icon: "💳", total: 0, count: 0, before: true, first: t.first ?? null } : { category: k, label: categoryLabel(plan, k), icon: categoryIcon(plan, k), total: 0, count: 0 });
       c.total -= Number(t.amount) || 0; c.count++; if (t.synthetic && !t.before) { c.before = false; c.label = t.payee; } m.set(k, c);
+      if (!t.synthetic && (t.category || "") !== k) { c.subs ??= new Map(); c.subs.set(t.category, (c.subs.get(t.category) ?? 0) - (Number(t.amount) || 0)); }
     }
     return m;
   };
@@ -108,7 +114,9 @@ export function compute(plan, params = {}) {
   const prevGaps = gapsIn(prevYm), curGaps = gapsIn(month);
   const onlyCard = (g) => !!g.unsure && !(g.holes.length + g.short.length + g.late.length);
   const cmpGap = !prevTxs.length ? null : gapCount(curGaps) ? { ym: month, prev: prevYm, card: onlyCard(curGaps) } : gapCount(prevGaps) ? { ym: prevYm, prev: prevYm, card: onlyCard(prevGaps) } : null;
-  const byCategory = [...cur.entries()].filter(([, c]) => c.total > 0).map(([k, c]) => { const p = prev.get(k)?.total ?? 0, w = curW.get(k)?.total ?? 0; return { ...c, share: total ? c.total / total : 0, previous: p, change: p && !noOverlap && !cmpGap ? (w - p) / p : null }; }).sort((a, b) => b.total - a.total);
+  // subs [{ category, label, icon, total }]: what each category inside this one came to, biggest first (only when one did)
+  const subsOf = (m) => [...m.entries()].filter(([, v]) => v > 0.005).map(([category, v]) => ({ category, label: categoryLabel(plan, category), icon: categoryIcon(plan, category), total: Math.round(v * 100) / 100 })).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+  const byCategory = [...cur.entries()].filter(([, c]) => c.total > 0).map(([k, { subs, ...c }]) => { const p = prev.get(k)?.total ?? 0, w = curW.get(k)?.total ?? 0, inside = subs ? subsOf(subs) : []; return { ...c, share: total ? c.total / total : 0, previous: p, change: p && !noOverlap && !cmpGap ? (w - p) / p : null, ...(inside.length ? { subs: inside } : {}) }; }).sort((a, b) => b.total - a.total);
   const real = txs.filter((t) => !t.synthetic);
   const payees = new Map(), onePayee = countOnce();   // a split purchase counts once, whichever of its parts are spending
   for (const t of real) { const k = t.payee || "(no description)"; const p = payees.get(k) ?? { payee: k, total: 0, count: 0, category: t.category }; p.total -= Number(t.amount) || 0; p.count += onePayee(t); payees.set(k, p); }
@@ -195,8 +203,9 @@ export function watchesOf(plan) {
   return out;
 }
 /** The lines a watch counts: real bank lines in the category, or at the shop (samePayee, with the watched name read once). */
-function matcher(w) {
-  if (w.kind === "category") return (t) => !t.synthetic && (t.category || "") === w.key;
+function matcher(w, up = (id) => id) {
+  // a watched category counts the categories inside it too (gap next-60 #16)
+  if (w.kind === "category") return (t) => !t.synthetic && ((t.category || "") === w.key || up(t.category || "") === w.key);
   const k = payeeWords(w.key), raw = w.key.trim().toLowerCase();
   return (t) => { if (t.synthetic) return false; const n = payeeWords(t.payee); return k || n ? n === k : String(t.payee ?? "").trim().toLowerCase() === raw; };
 }
@@ -235,13 +244,14 @@ function wholeYear(plan, { today, cov, covBy, gapsOf = (ym) => monthGaps(plan, y
  */
 function twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }) {
   const out = {};
+  const up = rollUp(plan);   // a category inside another counts in that one (gap next-60 #16)
   const whole = wholeYear(plan, { today, cov, covBy, gapsOf });
   if (whole) {
     const { months } = whole, n = months.length, late = LATELY_MONTHS;
     const per = new Map();   // category -> [total per month, newest first]
     months.forEach((ym, i) => {
       for (const t of whole.lines.get(ym)) {
-        const k = t.category || "";
+        const k = up(t.category || "");
         if (!per.has(k)) per.set(k, new Array(n).fill(0));
         per.get(k)[i] -= Number(t.amount) || 0;
       }
@@ -260,7 +270,7 @@ function twelveAndWatch(plan, { month, today, txs, cov, covBy, gapsOf }) {
   // a shop's name is never in the result (`at` points into watchesOf(plan)): Explain this page's copy swaps payees on the bank
   // lines only, so a name read from the watch list would reach the AI helper as it is typed
   if (watches.length) out.watch = watches.map((w, at) => {
-    const hit = matcher(w), mine = txs.filter(hit);
+    const hit = matcher(w, up), mine = txs.filter(hit);
     return { kind: w.kind, at, ...(w.kind === "category" ? { key: w.key, label: categoryLabel(plan, w.key) } : {}), icon: w.kind === "category" ? categoryIcon(plan, w.key) : "🏪",
       total: cents(outOf(mine)), count: wholeCount(mine), usual: whole ? cents(whole.months.reduce((s, ym) => s + outOf(whole.lines.get(ym).filter(hit)), 0) / whole.months.length) : null };
   });

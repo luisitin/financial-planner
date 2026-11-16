@@ -1,23 +1,39 @@
-// modules/transactions/categories/view.js -- DOM only. The category list grouped by kind,
-// tap to rename / change icon / hide, add your own, and a count of how many transactions use each.
-import { compute, KINDS, slug } from "./compute.js";
+// modules/transactions/categories/view.js -- DOM only. The category list grouped by kind, tap to rename / change icon /
+// hide, add your own, and a count of how many transactions use each. Gap list next 60 #16 (2026-11-16): each group shows
+// its first six, the rest one quiet tap away ("N more categories"); a category may sit inside another one (one level),
+// set under the form's "More details (optional)", asked first and with Undo; it is listed right under that one.
+import { compute, KINDS, slug, parentsOf, parentChoices, childrenOf, nestRefused, nestWords, readAs, addedInsideWords, onTheirOwnWords, nowOnTheirOwnWords, holdsOthersWords, unnest,
+  INSIDE_HELP, ON_ITS_OWN } from "./compute.js";
 import { dropCategory, splitsUsing, splitLossWords, splitBackWords } from "../ledger/compute.js";
+import { rest } from "../../../core/ui/more.js";
 
 const ICONS = ["📦", "🏠", "💡", "🛒", "🚗", "🛡️", "🩺", "💳", "🧒", "📱", "🧾", "📺", "🍽️", "🎉", "🛍️", "✈️", "🎁", "💇", "🐾", "💼", "🎯", "🛠️", "🏘️", "🏛️", "📈", "💵", "🔁", "🎓", "🏋️", "🍺", "☕", "🚌", "🏥", "🧴", "🎮", "📚", "🌳", "🏦"];
-const FIELDS = (editing) => [
+/** The choices of the box "Inside another category" for a category of `kind` (`id`: null for a new one). */
+const parentOptions = (plan, id, kind) => [{ value: "", label: ON_ITS_OWN }, ...parentChoices(plan, { id, kind }).map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))];
+/** The form's boxes. The last, "Inside another category", waits under "More details (optional)"; a category that has others
+ * inside it has none (one level only). */
+const FIELDS = (plan, editing) => [
   { key: "label", label: "Name", type: "text", required: true, placeholder: "e.g. Coffee" },
   { key: "icon", label: "Icon", type: "select", options: ICONS },
   { key: "kind", label: "Kind", type: "select", options: Object.entries(KINDS).map(([value, label]) => ({ value, label })) },
   { key: "essential", label: "Counts as a must-pay bill", type: "checkbox", help: "for the emergency-fund target; spending only" },
+  ...(editing && childrenOf(plan, editing.id).length ? [] : [{ key: "parent", label: "Inside another category", type: "select", more: true, help: INSIDE_HELP,
+    options: parentOptions(plan, editing?.id ?? null, editing?.kind ?? "expense") }]),
 ];
+/** The part ids of the groups' "N more categories" (stable names, never a title). */
+const GROUP_IDS = { expense: "spending", income: "income", transfer: "transfer" };
 
-// the confirmation shown on the next render, where the form was (the shell re-renders after store.update; stress test T4)
+// the confirmation shown on the next render (the shell re-renders after store.update; stress test T4):
+// { text, undo?, undone? } -- the green line, and an Undo with the words after it
 let pending = null;
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
   const d = compute(plan);
+  const links = parentsOf(plan);
+  const labelOf = (id) => (id ? d.categories.find((c) => c.id === id)?.label ?? id : "");
+  let said = pending; pending = null;
   let editing = null;
 
   root.append(ui.h("section", { class: "card accent hero" },
@@ -28,48 +44,83 @@ export function render(root, ctx) {
 
   const formCard = ui.card(null);
   const formHost = ui.h("div");
+  // the green line, with its Undo when the save can be taken back (a category put inside another, taken out or moved)
+  const okLine = (s) => ui.notice("ok", s.text, s.undo ? { undo: s.undo, undone: (r) => { pending = { text: ui.undoneWords(r, s.undone) }; } } : {});
   // The add form folds behind a button; tapping a category opens it filled in (design log 2026-09-15).
   let showForm = false;
   const drawForm = () => {
     formHost.innerHTML = "";
     if (!showForm && !editing) {
-      if (pending) { formHost.append(ui.notice("ok", pending)); pending = null; }
+      if (said) { formHost.append(okLine(said)); said = null; }
       formHost.append(ui.button("+ Add a category", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
     }
-    const values = editing ? { ...editing } : { icon: "📦", kind: "expense", essential: false };
+    const values = editing ? { ...editing, parent: links.get(editing.id) ?? "" } : { icon: "📦", kind: "expense", essential: false, parent: "" };
+    let f = null;
+    f = ui.form(FIELDS(plan, editing), values, (v) => {
+      const label = v.label.trim(); if (!label) return;
+      // the box is there unless the category has others inside it (then it stays on its own)
+      const hasBox = v.parent !== undefined, parentNow = hasBox ? v.parent || "" : null, was = editing ? links.get(editing.id) ?? "" : "";
+      const no = hasBox ? nestRefused(plan, { id: editing?.id ?? null, parent: parentNow, kind: v.kind }) : null;
+      if (no) return ui.fieldError(f.querySelector('[name="parent"]'), no);
+      const moved = !!editing && hasBox && parentNow !== was;
+      // a category of yours inside Taxes, Debt or Rent or mortgage (or a dividend one) changes what the spending guesses (or
+      // Dividends) count, so that question says so instead of "every total stays the same" (critic M4)
+      const words = moved ? nestWords(label, labelOf(was), labelOf(parentNow), readAs(plan, editing.id, parentNow)) : null;
+      if (moved && !ui.confirm(words.ask)) return false;
+      // a category whose kind changes: the ones inside it stand on their own (a category and those inside it are one kind)
+      const kids = editing && v.kind !== editing.kind ? childrenOf(plan, editing.id).map((c) => c.label) : [];
+      const id0 = editing?.id ?? null;
+      const write = (p) => {
+        p.categories = p.categories ?? [];
+        if (id0) {
+          const i = p.categories.findIndex((c) => c.id === id0);
+          const entry = { ...(i >= 0 ? p.categories[i] : {}), id: id0, label, icon: v.icon, kind: v.kind, essential: !!v.essential };
+          if (hasBox) { if (parentNow) entry.parent = parentNow; else delete entry.parent; }
+          if (i >= 0) p.categories[i] = entry; else p.categories.push(entry);
+          if (kids.length) unnest(p, id0);
+        } else {
+          let id = slug(label); const taken = new Set(compute(p).categories.map((c) => c.id)); let n = 2; while (taken.has(id)) id = `${slug(label)}-${n++}`;
+          p.categories.push({ id, label, icon: v.icon, kind: v.kind, essential: !!v.essential, ...(parentNow ? { parent: parentNow } : {}) });
+        }
+      };
+      const text = !editing ? (parentNow ? addedInsideWords(label, labelOf(parentNow)) : `${label} added.`) : label !== editing.label ? `${editing.label} is now ${label}.` : `${label} saved.`;
+      showForm = false; editing = null;
+      if (moved) { const undo = ui.undoable(store, write); pending = { text: words.done, undo, undone: words.undone }; }
+      else { pending = { text: kids.length ? `${text} ${nowOnTheirOwnWords(kids)}` : text }; store.update(write); }
+    }, { submitLabel: editing ? "Save changes" : "Add category", resetAfter: !editing, onCancel: () => { editing = null; showForm = false; drawForm(); } });
+    // the box lists the categories of the kind picked: a new income category can go inside an income one (critic M5); a
+    // pick of another kind goes back to "No, it stands on its own"
+    const kindBox = f.querySelector('[name="kind"]'), parentBox = f.querySelector('[name="parent"]'), me = editing?.id ?? null;
+    if (kindBox && parentBox) kindBox.addEventListener("change", () => {
+      const keep = parentBox.value, opts = parentOptions(plan, me, kindBox.value);
+      parentBox.replaceChildren(...opts.map((o) => ui.h("option", { value: o.value }, o.label)));
+      parentBox.value = opts.some((o) => o.value === keep) ? keep : "";
+    });
+    // a category with others inside it has no such box: one line says why (critic P5)
+    const holds = editing ? childrenOf(plan, editing.id).map((c) => c.label) : [];
     formHost.append(ui.h("div", {},
       ui.h("h2", {}, editing ? `Edit ${editing.label}` : "Add a category"),
-      ui.form(FIELDS(editing), values, (v) => {
-        const label = v.label.trim(); if (!label) return;
-        pending = !editing ? `${label} added.` : label !== editing.label ? `${editing.label} is now ${label}.` : `${label} saved.`;
-        showForm = false;
-        store.update((p) => {
-          p.categories = p.categories ?? [];
-          if (editing) {
-            const i = p.categories.findIndex((c) => c.id === editing.id);
-            const patch = { id: editing.id, label, icon: v.icon, kind: v.kind, essential: !!v.essential };
-            if (i >= 0) p.categories[i] = { ...p.categories[i], ...patch }; else p.categories.push(patch);
-          } else {
-            let id = slug(label); const taken = new Set(compute(p).categories.map((c) => c.id)); let n = 2; while (taken.has(id)) id = `${slug(label)}-${n++}`;
-            p.categories.push({ id, label, icon: v.icon, kind: v.kind, essential: !!v.essential });
-          }
-        });
-        editing = null;
-      }, { submitLabel: editing ? "Save changes" : "Add category", resetAfter: !editing, onCancel: () => { editing = null; showForm = false; drawForm(); } }),
+      f,
+      holds.length ? ui.h("p", { class: "muted small", style: { marginTop: "12px" } }, holdsOthersWords(editing.label, holds)) : null,
       editing ? ui.h("p", { style: { marginTop: "12px" } },
         editing.hidden
-          ? ui.button("Show it again", () => { const id = editing.id; pending = `${editing.label} is back in the list.`; editing = null; store.update((p) => { const c = (p.categories ?? []).find((x) => x.id === id); if (c) delete c.hidden; }); }, { class: "secondary" })
+          ? ui.button("Show it again", () => { const id = editing.id; pending = { text: `${editing.label} is back in the list.` }; editing = null; store.update((p) => { const c = (p.categories ?? []).find((x) => x.id === id); if (c) delete c.hidden; }); }, { class: "secondary" })
           : ui.button(editing.builtIn ? `Hide ${editing.label}` : `Remove ${editing.label}`, () => {
-            // a split purchase with a part here stops being split: said before, and again in the green line (gap #24)
+            // a split purchase with a part here stops being split: said before, and again in the green line (gap #24);
+            // the categories inside it stand on their own: said before and after (gap next-60 #16)
             const nSplit = splitsUsing(plan, editing.id), loss = splitLossWords(nSplit);
-            if (editing.count && !ui.confirm(`${editing.count} transactions use ${editing.label}. They will become uncategorized.${loss} Continue?`)) return;
+            const kids = childrenOf(plan, editing.id).map((c) => c.label);
+            // with others inside it the question says first what is hidden or removed (critic P3)
+            const ask = [kids.length ? `${editing.builtIn ? "Hide" : "Remove"} ${editing.label}?` : "", editing.count ? `${editing.count === 1 ? `1 transaction uses ${editing.label}. It` : `${editing.count} transactions use ${editing.label}. They`} will become uncategorized.${loss}` : "", onTheirOwnWords(kids)].filter(Boolean);
+            if (ask.length && !ui.confirm(`${ask.join(" ")} Continue?`)) return;
             const id = editing.id, builtIn = editing.builtIn;
-            pending = `${builtIn ? `${editing.label} hidden. Show it again under Hidden.` : `${editing.label} removed.`}${splitBackWords(nSplit)}`;
+            pending = { text: `${builtIn ? `${editing.label} hidden. Show it again under Hidden.` : `${editing.label} removed.`}${splitBackWords(nSplit)}${kids.length ? ` ${nowOnTheirOwnWords(kids)}` : ""}` };
             editing = null;
             store.update((p) => {
               p.categories = p.categories ?? [];
               for (const t of p.transactions ?? []) dropCategory(t, id);   // and off the parts of a split purchase (gap #24)
+              unnest(p, id);
               if (builtIn) { const c = p.categories.find((x) => x.id === id); if (c) c.hidden = true; else p.categories.push({ id, hidden: true }); }
               else p.categories = p.categories.filter((x) => x.id !== id);
             });
@@ -78,24 +129,29 @@ export function render(root, ctx) {
   };
   drawForm();
 
+  const open = (c) => { editing = c; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const row = (c) => {
+    const inside = links.get(c.id);
+    const bits = [inside ? `Inside ${labelOf(inside)}` : "", c.count ? `${c.count} transaction${c.count === 1 ? "" : "s"}, ${fmt.money(Math.abs(c.total), cur)}` : ""].filter(Boolean);
+    // a category inside another is set in under it, so the two read as one group (critic P4)
+    return ui.h("li", { role: "button", tabindex: "0", style: inside ? { cursor: "pointer", marginLeft: "28px" } : { cursor: "pointer" },
+      onClick: () => open(c),
+      onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
+      ui.h("span", { class: "ic" }, c.icon),
+      ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.label, c.builtIn ? null : ui.h("span", { class: "pill" }, "yours"), c.essential && c.kind === "expense" ? ui.h("span", { class: "pill" }, "must pay") : null),
+        bits.length ? ui.h("div", { class: "d" }, bits.join(" · ")) : null),
+      ui.h("span", { class: "st muted" }, "Edit ›"));
+  };
+  // each group: its first six, then "N more categories" (a category inside another right under it)
   for (const [kind, title] of Object.entries(KINDS)) {
     const rows = d.categories.filter((c) => c.kind === kind && !c.hidden);
     if (!rows.length) continue;
-    root.append(ui.card(title,
-      ui.h("ul", { class: "page-list" }, rows.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
-        onClick: () => { editing = c; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); },
-        onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
-        ui.h("span", { class: "ic" }, c.icon),
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.label, c.builtIn ? null : ui.h("span", { class: "pill" }, "yours"), c.essential && kind === "expense" ? ui.h("span", { class: "pill" }, "must pay") : null),
-          c.count ? ui.h("div", { class: "d" }, `${c.count} transaction${c.count === 1 ? "" : "s"}, ${fmt.money(Math.abs(c.total), cur)}`) : null),
-        ui.h("span", { class: "st muted" }, "Edit ›"),
-      ))),
-    ));
+    root.append(ui.card(title, ...rest(ctx, { id: GROUP_IDS[kind], items: rows, row, noun: "categories", one: "category", list: "page-list" })));
   }
   const hidden = d.categories.filter((c) => c.hidden);
   if (hidden.length) root.append(ui.card("Hidden",
     ui.h("ul", { class: "page-list" }, hidden.map((c) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer", opacity: 0.6 },
-      onClick: () => { editing = c; showForm = true; drawForm(); formCard.scrollIntoView({ behavior: "smooth", block: "start" }); } },
+      onClick: () => open(c) },
       ui.h("span", { class: "ic" }, c.icon), ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, c.label)), ui.h("span", { class: "st muted" }, "Show ›")))),
   ));
 

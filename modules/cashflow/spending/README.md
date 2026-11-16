@@ -215,3 +215,10 @@ Tests: `module.test.mjs` "gap #24 ...", `tests/split-tags.test.mjs`.
 The month picker lists the months that have spending among the lines that count (ledger `counted(plan)`): a month whose
 only spending is left out of the totals is not offered. The figures themselves already read `allLines`
 (`tests/left-out.test.mjs`).
+
+## A category inside another (gap list next 60 #16, 2026-11-16)
+A line counts under the category it sits inside (transactions/categories `rollUp`): the month by category, the twelve
+months, and a watched category (which counts the ones inside it; a watched one inside another counts itself). A row with
+spending inside it carries `subs` [{ category, label, icon, total }], drawn as one line under it ("Inside: Groceries $61 ·
+Eating out $31"). Each line still counts once, so the month's total is the same; with no category inside another every
+output is what it was at ce79d70 (modules/transactions/categories/invariance.json).

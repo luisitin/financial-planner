@@ -2,7 +2,7 @@
 // went out, what was kept, from the transactions (transfers excluded). Next to it, what the
 // Income and Expenses pages say should happen each month, so the two can be compared.
 import { allLines, countOnce, isTransfer, monthOf, monthLabel, coverage, monthCover, COVER_SLACK, shortDate, coverageByAccount, monthGaps, gapIssues, wholeMonth, allUnimportedCardLines, unimportedCardLines, cardLineLabel, beforeLabel, monthsWords, unsureCardPayments, unsureWords, bringWords, theCard } from "../../transactions/ledger/compute.js";
-import { categoryById, categoryLabel, categoryIcon } from "../../transactions/categories/compute.js";
+import { categoryById, categoryLabel, categoryIcon, rollUp, rollUpInto } from "../../transactions/categories/compute.js";
 import { compute as computeIncome } from "../income/compute.js";
 import { perMonth, activeOn } from "../../../core/math/periods.js";
 import { compute as computeExpenses, CATEGORIES, ROW_HOLDS, guessedSetupRow, mortgageLines } from "../expenses/compute.js";
@@ -12,8 +12,9 @@ import { takeHome } from "../paycheck/compute.js";
 /** Plan versus real: money in from the bank more than this share below the plan's take-home is a gap worth a look (two paychecks in a month of a pay every two weeks are 12/13 of the average month, 7.7% below). */
 export const IN_BAND = 0.1;
 
-/** A line's group on the out side: its category, or for a card's stand-in line that card. */
-const keyOf = (t) => (t.synthetic ? `${t.category}:${t.cardId}` : t.category || "");
+/** A line's group on the out side: its category (or the one it sits inside, `up` = rollUp: gap next-60 #16), or for a card's
+ * stand-in line that card. */
+const keyOf = (t, up) => (t.synthetic ? `${t.category}:${t.cardId}` : up(t.category || ""));
 
 /**
  * compute(plan, { months = 12, today }) -> {
@@ -43,6 +44,7 @@ export function compute(plan, params = {}) {
   const txs = [...allLines(plan).filter((t) => !isTransfer(t, plan)), ...allUnimportedCardLines(plan, { today, covBy })];
   const months = new Map(), once = countOnce();   // a split purchase is one line of its month, whichever parts are kept
   const cat = { in: new Map(), out: new Map() };
+  const up = rollUp(plan);   // a category inside another counts in that one (gap next-60 #16)
   for (const t of txs) {
     const ym = monthOf(t.date); if (!ym) continue;
     const m = months.get(ym) ?? { ym, label: monthLabel(ym), in: 0, out: 0, count: 0, uncategorised: 0, cards: 0 };
@@ -53,7 +55,7 @@ export function compute(plan, params = {}) {
     else if (once(t)) { m.count++; if (!t.category) m.uncategorised++; }
     months.set(ym, m);
     const side = kind === "income" ? "in" : "out";
-    const key = keyOf(t);
+    const key = keyOf(t, up);
     const c = cat[side].get(key) ?? (t.synthetic ? { category: t.category, cardId: t.cardId, cardName: t.cardName, unimported: true, label: t.payee, icon: "💳", total: 0, count: 0, months: new Set(), before: true, first: t.first ?? null } : { category: key, label: categoryLabel(plan, key), icon: categoryIcon(plan, key), total: 0, count: 0 });
     c.total += side === "in" ? amt : -amt; c.count++;
     if (t.synthetic) { c.months.add(ym); if (!t.before) c.before = false; }
@@ -188,7 +190,9 @@ export function bankVsPlan(plan, params = {}) {
   // planned, and "Use" on our home-costs row counted the mortgage twice (C7; review M2: "MR COOPER", "PENNYMAC LOAN SVC")
   // (Expenses' fromDebts: the debts counted from Debts, by their account)
   const mortgagePay = exp.fromDebts.filter((f) => (plan.accounts ?? []).find((a) => a.id === f.id)?.type === "mortgage").reduce((s, f) => s + (Number(f.monthly) || 0), 0);
-  const housingOut = txs.filter((t) => inWindow.has(monthOf(t.date)) && t.category === "housing" && (Number(t.amount) || 0) < 0 && (categoryById(plan, t.category)?.kind ?? "expense") === "expense")
+  // a category of the person's own inside one of Expenses' kinds counts as that kind (gap next-60 #16; Expenses keeps its own list)
+  const kindOf = rollUpInto(plan, (id) => !!CATEGORIES[id]);
+  const housingOut = txs.filter((t) => inWindow.has(monthOf(t.date)) && kindOf(t.category) === "housing" && (Number(t.amount) || 0) < 0 && (categoryById(plan, t.category)?.kind ?? "expense") === "expense")
     .map((t) => ({ t, ym: monthOf(t.date), out: -(Number(t.amount) || 0) }));
   const servicer = mortgageLines(housingOut, yms, mortgagePay), payLeft = new Map();
   for (const t of txs) {
@@ -197,7 +201,7 @@ export function bankVsPlan(plan, params = {}) {
     const c = categoryById(plan, t.category);
     const kind = c?.kind ?? (amt >= 0 ? "income" : "expense");
     if (kind !== "expense") continue;
-    const key = CATEGORIES[t.category] ? t.category : t.category ? "other" : "";
+    const key = CATEGORIES[kindOf(t.category)] ? kindOf(t.category) : t.category ? "other" : "";
     if (key === "taxes") continue;
     out += -amt;
     if (servicer.has(t)) {

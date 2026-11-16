@@ -1588,3 +1588,9 @@ The spending guess from the bank lines (`estimators/spend.js` `bankSpend`) does 
 totals on the Transactions page (ledger `counted`: a purchase to be paid back, the money back, a one-time thing left out of
 reports), as no spending page counts it. With none marked the lines read are the plan's own list
 (`tests/left-out.test.mjs`).
+
+## A category inside another (gap list next 60 #16, 2026-11-16)
+`bankSpend` reads a bank line's category as Expenses' kind it sits inside when it is a category of the person's own
+(transactions/categories `rollUpInto`): "Cafes" inside Eating out is the dining row, not "Shopping and everything else",
+and one inside Loan and card payments is a debt line. One of Expenses' own kinds stays itself. With no category inside
+another the output is what it was at ce79d70 (modules/transactions/categories/invariance.json).

@@ -7,7 +7,7 @@
 import { compute as computeHoldings } from "../holdings/compute.js";
 import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { allLines, isTransfer, tagsOf } from "../../transactions/ledger/compute.js";
-import { categoriesOf } from "../../transactions/categories/compute.js";
+import { categoriesOf, parentsOf } from "../../transactions/categories/compute.js";
 import { money } from "../../../core/format.js";
 
 /**
@@ -122,10 +122,12 @@ export function shapeOf(months) {
 /** The ledger's words for a dividend: the tags a line may carry instead of the category. */
 export const DIVIDEND_TAGS = Object.freeze(["dividend", "dividends"]);
 /** The categories that hold dividends: the built-in "Dividends and interest" (income-investment) and any income category of
- * the person's own whose name says "dividend". */
+ * the person's own whose name says "dividend", and a category inside one of them. */
 export function dividendCategories(plan) {
   const ids = new Set(["income-investment"]);
   for (const c of categoriesOf(plan, { all: true })) if (c.kind === "income" && /dividend/i.test(String(c.label ?? ""))) ids.add(c.id);
+  // a category inside one of them counts too (gap list next 60 #16); with no category inside another, none is added
+  for (const [child, parent] of parentsOf(plan)) if (ids.has(parent)) ids.add(child);
   return ids;
 }
 /**

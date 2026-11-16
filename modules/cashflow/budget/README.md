@@ -496,3 +496,10 @@ its row, S11, Undo putting the plan back exactly, no button on a past month); th
 fixture plan with no, an empty and a broken `budgetHistory`, and with one for another month; the critics' fixes (M1 the
 amounts and "start over on December 1 instead", M2 past months by hand after one and two start overs, on the page too, M4 a
 kind with two envelopes, P5 no button when nothing changes and the plain words, P6 the bottom note removed).
+
+## A category inside another (gap list next 60 #16, 2026-11-16)
+`envelopeKey(plan, budgets)`: a line counts in its own category's envelope when that has one, else under the category it
+sits inside (transactions/categories `rollUp`), in its envelope or, without one, as spending with no envelope said under
+it; the suggestions and Safe to spend's "no envelope" read the same key. Every line still counts once (spent in envelopes
+plus spent with none is the same); with no category inside another every output is what it was at ce79d70
+(modules/transactions/categories/invariance.json).

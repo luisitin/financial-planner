@@ -10,7 +10,7 @@
 // parts through allLines(plan) / linesOf(t), whose amounts always add up to the purchase: nothing is ever counted twice.
 import { normalizePayee, payeeWords } from "../rules/compute.js";
 import { centsOf, splitsOf, linesOf, partsOf as partsIn, leftOut, leftOutIn, wholeCount, countOnce, mainCategory, cleanTags, tagsOf } from "../splits.js";
-import { categoryLabel, categoryIcon, categoryById, categoriesOf } from "../categories/compute.js";
+import { categoryLabel, categoryIcon, categoryById, categoriesOf, rollUp } from "../categories/compute.js";
 import { NameIn, NameOf } from "../../../core/words.js";
 
 /** The identity of a bank line for duplicate detection: account + date + amount + cleaned payee. */
@@ -1181,7 +1181,9 @@ export function compute(plan, params = {}) {
   // a split purchase is in a category when one of its parts is, and its totals there are that part's (gap #24)
   const transfer = all.some((t) => t?.splits) ? transferTest(plan) : null;
   const partsOf = (t) => (transfer && t.splits && !transfer(t) ? partsIn(t) : [t]);
-  const inCat = (l) => (category === "none" ? !l.category : l.category === category);
+  // a category's lines include those of the categories inside it (gap next-60 #16; with none inside another, as before)
+  const up = rollUp(plan);
+  const inCat = (l) => (category === "none" ? !l.category : l.category === category || up(l.category) === category);
   const matched = all.filter((t) => (!month || monthOf(t.date) === month) && (!accountId || t.accountId === accountId)
     && (!category || (t.splits ? partsOf(t).some(inCat) : inCat(t)))
     && (dir !== "out" || Number(t.amount) < 0) && (dir !== "in" || Number(t.amount) > 0) && (only !== "left" || isOut(t))

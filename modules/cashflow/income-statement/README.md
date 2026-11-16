@@ -152,3 +152,9 @@ leave +$1,432).
 ## Split purchases (gap #24, 2026-11-14)
 `compute` and `bankVsPlan` read the Ledger's `allLines`: a purchase split across categories counts in each category for
 its part and once in the month's in, out and number of transactions (`tests/split-tags.test.mjs`).
+
+## A category inside another (gap list next 60 #16, 2026-11-16)
+`byCategory` counts a line under the category it sits inside (transactions/categories `rollUp`); the months' in and out are
+unchanged. `bankVsPlan` keeps Expenses' own list: a category of the person's own inside one of Expenses' kinds counts as
+that kind (`rollUpInto`), and one of its kinds stays itself whatever it sits inside. With no category inside another every
+output is what it was at ce79d70 (modules/transactions/categories/invariance.json).
