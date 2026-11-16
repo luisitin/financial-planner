@@ -111,7 +111,8 @@ export function render(page, ctx) {
   const have = `${money(d.saved)} set aside${d.goal ? ` (the "${d.goal.name}" goal)` : ""}`;
   if (d.monthsToGo === 0) when.append(ui.h("p", {}, `You have it: ${have}.`));
   else if (d.monthsToGo !== null) when.append(ui.h("p", {}, Number.isFinite(d.monthsToGo) ? `With ${have} and ${money(d.monthlySaving)} a month, you have it in about ${Math.ceil(d.monthsToGo / 12 * 10) / 10} years (${monthYear(d.readyDate)}).` : `At ${money(d.monthlySaving)} a month it is not reached in 100 years.`));
-  else when.append(ui.h("p", {}, `${have[0].toUpperCase()}${have.slice(1)}; enter what you save a month below to see when.`));
+  // while a shared link shows, the savings boxes are not drawn (a link never carries them): the line does not point at them
+  else when.append(ui.h("p", {}, sv.live ? `${have[0].toUpperCase()}${have.slice(1)}. Your savings stay your own: the link does not carry them.` : `${have[0].toUpperCase()}${have.slice(1)}; enter what you save a month below to see when.`));
   if (d.neededMonthly !== null) when.append(ui.h("p", {}, `To have it by ${monthYear(d.target)}: about ${money(d.neededMonthly)} a month.`));
   // The goal button only once the figures are the person's own: before, a filled "Update the goal" with the example's
   // figures replaced a $50,000 goal with $97,000 in one tap. It names both amounts, and it is outlined (Save is the action).

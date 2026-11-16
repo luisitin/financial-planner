@@ -84,12 +84,19 @@ upkeep:1,hoa:0,buying:3,selling:6,growth:3.5,rentup:3,renters:180,invest:5`: aft
 ahead, buying pulls ahead after 6 years, and the two are even at a rent of about $2,190.
 
 Opening a link: the page is drawn from a copy of the plan with the link's figures in `whatIfs.rentVsBuy` (this phone's
-own tax choices kept), under "Figures from a shared link: nothing in your plan has changed.", "The link filled in 16
-figures on this page." and the outlined "Keep these" and "Back to my own figures". While it shows, the two tax boxes are
-not drawn and "Compare" compares for this visit only (the boxes go into the address: "Compared for this visit: after 8
+own tax choices kept, and every box the link leaves out kept as this phone's own figure or guess), under "Figures from
+a shared link: nothing in your plan has changed.", "The link filled in 2 figures on this page." with whose the rest are
+(critic F2: the same link answered $49,010 renting ahead on an empty phone and $14,400 on one that itemizes, with
+nothing said): "The rest are our guesses for you." / "The rest are your own figures." / "The rest are your own figures
+and our guesses." ("own" counts this phone's typed boxes and its own `itemize` and `marginalRate`, the spec's `stays`),
+and the outlined "Keep these" and "Back to my own figures"; "The figures" is open (critic P5). While it shows, the
+even-rent sentence says "this rent" for a rent from the link (the sender's), never "your rent" (a rent the link leaves
+out is this phone's own and stays "your rent"), the two tax boxes are not drawn and "Compare" compares for this visit only (the boxes go into the address: "Compared for this visit: after 8
 years, buying comes out ahead by $51,660. Nothing in your plan has changed." with the rent at $2,600). "Keep these" asks
-first, writes `whatIfs.rentVsBuy` once (the link's keys, blank where it has none; `itemize` and `marginalRate` as they
-were) and says "Kept. After 8 years, buying comes out ahead by $26,380." with Undo. No formula is new: the answer is
+first ("Keep the price and the rent in your plan? They take the place of yours on this page; your other figures stay as
+they are. Undo puts yours back."), writes `whatIfs.rentVsBuy` once (the keys the link holds and nothing else: this
+phone's own 7% rate, `itemize` and `marginalRate` stay, so the kept page answers as the visit did; critic F1: Keep had
+blanked them) and says "Kept. After 8 years, buying comes out ahead by $26,380." with Undo. No formula is new: the answer is
 this page's `compute()`; a percent travels x 100 and comes back / 100 exactly, money to the cent. Builder's choices as on
 House down payment (its README, "Share these figures").
 

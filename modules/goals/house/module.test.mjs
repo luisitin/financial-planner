@@ -436,6 +436,8 @@ test("share: the round trip; the link holds the home's figures only, and the oth
   // the household's own savings, monthly saving and date are not boxes while the link shows (a link never carries them)
   assert.equal(b.root.querySelector('[name="saved"]'), null);
   assert.equal(b.root.querySelector('[name="targetDate"]'), null);
+  assert.ok(b.text().includes("Your savings stay your own: the link does not carry them."), "no line pointing at a box that is not drawn");
+  assert.ok(!b.text().includes("enter what you save a month below"));
   assert.equal(b.button(`Make it a goal (${money(Math.round(want.cash.total / 100) * 100)})`), undefined, "no goal button while a link shows");
 });
 

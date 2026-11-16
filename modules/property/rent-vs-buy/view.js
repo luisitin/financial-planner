@@ -91,7 +91,8 @@ export function render(page, ctx) {
   // nothing saved and our typical home counted: the whole answer is an example until the person puts in theirs, and the page
   // says so first (critic e9 P1: an empty plan read "Renting ahead by $101,610" as if it were about them)
   const example = !saved && shown.has("price");
-  const theirRent = !shown.has("rentMonthly") || g.rentMonthly?.basis === "yours";
+  // a rent from a shared link is the sender's: "this rent", never "your rent" (a rent the link leaves out is this phone's own)
+  const theirRent = !(sv.live && sv.read.figures.rentMonthly != null) && (!shown.has("rentMonthly") || g.rentMonthly?.basis === "yours");
   const home = example ? `An example: a typical ${where === "the U.S." ? "U.S." : where} home of ${money(x.price)}, ${Math.round(x.downShare * 100)}% down` : `A ${money(x.price)} home with ${Math.round(x.downShare * 100)}% down`;
 
   root.append(ui.h("section", { class: saved ? "card" : "card accent hero" },

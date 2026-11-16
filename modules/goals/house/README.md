@@ -134,11 +134,15 @@ closing:3,term:30,tax:1.2,insurance:0.4,hoa:150,reserve:3`.
 
 Opening a link (another phone, or this one): the page is drawn from `planWith(plan, SHARE_SPEC, withShared(own, link))`,
 a copy, so the plan is untouched. At the top: "Figures from a shared link: nothing in your plan has changed.", "The link
-filled in 9 figures on this page." (or "...; 2 could not be read and were left out."), "Keep these" and "Back to my own
-figures" (both outlined). The answer counts the link's home with this phone's own income, debts, savings and goal; a box
-the link leaves blank counts this phone's gray guess (the sender's guess is worked out from where the sender lives,
-which is plan data, so it never travels). While the link shows, the savings and date boxes and the goal button are not
-drawn, and "Work it out" works the boxes out for this visit only: they go into the address (`ctx.replace`, no new Back
+filled in 9 figures on this page." (or "...; 2 could not be read and were left out."), then whose the other boxes are
+(critic F2, P1; `restOf` and `restWords`): "The rest are our guesses for you." / "The rest are your own figures." / "The
+rest are your own figures and our guesses.", and "Keep these" and "Back to my own figures" (both outlined). "The
+figures" is open while a link shows, so the visitor sees where to change one (critic P5). The answer counts the link's
+home with this phone's own income, debts, savings and goal; a box the link leaves out keeps this phone's own figure, or
+its gray guess when it has none (the sender's guess is worked out from where the sender lives, which is plan data, so it
+never travels). While the link shows, the savings and date boxes and the goal button are not
+drawn (so "When you get there" says "Your savings stay your own: the link does not carry them." instead of pointing at
+a box below), and "Work it out" works the boxes out for this visit only: they go into the address (`ctx.replace`, no new Back
 step), with "Worked out for this visit: a $430,000 home, about $3,110 a month. Nothing in your plan has changed." (the invented family's figures)
 "Keep these" asks first ("Keep the price and the down payment in your plan? They take the place of yours on this page;
 your other figures stay as they are. Undo puts yours back."; four or more: "Keep these 9 figures ..."), writes

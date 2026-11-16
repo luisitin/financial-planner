@@ -287,6 +287,7 @@ test("share: the round trip; the link holds the page's figures only, and the oth
   assert.equal(JSON.stringify(got), JSON.stringify(want));
   assert.ok(b.text().includes(`A ${money(450000)} home with 15% down`));
   assert.ok(b.text().replace(/\u200b/g, "").includes(money(Math.abs(want.atEnd.ahead))), "the answer of the link's figures");
+  assert.match(b.text(), /: this rent is (higher|lower), so/, "the link's rent is the sender's: \"this rent\", not \"your rent\"");
   assert.equal(b.root.querySelector('[name="itemize"]'), null, "the household's own tax choices are not boxes while the link shows");
   assert.equal(b.root.querySelector('[name="marginalRate"]'), null);
 });
