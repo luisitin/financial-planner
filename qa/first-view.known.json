@@ -5,7 +5,7 @@
   "balance/net-worth": {"empty":{"noStart":1}},
   "balance/update": {"plan":{"actCut":1}},
   "career/benefits": {"plan":{"fsWords":200,"fsFigs":18,"actCut":1}},
-  "career/business": {"plan":{"fsWords":130,"actCut":1,"moreFilled":2},"empty":{"moreFilled":2}},
+  "career/business": {"plan":{"fsWords":120}},
   "career/human-capital": {"plan":{"fsWords":140,"fsFigs":12}},
   "career/offer-compare": {"plan":{"actCut":1},"empty":{"actCut":1,"noStart":1}},
   "career/salary": {"plan":{"fsWords":120}},

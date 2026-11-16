@@ -2,7 +2,7 @@
 //   - Costs a self-employed person often forgets to count: nine rows, each saying what counts in one line, and whether
 //     the page already counts it (with the figure) or where it goes (the box or the kind of expense, one tap away).
 //     Nothing here is counted: it reads compute()'s result and the page's own boxes. The rules are read from the IRS
-//     (README, "Costs people often forget to count"), 2026-11-16.
+//     (README, "Costs you may be missing"), 2026-11-16.
 //   - Costs from your bank lines: the ledger lines the person ties to the business (the tag "business" or the
 //     business's own name, as Rental analysis ties a line to a rental, or a category of their own with "business" in its
 //     name) added up for the year by the page's own kinds of expense, beside what is typed; useBank() copies the totals
@@ -18,8 +18,10 @@ import { HOME_OFFICE } from "./data/business.js";
 // its new name's words (KIND_WORDS)
 const DEFAULT_LABELS = Object.freeze(Object.fromEntries(Object.entries(SPENDING).map(([k, v]) => [k, v.label])));
 
-export const MISSED_TITLE = "Costs people often forget to count";
-export const MISSED_INTRO = "Costs the tax law lets a self-employed person count that are easy to leave out. Nothing here is counted by itself: tap one that applies to put it where it goes.";
+// "Costs you may be missing" keeps to one line beside its status at 390 px ("Costs people often forget to count" took
+// two; person critic P6, 2026-11-16)
+export const MISSED_TITLE = "Costs you may be missing";
+export const MISSED_INTRO = "Costs a self-employed person may count and often leaves out. Tap Add on one that applies: nothing counts until you save it there.";
 export const MISSED_SOURCES = "From the IRS's tax guide for small business (Publication 334, 2025, which replaced Publication 535) and its guides to the home office, cars, education and health insurance.";
 
 /**
@@ -29,14 +31,14 @@ export const MISSED_SOURCES = "From the IRS's tax guide for small business (Publ
  */
 export const CHECKLIST = Object.freeze([
   { key: "office", title: "Home office", counts: "A space used only and regularly for the business: $5 a square foot, up to 300 square feet.", go: { box: "homeOfficeSqft" }, label: "Type the square feet" },
-  { key: "miles", title: "Business miles", counts: "Driving for the work at the IRS rate a mile, not the drive from home to a regular workplace; parking and tolls count on top.", go: { box: "miles" }, label: "Type the miles" },
-  { key: "health", title: "Health insurance you pay", counts: "Medical, dental and long-term care insurance for you and your family, for months no employer's plan could cover you.", go: { box: "healthPremiums" }, label: "Type what you pay" },
-  { key: "retire", title: "Retirement savings", counts: "What you put into a SEP-IRA, a solo 401(k) or a SIMPLE IRA for yourself comes off income.", go: { href: "#/retirement/contributions" }, label: "Retirement contributions" },
-  { key: "seHalf", title: "Half the self-employment tax", counts: "Half of the Social Security and Medicare tax on the profit comes off income; there is nothing to do.", go: null, label: "" },
+  { key: "miles", title: "Business miles", counts: "Driving for the work at the IRS rate a mile, not to a regular workplace; parking and tolls count too.", go: { box: "miles" }, label: "Type the miles" },
+  { key: "health", title: "Health insurance you pay", counts: "Medical, dental and long-term care insurance for your family, when no employer's plan could cover you.", go: { box: "healthPremiums" }, label: "Type what you pay" },
+  { key: "retire", title: "Retirement savings", counts: "What you put into a SEP-IRA, a solo 401(k) or a SIMPLE IRA for yourself.", go: { href: "#/retirement/contributions" }, label: "Retirement contributions" },
+  { key: "seHalf", title: "Half the self-employment tax", counts: "Half of the Social Security and Medicare tax on the profit; there is nothing to do.", go: null, label: "" },
   { key: "phone", title: "Phone and internet", counts: "The business share of your phone and internet bills; never the base rate of a home's first landline.", go: { kind: "phone" }, label: "Add the bill" },
-  { key: "supplies", title: "Supplies and software", counts: "Supplies, materials and postage used up in the year, and the software or subscriptions that run the business.", go: { kind: "supplies" }, label: "Add supplies" },
-  { key: "professional", title: "Accountant and lawyer", counts: "Fees for an accountant, a lawyer or tax advice for the business, and preparing the business part of your tax return.", go: { kind: "professional" }, label: "Add the fees" },
-  { key: "education", title: "Courses for your work", counts: "Courses, books and seminars that keep up or improve a skill for the work you do now; not training for a new line of work.", go: { kind: "education" }, label: "Add a course" },
+  { key: "supplies", title: "Supplies and software", counts: "Supplies, materials and postage used up in the year, and software or subscriptions for the work.", go: { kind: "supplies" }, label: "Add supplies" },
+  { key: "professional", title: "Accountant and lawyer", counts: "Fees for an accountant, a lawyer or tax advice for the business, and for your return's business part.", go: { kind: "professional" }, label: "Add the fees" },
+  { key: "education", title: "Courses for your work", counts: "Courses that keep up or improve a skill for the work you do now; not training for a new line of work.", go: { kind: "education" }, label: "Add a course" },
 ]);
 /** The expense kinds each row reads (what is typed under them is what the row counts). */
 export const ROW_KINDS = Object.freeze({ phone: ["phone"], supplies: ["supplies", "software"], professional: ["professional"], education: ["education"] });

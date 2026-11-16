@@ -1,8 +1,8 @@
 // modules/career/business/view.js -- DOM only. A small business from its owner's side, simple first (docs/OPTIONAL.md; opt
 // spec 6.1, career/business, class C, done with gap list next 60 #6): the hero says what the business leaves the person
 // after tax (one sentence per case, words.js), an S corporation's saving when there is one, the retirement plans for the
-// business; then one card of quiet rows drawn by core/ui/more.js (no hand-written <details>): "Costs people often forget
-// to count" (costs.js), "The business" (its figures and its expenses), "Costs from your bank lines" (costs.js: the
+// business; then one card of quiet rows drawn by core/ui/more.js (no hand-written <details>): "Costs you may be
+// missing" (costs.js), "The business" (its figures and its expenses), "Costs from your bank lines" (costs.js: the
 // ledger lines tied to the business added up by the page's kinds, "Use these" with a question first and Undo), "As an
 // S corporation", "How this is worked out".
 import { compute, CATEGORIES } from "./compute.js";
@@ -104,16 +104,19 @@ export function render(page, ctx) {
     best ? h("p", { class: "muted small" }, `${best.label} has the most room here.`) : null));
   }
 
-  // ---------------------------------------------------------------- (a) costs people often forget to count
+  // ---------------------------------------------------------------- (a) costs you may be missing
   const C = checklist(d, s, money);
   let partsCard = null;
   const missedBody = () => [h("p", { class: "small" }, MISSED_INTRO),
+    // a row not counted yet has its "Add" where a counted row has its figure (the row's sentence, "Not counted yet.", is
+    // the button's name); the others say what the page does with it under what counts
     h("ul", { class: "records" }, C.items.map((it) => h("li", { dataset: { cost: it.key } },
-      h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, it.title), it.amount > 0.5 ? h("span", { class: "rec-value" }, money(it.amount)) : null),
+      h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, it.title),
+        it.state === "add" ? h("span", { class: "rec-value" }, ui.button("Add", () => goTo(it.go), { class: "secondary small", "aria-label": `${it.title}: not counted yet. ${it.label}` }))
+          : it.amount > 0.5 ? h("span", { class: "rec-value" }, money(it.amount)) : null),
       h("div", { class: "rec-sub" }, it.counts),
-      h("div", { class: "rec-sub" }, it.said),
-      it.go ? h("div", { class: "rec-foot" }, it.go.href ? h("a", { class: "btn secondary small", href: it.go.href }, it.label)
-        : ui.button(it.label, () => goTo(it.go), { class: "secondary small", "aria-label": `${it.label}: ${it.title}` })) : null))),
+      it.state === "add" ? null : h("div", { class: "rec-sub" }, it.said),
+      it.go?.href ? h("div", { class: "rec-foot" }, h("a", { class: "btn secondary small", href: it.go.href }, it.label)) : null))),
     h("p", { class: "muted small" }, MISSED_SOURCES)];
 
   // ---------------------------------------------------------------- the business: its figures and its expenses

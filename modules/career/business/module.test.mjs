@@ -394,12 +394,12 @@ test("the headline from the page's own figures: the BIZ plan keeps, the family's
   assert.equal(answerFor(meals, $).case, "evenMeals"); assert.equal(answerFor(meals, $).title, "After tax, the business costs you about $83 a month");
 });
 
-// ---------------------------------------------------------------- costs people often forget to count (costs.js)
+// ---------------------------------------------------------------- costs you may be missing (costs.js)
 const S = (o = {}) => ({ ...o });
 const itemOf = (c, key) => c.items.find((x) => x.key === key);
 
 test("the checklist: nine rows in a person's order, each with what counts and a source; nothing counted from here", () => {
-  assert.equal(MISSED_TITLE, "Costs people often forget to count");
+  assert.equal(MISSED_TITLE, "Costs you may be missing", "one line beside its status at 390 px (person critic P6)");
   assert.deepEqual(CHECKLIST.map((x) => x.key), ["office", "miles", "health", "retire", "seHalf", "phone", "supplies", "professional", "education"]);
   for (const r of CHECKLIST) { assert.ok(r.counts.length > 20 && r.counts.length < 140, r.key); assert.ok(/[.]$/.test(r.counts), `${r.key} ends with a stop`); }
   // the two kinds the checklist needed are expense kinds now, counted in full
@@ -504,7 +504,7 @@ test("the page opens simple: the answer, the plans for retirement, then quiet ro
   assert.match(t, new RegExp(answerFor(d, $).line.replace(/[$().]/g, "\\$&")));
   assert.match(t, /You take out \$3,000 a month; that leaves \$[\d,]+ a month in the business\./);
   assert.deepEqual(partsOpen(root), { missed: false, business: false, bank: false, scorp: false, how: false });
-  assert.deepEqual(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => a.textOf(x.querySelector(".fold-title"))), ["Costs people often forget to count", "The business", "Costs from your bank lines", "As an S corporation", "How this is worked out"]);
+  assert.deepEqual(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => a.textOf(x.querySelector(".fold-title"))), ["Costs you may be missing", "The business", "Costs from your bank lines", "As an S corporation", "How this is worked out"]);
   assert.equal(a.textOf(partEl(root, "bank").querySelector(".fold-status")), "no bank lines yet");
   assert.equal(a.textOf(partEl(root, "missed").querySelector(".fold-status")), "4 not counted yet");
   assert.equal(a.textOf(partEl(root, "business").querySelector(".fold-status")), "6 set by you", "revenue, home office, miles, what is taken out and the two expenses");
@@ -552,14 +552,17 @@ test("a checklist row's button opens The business where it is, the box ready or 
   const a = await drawPage(withBiz(BIZ));
   let root = a.draw();
   const missed = partEl(root, "missed");
-  assert.ok(btnOf(missed, "Type what you pay"), "health insurance is not counted yet");
-  btnOf(missed, "Type what you pay").click();
+  const addOf = (key) => missed.querySelectorAll("li").find((x) => x.dataset.cost === key).querySelectorAll("button").find((b) => b.textContent === "Add");
+  assert.ok(addOf("health"), "health insurance is not counted yet: its Add stands where a figure would");
+  assert.equal(addOf("health").getAttribute("aria-label"), "Health insurance you pay: not counted yet. Type what you pay");
+  assert.doesNotMatch(a.textOf(missed), /Not counted yet\./, "the button says it");
+  addOf("health").click();
   assert.equal(partsOpen(root).business, true, "The business opens");
   assert.ok(boxOf(partEl(root, "business"), "healthPremiums"));
-  btnOf(missed, "Add the bill").click();
+  addOf("phone").click();
   const f = btnOf(partEl(root, "business"), "Add the expense").closest("form");
   assert.equal(boxOf(f, "category").value, "phone", "the expense form opens with Phone and internet picked");
-  btnOf(missed, "Add a course").click();
+  addOf("education").click();
   assert.equal(boxOf(btnOf(partEl(root, "business"), "Add the expense").closest("form"), "category").value, "education", "the same form, its kind changed");
   assert.equal(a.saved.length, 0, "nothing saved by a tap here");
   // the retirement row goes to Retirement contributions; the counted rows have no button

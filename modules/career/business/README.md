@@ -123,10 +123,15 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   against the solo 401(k)'s.
 
 ## Tests
-`module.test.mjs` (43; the 9 after the home office's came with the checklist, the 9 after them with the bank lines:
+`module.test.mjs` (45; the 10 after the home office's came with the checklist, the 10 after them with the bank lines:
 the tie by tag, name and category; every kind's words and built-in category; the year's sums with refunds, splits, lines
 left out, moves, $0 lines and what is set apart; a year with no tied lines, no lines, lines with no cost; every sentence;
-useBank; Use these on the page with its question, green line, Undo and No; the row with no lines; invariance): every headline and line case and the green line
+useBank; Use these on the page with its question, green line, Undo and No; the row with no lines; the notice that points
+to the bank lines; invariance. The critics' fixes, 2026-11-16, each with the test that would have caught it: the one
+deliberate change from a491122 (F1), the even cases from what is left (F2), a typed figure larger than the bank's named
+(F3), the kind words (F4), the home office cut by the profit (F5), lines and months of costs only (F6), no later year
+(F7), the part-year caution kept on the page (P1), no "not counted" and no bank row before a business (P2), the
+notice (P3), the labelled examples (P4), the plain sentences (P5), the shorter title (P6)): every headline and line case and the green line
 after a save (`words.js`); the headline from the page's own figures; the checklist's rows and the two new kinds; every
 state of every row with its sentence; the checklist from the page's figures (and that it writes nothing); the page drawn
 on the stand-in DOM (the first view: the answer, the plans, four shut rows, no fold by hand, no box, one filled button;
@@ -169,10 +174,11 @@ The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` b
   business": each plan's room ("up to $6,691", "too late now") and "Putting in the most saves about $1,238 in tax this
   year." (hints worth money, never folded); one card of quiet rows; "More on this" (four questions: the
   self-employment tax, paying during the year, where retirement savings go in, side income).
-- **The rows** (shut on the first view): "Costs people often forget to count" (kind `more`, pinned title; status "4 not
-  counted yet" / "nothing missing"), "The business" (own; the business's figures and, under them, its expenses; status "6
-  set by you", "from Income", "not set yet"), "Costs from your bank lines" (own, pinned title; below; status "$869 in
-  2026", "none tied yet", "no bank lines yet", "no costs in 2026"), "As an S corporation" (own, with a profit; the comparison and its two
+- **The rows** (shut on the first view): "Costs you may be missing" (kind `more`, pinned title; status "4 not counted
+  yet" / "nothing missing", and "a short list" with no business yet: nothing is "missed" before there is one, person
+  critic P2), "The business" (own; the business's figures and, under them, its expenses; status "6 set by you", "from
+  Income", "not set yet"), "Costs from your bank lines" (own, pinned title; below; only once there is a business, P2;
+  status "$869 in 2026", "none tied yet", "no bank lines yet", "no costs in 2026"), "As an S corporation" (own, with a profit; the comparison and its two
   boxes; status "would save $1,234" / "would cost $1,479" / "about the same"), "How this is worked out" (how, "profit and
   tax": the year's profit line by line with its share of what comes in and the costs a month, the tax as a sole
   proprietor with what comes off income, each retirement plan's rules and deadlines, the earnings they count). Nothing
@@ -191,7 +197,14 @@ The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` b
   figures, 6 boxes, 4 tiles, 2 filled buttons; after 146 words, 8 figures, 0 boxes, 0 tiles, 1 filled button. Empty
   plan: before 143 words, 6 boxes, 2 filled; after 86 words, 0 boxes, 1 filled ("Add it on Income"). Inside the answer
   budget, so the page left `tests/first-view.known.json`. With "Costs from your bank lines" (the second commit) the
-  family reads 155 words and 8 figures, the empty plan 95 words: still inside it.
+  family reads 155 words and 8 figures, the empty plan 95 words: still inside it. After the critics' fixes (a shorter
+  checklist title, no bank row before a business): 154 and 8, the empty plan 84.
+- **Notices** (never folded, R9): with no costs typed, "No costs typed yet, so all of what customers pay counts as
+  profit.", and when the bank lines hold costs, " Your bank lines show $869 of costs: open “Costs from your bank lines”
+  below to use them." (person critic P3: the notice read as a contradiction of the row under it); while expenses put in
+  from the bank lines cover part of a year (`partNote`), "The costs from your bank lines cover January to October 2026
+  only, so the profit leaves out the other months' costs. Use these again under “Costs from your bank lines” once more
+  lines are in." (P1: the caution was only in the question before Use these).
 - Builder's choices: the headline is what the business leaves the person after tax, not the S corporation's verdict the
   opt spec row suggested (R3: what happens to the person); the S corporation's saving is a worth line under it. The
   share of what comes in moved to "How this is worked out" so the first view keeps to eight figures. The business's
@@ -292,28 +305,37 @@ added up for the page's tax year by the page's own kinds of expense, each beside
   business leaves a month and the costs a month to break even with a home office typed, are in no invented plan (the
   deliberate exception above, with its own test).
 
-## Costs people often forget to count (gap list, next 60, item 6; map P10; 2026-11-16, claude-b)
-One quiet row (`costs.js` `checklist(d, s)`): an intro ("Costs the tax law lets a self-employed person count that are easy
-to leave out. Nothing here is counted by itself: tap one that applies to put it where it goes."), nine rows, each with
-what counts in one line and its state, and one line on where the rules come from. A row the page already counts says so
-with the figure; a row not counted yet has one outlined button that opens "The business" where it is with the focus in
+## Costs you may be missing (gap list, next 60, item 6; map P10; 2026-11-16, claude-b)
+The brief's title was "Costs people often forget to count"; at 390 px it took two lines beside its status, so the row is
+"Costs you may be missing" (person critic P6).
+One quiet row (`costs.js` `checklist(d, s)`): an intro ("Costs a self-employed person may count and often leaves out. Tap
+Add on one that applies: nothing counts until you save it there."), nine rows, each with what counts in one line and its
+state, and one line on where the rules come from. A row the page already counts shows its figure where a record's value
+goes and says so under what counts; a row not counted yet has an outlined "Add" in that place (its name for a screen
+reader: "Home office: not counted yet. Type the square feet"), which opens "The business" where it is with the focus in
 its box (the home office, the miles, the health insurance) or its expense form open with the kind picked (phone,
 supplies, professional, education); nothing is saved until the person saves there, and nothing on this row writes the
-plan. Status: "N not counted yet" (the rows with a button), else "nothing missing".
+plan. Status: "N not counted yet" (the rows with an Add), else "nothing missing"; with no business yet "a short list"
+(person critic P2). Open, the row is 1,295 px tall at 390
+px for the full walk household (six rows to add; R15 asks 1,300): it was 1,673 with a "Not counted yet." line and a
+button under each row, so the button took the figure's place and each line on what counts was cut to two lines.
+A row a script opens is not remembered (as Federal estimate's "Type the gain on them"): after a Save there it stays open
+on the redraw with its green line (R17), a reload draws it shut with its status ("5 set by you"), and the checklist row,
+opened by the person's own tap, stays open with the cost now "Counted".
 
 | row | what counts (on screen) | counted when / the sentence | where it goes |
 |---|---|---|---|
 | Home office | A space used only and regularly for the business: $5 a square foot, up to 300 square feet. | `homeOffice` > 0: "Counted: $750 for 150 square feet."; cut by the profit: "Counted: $600 of the $1,500 for 300 square feet: it counts only up to the profit." (money critic F5); typed but no profit for it: "It counts only up to the profit, so none this year." | box `homeOfficeSqft` |
-| Business miles | Driving for the work at the IRS rate a mile, not the drive from home to a regular workplace; parking and tolls count on top. | `miles.amount` > 0: "Counted: $2,228 for 3,000 miles." | box `miles` |
-| Health insurance you pay | Medical, dental and long-term care insurance for you and your family, for months no employer's plan could cover you. | `tax.health`: "Counted: $6,000 comes off income."; less than typed: "Counted: $4,647 of the $6,000: it counts only up to the profit."; none: "It counts only up to the profit, so none this year." | box `healthPremiums` |
-| Retirement savings | What you put into a SEP-IRA, a solo 401(k) or a SIMPLE IRA for yourself comes off income. | earnings: "Not part of the profit: it comes off income. The plans and the tax each saves are above."; none: "No earnings from the business this year, so nothing can go in from it." | Retirement contributions |
-| Half the self-employment tax | Half of the Social Security and Medicare tax on the profit comes off income; there is nothing to do. | `tax.se` > 0: "Counted by itself: $3,533 comes off income."; else "No self-employment tax this year, so nothing to take off." | (by itself) |
+| Business miles | Driving for the work at the IRS rate a mile, not to a regular workplace; parking and tolls count too. | `miles.amount` > 0: "Counted: $2,228 for 3,000 miles." | box `miles` |
+| Health insurance you pay | Medical, dental and long-term care insurance for your family, when no employer's plan could cover you. | `tax.health`: "Counted: $6,000 off the income you pay tax on."; less than typed: "Counted: $4,647 of the $6,000: it counts only up to the profit."; none: "It counts only up to the profit, so none this year." | box `healthPremiums` |
+| Retirement savings | What you put into a SEP-IRA, a solo 401(k) or a SIMPLE IRA for yourself. | earnings: "This lowers the income you pay tax on; it is not a business cost. The plans and the tax each saves are above." (person critic P5: "comes off income" was tax talk); none: "No earnings from the business this year, so nothing can go in from it." | Retirement contributions |
+| Half the self-employment tax | Half of the Social Security and Medicare tax on the profit; there is nothing to do. | `tax.se` > 0: "The page already takes $3,533 off the income you pay tax on."; else "No self-employment tax this year, so nothing to take off." | (by itself) |
 | Phone and internet | The business share of your phone and internet bills; never the base rate of a home's first landline. | kind phone typed: "Counted: $720 a year." | expense, kind phone |
-| Supplies and software | Supplies, materials and postage used up in the year, and the software or subscriptions that run the business. | kinds supplies + software | expense, kind supplies |
-| Accountant and lawyer | Fees for an accountant, a lawyer or tax advice for the business, and preparing the business part of your tax return. | kind professional | expense, kind professional |
-| Courses for your work | Courses, books and seminars that keep up or improve a skill for the work you do now; not training for a new line of work. | kind education | expense, kind education |
+| Supplies and software | Supplies, materials and postage used up in the year, and software or subscriptions for the work. | kinds supplies + software | expense, kind supplies |
+| Accountant and lawyer | Fees for an accountant, a lawyer or tax advice for the business, and for your return's business part. | kind professional | expense, kind professional |
+| Courses for your work | Courses that keep up or improve a skill for the work you do now; not training for a new line of work. | kind education | expense, kind education |
 
-Every row not counted says "Not counted yet." No figure here is new: $5 and 300 square feet are the page's
+Every row not counted carries "Not counted yet." (`said`) as its Add's name. No figure here is new: $5 and 300 square feet are the page's
 `HOME_OFFICE` (Rev. Proc. 2013-13, above), the mileage rate its `mileageYear`, the rest the page's own compute.
 
 **Sources, read at irs.gov on 2026-11-16** (the rules, in the IRS's words):
@@ -341,8 +363,8 @@ Every row not counted says "Not counted yet." No figure here is new: $5 and 300 
   ("If you used your home phone for business, do not deduct the base rate (including taxes) of the first phone line
   into your residence"), "Technology and software tools. You can deduct technology and software tools that are ordinary
   and necessary expenses ... Generally, this will include tax preparation software and subscription services paid to
-  manage your business. ... Most computer software expenses must be capitalized" (said on screen as "the software or
-  subscriptions that run the business"; software bought outright is equipment).
+  manage your business. ... Most computer software expenses must be capitalized" (said on screen as "software or
+  subscriptions for the work"; software bought outright is equipment).
 - Publication 587 (2025), Business Use of Your Home, https://www.irs.gov/pub/irs-pdf/p587.pdf: the simplified method,
   "multiplying $5, the prescribed rate, by the area of your home used for a qualified business use. The area you use to
   figure your deduction is limited to 300 square feet."
