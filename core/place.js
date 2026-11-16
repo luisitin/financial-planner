@@ -130,6 +130,9 @@ function foldWords(d) {
   return textOf(c).replace(/[›▸▾]/g, "").replace(/\s+/g, " ").trim();
 }
 const foldTitle = (d) => shape(foldWords(d), 60);
+const HEADS = "h1, h2, h3, h4, legend";
+/** A card's own heading: never one inside one of its sections (a part's form heading comes and goes with a save). */
+const ownHead = (host) => $$(host, HEADS).find((h) => { const d = up(h, "details"); return !d || !has(host, d); }) ?? null;
 function sectOf(el) {
   const p = parentOf(el);
   if (!p) return "";
@@ -137,7 +140,9 @@ function sectOf(el) {
   const host = d && card ? (has(card, d) ? d : card) : (d ?? card);
   if (!host) return "";
   if (tagOf(host) === "DETAILS") return "f:" + foldTitle(host);
-  return "c:" + shape(attr(host, "aria-label") || textOf($1(host, "h1, h2, h3, h4, legend")), 60);
+  // a section (a part) is named by its card's own heading, so it is the same section after a save changed what a part
+  // holds (Crypto's card of parts was named by "Record a sale", the form inside one of them, until the sale was recorded)
+  return "c:" + shape(attr(host, "aria-label") || textOf(tagOf(el) === "DETAILS" ? ownHead(host) : $1(host, HEADS)), 60);
 }
 function rowOf(el) { const r = up(parentOf(el), "li, tr, .rec, [data-key]"); return r ? "r:" + (r.dataset?.key ? "k" + r.dataset.key : shape(textOf(r)).slice(0, 24)) : ""; }
 const kindOfEl = (el) => (tagOf(el) === "DETAILS" ? "D" : is(el, CONTROL) ? "C" : "A");
@@ -280,7 +285,9 @@ function onClick(e) {
   if (tt) { try { lastTap = { el: tt, at: now(), chain: chainOf(root, tt) }; } catch { lastTap = null; } }
   const sum = up(t, "summary"), d = parentOf(sum);
   if (sum && tagOf(d) === "DETAILS") {
-    const drew = foldBy.get(d)?.drew ?? (d.open ? "open" : "shut");
+    // measured against how the page drew it: a record the page drew this way again by itself (`again`) is measured
+    // against how it stands now, since the page may draw it so for its own reason (a problem to fix)
+    const f0 = foldBy.get(d), drew = f0 && !f0.again ? f0.drew : d.open ? "open" : "shut";
     setTimeout(() => { const by = d.open ? "open" : "shut"; if (by === drew) foldBy.delete(d); else foldBy.set(d, { by, drew }); hooks.changed?.(); }, 0);
     return;
   }
@@ -452,6 +459,9 @@ function reopen(root) {
     const o = locate(root, r.opener);
     if (!o || !drawn(o) || !is(o, "button, summary, [role=button], li, tr, .rec") || up(o, "a[href]")) return false;
     r.open = false;   // once: a form the person then shuts stays shut
+    // a section's own row whose section is already open (the open sections went back first; a part built when opened draws
+    // its form a moment later, and the typing goes into it then): pressing it would shut what the person left open
+    if (is(o, "summary") && tagOf(parentOf(o)) === "DETAILS" && parentOf(o).open) return true;
     lastTap = { el: o, at: now(), chain: chainOf(root, o) };
     try { router.quietLayers?.(250); } catch { }   // the form it opens takes no step on Back (only this tap: a person's own tap a moment later does)
     o.click();
@@ -522,12 +532,19 @@ export const hasTyping = () => !!typing[shownKey];
 // ---------------------------------------------------------------- open sections
 export function foldsOf(root = pageRoot()) {
   const out = [];
-  for (const d of $$(root, "details")) { const f = foldBy.get(d); if (f && (f.by === "open") === d.open && !inPlace(d)) out.push({ loc: locOf(root, d), ...f }); }
+  for (const d of $$(root, "details")) { const f = foldBy.get(d); if (f && (f.by === "open") === d.open && !inPlace(d)) out.push({ loc: locOf(root, d), by: f.by, drew: f.drew }); }
   return out;
 }
-/** Sections the person set go back the same way, only where the page drew them as it did before (else the page wins). */
+/** Sections the person set go back the same way, only where the page drew them as it did before (else the page wins).
+ * Where the page drew one the person's way by itself (the part just saved in, which the page opens on that draw: R17),
+ * nothing moves and the person's record goes on with it (`again`), so a reload or a later save still finds it. */
 export function applyFolds(root, folds) {
-  for (const f of folds ?? []) { const d = locate(root, f.loc); if (d && !foldBy.has(d) && d.open === (f.drew === "open")) { d.open = f.by === "open"; foldBy.set(d, { by: f.by, drew: f.drew }); } }
+  for (const f of folds ?? []) {
+    const d = locate(root, f.loc);
+    if (!d || foldBy.has(d)) continue;
+    if (d.open === (f.drew === "open")) { d.open = f.by === "open"; foldBy.set(d, { by: f.by, drew: f.drew }); }
+    else if (d.open === (f.by === "open")) foldBy.set(d, { by: f.by, drew: f.drew, again: true });
+  }
 }
 
 // ---------------------------------------------------------------- one record per history entry
@@ -783,6 +800,10 @@ function watchPage(recs, shell = !!drawing.size) {
   const go = () => { if (drawing.size) return; refill(); if (strayHere) tell(pageRoot(), { now: true }); };
   if (strayHere) go(); else fillTimer = setTimeout(go, 0);
 }
+
+/** For tests only (tests/place.test.mjs, a stand-in DOM with no MutationObserver): what the observer would hand over, and
+ * the arrival's "open the form again". */
+export const _test = { watch: (recs) => watchPage(recs), reopen: (root) => reopen(root) };
 
 // ---------------------------------------------------------------- start
 let started = false;

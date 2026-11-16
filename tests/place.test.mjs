@@ -294,8 +294,9 @@ const MORE = { id: "numbers", kind: "more", n: 4, noun: "numbers", body: ["$1,20
 const BOXES = { id: "itemized", kind: "own", title: "Itemized deductions", body: ["Gifts to charity"] };
 const ITEM = { id: "ana", kind: "item", title: "Ana", body: ["Pay $72,000", "Withheld $8,100"] };
 const later = () => new Promise((r) => setTimeout(r, 5));
+const echoes = [];   // what the shell's bottom note would say (place's echo hook): read by the "coming back" cases below
 function agreeing() {
-  if (!dom) { dom = miniDom(); placeStart({ root: () => dom.root }); }
+  if (!dom) { dom = miniDom(); placeStart({ root: () => dom.root, echo: (t) => echoes.push(t) }); }
   dom.store.clear(); moreTest.reset(); moreTest.clock(() => T0); moreDetail.set({ working: false });
   return dom;
 }
@@ -437,4 +438,158 @@ test("agree: typing put back inside a shut part opens it (wave 1), and this phon
   await later();
   assert.equal(p.itemized.open, true);
   assert.deepEqual(record(), [], "not a tap"); assert.equal(dom.store.has(MORE_KEY), false);
+});
+
+// ---------------------------------------------------------------- coming back to a page (2026-11-16)
+// A part a person opened stays open across a save and a reload, also when the page itself draws the part it was saved in
+// open again (docs/OPTIONAL.md R17: Crypto's "Sales for your tax return" after "Record the sale", Tax lots' "Compare ways
+// to sell part of a fund" after "Work it out"). A save's redraw is foldsOf, a draw, applyFolds; a reload is a draw, then
+// applyFolds(the entry's record).
+import * as place from "../core/place.js";
+const BO = { id: "bo", kind: "item", title: "Bo", body: ["Pay $50,000", "Withheld $4,100"] };
+test("coming back: a part opened by hand and saved in (the page draws it open itself, R17) is open after a reload", async () => {
+  agreeing();
+  let p = draw([ITEM, BO]);
+  await tapFold(p.ana);
+  let snap = foldsOf(dom.root);
+  p = draw([{ ...ITEM, set: 1, open: true }, BO]); applyFolds(dom.root, snap);   // "Record the sale": open: true for the part saved in
+  assert.equal(p.ana.open, true, "after the save");
+  assert.deepEqual(record(), [["D|ana", "open", "shut"]], "the person's record goes on with the part the page drew open again");
+  const entry = foldsOf(dom.root);
+  p = draw([{ ...ITEM, set: 1 }, BO]); applyFolds(dom.root, entry);
+  assert.equal(p.ana.open, true, "a reload: the page draws it shut again, the record opens it");
+  assert.equal(p.ana.querySelector(".fold-status").textContent, "1 set by you", "its status still says what it holds");
+});
+test("coming back: after a save in one part, a save in another part leaves the first open (no other part opens or shuts)", async () => {
+  agreeing();
+  let p = draw([ITEM, BO]);
+  await tapFold(p.ana);
+  let snap = foldsOf(dom.root);
+  p = draw([{ ...ITEM, open: true }, BO]); applyFolds(dom.root, snap);   // saved in Ana
+  await tapFold(p.bo);
+  snap = foldsOf(dom.root);
+  p = draw([ITEM, { ...BO, open: true }]); applyFolds(dom.root, snap);   // then saved in Bo
+  assert.deepEqual([p.ana.open, p.bo.open], [true, true]);
+  const entry = foldsOf(dom.root);
+  p = draw([ITEM, BO]); applyFolds(dom.root, entry);
+  assert.deepEqual([p.ana.open, p.bo.open], [true, true], "and after a reload");
+});
+test("coming back: a part saved in and then shut by hand is shut after a reload; opened again, open", async () => {
+  agreeing();
+  let p = draw([ITEM]);
+  await tapFold(p.ana);
+  const snap = foldsOf(dom.root);
+  p = draw([{ ...ITEM, open: true }]); applyFolds(dom.root, snap);
+  await tapFold(p.ana);
+  assert.equal(p.ana.open, false);
+  let entry = foldsOf(dom.root);
+  p = draw([ITEM]); applyFolds(dom.root, entry);
+  assert.equal(p.ana.open, false, "shut, as left");
+  await tapFold(p.ana);
+  entry = foldsOf(dom.root);
+  p = draw([ITEM]); applyFolds(dom.root, entry);
+  assert.equal(p.ana.open, true, "opened again: open, as left");
+});
+test("coming back: a part the page now draws open for its own reason, which the person had opened, shut by hand stays shut", async () => {
+  agreeing();
+  let p = draw([ITEM]);
+  await tapFold(p.ana);
+  const first = foldsOf(dom.root);
+  p = draw([{ ...ITEM, fix: 1 }]); applyFolds(dom.root, first);   // Back to that entry: the page draws it open now ("1 to fix")
+  assert.equal(p.ana.open, true);
+  await tapFold(p.ana);
+  const entry = foldsOf(dom.root);
+  assert.deepEqual(record(), [["D|ana", "shut", "open"]], "measured against how the page draws it now");
+  p = draw([{ ...ITEM, fix: 1 }]); applyFolds(dom.root, entry);
+  assert.equal(p.ana.open, false, "a reload: shut, as left");
+});
+test("coming back: nothing opened by hand, nothing kept; a part only the page opened is not the person's (R17 as before)", async () => {
+  agreeing();
+  let p = draw([ITEM, BO]);
+  let snap = foldsOf(dom.root);
+  p = draw([{ ...ITEM, open: true }, BO]); applyFolds(dom.root, snap);
+  assert.deepEqual(record(), [], "the page's own open: true is not a tap");
+  const entry = foldsOf(dom.root);
+  p = draw([ITEM, BO]); applyFolds(dom.root, entry);
+  assert.deepEqual([p.ana.open, p.bo.open], [false, false], "a reload: as the page draws them");
+});
+
+// The few more pieces of a browser the cases below reach (typing and the arrival's "open the form again"); added to the
+// stand-in once, after the cases above, which never use them.
+let roomyDone = false;
+function roomy(hash) {
+  agreeing();
+  globalThis.location = { hash, search: "?sandbox=1", href: `http://h/?sandbox=1${hash}` };
+  if (roomyDone) return dom;
+  roomyDone = true;
+  const E = globalThis.Element.prototype, N = globalThis.Node.prototype;
+  globalThis.CSS = { escape: (s) => String(s).replace(/["\\]/g, "\\$&") };
+  globalThis.scrollY = 0; globalThis.innerHeight = 844;
+  globalThis.document.querySelectorAll = (s) => globalThis.document.documentElement.querySelectorAll(s);
+  const get = (o, k) => Object.getOwnPropertyDescriptor(o, k)?.get;
+  const tget = get(E, "type"), cget = get(N, "textContent");
+  Object.defineProperty(E, "type", { configurable: true, get: tget, set(v) { this.setAttribute("type", v); } });
+  Object.defineProperty(N, "textContent", { configurable: true, get: cget, set(v) { for (const c of this.childNodes) c.parentNode = null; this.childNodes = []; this.append(String(v)); } });
+  Object.defineProperty(N, "firstChild", { configurable: true, get() { return this.childNodes[0] ?? null; } });
+  Object.defineProperty(E, "form", { configurable: true, get() { return /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(this.tagName) ? this.closest("form") : undefined; } });
+  N.insertBefore = function (n, ref) { this.append(n); if (ref) { this.childNodes.splice(this.childNodes.indexOf(n), 1); this.childNodes.splice(this.childNodes.indexOf(ref), 0, n); } return n; };
+  E.prepend = function (n) { this.insertBefore(n, this.childNodes[0] ?? null); };
+  E.after = function (n) { this.parentNode.insertBefore(n, this.parentNode.childNodes[this.parentNode.childNodes.indexOf(this) + 1] ?? null); };
+  // a script's click: the document's listeners, the element's own, then the browser's default (a summary toggles its section)
+  E.click = function () { const ev = { type: "click", isTrusted: false, target: this }; for (const f of dom.on.click ?? []) f({ ...ev, preventDefault() { } }); this.dispatchEvent(ev); if (this.tagName === "SUMMARY" && this.parentNode?.tagName === "DETAILS") this.parentNode.open = !this.parentNode.open; };
+  return dom;
+}
+/** A person typing into a box: the focus, each keystroke's input, then the change as they leave it (document first). */
+function typeInto(box, text) {
+  for (const f of dom.on.focusin ?? []) f({ type: "focusin", target: box });
+  box.value = text;
+  for (const f of dom.on.input ?? []) f({ type: "input", isTrusted: true, target: box });
+  box.dispatchEvent({ type: "input", isTrusted: true });
+  for (const f of dom.on.change ?? []) f({ type: "change", isTrusted: true, target: box });
+  box.dispatchEvent({ type: "change", isTrusted: true });
+}
+// what the page's observer hands over (the stand-in has no MutationObserver); a form is found inside what was added
+const removed = (n) => ({ addedNodes: [], removedNodes: [n] });
+const added = (n) => ({ addedNodes: [n], removedNodes: [] });
+
+test("coming back: a reload with typing kept in a part built when opened opens the part once, with the typing in its form", async () => {
+  roomy("#/investments/tax-lots");
+  place.visit({ v: "u1-a2", n: 1 }, "#/investments/tax-lots");
+  const SELL = { id: "sell", kind: "item", title: "Compare ways to sell part of a fund", says: "2 ways", lazy: true,
+    body: () => uiForm([{ key: "amount", label: "Shares to sell", type: "number" }], {}, () => { }, { submitLabel: "Work it out" }) };
+  let p = draw([SELL]);
+  await tapFold(p.sell);                                   // opened by hand: the body is built on the toggle
+  await later();
+  const f0 = p.sell.querySelector("form");
+  assert.ok(f0, "the form is drawn once the part is open");
+  place._test.watch([added(p.sell.querySelector(".fold-body"))]);   // what the page's observer hands over: the form appeared after the tap
+  typeInto(f0.querySelector("input"), "5");
+  place.remember();                                        // the page goes (pagehide): the typing is written down
+  const entry = foldsOf(dom.root);
+  // the reload: the page draws the part shut and its body not built yet; then what afterArrive does
+  place.visit({ v: "u1-a2", n: 1 }, "#/investments/tax-lots");
+  p = draw([SELL]);
+  applyFolds(dom.root, entry); place.refill(dom.root); place._test.reopen(dom.root); place.tell(dom.root);
+  await later(); await later();
+  const f1 = p.sell.querySelector("form");
+  if (f1) { place._test.watch([added(p.sell.querySelector(".fold-body"))]); await later(); }
+  assert.equal(p.sell.open, true, "open, as left (the form's opener is that part's own row: it is not pressed again)");
+  assert.equal(p.sell.querySelector("input")?.value, "5", "the typing is back in its box");
+  assert.equal(dom.root.querySelector("[data-place=kept]"), null, "no 'Not saved yet ... Open it' line: the form is on the screen");
+  place.forgetAll();
+});
+test("coming back: a part is the same part after a save changed a heading inside it (its card is named by its own heading only)", async () => {
+  agreeing();
+  // Crypto: the card of parts has no heading of its own; "Record a sale" is the form's heading inside "Sales for your tax
+  // return", and it goes when the sale is recorded (the form folds behind "+ Record another sale")
+  const SALES = { id: "sales", kind: "item", title: "Sales for your tax return", says: "none in 2026", body: () => [uiH("h3", {}, "Record a sale"), "How many coins you sold"] };
+  const SOLD = { ...SALES, says: "1 in 2026", body: () => ["0.05 BTC sold Nov 16, 2026", "+ Record another sale"] };
+  let p = draw([SALES]);
+  await tapFold(p.sales);
+  const snap = foldsOf(dom.root);
+  p = draw([{ ...SOLD, open: true }]); applyFolds(dom.root, snap);
+  const entry = foldsOf(dom.root);
+  assert.deepEqual(entry.map((f) => [f.loc.k, f.loc.s, f.by, f.drew]), [["D|sales for your tax return", "c:", "open", "shut"]], "named by its card's own heading (none), never by the form's");
+  p = draw([SOLD]); applyFolds(dom.root, entry);
+  assert.equal(p.sales.open, true, "a reload: open, '1 in 2026' beside it");
 });

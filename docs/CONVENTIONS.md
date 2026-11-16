@@ -62,7 +62,9 @@ no "open sections" memory of their own):
   same button, back where it was, as long as the plan has not changed since (any save, here or on another device, and
   it is not offered again). It is kept in memory only (a reload is a new visit). Nothing to do in the page.
 - **After a save** the sections the person opened stay open, the button tapped stays under the thumb, the box being typed
-  in keeps the focus. A page that brings its answer into view itself (it scrolls, or `planner:reveal`) wins.
+  in keeps the focus. A page that brings its answer into view itself (it scrolls, or `planner:reveal`) wins. A part the
+  person opened and then saved in, which the page draws open itself on that redraw (`open: true`, docs/OPTIONAL.md R17),
+  stays theirs: open after a reload, Back or a later save elsewhere on the page, shut when they shut it.
 - **Typing not saved** (per page, per form) waits: leave by the menu, Back or Next and come back, and it is in its boxes
   with "Not saved yet" and "Undo my typing" beside the form's button. A form that was open when the person left (an
   "+ Add another ..." or a row's edit form) is opened again on Back, Forward and Reload by tapping its opener for them
