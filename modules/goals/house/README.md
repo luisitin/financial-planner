@@ -42,7 +42,8 @@ estimators and the same line).
 - The goal button shows only once the figures are the person's own (saved): outlined, naming both amounts, "Change the goal
   from $50,000 to $97,000", or "Make it a goal ($97,000)" when there is none. Before, a filled "Update the goal" applied the
   example's figures in one tap and replaced the person's $50,000 with $105,995. Unsaved and with no goal, a line says to put in
-  the home first.
+  the home first. (2026-11-16, person critic P6: "Make it a goal" was still drawn filled, so after "Work it out" the screen
+  had two filled buttons; it is outlined now, and "Work it out" is the page's one filled button.)
 - Dates read as month and year ("November 2029").
 
 ## Our guesses in the boxes (smart guesses C9, 2026-11-14; spec 12.1 "K3 previews")

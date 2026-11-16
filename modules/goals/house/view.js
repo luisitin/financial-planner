@@ -119,7 +119,7 @@ export function render(page, ctx) {
   const newTarget = Math.round(d.cash.total / 100) * 100;
   const changes = d.goal && Math.abs((d.goal.target ?? 0) - newTarget) >= 100;
   // while a shared link shows nothing but "Keep these" writes the plan: no goal button
-  const goalButton = !saved || sv.live ? null : d.goal ? (changes ? ui.button(`Change the goal from ${fmt.money(d.goal.target ?? 0, cur)} to ${fmt.money(newTarget, cur)}`, () => goalWrite(), { class: "secondary" }) : null) : ui.button(`Make it a goal (${fmt.money(newTarget, cur)})`, () => goalWrite());
+  const goalButton = !saved || sv.live ? null : d.goal ? (changes ? ui.button(`Change the goal from ${fmt.money(d.goal.target ?? 0, cur)} to ${fmt.money(newTarget, cur)}`, () => goalWrite(), { class: "secondary" }) : null) : ui.button(`Make it a goal (${fmt.money(newTarget, cur)})`, () => goalWrite(), { class: "secondary" });
   if (!saved && !d.goal) when.append(ui.h("p", { class: "muted small" }, "Put the home you have in mind in the figures below and save; then it can become a goal."));
   const goalWrite = () => {
     pending = d.goal ? "Goal updated." : "Goal added on the Goals page.";

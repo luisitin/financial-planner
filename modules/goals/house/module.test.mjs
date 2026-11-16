@@ -361,6 +361,18 @@ test("C9 (critic e9 P2, P8) a figure nobody typed says where it comes from, and 
   assert.equal(s.textOf(boxOf(s.root, "downShare").closest("label").querySelector(".help")), "20% avoids mortgage insurance.");
 });
 
+test("one filled button after Work it out: \"Make it a goal\" is outlined, as its README and its comment say (person critic P6, 2026-11-16)", async () => {
+  const p = familyPlan(T13); p.whatIfs = { house: { price: 420000, downShare: 0.2 } };
+  const { root, textOf } = await drawHouse(p);
+  const goal = root.querySelectorAll("button").find((b) => /^Make it a goal \(/.test(textOf(b)));
+  assert.ok(goal, "the goal button shows once the figures are the person's own");
+  assert.match(goal.className, /\bsecondary\b/);
+  const work = root.querySelectorAll("button").find((b) => textOf(b) === "Work it out");
+  assert.doesNotMatch(work.className ?? "", /\bsecondary\b/, "Work it out stays the page's one filled button");
+  const filled = root.querySelectorAll("button").filter((b) => !/\b(secondary|ghost|link)\b/.test(b.className ?? "") && !b.closest("summary"));
+  assert.deepEqual(filled.map((b) => textOf(b)), ["Work it out"]);
+});
+
 // ---------------------------------------------------------------- share a link (gap list, next 60, item 33)
 // "Share these figures" builds a link with the home's own figures only; opened on another phone it fills this page for the
 // visit, and only "Keep these" (asked first, with Undo) writes the plan. The helper's own rules: tests/share-link.test.mjs.
