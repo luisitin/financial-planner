@@ -3,6 +3,10 @@
 // a policy on file changes), and the care to plan for as a small form. Runs on the PC when connected.
 import { CARE, COST_YEAR, CHANCE_AFTER_65, AVERAGE_YEARS, DEFAULTS, DEFAULT_WAIT_DAYS, DEFAULT_BENEFIT_YEARS, MAX_YEARS } from "./compute.js";
 import { nameIn, verbFor, needItem } from "../../../core/words.js";
+import { unknownWords } from "../../retirement/projection/compute.js";
+
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "whether your savings could pay for care";
 
 let pending = null;   // the confirmation shown on the next render
 
@@ -44,12 +48,12 @@ export function render(page, ctx) {
     const costs = ui.h("ul", { class: "ltc-costs" }, Object.entries(CARE).map(([key, c]) => ui.h("li", { class: key === d.care.key ? "on" : null }, ui.h("span", {}, c.label), ui.h("span", { class: "ltc-v" }, `${fmt.money(Math.round(c.yearly * d.settings.costFactor), cur)} a year`))));
     host.append(ui.card("What care costs", ui.h("p", { class: "muted small" }, `The middle price across the country in ${COST_YEAR}${d.settings.costFactor !== 1 ? `, times ${Math.round(d.settings.costFactor * 100)}% for where you live` : ""}. Prices differ a lot by state: the survey's site has yours.`), costs));
 
-    for (const p of d.people) host.append(personCard(p, d));
+    d.people.forEach((p, i) => host.append(personCard(p, d, i)));
     host.append(settingsCard(d));
     host.append(ui.card("More on this", ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/policies" }, "Your policies"), ui.h("a", { class: "btn secondary", href: "#/retirement/longevity" }, "How long to plan for"))));
   }
 
-  function personCard(p, d) {
+  function personCard(p, d, i = 0) {
     // the age the money runs out, said of the first adult: "you are 83", "Ana is 83"
     const whenAge = (age) => `${nameIn(d.primary)} ${verbFor(d.primary, "is", "are")} ${age}`;
     const card = ui.card(`If ${nameIn(p.name)} needed care`);
@@ -58,7 +62,11 @@ export function render(page, ctx) {
       ui.stat("Care would cost", money(p.costTotal), `${what}, today's prices`),
       ui.stat("Chance of reaching " + p.startAge, `${Math.round(p.reachChance * 100)}%`, "from How long to plan for"),
     ));
-    if (!d.base.success) {
+    if (d.unknown) {
+      // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last? (whole-app sweep x3,
+      // 2026-11-16: "The plan runs short even without care" beside its "We don't know yet"); the one filled link in the first card
+      card.append(ui.h("p", { class: "ltc-d" }, unknownWords(d.unknown, UNKNOWN_WHAT)), i === 0 ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")) : null);
+    } else if (!d.base.success) {
       card.append(ui.h("p", { class: "ltc-verdict bad" }, "The plan runs short even without care."), ui.h("p", { class: "ltc-d" }, `Fix that first on the Will the money last? page. Care would only make the money run out sooner${p.self.failAge ? ` (the money would run out when ${whenAge(p.self.failAge)})` : ""}.`));
     } else if (p.self.success) {
       card.append(ui.h("p", { class: "ltc-verdict ok" }, `Your plan can pay for it and still last.`),

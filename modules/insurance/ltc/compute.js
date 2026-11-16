@@ -4,7 +4,7 @@
 // years of care the savings could carry and still last, and what a long-term care policy on file
 // changes, against the premiums it costs until then.
 import { project, copyInputs } from "../../../core/math/retirement.js";
-import { buildInputs } from "../../retirement/projection/compute.js";
+import { buildInputs, retirementUnknown } from "../../retirement/projection/compute.js";
 import { survival } from "../../retirement/longevity/compute.js";
 import { compute as computePolicies } from "../policies/compute.js";
 import { largestWhere, smallestWhere } from "../../scenarios/goal-seek/compute.js";
@@ -136,5 +136,8 @@ export function compute(plan, params = {}) {
       costYearly: yearly, costTotal: yearly * st.years, self, maxYears, shortToday, policy, withPolicy,
     };
   });
-  return { ready: true, missing: [], primary: I.people[0]?.name ?? "", settings: s0, care: { key: s0.care, label: CARE[s0.care].label, short: CARE[s0.care].short, yearly: CARE[s0.care].yearly * s0.costFactor }, base, people };
+  // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "The plan runs short even
+  // without care" (whole-app sweep x3, 2026-11-16); absent for every other plan
+  const unknown = retirementUnknown(plan, { today });
+  return { ready: true, missing: [], primary: I.people[0]?.name ?? "", settings: s0, care: { key: s0.care, label: CARE[s0.care].label, short: CARE[s0.care].short, yearly: CARE[s0.care].yearly * s0.costFactor }, base, people, ...(unknown ? { unknown } : {}) };
 }

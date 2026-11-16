@@ -47,3 +47,12 @@ Odds: "almost 70%" of people turning 65 will need some long-term care; women for
 
 Review 2026-11-06 (round 7): "If you needed care" and "the money would run out when you are 83" say you for the unnamed first adult ("Me"), "your spouse" for the setup's "My spouse", with the verb to match; typed names read as before (core/words.js). Words only (view): no figure or rule changed.
 Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page said
+"The plan runs short even without care ... the money would run out when Riley is 65" on the same plan (Riley, 24, an empty Work
+401(k)). `compute` now adds `unknown: { nothingSaved }` (retirement/projection `retirementUnknown`, that page's own rule) only
+when that holds. Each person's card then keeps what care would cost and the chance of reaching that age, and says, in place of
+the verdict, the projection's sentence with this page's question ("whether your savings could pay for care", `UNKNOWN_WHAT`);
+the first card has the one filled link, "Add what you own ›". For every other plan the result is the same as before (absent
+field; the invariance test compares it with ce79d70 over the invented households).

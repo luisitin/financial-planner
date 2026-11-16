@@ -150,3 +150,13 @@ test("Stress tests: nothing saved -> the page's own we-can't-say-yet sentence, n
   assert.match(f.text, /Your plan survives/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("Long-term care: nothing saved -> the care costs stay, the verdict is the page's own we-can't-say-yet sentence, no 'runs short'; the family's verdict unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/insurance/ltc/view.js");
+  await saysUnknown("insurance/ltc", UNKNOWN_WHAT, { title: "Care in later life" });
+  const r = await drawn("insurance/ltc", rd());
+  assert.match(r.text, /Care would cost/);
+  const f = await drawn("insurance/ltc", fam());
+  assert.match(f.text, /If Ana needed care/);
+  assert.doesNotMatch(f.text, /can't say/);
+});
