@@ -487,7 +487,7 @@ test("s3 fix round 2 P4: \"Also count this as an improvement\" adds the job's co
   assert.deepEqual([improvementOff(27000, roof), improvementOff(5000, roof), improvementOff(null, roof), improvementOff(27000, { ...roof, improvement: false })], [12000, 5000, 0, 0], "never more than Improvements holds");
   assert.deepEqual(jobFrom({ date: "2026-03-10", what: "New roof", cost: 12000, improvement: true }, { id: "r", today: T15 }), { job: roof });
   assert.deepEqual(jobFrom({ date: "2026-03-10", what: "New roof", cost: 12000, improvement: false }, { id: "r", today: T15 }), { job: { id: "r", date: "2026-03-10", what: "New roof", cost: 12000 } }, "unticked: no field");
-  assert.deepEqual(jobFrom({ date: "2026-03-10", what: "New deck", cost: null, improvement: true }, { id: "r", today: T15 }), { error: "cost", words: "Type what it cost to count it as an improvement, or untick that box." });
+  assert.deepEqual(jobFrom({ date: "2026-03-10", what: "New deck", cost: null, improvement: true }, { id: "r", today: T15 }), { error: "cost", words: "Type what it cost to count it as an improvement, or uncheck that box." });
   assert.equal(addedWords(roof, $, 27000), "Added \"New roof\", $12,000, to the list and to Improvements, now $27,000: that lowers the tax when you sell.");
   assert.equal(addedWords({ ...roof, improvement: undefined }, $, 27000), "Added \"New roof\", $12,000, to the list.");
   assert.equal(removeConfirmWords(roof, $, 12000), "Remove \"New roof\" from the list? Its $12,000 also comes off Improvements.");

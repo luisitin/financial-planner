@@ -141,7 +141,7 @@ the list is empty, then "1 job", "3 jobs"). Inside:
   part may hold no required box, first-view check S5): a job with no words or no real day is refused at that box ("Say what
   was done, like "New water heater".", "Pick the day it was done." (also for a day the calendar does not have, 2026-02-30:
   `isDay`), "That day is still ahead: pick the day it was done."), and a ticked improvement with no cost at the cost box
-  ("Type what it cost to count it as an improvement, or untick that box.").
+  ("Type what it cost to count it as an improvement, or uncheck that box.").
 - a list: the comparison (below), under it "One year can be uneven: a roof or a furnace comes once in many years." when the
   year's costs are compared with upkeep counted, an outlined **"Use $X a year"** when it applies, the jobs newest first as
   records (what and cost, then the day, "counted as an improvement" when ticked, and the note, an outlined "Remove"), the line

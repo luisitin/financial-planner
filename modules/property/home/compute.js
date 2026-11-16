@@ -297,6 +297,6 @@ export function jobFrom(v, { id, today }) {
   const c = Number(v?.cost);
   const note = String(v?.note ?? "").trim();
   const amount = v?.cost === null || v?.cost === undefined || v?.cost === "" || !Number.isFinite(c) ? null : Math.max(0, c);
-  if (v?.improvement === true && !(amount > 0)) return { error: "cost", words: "Type what it cost to count it as an improvement, or untick that box." };
+  if (v?.improvement === true && !(amount > 0)) return { error: "cost", words: "Type what it cost to count it as an improvement, or uncheck that box." };
   return { job: { id, date, what: what.slice(0, 120), cost: amount, ...(note ? { note: note.slice(0, 300) } : {}), ...(v?.improvement === true ? { improvement: true } : {}) } };
 }
