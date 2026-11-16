@@ -159,10 +159,18 @@ it; what the survivor owns alone ("What Bo owns alone ($73,000) stays with Bo.")
   with ...", "What is Bo's alone" and the three-line amber title read badly; a reload put the chip back to the first case.
   Not changed: the row stays open after Back and a reload (core/ui/more.js keeps a person's own tap; the critic's script
   tapped the title again after the reload, which shut it).
-- The row's line is case-free (the first case), so it does not change when a chip is pressed.
+- The row's line follows the case drawn: a chip changes it in place ("1 name" for Ana alone, "2 names" with both gone),
+  so the line never counts names the open picture does not show. Whether the row is drawn does not depend on the case.
 
 ### Opt conversion (opt spec 6.2, class B: this page had no opt commit of its own)
 Drawing the new row with `core/ui/more.js` makes the page "adopted", so its two folds by hand go through the helper in
 the same change: "N more changes" is the part `changes` (its line names the changes when they fit in 20 characters), and
 the note is the add form's own "More details (optional)" (`more: true`; open when the one being changed has a note).
 The fix round 2 test reads the new markup. Title "Who gets what" pinned in `qa/first-view-lib.mjs` with its reason.
+
+## Look after it (2026-11-16)
+- "Does the plan leave it?", when it does and there is room to spend more, read "While still leaving it, you could spend
+  If markets do as well as average, up to about $8,080 a month ..." (Goal seek's sentence now opens "If markets do as
+  well as average,"). `roomWords` reads it as one sentence: "While still leaving it, if markets do as well as average, you
+  could spend up to about $8,080 a month ...", and the older "Up to ..." as before. Test "Does the plan leave it?: the room
+  to spend reads as one sentence".

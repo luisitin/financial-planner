@@ -2,7 +2,7 @@
 // for it, whether the plan does, and what each lever would have to be if not. Runs on the PC when connected.
 // One quiet row, "Who gets what" (gap list, next 60, item 15), opens to a picture of who would receive what today: by the
 // account forms, the other owner and the will's wishes, with what no one is named for as its own bar. Nothing there is saved.
-import { KINDS, listedLevers, whoGetsWhat, WHO_TITLE, UNNAMED, NOT_ADVICE, GAP_LINKS, ledeWords, detailWords, unnamedWords, gapWords, keptWords, debtWords, ruleWords, goalsWords } from "./compute.js";
+import { KINDS, listedLevers, roomWords, whoGetsWhat, WHO_TITLE, UNNAMED, NOT_ADVICE, GAP_LINKS, ledeWords, detailWords, unnamedWords, gapWords, keptWords, debtWords, ruleWords, goalsWords } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
 import { part, parts } from "../../../core/ui/more.js";
 
@@ -100,8 +100,13 @@ function whoBody(ctx, money) {
       d.debts > 0 ? ui.h("p", { class: "lg-d" }, debtWords(d, money)) : null,
       ui.h("p", { class: "lg-d" }, `${ruleWords(d)} ${NOT_ADVICE}`),
     ].filter(Boolean));
-    // the chip just pressed keeps the focus (the row of chips was drawn again)
-    if (focusId) holder.querySelector?.(`[data-case="${focusId}"]`)?.focus?.();
+    // after a chip: the row's line follows the case drawn ("1 name" for Ana alone, "3 names" with both gone), and the chip
+    // just pressed keeps the focus (the row of chips was drawn again)
+    if (focusId) {
+      const line = holder.closest?.("details")?.querySelector?.(".fold-status");
+      if (line) line.textContent = d.status;
+      holder.querySelector?.(`[data-case="${focusId}"]`)?.focus?.();
+    }
   };
   fill();
   return holder;
@@ -124,7 +129,7 @@ export function render(page, ctx) {
     host.replaceChildren();
     let editing = null;
     // who would get what today (gap list, next 60, item 15): drawn as one quiet row above More on this when there is something to picture
-    const who = picture(ctx);
+    const who = picture(ctx, whoseNow(ctx));
     if (!d.bequests.length) host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "What you want to leave"),
       ui.h("p", { class: "lede" }, "Money for the children, a grandchild's education, a cause you care about. Write down what you would like to leave and to whom, in today's dollars, and the plan will aim to still have it at the end."),
@@ -141,7 +146,7 @@ export function render(page, ctx) {
           // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the first three changes, in Goal seek's order (what is worth
           // money and what gets there on its own first), the rest one quiet tap away
           ...(d.levers && !d.meets ? leverList(ctx, listedLevers(d.levers)) : []),
-          d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, `While still leaving it, you could spend ${d.levers.find((l) => l.id === "spending").sentence.replace(/^Up/, "up")}`) : null,
+          d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, roomWords(d.levers.find((l) => l.id === "spending").sentence)) : null,
           ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
       } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check it against your plan, it needs", d.missing))));
       const list = ui.h("ul", { class: "lg-list" }, d.bequests.map((b) => ui.h("li", { role: "button", tabindex: "0", onClick: () => { editing = (plan.estate.legacy.bequests ?? []).find((y) => y.id === b.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },

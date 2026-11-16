@@ -106,7 +106,7 @@ export function formShares(list) {
 
 /**
  * whoGetsWhat(plan, { today, dies }) -> {
- *   ready (something to picture), couple, cases: [{ id, label }] (a couple: one per adult, then "both"; one adult: none),
+ *   ready (something to picture in some case: the same whichever case is drawn), couple, cases: [{ id, label }] (a couple: one per adult, then "both"; one adult: none),
  *   dies (the case drawn: an adult's id, "both", or "" for one adult), dead: [{ id, name }], total,
  *   rows: [{ key, name, amount, share, joint, named, will, others? }] (largest first; at most MAX_ROWS, the rest as one "N others" row),
  *   unnamed: { amount, share, things: [{ name, value }] } | null, kept: { names, amount } | null (what a survivor owns alone),
@@ -156,7 +156,7 @@ export function whoGetsWhat(plan, params = {}) {
   const formOf = new Map(ben.items.map((x) => [x.key, x]));
   const wholeOn = tidy.insurance.policies.filter((x) => x.kind === "whole" && !(x.endDate && today && x.endDate < today)).map((x) => x.personId ?? "");
   const things = [];
-  let kept = 0, debts = 0;
+  let kept = 0, debts = 0, worth = 0;   // worth: everything that could pass in some case (the row is drawn when there is any)
   for (const a of tidy.accounts) {
     if (isLiability(a.type)) { debts += countedBalance(a); continue; }
     const value = Math.max(0, countedBalance(a));
@@ -164,6 +164,7 @@ export function whoGetsWhat(plan, params = {}) {
     const owner = ownerOf(a.ownerId);
     // the savings inside a whole life policy are part of its death benefit, already counted with the policy
     if (a.type === "cash_value_life" && wholeOn.some((pid) => !pid || !owner || pid === owner.id)) continue;
+    worth += value;
     const together = couple && !owner;
     if (!together && couple && !deadIds.has(owner.id)) { kept += value; continue; }
     const form = formOf.get(`account:${a.id}`) ?? null;
@@ -172,6 +173,7 @@ export function whoGetsWhat(plan, params = {}) {
   for (const x of ben.items.filter((i) => i.source === "policy")) {
     const value = Math.max(0, Number(x.value) || 0);
     if (!(value > 0)) continue;
+    worth += value;
     const insured = ownerOf(x.ownerId);
     if (insured && !deadIds.has(insured.id)) continue;
     things.push({ key: x.key, name: clean(x.name) || "Life insurance", value, together: false, form: x });
@@ -286,7 +288,7 @@ export function whoGetsWhat(plan, params = {}) {
   }
   const names = list.reduce((n, r) => n + (r.others ? r.others.length : 1), 0);
   return {
-    ready: total > 0 || kept > 0, couple, cases, dies, dead: dead.map((a) => ({ id: a.id ?? "", name: clean(a.name) })), total, rows: list, unnamed,
+    ready: worth > 0, couple, cases, dies, dead: dead.map((a) => ({ id: a.id ?? "", name: clean(a.name) })), total, rows: list, unnamed,
     kept: couple && kept > 0 && alive.length ? { names: alive.map((a) => clean(a.name)), amount: kept } : null,
     debts, any, wishes, signed, gap, goals: [...goals.values()],
     // the line counts who gets something; with no one (nothing written, or every name given nothing or gone in this case) it says so
@@ -350,6 +352,16 @@ export function goalsWords(d, money = dollars) {
 }
 /** Debts are not taken off the picture. */
 export const debtWords = (d, money = dollars) => (d.debts > 0 ? `What you owe (${money(d.debts)}) is not taken off: a loan on a home goes with the home, and other debts are usually paid before anyone gets the rest.` : "");
+/**
+ * "Does the plan leave it?" when it does and there is room to spend more: Goal seek's spending sentence after "While still
+ * leaving it, ...". Its sentence opens "If markets do as well as average, up to ..." (older ones "Up to ..."): read as one
+ * sentence either way (it read "you could spend If markets do as well as average, up to ...").
+ */
+export function roomWords(sentence) {
+  const s = String(sentence ?? "");
+  const m = /^If markets do as well as average, (up .*)$/s.exec(s);
+  return m ? `While still leaving it, if markets do as well as average, you could spend ${m[1]}` : `While still leaving it, you could spend ${s.replace(/^Up/, "up")}`;
+}
 /** The order things pass in: a couple (what is held together first) or one adult. */
 export const ruleWords = (d) => (d.couple
   ? "What you own together goes to the other owner; whoever is named on an account's form comes next, whatever the will says; the will's wishes cover the rest."

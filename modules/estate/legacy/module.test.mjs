@@ -277,6 +277,18 @@ test("who gets what: one written sentence per gap", () => {
   assert.deepEqual(W.GAP_ORDER, ["gone", "unnamed", "estate", "nobackup", "minor", "minorWill", "nowill", "unsigned"]);
 });
 
+test("Does the plan leave it?: the room to spend reads as one sentence (it read \"you could spend If markets do ...\")", async () => {
+  const { roomWords } = await import("./compute.js");
+  assert.equal(roomWords("If markets do as well as average, up to about $8,080 a month on top of health insurance, $1,080 more than the $7,000 the plan spends before health insurance."),
+    "While still leaving it, if markets do as well as average, you could spend up to about $8,080 a month on top of health insurance, $1,080 more than the $7,000 the plan spends before health insurance.");
+  assert.equal(roomWords("Up to about $5,000 a month."), "While still leaving it, you could spend up to about $5,000 a month.");
+  // the family leaving Cy $200,000: the page says it that way
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const r = await draw(withLegacy({ bequests: [{ id: "a", to: "Cy", kind: "person", amount: 200000 }] }));
+  assert.match(textOf(r.root), /While still leaving it, if markets do as well as average, you could spend up to about \$[\d,]+ a month/);
+  assert.doesNotMatch(textOf(r.root), /could spend If/);
+});
+
 test("who gets what: the other sentences, one per case", () => {
   const ana = whoGetsWhat(fam(), { today: WT });
   assert.equal(ledeWords(ana), "If Ana died today, $499,700 would go to:");
@@ -455,11 +467,22 @@ test("the page: a chip pictures another case in place and saves nothing; the cho
   const chips = who.all().filter((e) => e.tagName === "BUTTON" && e.classList.contains("chip"));
   assert.deepEqual(chips.map((c) => textOf(c)), ["If Ana died", "If Bo died", "If both died"]);
   assert.deepEqual(chips.map((c) => c.getAttribute("aria-pressed")), ["true", "false", "false"]);
+  const line = () => textOf(who.querySelector(".fold-status"));
+  assert.equal(line(), NO_NAMES);
   chips[2].click();
   assert.match(textOf(who), /If you both died today, \$572,700 would go to:/);
   assert.equal(r.saved.length, 0, "a chip changes nothing in the plan");
   const again = await draw(fam());
   assert.match(textOf(partOf(again.root, "who")), /If you both died today/, "kept while the app is open");
+  // the row's line follows the case drawn: Ana's 401(k) names Bo, backup Dee
+  const named = await draw(fam((q) => { q.estate.beneficiaries = [form("a-401", [{ name: "Bo", personId: "p-bo", share: 1 }], [{ name: "Dee", personId: "", share: 1 }])]; }));
+  const w2 = partOf(named.root, "who");
+  assert.equal(textOf(w2.querySelector(".fold-status")), "1 name", "both gone (kept from before): Dee alone is named");
+  w2.all().find((e) => e.tagName === "BUTTON" && textOf(e) === "If Ana died").click();
+  assert.equal(textOf(w2.querySelector(".fold-status")), "1 name", "Ana: Bo");
+  w2.all().find((e) => e.tagName === "BUTTON" && textOf(e) === "If Bo died").click();
+  assert.equal(textOf(w2.querySelector(".fold-status")), NO_NAMES, "Bo: nothing of his names anyone");
+  assert.equal(named.saved.length, 0);
   partOf(again.root, "who").all().find((e) => e.tagName === "BUTTON" && textOf(e) === "If Ana died").click();
   assert.equal(again.saved.length, 0);
 });
