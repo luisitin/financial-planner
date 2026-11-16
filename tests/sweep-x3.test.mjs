@@ -195,3 +195,14 @@ test("Year by year: under 'we can't say yet' the years the money does not cover 
   assert.ok(classed(k.root, "bad").length > 0);
 });
 
+test("Tax year by year: nothing saved -> the lede says we can't say whether the money lasts and that the years count only income, never 'The money runs out in 2067'; the family's lede unchanged", async () => {
+  const { UNKNOWN_WHAT, UNKNOWN_COUNTS } = await import("../modules/taxes/projection/view.js");
+  for (const [who, plan, nothing] of [["renterDebt", rd(), true], ["sam", sam(), false]]) {
+    const r = await drawn("taxes/projection", plan);
+    assert.ok(r.text.includes(`${unknownWords({ nothingSaved: nothing }, UNKNOWN_WHAT)} ${UNKNOWN_COUNTS}`), `${who}: ${r.text.slice(0, 500)}`);
+    assert.doesNotMatch(r.text, RUNS_OUT, who);
+  }
+  const f = await drawn("taxes/projection", fam());
+  assert.match(f.text, /of federal tax over retirement/);
+  assert.doesNotMatch(f.text, /can't say/);
+});

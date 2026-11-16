@@ -349,3 +349,12 @@ retired couple: 2027 to 2030 listed $56,994 to $68,642 after 2026 used their $60
   new figures on each year taken, which keep `year` and `amount` (module test "r2 invariance"; a scratch run against
   ab3bdde's own code over every fixture plan, the 14 households and the phone households, in the builder's log). The sums
   `extra.tax`, `state.total` and `medicare.over` are, and were, these figures added up (module test "r2: each year taken").
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page's lede
+said "The money runs out in 2067: the years after it show no tax because there is nothing left to tax" on the same plan (Riley,
+24, an empty Work 401(k)). `compute` now adds `unknown: { nothingSaved }` (retirement/projection `retirementUnknown`, that page's
+own rule) only when the run falls short and that rule holds, and the lede says instead the projection's sentence with this
+page's question ("whether the money lasts", `UNKNOWN_WHAT`), then "These years count only your income." (`UNKNOWN_COUNTS`). The
+tax figures are unchanged: they are the tax on the income the plan has. For every other plan the result is the same as before
+(absent field; the invariance test compares it with ce79d70 over the invented households).

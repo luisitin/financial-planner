@@ -8,6 +8,11 @@ import { parts, rest, links } from "../../../core/ui/more.js";
 import { compute, stateLine, stateNames, stateNameOf, GAINS_TITLE, gainsStatus, gainsWords, gainsUseLine } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 import { statusLabel } from "../../../core/math/tax.js";
+import { unknownWords } from "../../retirement/projection/compute.js";
+
+/** What the years count when nothing is saved for retirement yet (whole-app sweep x3): the projection's sentence, then this. */
+export const UNKNOWN_WHAT = "whether the money lasts";
+export const UNKNOWN_COUNTS = "These years count only your income.";
 
 const state = { real: true };
 
@@ -34,7 +39,7 @@ export function render(root, ctx) {
     ui.h("h1", {}, `About ${money(d.totals.taxes)} of federal tax over retirement`),
     // one retirement year: "1 year, 2026", with no average and no biggest year (Review 2026-11-06, verifier: "1 years from 2026
     // to 2026 ... $813 a year on average ... The biggest year is 2026", as the Tax report read before this round)
-    ui.h("p", { class: "lede" }, `${d.rows.length === 1 ? `1 year, ${first.year}` : `${d.rows.length} years from ${first.year} to ${last.year}`}, ${d.real ? "in today's dollars" : "in each year's dollars"}${d.rows.length === 1 ? "" : `: ${money(d.average)} a year on average`}, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak && d.rows.length > 1 ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${!d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
+    ui.h("p", { class: "lede" }, `${d.rows.length === 1 ? `1 year, ${first.year}` : `${d.rows.length} years from ${first.year} to ${last.year}`}, ${d.real ? "in today's dollars" : "in each year's dollars"}${d.rows.length === 1 ? "" : `: ${money(d.average)} a year on average`}, filing ${statusLabel(d.filingStatus).toLowerCase()}. ${d.peak && d.rows.length > 1 ? `The biggest year is ${d.peak.year} at ${money(d.peak.taxes)}, driven by ${d.peak.why}.` : ""} ${d.zeroYears ? `${d.zeroYears} year${d.zeroYears === 1 ? "" : "s"} owe nothing at all.` : ""}${d.totals.taxableSocialSecurity > 0 ? ` ${fmt.pct(d.totals.taxableSocialSecurity / d.totals.socialSecurity, 0)} of Social Security ends up taxed.` : ""}${d.unknown ? ` ${unknownWords(d.unknown, UNKNOWN_WHAT)} ${UNKNOWN_COUNTS}` : !d.success ? ` The money runs out in ${d.failYear}: the years after it show no tax because there is nothing left to tax.` : ""}`),
     // the state's one sentence stays in sight (R9: "not counted yet" is never folded); how brackets rise is under How this is worked out
     ui.h("p", { class: "muted small" }, stateLine(d.state, money, d.rows.length === 1, d.state ? null : stateNameOf(plan.household?.state))),
   ));

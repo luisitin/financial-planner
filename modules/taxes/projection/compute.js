@@ -7,7 +7,7 @@
 import { project } from "../../../core/math/retirement.js";
 import { federalTax, largestAtOrUnder } from "../../../core/math/tax.js";
 import { stateIncomeTax, hasRules, stateNames } from "../../../core/math/state-tax.js";
-import { buildInputs, taxSettings, noYearsWhy } from "../../retirement/projection/compute.js";
+import { buildInputs, taxSettings, noYearsWhy, retirementUnknown } from "../../retirement/projection/compute.js";
 import { medicareLine, medicareYears, marketplaceLines } from "../../retirement/roth-conversions/ceiling.js";
 import { STATE_NAMES } from "../state/compute.js";
 import { TAX_YEARS } from "../federal/data/federal.js";
@@ -67,8 +67,12 @@ export function compute(plan, params = {}) {
   if ((plan.retirement?.taxMode ?? "flat") !== "brackets") notes.push(`The projection pages still use the flat ${Math.round((plan.retirement?.taxRate ?? 0.15) * 100)}% setting, which comes to $${Math.round(flatTaxes).toLocaleString("en-US")} over the same years; switch Will the money last? to the federal brackets to use these figures.`);
   return { ready: true, missing: [], rows, totals, ...(withState ? { state } : {}), average: rows.length ? totals.taxes / rows.length : 0, peak: peak ? { year: peak.year, taxes: peak.taxes, why: peakWhy } : null, byBracket, flatTaxes, bracketsOn: (plan.retirement?.taxMode ?? "flat") === "brackets", notes, people: b.people, filingStatus: tax.filingStatus, zeroYears: rows.filter((x) => x.taxes < 1).length, real, retireYear: b.inputs.retireYear, success: r.success, failYear: r.failYear,
     noYears: rows.length ? null : noYearsWhy(b.people, b.inputs.startYear ?? (params.today ? Number(String(params.today).slice(0, 4)) : null)),
-    ...(params.gains === true ? { gains: gainsRoom(plan, { run: r, inputs: b.inputs, tax, real, code, withState, today: params.today ?? null }) } : {}) };
+    ...(params.gains === true ? { gains: gainsRoom(plan, { run: r, inputs: b.inputs, tax, real, code, withState, today: params.today ?? null }) } : {}),
+    // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "The money runs out in
+    // 2067" (whole-app sweep x3, 2026-11-16); absent for every other plan
+    ...(r.success ? {} : unknownOf(plan, params)) };
 }
+const unknownOf = (plan, params) => { const u = retirementUnknown(plan, { today: params.today ?? null }); return u ? { unknown: u } : {}; };
 
 // ---- gains at the 0% rate, year by year (gap list, next 60, item 25) ------------------------------------------------------------
 /** The top of the 0% band for long-term gains for a status in a year's params (taxable income up to it: Rev. Proc. 2025-32 sec. 4.03). */
