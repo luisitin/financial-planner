@@ -3,9 +3,15 @@
 import { compute, INCOME_TYPES, looksYearly, changeFrom, rentAfterCostsOf } from "./compute.js";
 import { PERIOD_OPTIONS, periodLabel, payRhythm } from "../../../core/math/periods.js";
 import { takeHome } from "../paycheck/compute.js";
+import { part, choice } from "../../../core/ui/more.js";
+import { sectionsOf, sectionKey, asOne, itemize, unmarkOnAdd, rowLine, statusWords, sectionLine, holdWords, askWords, doneWords, itemizeWords, undoneWords, addWords, INTRO, PART_TITLE } from "./one-figure.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render.
 let pending = null;
+// "One figure or item by item" (gap next-60 #11): the green line after a tap in that part ({ text, undo?, r?, total? }), and,
+// for this visit (a new address starts afresh), whether the person acted in it (it stays open, R17) and which kinds they changed
+let oneSaid = null, oneOpen = false, landedOn = null;
+const oneTouched = new Set();
 
 const FIELDS = (people) => [
   { key: "name", label: "What is it", type: "text", required: true, placeholder: "e.g. Ana's salary" },
@@ -26,6 +32,7 @@ export function render(root, ctx) {
   const d = compute(plan, { today });
   const people = plan.household?.people ?? [];
   let editing = null;
+  if (ctx.route !== landedOn) { landedOn = ctx.route; oneOpen = false; oneTouched.clear(); }
 
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
@@ -67,19 +74,23 @@ export function render(root, ctx) {
       const diff = ch.change;
       pending = `From ${fmt.date(clean.startDate)} ${clean.name} is ${each(clean)}${Math.abs(diff) >= 1 ? ` (${diff > 0 ? "+" : "-"}${fmt.money(Math.abs(diff), cur)} a month before tax)` : ""}. Until then it stays ${each(was)}. Both are on this page.`;
     } else pending = was ? `Changes saved: ${clean.name}, ${each(clean)}.` : `${clean.name} added.`;
+    // another line of a kind kept as one figure lists that kind item by item again (gap next-60 #11)
+    const unmark = !was ? sectionsOf(plan).find((s) => s.mode === "one" && s.key === sectionKey(clean)) : null;
+    if (unmark) pending = `${pending} ${addWords(unmark.name)}`;
     store.update((p) => {
       p.income = p.income ?? [];
       if (was) {
         const i = p.income.findIndex((x) => x.id === was.id);
         // the pay that ends keeps its id; the new pay gets a new one and says which line it carries on (`continues`), so
         // Side income and Salary keep one record for both (review 2026-11-02, round 5)
-        if (i >= 0 && ch?.split) { p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: ui.uid(), ...ch.next }); }
+        // (the new pay is a line of its own: it does not carry the one-figure mark of the pay it follows)
+        if (i >= 0 && ch?.split) { const { oneFigure, ...next } = ch.next; void oneFigure; p.income[i] = ch.old; p.income.splice(i + 1, 0, { id: ui.uid(), ...next }); }
         else if (i >= 0) {
           p.income[i] = { ...p.income[i], ...clean };
           // Side income's careful figure is for uneven pay that repeats: a line changed to another kind or to one time drops it
           if (clean.type !== "business" || clean.period === "once") delete p.income[i].countOn;
         }
-      } else p.income.push({ id: ui.uid(), ...clean });
+      } else { p.income.push({ id: ui.uid(), ...clean }); if (unmark) unmarkOnAdd(p, p.income.at(-1)); }
     });
   };
   const drawForm = () => {
@@ -150,17 +161,21 @@ export function render(root, ctx) {
       return ui.h("div", { class: "d" }, "Before the place's running costs (tax, insurance, upkeep): add it on ", link, " to count them.");
     };
     const rows = [...d.items].sort((a, b) => Number(b.active) - Number(a.active) || b.monthly - a.monthly);
+    // a line that holds its kind as one figure says so ("One figure for your dividends and interest"; gap next-60 #11)
+    const kinds = sectionsOf(plan);
+    const oneLine = (x) => { const w = rowLine(plan, x, kinds); return w ? ui.h("div", { class: "d" }, w) : null; };
     root.append(ui.card("Income sources",
       ui.h("ul", { class: "page-list" }, rows.map((x) => ui.h("li", { role: "button", tabindex: "0", style: { cursor: "pointer", opacity: x.active ? 1 : 0.6 },
         onClick: () => { editing = plan.income.find((y) => y.id === x.id); showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); },
         onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("span", { class: "ic" }, x.icon),
-        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x)), rentNote(x),
+        ui.h("span", { class: "body" }, ui.h("div", { class: "t" }, x.name, x.active ? null : ui.h("span", { class: "pill" }, x.upcoming ? "not yet" : "ended")), ui.h("div", { class: "d" }, sub(x)), oneLine(x), rentNote(x),
           // our guess (Get started left the amount blank; fixer round 1, ssg-L-6), as Net worth marks a guessed balance
           x.guessed ? ui.h("div", { class: "d" }, "Our guess for now: tap to type what arrives") : null),
         ui.h("span", { class: "st amount" }, !x.active ? ui.h("div", { class: "muted" }, x.upcoming ? "not yet" : "ended") : ui.h("div", {}, x.period === "once" ? fmt.money(x.amount, cur) : fmt.money(x.monthly, cur)), !x.active ? null : ui.h("div", { class: "muted small" }, x.period === "once" ? "one time" : "a month"), ui.h("div", { class: "muted small" }, "Edit \u203a")),
       ))),
       ui.h("p", { class: "muted small" }, "Tap an income to change it."),
+      onePart(),
       out, formHost,
     ));
   } else {
@@ -168,4 +183,54 @@ export function render(root, ctx) {
     root.append(formCard);
   }
   root.append(ui.h("style", {}, ".st.amount { text-align: right; }"));
+
+  // "One figure or item by item" (gap next-60 #11; README): one quiet row under the list, drawn only while a kind of income can
+  // be put together into one figure or is kept as one (a kind = one kind of income of one person: Bo's business income,
+  // Dividends and interest; never pay from a job: one-figure.js says why). Inside: each such kind with its two chips; One figure asks first, in place, then replaces the lines with one
+  // (Undo); Item by item keeps the one line as the first of the list. Nothing here is drawn for a plan with nothing to choose.
+  function onePart() {
+    const money = (n) => fmt.money(n, cur);
+    const all = sectionsOf(plan, { all: true });
+    const shown = all.filter((s) => s.count >= 2 || s.mode === "one" || oneTouched.has(s.key));
+    const said = oneSaid; oneSaid = null;
+    if (!said && !shown.some((s) => s.changes || oneTouched.has(s.key))) return null;
+    const act = (s, mutate, words) => {
+      oneOpen = true; oneTouched.add(s.key);
+      let r = null, total = d.monthly;
+      const undo = ui.undoable(store, (dr) => { r = mutate(dr); total = compute(dr, { today }).monthly; });
+      if (!r) return;
+      oneSaid = { text: words(r, total), r, total, undo };
+    };
+    const putTogether = (s) => act(s, (dr) => asOne(dr, s.key), (r, total) => doneWords(r, s, money, total));
+    const toItems = (s) => act(s, (dr) => itemize(dr, s.key), (r) => itemizeWords(r));
+    // One figure asks first, in place; while it asks, its chip is the one lit (review 2026-11-16 P2: the old choice stayed lit and
+    // the tap looked lost). "Keep them as they are", or a tap on the other chip, puts the block back as it was. Nothing is written.
+    const block = (s) => {
+      const host = ui.h("div", { dataset: { kind: s.key }, style: { display: "grid", gap: "8px" } });
+      // the chip lit now keeps the focus when the block is drawn again under the finger (the tapped control is replaced)
+      const lit = () => { try { host.querySelector('[aria-pressed="true"]')?.focus({ preventScroll: true }); } catch { /* old browsers */ } };
+      const draw = (asking, focus = false) => {
+        const ask = !asking ? null : ui.h("div", { style: { display: "grid", gap: "8px" } }, ui.h("p", {}, askWords(plan, s, money, d.monthly)),
+          ui.row(ui.button("Replace with one line", () => putTogether(s), { class: "secondary" }), ui.button("Keep them as they are", () => draw(false, true), { class: "secondary" })));
+        const pick = (v) => {
+          if (asking) return draw(false, true);      // the other chip while asking: the question goes, nothing changes
+          if (v === "items") return toItems(s);
+          if (!s.join.length) return putTogether(s);   // one row: only marked, nothing to replace
+          draw(true, true);
+        };
+        host.replaceChildren(...[   // (a native replaceChildren writes a null as the word "null": left out)
+          ui.h("p", {}, ui.h("strong", {}, s.name), ` \u00b7 ${sectionLine(s, money)}`),
+          s.changes || oneTouched.has(s.key) ? choice(ctx, { id: `one-${s.key}`, label: `${s.name}: one figure or item by item`, value: asking ? "one" : s.mode, onPick: pick,
+            presets: [{ value: "one", label: "One figure" }, { value: "items", label: "Item by item" }] }) : null,
+          ...s.held.map((h) => ui.h("p", { class: "muted small" }, holdWords(h))),
+          ask].filter(Boolean));
+        if (focus) lit();
+      };
+      draw(false);
+      return host;
+    };
+    const note = said ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (res) => { oneOpen = true; oneSaid = { text: ui.undoneWords(res, undoneWords(said.r, money, said.total)) }; } } : {}) : null;
+    return ui.h("div", { class: "folds", style: { marginTop: "8px" } }, part(ctx, { id: "asOne", kind: "own", title: PART_TITLE, says: statusWords(shown),
+      open: !!said || oneOpen, body: [note, ui.h("p", {}, INTRO), ...shown.map(block)] }));
+  }
 }

@@ -97,3 +97,89 @@ elsewhere. Test: "batch 6" in `module.test.mjs`.
 Each item carries `guessed: true` when its amount is our guess in the ledger (core/estimate `isGuess` on
 `income[<id>].amount`; Get started writes "Your Social Security" so when the amount was left blank). The list says "Our
 guess for now: tap to type what arrives" under it. No figure changes.
+
+## One figure or item by item (gap list, next 60, item 11; 2026-11-16) -- `one-figure.js`
+
+A person can keep a kind of income as **one figure** (typed and changed in one place) or list it **item by item**, as
+before (research Ux8). Net worth has the same choice for accounts (its README says how the two agree).
+
+- **What a "kind" is (a section).** One kind of income of one person: Bo's business income; Dividends and interest (the
+  household's); Kim's support or gifts; Bo's bonus; Other income. Key: `type|personId` (`sectionKey`). Inside a kind, a
+  line goes together with the one kept only when it is paid alike: the same schedule, raise, start and end dates, tax
+  mark, payday and "typical year" mark (`alikeWhy`). So the sum is the same at every page that reads lines: Income's own
+  figures, Next year, the Forecast and the paydays, the tax pages, and the retirement plan (pay by person and dates, other
+  income by person and its end).
+- **Never one figure (builder's choices, where the brief was wrong about the code):**
+  - **Pay from a job.** Two salary lines of one person are two employers: Paycheck takes Social Security and the 0.9%
+    extra Medicare from each employer's pay on its own (each up to the wage base), so one line for two jobs changes
+    take-home pay above the wage base. Seen on the invented high-earning household (12-high-net-worth): its take-home moved
+    from $47,247 to $46,884 a month when one salary was split in two lines. The brief's "pay" kind is the bonus and
+    business income here.
+  - **Rent, a pension, Social Security** (Rental analysis matches rent to its place by name and amount; Pensions match by
+    amount; Social Security is read by person) and **one-time amounts**.
+  - **A support or other line whose name the retirement plan reads** (`nameRead`, the plan's own rules in
+    retirement/projection `otherIncome`): child support (it stops when the child it names, or the youngest, turns 18:
+    "support" with "child", "children", "kids" or a dependent's first name), money named as coming out of your own
+    accounts (`ownAccountMoney`: "IRA withdrawals" is never added on top of the accounts), and a pension or Social
+    Security named in words (How much to take out lists those by name). Seen on the invented blended family: its "Child
+    support for Zoe" line, renamed, was counted in a retirement year instead of stopping when Zoe turns 18.
+- **First view: nothing new** unless a kind can change (two or more lines that can go together, or one figure now). Then
+  one quiet row at the foot of the Income sources card, above "+ Add another income": the part "One figure or item by
+  item" (kind `own`, title pinned in `qa/first-view-lib.mjs`), shut, status "1 can be one figure" / "1 as one figure". None
+  of the invented households has such a kind, so no first view moved.
+- **One tap away**: "Keep a kind of income as one figure, typed and changed in one place, or list each source on its own.
+  Either way what comes in counts the same, and so does every plan that reads it." Then per kind: its name, "3 sources,
+  $190 a month in all", or, when some lines stay on their own, what one figure would bring in: "2 of 3 sources can be one
+  figure, $150 a month" (review 2026-11-16 P1); one figure: "One figure: $150 a month", "...with 1 more on its own". Then
+  the two chips (`choice()`) **One figure** / **Item by item**, and one muted sentence for each line that stays on its own.
+- **One figure** asks first, in place, with two outlined buttons: "Replace Index fund dividends and Savings interest with
+  one line, Dividends and interest: $150 a month? Bond interest stays on its own. What comes in stays $14,440 a month."
+  While it asks, the One figure chip is the one lit (review 2026-11-16 P2); Keep them as they are, or a tap on Item by
+  item, takes the question away. Replace is one `store.update` (`ui.undoable`); the part stays open with "Dividends and
+  interest is one figure now: $150 a month, in place of 2 sources. Bond interest stays on its own. What comes in is still
+  $14,440 a month." and Undo ("Put back: Index fund dividends and Savings interest. ..."). One line alone is only marked.
+  Back after a look at another page shows the green line again while the plan is unchanged: the shell keeps every Undo
+  line with its page (docs/CONVENTIONS.md "Back, Forward"), so the way back is not lost.
+- **Item by item** keeps the one line as the first of the list: "Dividends and interest is item by item now. List each
+  one: tap its line to rename it, then + Add another income." (short for a phone: review 2026-11-16 P4)
+- **In the list** the line says "One figure for your dividends and interest". **Adding** another line of that kind and
+  person here takes the mark off ("Bank bonus added. Dividends and interest is item by item again: each source is on the
+  list."). A raise from a later date (`changeFrom`) does not copy the mark to the new pay.
+
+**Which line holds the figure, and which stay on their own** (`sectionsOf`): the line marked, else Get started's own
+(`setup-other`, so its question shows the total), else the biggest a month. A line stays on its own, one sentence each
+(`<name> stays on its own: <why>.`), when another page keeps something under its id (`pointedAt`: a scan of the plan,
+values anywhere and keys under `whatIfs`): Salary keeps its raises under it / Side income keeps its months under it /
+Small business works from it / another page keeps something about it; or Side income plans with a careful figure for it
+(`countOn`); it is part of a raise from a later date (`continues`, either side); its amount is our guess for now: type the
+real one first; it is an answer in Get started (a second Get started line); the three name cases above; or, against the
+line kept, it is paid on another schedule / it has a raise of its own / it has dates of its own / income tax applies to it
+differently / it has its own payday / it is a typical year of uneven pay; or the app cannot tell it apart from another
+income on your list (its id is missing or shared: review 2026-11-16 F3, two lines with the id "x" put together removed
+both). Lines are removed by which line they are, never by id.
+
+**Formula** (arithmetic on the person's own figures; no outside figure, so nothing here has a source to date): for the
+lines L put together into the kept line k, all on the same schedule p, amount(k) = Σ amount(l), l ∈ L, to the cent, at
+p. So yearly(k) = Σ yearly(l) and monthly(k) = Σ monthly(l) (yearly = amount × times a year, monthly = yearly / 12,
+core/math/periods.js). Example: dividends $300 and interest $150.50, each every three months: one line of $450.50 every
+three months, $150.17 a month. The name is the kind's ("Dividends and interest", "Bo's business income"); nothing else of
+k changes; the others are removed.
+
+**The put-together name is never one the retirement plan reads** (`sectionName`, review 2026-11-16 F1). The kind's name
+with the person's ("Sofia's support or gifts") can itself be a name the plan reads: "support" with a dependent's first
+name is child support there, which stops the year Sofia turns 18, so two support lines of a dependent (Board $300 and Gift
+$200 a month) put together were dropped from the retirement plan's count. The name is the first of these that `nameRead`
+says nothing about: "<Person>'s support or gifts", "<Person>'s gifts and help" (support only), "Support or gifts", "Gifts
+and help" ("Other income" for other). So the two lines become "Sofia's gifts and help", $500 a month, read as before.
+Tested: `module.test.mjs` ("F1", the two-parent household's `otherIncome` before and after) and
+`tests/one-figure-totals.test.mjs`, which now also compares the income the retirement plan leaves out after work, by kind,
+person and why (the blended household's "Eli's board", split and put back together, was dropped from it).
+
+**Data**: `income[].oneFigure` (optional, `true`; docs/DATA_MODEL.md). No total reads it.
+
+**Tests**: `module.test.mjs` ("one figure: ..."): the kinds and names, the line kept, every hold sentence, the sum, Item
+by item, the mark taken off on an add, every message, Income's figures, take-home pay, each paycheck, the Federal
+estimate and the retirement plan the same after One figure and after Item by item again, and the page (S11: only this part
+changes, it stays open, Undo puts every line back). `tests/one-figure-totals.test.mjs`: every invented household with each
+free line split in two and put back together, to the cent. `tests/one-figure-invariance.test.mjs`: with no mark, every
+figure and this page's words are those of a491122.
