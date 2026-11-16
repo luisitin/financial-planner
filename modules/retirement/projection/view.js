@@ -101,6 +101,16 @@ export function decidesRetire(r) {
   return { text: `${cap(r.decisive.label)} ${r.decisive.verb} ${what}: it is our guess for now.`, ask: w.ask, href: w.href };
 }
 
+/**
+ * What the planned spending in retirement is marked with, while it is taken from today's Expenses with no figure set (compute's
+ * `estimates`): " (our estimate)", or " (from your Expenses list)" once the person has said that list is everything ("That's
+ * everything", guide.spendComplete; gy1 fix P3: it said "our estimate" right after they confirmed it); "" when a figure is set.
+ */
+export function spendingMark(d, plan) {
+  if (!(d?.estimates ?? []).some((x) => x.key === "spending")) return "";
+  return plan?.guide?.spendComplete ? " (from your Expenses list)" : " (our estimate)";
+}
+
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
   const cur = plan.meta.currency;
@@ -169,8 +179,9 @@ export function render(root, ctx) {
   const movingText = moving ? `About ${money(r0.spendingReal / 12)} a month ${r0.year === thisYear ? "this year" : `in ${r0.year}`}, about ${money(lowest / 12)} at the lowest if markets do as well as average.` : null;
   const spentDown = moving && d.strategy === "vpw" && d.result.success && d.atEnd.totalReal < 1 ? `Savings are spent down to $0 by ${d.atEnd.year} on purpose.` : null;
   // the spending is taken from today's expenses, no figure set (compute's `estimates`, spec 8.4; critic F3: worked out and never
-  // shown): the answer marks that figure "(our estimate)", once
-  const ourEstimate = (d.estimates ?? []).some((x) => x.key === "spending") ? " (our estimate)" : "";
+  // shown): the answer marks that figure "(our estimate)", once; once the person has said their Expenses list is everything
+  // ("That's everything", guide.spendComplete), it is their list's figure: "(from your Expenses list)" (gy1 fix P3)
+  const ourEstimate = spendingMark(d, plan);
   const planOn = `you plan to spend ${money(d.spendingYearly)}${ourEstimate}`;
   const decides = decidesRetire(d.range);
   const verdictText = moving && d.verdict !== "short" ? movingText : { "on track": `If markets do as well as average, it can pay for ${money(d.affordable)} a year${onTop}; ${planOn}.`, tight: `If markets do as well as average, it can pay for about ${money(d.affordable)} a year${onTop}; ${planOn}.`, short: `Short. If markets do as well as average, ${moving ? `this way runs out` : `${money(d.spendingYearly)} a year${onTop}${ourEstimate} runs out`} in ${d.shortYear} (age ${d.shortAge}), ${d.affordable >= 1 ? `and the most the plan can pay for is about ${money(d.affordable)} a year` : "and even spending nothing it would not last to the end"}.` }[d.verdict];

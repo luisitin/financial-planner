@@ -7,12 +7,11 @@ import { pathSummary } from "../guide/compute.js";
 import { goalsBehind } from "../alerts/compute.js";
 import { checkInDue } from "../monthly-review/compute.js";
 import { setupCard } from "../start/compute.js";
-import { retireGuessAsk } from "../setup/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
-import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords } from "./compute.js";
+import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords, retireRow } from "./compute.js";
 import { lookNext } from "../../../core/demo/names.js";
-import { goalsWords, guessedGoals, smallChangesHelp } from "../plan/words.js";
+import { goalsWords, guessedGoals } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
 import { fillCard, missingCard, upgradeCard, registryOf, sayNotice, rankedFor } from "../guesses/view.js";
 
@@ -146,20 +145,9 @@ export function render(root, ctx) {
       if (st.runway === null) { const hasSpend = (plan.expenses ?? []).length > 0, hasCash = (plan.accounts ?? []).some((a) => ["checking", "savings", "cash"].includes(a.type)); rows.push({ dot: "", k: "Emergency fund", s: rowWords(why.cushion) || (hasSpend ? "Needs your savings" : hasCash ? "Needs what you spend each month" : "Needs your spending and savings"), v: "Add ›", open: true, href: back(hasSpend ? "have" : "spend") }); }
       else if (st.runwayWaits) rows.push({ dot: "", k: "Emergency fund", s: `By our guesses of your bills. Aim for ${st.runwayTarget ?? 6} months`, v: `About ${monthsNear(st.runway, st.runwayTarget ?? 6)}`, href: "#/balance/liquidity" });
       else rows.push({ dot: st.runwayStatus === "ok" ? "ok" : st.cushionLater ? "warn" : st.runwayStatus === "bad" ? "bad" : "warn", k: "Emergency fund", s: st.runwayStatus === "ok" ? "Covered" : st.cushionLater ? `Enough for now; ${st.runwayTarget ?? 6} months after the costly debt` : `Aim for ${st.runwayTarget ?? 6} months`, v: monthsNear(st.runway, st.runwayTarget ?? 6), href: "#/balance/liquidity" });
-      // Social Security and the birth dates known, the forecast still waits: on the spending (j-first-renter/x-1: it said the
-      // ages were missing and sent them back to the question they had just answered)
-      // (tileWhy.retire: the check's own gap, the savings or the spending, as the summary tile says it; tileAt.retire: the
-      // question it waits for. "A few more of your figures" opens Will the money last?, which lists them)
-      if (!st.retire && why.retire) { const known = st.retirementKnown ?? !st.retirementMissing, s = rowWords(why.retire); rows.push({ dot: "", k: "Retirement", s, v: "Add ›", open: true, href: !known ? back("ages") : /a few more of your figures/.test(s) ? "#/retirement/projection" : back(st.tileAt?.retire ?? "spend") }); }
-      else if (!st.retire && !st.retirementMissing && !(plan.expenses ?? []).length) rows.push({ dot: "", k: "Retirement", s: "Needs what you spend each month", v: "Add ›", open: true, href: back("spend") });
-      else if (!st.retire && !st.retirementMissing) rows.push({ dot: "", k: "Retirement", s: "Needs a few more of your figures", v: "Add ›", open: true, href: "#/retirement/projection" });
-      else if (!st.retire) rows.push({ dot: "", k: "Retirement", s: `Needs ${st.retirementMissing}`, v: "Add ›", open: true, href: back("ages") });
-      // the tick for a retirement account is on "What do you have?", not on the amounts screen (j-first-renter/x-2)
-      else if (st.retireSavingsUnknown) rows.push({ dot: "", k: "Retirement", s: "Add your retirement savings to see", v: "Not known yet", open: true, href: back("have") });
-      else if (st.retireGuessed) rows.push({ dot: "", k: "Retirement", s: retireGuessAsk(st).dash, v: st.retire.verdict === "on track" ? "On track" : st.retire.verdict === "tight" ? "Tight" : "Needs a look", href: "#/retirement/projection" });
-      // "Small changes help" only when they would (the plan carries 85% or more of the spending: plan/words.js smallChangesHelp);
-      // else "Check the numbers first", landing on "What this answer rests on" (retirement spec D1, L12)
-      else { const ok = st.retire.verdict === "on track", small = ok || smallChangesHelp(computeOf("retirement/projection", { today })); rows.push({ dot: ok ? "ok" : "warn", k: "Retirement", s: ok ? "The money lasts" : small ? "Small changes help" : "Check the numbers first", v: ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", href: small ? "#/retirement/projection" : "#/retirement/projection?check=1" }); }
+      // the retirement row (dashboard/compute.js retireRow: the branches that were here, and the answer Will the money last? gives
+      // while Social Security is the only thing missing and the money lasts without it; gy1, 2026-11-16)
+      rows.push(retireRow(st, { plan, today, back }));
       // time for the monthly update: the oldest balance is 25 days old or more (or one has no date)
       const oldDays = bu?.rows?.length ? Math.max(...bu.rows.map((r) => (r.days === null ? Infinity : r.days))) : 0;
       // the month just ended and not checked in on: one row inviting the check-in, all month (not only the first ten days:

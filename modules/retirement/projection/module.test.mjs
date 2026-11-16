@@ -3243,3 +3243,18 @@ test("move money between accounts: no year, no amount (and not All of it), the s
   assert.equal(r.saved.length, 1, "then a good one saves");
   assert.equal(r.saved[0].retirement.happenings[0].year, 2027);
 });
+
+test("gy1 fix P3: once the person says their Expenses list is everything, the planned spending is theirs, not our estimate", async () => {
+  const { spendingMark } = await import("./view.js");
+  const est = { estimates: [{ key: "spending" }] };
+  assert.equal(spendingMark(est, {}), " (our estimate)");
+  assert.equal(spendingMark(est, { guide: { spendComplete: "2026-11-16" } }), " (from your Expenses list)");
+  assert.equal(spendingMark({ estimates: [] }, { guide: { spendComplete: "2026-11-16" } }), "", "a figure set for retirement: no mark");
+  assert.equal(spendingMark(null, null), "");
+  // Ruth and Sam, after "That's everything" on the Dashboard
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const p = retiredCouplePlan(); p.guide = { ...(p.guide ?? {}), spendComplete: "2026-11-16" };
+  const first = await firstViewOf((await sfDraw(p)).root);
+  assert.ok(first.includes("you plan to spend $33,360 (from your Expenses list)."), first.slice(0, 600));
+  assert.ok(!first.includes("(our estimate)"));
+});

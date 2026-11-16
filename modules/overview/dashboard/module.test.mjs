@@ -341,3 +341,48 @@ test("L12: the retirement row says 'Small changes help' only when they would, el
   const t = (await drawDashboard(H.danaLee(), D)).row("Retirement");
   assert.deepEqual([t.s, t.v], ["Small changes help", "Tight"]);
 });
+
+test("gy1: the retirement row says what Will the money last? says while Social Security alone is missing", async () => {
+  const { retireRow, answerWithoutSs } = await import("./compute.js");
+  const { standing } = await import("../setup/compute.js");
+  const { markGuess } = await import("../../../core/estimate/index.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  // Ruth and Sam: Sam has no Social Security figure; Will the money last? says the money lasts without it
+  const p = retiredCouplePlan(T), st = standing(p, { today: T });
+  assert.equal(st.retire, null);
+  assert.equal(st.retirementMissing, "Social Security for Sam");
+  // (gy1 fix F2, P2: the row names whose Social Security the answer leaves out, as Your plan, Health score and the Timeline
+  // still ask for it, and Will the money last? opens with "Sam's Social Security is not counted yet")
+  assert.deepEqual(retireRow(st, { plan: p, today: T }), { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" });
+  assert.equal(answerWithoutSs(p, { today: T }).retire.verdict, "on track");
+  // Sam's figure typed: the same answer, now from Get started's own check, and nothing left out to name
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  const st2 = standing(typed, { today: T });
+  assert.equal(st2.retire.verdict, "on track");
+  assert.deepEqual(retireRow(st2, { plan: typed, today: T }), { dot: "ok", k: "Retirement", s: "The money lasts", v: "On track", href: "#/retirement/projection" });
+  // our guesses carry most of the spending: the answer is said as partly our guesses, as for a checked plan, and without whose
+  const g = retiredCouplePlan(T);
+  for (const x of g.expenses) markGuess(g, `expenses[${x.id}].amount`, { key: "spend.x", value: x.amount, unit: "month", sigma: 0.25, dataAsOf: "2026-09-01" }, T);
+  const rg = retireRow(standing(g, { today: T }), { plan: g, today: T });
+  assert.deepEqual([rg.s, rg.v, rg.dot], ["Partly our guesses of your spending, without Sam's Social Security", "On track", ""]);
+  // whose, in the row's words: the other adult by name, the person themself or everyone as "your"
+  const { ssLeftOutWords } = await import("./compute.js");
+  assert.equal(ssLeftOutWords(p), "Sam's Social Security");
+  const ruth = retiredCouplePlan(T); ruth.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } }; ruth.income = (ruth.income ?? []).filter((x) => !/social security/i.test(x.name ?? ""));
+  const { ssMissingFor } = await import("../setup/compute.js");
+  assert.deepEqual(ssMissingFor(ruth).map((x) => x.role), ["self"]); assert.equal(ssLeftOutWords(ruth), "your Social Security");
+  const both = retiredCouplePlan(T); both.income = (both.income ?? []).filter((x) => !/social security/i.test(x.name ?? ""));
+  assert.equal(ssMissingFor(both).length, 2); assert.equal(ssLeftOutWords(both), "your Social Security");
+  // spending three times as high: the money runs short without Sam's Social Security, which could change that: keep asking
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  const sh = standing(high, { today: T });
+  assert.equal(answerWithoutSs(high, { today: T }), null);
+  assert.deepEqual(retireRow(sh, { plan: high, today: T }), { dot: "", k: "Retirement", s: "Needs Social Security for Sam", v: "Add ›", open: true, href: "#/overview/setup/ages?back=done" });
+  // part way through the questions, the ask picks them up where they stopped (the view's `back`)
+  assert.equal(retireRow(sh, { plan: high, today: T, back: () => "#/overview/setup/spend" }).href, "#/overview/setup/spend");
+  // Sam's birth date missing too: the row asks for both, never an answer
+  const nd = retiredCouplePlan(T); nd.household.people.find((x) => x.id === "p-sam").birthDate = "";
+  const rn = retireRow(standing(nd, { today: T }), { plan: nd, today: T });
+  assert.equal(rn.open, true); assert.match(rn.s, /^Needs Social Security for Sam and birth dates$/);
+});

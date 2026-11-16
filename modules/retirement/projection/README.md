@@ -1988,6 +1988,10 @@ that page is one more outlined link among the deeper pages inside "N more number
   The h1 ("The money lasts") stays the verdict word: the mark goes beside the figure that is ours. The line never folded,
   "Retirement spending is set to what you spend today; change it under Retirement settings below.", says where it comes
   from. The retired couple's first view rose by those two words (156 to 158 of the answer budget's 160).
+- Once the person has said their Expenses list is everything ("That's everything" on the Dashboard or Expenses,
+  `guide.spendComplete`), the mark is " (from your Expenses list)": the figure is their own list's, and "our estimate" right
+  after they confirmed it read as if the page did not believe them (gy1 fix P3, 2026-11-16; `view.js` `spendingMark(d,
+  plan)`, tested in `module.test.mjs` "gy1 fix P3"). The first-view households have not said it, so their words stay.
 
 ## Pay held for later: deferred pay plans' payouts (2026-11-16, gap list next 60 #30; tests `modules/career/equity/module.test.mjs`, `tests/deferred-pay-invariance.test.mjs`)
 `buildInputs` adds, after every other line, one income line per deferred pay plan on Equity compensation

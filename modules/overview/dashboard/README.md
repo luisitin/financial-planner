@@ -210,3 +210,38 @@ Test: `tests/demo.test.mjs` ("the Dashboard's button inside a pretend family").
   (critic F5, F8: the card said 22 above a page that said 32, in a longer sentence). The page's one filled button stays the
   next step. Nothing is written on opening the Dashboard or the page it links to.
 
+
+## The retirement line says what Will the money last? says (gy1, 2026-11-16, claude-b)
+The whole-app sweep found the Dashboard saying "Retirement: Needs Social Security for Sam" for the invented retired couple
+while Will the money last? said "The money lasts". The Dashboard's rows come from Get started's `standing()`, which runs
+the retirement check only when `retirementKnown` (every adult has a birth date and a Social Security figure, a line on
+Income, or "won't get it"); Will the money last? runs without that gate, counts no Social Security for an adult with none,
+and says so first ("Sam's Social Security is not counted yet, so this page looks worse than it is").
+
+The row is now `compute.js` `retireRow(st, { plan, today, back, proj })`, the view's branches moved there word for word
+(so a test reads them), with one change, `answerWithoutSs(plan, { today, proj })`:
+- only while Social Security is the one thing missing (on a copy, each adult `ssMissingFor` names is marked as not getting
+  it, `guide.setup.ss[id] = "none"`, what the page's "Sam won't get Social Security" button saves; the copy must then be
+  checkable, so a missing birth date keeps the ask);
+- and only when Will the money last? says "on track" without it (its own compute, `proj` when the caller has it). More
+  income can only keep the money lasting, so that answer stands: the row is the one a checked plan gets, from `standing()`
+  of the copy, naming whose Social Security it leaves out (`ssLeftOutWords`: the other adult by name, else "your"; gy1 fix
+  F2, P2): "The money lasts, even without Sam's Social Security" / "On track" (green), or "Partly our guesses of your
+  spending, without Sam's Social Security" / "On track" while our guesses carry it. (Your plan, Health score, the Timeline
+  and Get started still ask for Sam's Social Security; the row now says it is not in, so the pages agree on that, and
+  the page it opens begins with "Sam's Social Security is not counted yet".)
+- Short or only just lasting, the missing figure could change the answer, and the page's first thing is "Add Social
+  Security": the row keeps "Needs Social Security" / "Add ›", as before. Nothing is written; nothing new on screen.
+
+Ruth and Sam (the invented retired couple, Sam with no Social Security figure): "Retirement: The money lasts, even without
+Sam's Social Security, On track",
+as Will the money last? says ($85,416 a year it can pay for against $33,360 planned). The 14 households' singles and
+couples with no Social Security and money that runs short (01-07, 09-13) keep "Needs Social Security". A test over every
+invented household (`tests/month-agree-invariance.test.mjs`) checks the row against the page's answer: the page not ready,
+an ask; "The money lasts", "On track"; "It lasts, just", "Tight" or the Social Security ask; "Runs out in YEAR (age A)",
+"Short at A" or "Needs a look" or the Social Security ask; "We don't know yet", "Not known yet" or an ask; and that every
+other household's row is the one the 398a01e view built. The cost: one more `standing()` of the copy (about 20 to 60 ms
+in Node) only for a plan missing Social Security whose money lasts.
+Not done: Get started's done screen, the Timeline, Needs attention and the other pages that gate on `retirementKnown`
+still say Social Security is needed for such a plan; moving `answerWithoutSs` into `standing()` (overview/setup, claude-b's
+lane) would carry the same answer to all of them.
