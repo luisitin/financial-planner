@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { compute, crisisFacts, CRISES, TAKE_HOME, JOB_LOSS_MONTHS, CARE_HOME_YEARLY } from "./compute.js";
+import { compute as paycheck } from "../../cashflow/paycheck/compute.js";
+import { compute as disability } from "../../insurance/disability/compute.js";
 import { familyPlan } from "../../../qa/fixtures/family-plan.mjs";
 import { retirementPlan } from "../../../qa/fixtures/retirement-plan.mjs";
 import { emptyPlan } from "../../../core/schema/migrate.js";
@@ -46,7 +48,13 @@ test("life: the job loss takes six months of the bigger take-home pay; the death
   const job = sc(fam, "job-loss");
   const anaPay = 3900 * 26;   // the bigger earner
   assert.match(job.title, /^Ana /);
-  assert.match(job.story, new RegExp(`\\$${(Math.round(anaPay * TAKE_HOME * JOB_LOSS_MONTHS / 12 / 10) * 10).toLocaleString("en-US")}`));
+  // six months of Ana's take-home as Paycheck works it out, the figure Disability says (whole-app sweep x3 fix round, critic F3:
+  // it was 75% of her pay, $38,030, against Paycheck's and Disability's $6,257 a month)
+  const anaNet = paycheck(familyPlan(), { today: TODAY }).people.find((x) => x.id === "p-ana").yearly.net / 12;
+  near(disability(familyPlan(), { today: TODAY }).earners.find((x) => x.id === "p-ana").takeHomeMonthly, anaNet, 0.01);
+  const lost = (n) => `\\$${(Math.round(n / 10) * 10).toLocaleString("en-US")}`;
+  assert.match(job.story, new RegExp(`^About ${lost(anaNet * JOB_LOSS_MONTHS)} of take-home pay is missing \\(${lost(anaPay * JOB_LOSS_MONTHS / 12)} before tax\\)\\.`));
+  assert.ok(anaNet * JOB_LOSS_MONTHS < anaPay * TAKE_HOME * JOB_LOSS_MONTHS / 12 - 300, "not 75% of pay");
   assert.ok(job.path[0] < fam.base.path[0], "the first year's savings are lower");
   assert.ok(sc(fam, "disability").endReal < fam.base.endReal);
   const deathAna = sc(fam, "death-p-ana");

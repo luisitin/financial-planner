@@ -6,7 +6,9 @@
 //     `unknown` must be, without that one field, byte for byte what they were, and the field is the projection's own answer; the
 //     Timeline, How am I doing and Quick answers say their new words there (tests/sweep-x3.test.mjs pins those);
 //   - Disability, for a plan whose pay Paycheck can work out (its take-home is now Paycheck's): listed by the test, and every
-//     other plan's Disability is what it was.
+//     other plan's Disability is what it was;
+//   - the Stress tests' job loss, for the same plans (fix round, critic F3: it takes Paycheck's take-home too): the Stress tests
+//     without that one shock ("but the job loss", the count of shocks passed included) are what they were for every plan.
 //
 // To write the digests down again (from the code before a deliberate change): PRINT=1 node --test tests/sweep-x3-invariance.test.mjs
 import { test } from "node:test";
@@ -62,7 +64,7 @@ const PAGES = [
 ];
 /** The pages whose only change for a nothing-saved plan is the added `unknown` field. */
 const ADDS_UNKNOWN = ["retirement/historical", "retirement/monte-carlo", "retirement/withdrawal-strategy", "retirement/sequence-risk", "retirement/fire",
-  "retirement/cash-flow", "scenarios/stress-tests", "insurance/ltc", "taxes/projection", "reports/retirement"];
+  "retirement/cash-flow", "scenarios/stress-tests", "scenarios/stress-tests but the job loss", "insurance/ltc", "taxes/projection", "reports/retirement"];
 /** The pages whose words change for a nothing-saved plan (pinned in tests/sweep-x3.test.mjs). */
 const SAYS_UNKNOWN = ["overview/timeline", "overview/benchmarks", "overview/quick"];
 
@@ -75,6 +77,9 @@ const goalSeek = await imp("modules/scenarios/goal-seek/compute.js");
 function figures(plan) {
   const out = {};
   for (const [key, params] of PAGES) out[key] = run(() => mods[key].compute(structuredClone(plan), { ...params }));
+  // the Stress tests without the job loss, whose take-home is Paycheck's since the fix round (critic F3)
+  const st = out["scenarios/stress-tests"];
+  out["scenarios/stress-tests but the job loss"] = st?.scenarios ? { ...st, scenarios: st.scenarios.filter((s) => s.id !== "job-loss") } : st;
   // Goal seek's nothingSaved moved to the projection (re-exported): the same answer for every plan
   out["scenarios/goal-seek nothingSaved"] = run(() => goalSeek.nothingSaved(plan));
   return out;
@@ -95,7 +100,7 @@ if (process.env.PRINT) {
     assert.deepEqual(ALL.map((x) => x.name), Object.keys(before.plans));
     assert.ok(ALL.length >= 40, `${ALL.length} plans`);
   });
-  const moved = { unknown: [], disability: [] };
+  const moved = { unknown: [], disability: [], jobLoss: [] };
   for (const { name, plan } of ALL) {
     test(`${name}: every touched compute is what it was, but for the changes it is meant for`, () => {
       const was = before.plans[name];
@@ -107,6 +112,9 @@ if (process.env.PRINT) {
       for (const [key, v] of Object.entries(now)) {
         if (u && SAYS_UNKNOWN.includes(key)) continue;   // its new words: tests/sweep-x3.test.mjs
         if (key === "insurance/disability" && pay?.ready && (v?.earners ?? []).length) { if (digest(v) !== was[key]) moved.disability.push(name); continue; }
+        // the whole Stress tests output, job loss included, where Paycheck works the take-home out: only the job loss may move
+        // (checked by the key without it)
+        if (key === "scenarios/stress-tests" && pay?.ready && (v?.scenarios ?? []).some((s) => s.id === "job-loss")) { moved.jobLoss.push(name); continue; }
         let mine = v;
         if (u && ADDS_UNKNOWN.includes(key) && v && typeof v === "object" && "unknown" in v) {
           assert.deepEqual(v.unknown, u, `${name} ${key}: the projection's own answer`);
@@ -124,5 +132,6 @@ if (process.env.PRINT) {
     assert.ok(!moved.unknown.includes("fixture family-plan.mjs:familyPlan"));
     // Disability moved only where Paycheck works the take-home out, and for the family it did
     assert.ok(moved.disability.includes("fixture family-plan.mjs:familyPlan"), moved.disability.join(", "));
+    assert.ok(moved.jobLoss.includes("fixture family-plan.mjs:familyPlan"), moved.jobLoss.join(", "));
   });
 }

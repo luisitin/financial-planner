@@ -2,7 +2,7 @@
 // with "How to get it" when someone is short; then for each adult: the need against the cover they have, how it is worked
 // out (a single parent's part by part), two rules of thumb folded for comparison, what Social Security would pay the
 // family, and how long the cover should last. Runs on the PC when connected.
-import { FUNERAL, SURVIVOR_SPENDING, earningsTestExempt, sayName, sayWhose, termYears, collegeWords, shownChild, inDollars } from "./compute.js";
+import { FUNERAL, SURVIVOR_SPENDING, TAKE_HOME, earningsTestExempt, sayName, sayWhose, termYears, collegeWords, shownChild, inDollars } from "./compute.js";
 import { isYou, nameIn, NameIn, nameOf, NameOf, verbFor, selfOf, NamesIn, needItem } from "../../../core/words.js";
 
 const STYLE = `
@@ -340,7 +340,7 @@ export function render(page, ctx) {
     const dimeParts = [di.debts > 0 ? `debts ${money(di.debts)}` : null, `funeral ${money(di.finalExpenses)}`, di.incomeYears > 0 ? `${di.incomeYears < 1.5 ? (di.incomeYears < 0.5 ? "less than a year" : "a year") : `${Math.round(di.incomeYears)} years`} of pay ${money(di.income)}` : null, di.mortgage > 0 ? `mortgage ${money(di.mortgage)}` : null, di.education > 0 ? `education ${money(di.education)}` : null].filter(Boolean);
     const dimeTitle = `${dimeNames(di)} added up`;
     ways.append(way(dimeTitle.charAt(0).toUpperCase() + dimeTitle.slice(1), money(di.total), `${dimeParts.join(" + ")}.${di.incomeYears > 0 ? " Pay counts until the youngest child turns 18." : d.children.length ? " No child is under 18, so no pay is counted." : " With no children, no pay is counted."}`));
-    if (p.lifetime.years > 0) ways.append(way("Lifetime earnings", money(p.lifetime.total), `The family's share of ${nameOf(p.name)} take-home pay for ${p.lifetime.years} more working year${p.lifetime.years === 1 ? "" : "s"} (about ${money(p.lifetime.yearly)} a year, after taking out ${nameOf(p.name)} own spending), in today's dollars.`));
+    if (p.lifetime.years > 0) ways.append(way("Lifetime earnings", money(p.lifetime.total), `The family's share of ${nameOf(p.name)} take-home pay (taken as ${Math.round(TAKE_HOME * 100)}% of pay, a rough share for a whole working life) for ${p.lifetime.years} more working year${p.lifetime.years === 1 ? "" : "s"} (about ${money(p.lifetime.yearly)} a year, after taking out ${nameOf(p.name)} own spending), in today's dollars.`));
     const rules = p.lifetime.years > 0 ? 2 : 1;
     card.append(ui.h("details", { class: "ln-more" }, ui.h("summary", {}, rules === 2 ? "Two rules of thumb, for comparison" : "A rule of thumb, for comparison"), ways,
       p.plan && p.plan.need !== null ? ui.h("p", { class: "muted small" }, `${rules === 2 ? "Both leave" : "It leaves"} out ${nameOf(p.survivorName)} own pay, Social Security for the family and the savings you already have, so ${rules === 2 ? "they come" : "it comes"} out higher. ${rules === 2 ? "They are quick checks" : "It is a quick check"}; the figure above is the one built from your numbers.`)

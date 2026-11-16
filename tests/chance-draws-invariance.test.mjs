@@ -59,7 +59,13 @@ const sansUnknown = (v, u) => { if (!u || !v || typeof v !== "object" || !("unkn
 /** The plans whose plan summary now says "not known yet" (the Timeline's and the Plan health score's words; tests/sweep-x3.test.mjs
  * and the health score's module test pin them): their summary is not compared here. */
 const SAYS_UNKNOWN = new Set(ALL.filter(({ plan }) => retirementUnknown(plan, { today: T })).map((x) => x.name));
-const skipped = (name, k) => k === "summary" && SAYS_UNKNOWN.has(name);
+/** The plan summary without the job loss's row among the shocks the plan does not survive: the Stress tests' job loss takes the
+ * take-home Paycheck works out since the sweep x3 fix round (critic F3), so that row's figures move where the shock fails; the rest
+ * of the summary may not, nor which shocks fail (`jobLossFails` and the count passed). Its digests were written from ce79d70, the
+ * code before that change, where every other digest here was the same as at 81a5288. */
+const JOB_LOSS = / out of work for /;
+const butJobLoss = (s) => (s?.protection ? { ...s, protection: { ...s.protection, failing: s.protection.failing.filter((f) => !JOB_LOSS.test(f.title)) } } : s);
+const skipped = (name, k, jobLossFails) => (k === "summary" && (SAYS_UNKNOWN.has(name) || jobLossFails)) || (k === "summaryButJobLoss" && SAYS_UNKNOWN.has(name));
 /** The careful figure (thousands of runs) only for the plans the module tests use. */
 const CAREFUL = new Set(["fixture family-plan.mjs:familyPlan", "fixture retirement-plan.mjs:retirementPlan", "fixture widow-plan.mjs:widowPlan"]);
 /** Chance the money lasts' own figures for one plan, asked for with `extra` on top of each call the pages make. */
@@ -79,7 +85,7 @@ function figures(name, plan) {
   return {
     ...chanceFigures(name, plan),
     report: run(() => sansUnknown(reportRetirement(p(), { today: T, maxPaths: 200 }), u)),
-    summary: run(() => summary(p(), { today: T, maxPaths: 200 })),
+    ...(() => { const s = run(() => summary(p(), { today: T, maxPaths: 200 })); return { summary: s, summaryButJobLoss: butJobLoss(s), jobLossFails: !!s?.protection?.failing?.some((f) => JOB_LOSS.test(f.title)) }; })(),
     fire: run(() => sansUnknown(fire(p(), { today: T }), u)),
     goals: run(() => goals(p(), { today: T })),
     compare: run(() => compare(p(), { today: T, paths: 100 })),
@@ -117,7 +123,7 @@ test("with the usual way of drawing, every figure is the one the code gave befor
   assert.deepEqual(Object.keys(now).sort(), Object.keys(was.plans).sort(), "the same plans");
   let ran = 0;
   for (const [name, d] of Object.entries(now)) {
-    for (const [k, v] of Object.entries(was.plans[name])) if (!skipped(name, k)) assert.equal(d[k], v, `${name}: ${k}`);
+    for (const [k, v] of Object.entries(was.plans[name])) if (!skipped(name, k, d.jobLossFails === digest(true))) assert.equal(d[k], v, `${name}: ${k}`);
     if (ALL.find((x) => x.name === name) && chance(structuredClone(ALL.find((x) => x.name === name).plan), { today: T, paths: 100, careful: false }).ready) ran++;
   }
   assert.ok(ran >= 25, `${ran} plans run`);
@@ -142,6 +148,6 @@ test("the usual way asked for by name, an unknown way, a way kept in the plan, o
     }
     // every figure, with a way kept in the plan: this page as the other pages ask for it, and every other page
     const d = figures(name, kept("history"));
-    for (const k of Object.keys(was[name])) if (!skipped(name, k)) assert.equal(digest(d[k]), was[name][k], `${name}, kept history: ${k}`);
+    for (const k of Object.keys(was[name])) if (!skipped(name, k, d.jobLossFails === true)) assert.equal(digest(d[k]), was[name][k], `${name}, kept history: ${k}`);
   }
 });

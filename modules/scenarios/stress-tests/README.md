@@ -14,7 +14,7 @@ Everything `retirement/projection` `buildInputs` reads (people, accounts, contri
 |---|---|
 | A crash like 2008; a lost decade like 2000-2009; the 1970s (1973-1982); 1929 and the Depression (1929-1938); stocks and bonds down together, like 2022 | from the hit year (the household's retirement year, or now), the real yearly returns of stocks, 10-year Treasuries and bills, and the real CPI inflation of those years (Damodaran, `retirement/historical/data/returns.js`), then the plan's own assumptions again. The stories' figures (the deepest fall, average inflation, the real stock result) are worked out from the same data by `crisisFacts`. |
 | Returns 2 points lower, for good | the stock and bond assumptions minus `LOWER_RETURNS` (0.02) every year |
-| Out of work for 6 months | the biggest earner still working: `JOB_LOSS_MONTHS` (6) of take-home pay (`TAKE_HOME` 75% of gross; a planning assumption) comes out of savings this year as an engine event, and their contributions skip the year |
+| Out of work for 6 months | the biggest earner still working: `JOB_LOSS_MONTHS` (6) of take-home pay (the Paycheck page's, `cashflow/paycheck` `takeHomeOf`: each salary and bonus at that page's share; business income, and pay it cannot work out, at `TAKE_HOME` 75% of gross, a planning assumption) comes out of savings this year as an engine event, and their contributions skip the year |
 | Never working again | the plan rebuilt with that person retiring now (contributions stop; if it is the first person the household's spending years start); their Social Security line starts next year at the full-retirement-age amount (Social Security disability pays the PIA); a disability policy on file pays its monthly `benefit` to 65 |
 | If X died this year (couples, each adult) | the plan rebuilt for the survivor alone: X's people entry, income, contributions and Social Security removed; filing single (head of household with a dependent); spending x `SURVIVOR_SPENDING` (0.75, a rule of thumb) from now; the survivor's Social Security the larger of their own and `couple.survivorMonthly` (widow(er)'s limit included); `FUNERAL` ($8,300, NFDA 2023 median with viewing and burial) out, term/whole life benefits on file in |
 | Living to 100 | every adult's plan-end age 100 (105 if the plan already runs to 100); the story gives the chance at least one reaches it from `retirement/longevity` `survival` |
@@ -75,3 +75,16 @@ For a plan with nothing saved for retirement and nothing going in, Will the mone
 and the page then shows, under its title, the projection's sentence with this page's question ("which shocks your plan would
 survive", `UNKNOWN_WHAT`) and one filled link, "Add what you own ›"; nothing else. For every other plan the result is the same
 as before (absent field; the invariance test compares it with ce79d70 over the invented households).
+
+## The job loss takes Paycheck's take-home (whole-app sweep x3, fix round, 2026-11-16; tests `module.test.mjs`, `tests/sweep-x3-invariance.test.mjs`)
+Disability now says the take-home the Paycheck page works out (Ana: $6,257 a month), while this page's job loss took 75% of her pay
+($38,030 for six months, $6,338 a month), and Disability links here (critic F3). The job loss now asks the same helper,
+`takeHomeOf(plan, { today, fallback: TAKE_HOME })`, so for the invented family it reads "About $37,540 of take-home pay is missing
+($50,700 before tax)." A household whose pay Paycheck cannot work out (all business income, like the round 8 freelancer) loses 75%
+of its pay as before. "How these are worked out" says it: "take-home pay is what reaches the bank, as the Paycheck page works it
+out (75% of pay before tax where it cannot)".
+Measured over the 49 invented plans (the invariance test's set): the job loss's amount moved on 30, no shock changed between lasting
+and running out, and nothing else on this page moved (the test compares the page without the job loss with ce79d70). The plan
+summary's row for a job loss the plan already does not survive moves with it (`tests/chance-draws-invariance.test.mjs` compares the
+summary without that row). Life insurance needs keeps its 75% planning share (its README says why).
+

@@ -61,3 +61,5 @@ Fix round (critics F4, F5; tests `module.test.mjs` "with no date given, compute 
   the others' take-home pays them while they keep working, and their 401(k) and health cover keep coming out of their pay. For the
   person who cannot work it is only said on screen ("about $6,257 take-home pay", as Paycheck says it); their own 401(k) stops with
   their pay and is not counted anywhere here, so nothing is taken off twice.
+- The Stress tests' job loss asks the same helper, so the take-home it says missing is six months of this one; Life insurance needs
+  keeps 75% of pay as its planning share for a whole working life and a survivor's pay, and says so on screen (its README says why).

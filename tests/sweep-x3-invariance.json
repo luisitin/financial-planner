@@ -18,6 +18,7 @@
    "overview/timeline": "qls2rC3HF1wvpAAlRthegE",
    "overview/quick": "ZeDzPEsJajwKpk0KHSPGFq",
    "reports/retirement": "ZjK7tqPM-h5JDTnYeWIdEM",
+   "scenarios/stress-tests but the job loss": "SLtJzgP-Tzn7nAf4XDgX-j",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture debt-plan.mjs:debtPlan": {
@@ -36,6 +37,7 @@
    "overview/timeline": "rjqP5NMGHee5JGuxPoZEpn",
    "overview/quick": "od6o8b1iejR7FWvT_CStM6",
    "reports/retirement": "MZiv7M5qFlGfmZAnBC72hp",
+   "scenarios/stress-tests but the job loss": "MZiv7M5qFlGfmZAnBC72hp",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "fixture family-plan.mjs:familyPlan": {
@@ -54,6 +56,7 @@
    "overview/timeline": "qls2rC3HF1wvpAAlRthegE",
    "overview/quick": "ZeDzPEsJajwKpk0KHSPGFq",
    "reports/retirement": "ZjK7tqPM-h5JDTnYeWIdEM",
+   "scenarios/stress-tests but the job loss": "SLtJzgP-Tzn7nAf4XDgX-j",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture guessed-plan.mjs:guessedPlan": {
@@ -72,6 +75,7 @@
    "overview/timeline": "I_9Q20Jv5r6dM2FzzhcoqM",
    "overview/quick": "ZzjyLiR98fhrbGBZdNpKq6",
    "reports/retirement": "ZL2MvsBHa09KdeZELKklot",
+   "scenarios/stress-tests but the job loss": "dGdG8ukcoJwTw89PBDLdzF",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture held-plan.mjs:heldPlan": {
@@ -90,6 +94,7 @@
    "overview/timeline": "4ZFWf9ibotHosDrwRiGllw",
    "overview/quick": "nJDkKmxPxpgIElocYkbPcs",
    "reports/retirement": "338NTJPi-PUXgrkN_rpwIg",
+   "scenarios/stress-tests but the job loss": "pKoPpQgU4OXgdf-c48ky6o",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture investments-plan.mjs:investmentsPlan": {
@@ -108,6 +113,7 @@
    "overview/timeline": "oERvNloUsQ0AoDRc9zDxcI",
    "overview/quick": "DIQIAu9pBhiDtBz0bMiUyk",
    "reports/retirement": "OML0Lp8ue4yCfTSVDYUtWC",
+   "scenarios/stress-tests but the job loss": "1siVm_wwnprGllBW4fYk1h",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture renter-debt-plan.mjs:renterDebtPlan": {
@@ -126,6 +132,7 @@
    "overview/timeline": "DCcSG8n6lXssppKPpwD5Sz",
    "overview/quick": "3pb6vVlAYVO4-fsnjcXpWI",
    "reports/retirement": "jDUDMriRL52aYpqPrrXnOo",
+   "scenarios/stress-tests but the job loss": "AV6SjFp22K_8r9Bnv6X6mb",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
@@ -144,6 +151,7 @@
    "overview/timeline": "0Phe3mFigvzL6eCSlrtZrB",
    "overview/quick": "lAdsiEP5VAtPk8bEGgKHqG",
    "reports/retirement": "jDUDMriRL52aYpqPrrXnOo",
+   "scenarios/stress-tests but the job loss": "AV6SjFp22K_8r9Bnv6X6mb",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture retired-couple-plan.mjs:retiredCouplePlan": {
@@ -162,6 +170,7 @@
    "overview/timeline": "UqvDMi2AweKgZk0es4aZ4Y",
    "overview/quick": "LhNIioflBMkDggGo1DJgWg",
    "reports/retirement": "IVWDTWsypE5JxCTF_TXDHx",
+   "scenarios/stress-tests but the job loss": "hKo-p2kGaa_YR3URj-4Xos",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture retirement-plan.mjs:retirementPlan": {
@@ -180,6 +189,7 @@
    "overview/timeline": "c0-6wTqVh4Ht86aaJXNEQI",
    "overview/quick": "f9HimWFBy1intz4lOeqKjw",
    "reports/retirement": "uiGBltzmPxq3utOLsA7wlI",
+   "scenarios/stress-tests but the job loss": "KYF7kJpZI1u-JSQ180ok5_",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture sample-plan.mjs:samplePlan": {
@@ -198,6 +208,7 @@
    "overview/timeline": "rjqP5NMGHee5JGuxPoZEpn",
    "overview/quick": "nMzT-eq7zLDadDTbmv4C28",
    "reports/retirement": "MZiv7M5qFlGfmZAnBC72hp",
+   "scenarios/stress-tests but the job loss": "MZiv7M5qFlGfmZAnBC72hp",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "fixture tax-plan.mjs:taxPlan": {
@@ -216,6 +227,7 @@
    "overview/timeline": "PA5JbyOY5sDDkztvnps-ZS",
    "overview/quick": "jMjwL2-HNMwTSU0HeXpfsJ",
    "reports/retirement": "SYbkDuK91wq46r336Xv2iB",
+   "scenarios/stress-tests but the job loss": "ZE9LmGbAIx9FWP0bI_k4qF",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "fixture widow-plan.mjs:widowPlan": {
@@ -234,6 +246,7 @@
    "overview/timeline": "rgpsljzQZR6_O0f-hNVzux",
    "overview/quick": "qiUCyYNoNcrPk7HRCskdAP",
    "reports/retirement": "9sN1Yg4smUpscmlTFVSnRy",
+   "scenarios/stress-tests but the job loss": "U7NbJfknnITxewsbV1RgT8",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "01-single-adult/base": {
@@ -252,6 +265,7 @@
    "overview/timeline": "zU4kVo1FMIO2S5_R0BjIYg",
    "overview/quick": "va7OzGbzlPSsgt9nJO0Tdr",
    "reports/retirement": "oVR4D7IrNTNdilCu9xlmHa",
+   "scenarios/stress-tests but the job loss": "G63_JdWiLQhFMfEj92VKzR",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "02-couple-no-kids/base": {
@@ -270,6 +284,7 @@
    "overview/timeline": "LKOF0NAkPBWntA7vaF9raN",
    "overview/quick": "DotOHiCChIel0d4pxYl3Vj",
    "reports/retirement": "Ypynl_8938fLmVs04spljl",
+   "scenarios/stress-tests but the job loss": "Ww_4lQu8pXJ2a62CXO_JsB",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "03-single-parent/base": {
@@ -288,6 +303,7 @@
    "overview/timeline": "LJ5aQQfkJ8v7V7q8MLN6rD",
    "overview/quick": "bIerVyFW3yduSDIcb8K9jJ",
    "reports/retirement": "kHMWEoFedx0suwzFUnwyEv",
+   "scenarios/stress-tests but the job loss": "K2qP173EoFgtzcnMhbAmzo",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "04-two-parents/base": {
@@ -306,6 +322,7 @@
    "overview/timeline": "_f9zAO853OhWI063ymALyt",
    "overview/quick": "1geA4rdeOLSd35f-Lvn4Bp",
    "reports/retirement": "4fBtOQC5y16rbqrpG5Ks37",
+   "scenarios/stress-tests but the job loss": "5OkjVnw4Cr8fOl4T9wdtvK",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "05-stay-at-home-parent/base": {
@@ -324,6 +341,7 @@
    "overview/timeline": "hR_AHcMXAAq7TH3izW2lKI",
    "overview/quick": "9KsO_KcNdLw4Yi2fuPLBQn",
    "reports/retirement": "Au6YYsmlxnEH8w8wLslLVU",
+   "scenarios/stress-tests but the job loss": "Pe-vgCbuQWeTRRoHrbY6Jl",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "06-blended-family/base": {
@@ -342,6 +360,7 @@
    "overview/timeline": "L1zqAavwlqGyTRCC6ChSut",
    "overview/quick": "nkwzBCqKYMUX_NMIiiKJlv",
    "reports/retirement": "_lKxBrAiX2Sd5iHlBa7f-A",
+   "scenarios/stress-tests but the job loss": "8YHS_E9wfxwlb3zLbNDfoK",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "07-multigenerational/base": {
@@ -360,6 +379,7 @@
    "overview/timeline": "AgduinxiZw8hzhzIzEmoiu",
    "overview/quick": "SNSxWpAamVBedKb9wHle1t",
    "reports/retirement": "oHFma6k50T2a2Tb8VGFFQk",
+   "scenarios/stress-tests but the job loss": "Bt71Sx9ck-GXSvz3X-lU0o",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "08-retired/base": {
@@ -378,6 +398,7 @@
    "overview/timeline": "SS1NzHSumyPeKFnXIQLBu0",
    "overview/quick": "ptGLbLFwXoPvga6y74R_cD",
    "reports/retirement": "logD9BXUsQJ8tzE564XnPX",
+   "scenarios/stress-tests but the job loss": "XYXof6QLyQ8HsbWudM_iSM",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "09-near-retirement/base": {
@@ -396,6 +417,7 @@
    "overview/timeline": "trhGrP8BvlmqU30je1qqjc",
    "overview/quick": "x3B7YiL2eM7jURGZagjWBg",
    "reports/retirement": "68aRegXn_vhRRLB8BxIOxp",
+   "scenarios/stress-tests but the job loss": "ihd2e5ne1PsEzilqaiYsI3",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "10-student-and-starter/base": {
@@ -414,6 +436,7 @@
    "overview/timeline": "Coi7eYaTnDlg1bjJ2t9K-y",
    "overview/quick": "LqEHs5yv0YMVWMNgKyusuX",
    "reports/retirement": "3zn90EtUYl8N29EsTZBH7C",
+   "scenarios/stress-tests but the job loss": "7HtiBzOViQh6t_KZf8BsBZ",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "11-self-employed/base": {
@@ -432,6 +455,7 @@
    "overview/timeline": "SKsugSM2wBs-9Rlfgv6Iqd",
    "overview/quick": "eJwcWVuA0H-3k3JaHr60Uf",
    "reports/retirement": "uXbxG8c8PD7MjdxjPif0b-",
+   "scenarios/stress-tests but the job loss": "x3_wn03H2kCqrygBajtu3W",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "12-high-net-worth/base": {
@@ -450,6 +474,7 @@
    "overview/timeline": "4DiR2vh_7zswSZdQQWXJId",
    "overview/quick": "Wi27ocjvgSJDjPvC4OIg9-",
    "reports/retirement": "nsbzLmSi62-q5BLe5S2Gs9",
+   "scenarios/stress-tests but the job loss": "snDxj7mTnY4X50RJNt9IKx",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "13-in-crisis/base": {
@@ -468,6 +493,7 @@
    "overview/timeline": "-Xj0TkwDHGxnD9aPIwUCyJ",
    "overview/quick": "exDSDMSzcVFbu49UTEQpfY",
    "reports/retirement": "nUFjwhrm_bs7_65Qmh8J0K",
+   "scenarios/stress-tests but the job loss": "5w38iHRJUMnOp4wfIdew7R",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "14-unusual-structures/base": {
@@ -486,6 +512,7 @@
    "overview/timeline": "8-7k9sMMHp_M5AFJnhJPz5",
    "overview/quick": "yobm1f3IUBjFZHR6ZgbFk_",
    "reports/retirement": "1p4kxr4qxpDqOlgejS-1eo",
+   "scenarios/stress-tests but the job loss": "lpuB4yaaUxB8cMzwaUM-cf",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "phone casey": {
@@ -504,6 +531,7 @@
    "overview/timeline": "aYi9w7zrumgkLO55jyRRQc",
    "overview/quick": "IhxRrpoodu7gbT3pcwA4Wy",
    "reports/retirement": "CScPs5vgxLCMjqiDx7-H6b",
+   "scenarios/stress-tests but the job loss": "X44zhIu_XNK1jqq5w6jGP_",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "phone danaLee": {
@@ -522,6 +550,7 @@
    "overview/timeline": "BdqJtVvY83j7-kLVvPCazd",
    "overview/quick": "-rGRX1XlpL87DB2bDWqKfk",
    "reports/retirement": "IYKw-Zr9cc6_ybVrkIPuS0",
+   "scenarios/stress-tests but the job loss": "jCI6tXPRWpdYscKp8I56nw",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "phone jamie": {
@@ -540,6 +569,7 @@
    "overview/timeline": "3j8hwxQ2bcW3xka2jMVMtq",
    "overview/quick": "zz9mDBOftN9-nzEeuZYkoO",
    "reports/retirement": "qxbDJcsiGpgKme6pehLcKY",
+   "scenarios/stress-tests but the job loss": "gBhkTKfbj-1ESm3pdiOeLV",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "phone morgan": {
@@ -558,6 +588,7 @@
    "overview/timeline": "B_6Trq6Tk9MzAkkQZ20w4s",
    "overview/quick": "cfs5xSmOXMtn9wAniueM7i",
    "reports/retirement": "Ct7zJLudTo3Oq0epo2pgdD",
+   "scenarios/stress-tests but the job loss": "okB0XB--t-DtarL6n1eRbE",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "phone robin": {
@@ -576,6 +607,7 @@
    "overview/timeline": "B6GWl6DXtyWcIwhlI025gw",
    "overview/quick": "yOqTr8HTdsLXZ4n6-bI26k",
    "reports/retirement": "B81Q7yT9i7AhCrHbmpr7kH",
+   "scenarios/stress-tests but the job loss": "1H2wr2FxaBRQxyJG87nZ9b",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "round8 earlyRetireePlan": {
@@ -594,6 +626,7 @@
    "overview/timeline": "x20wlivQxW3vtASzBsihFq",
    "overview/quick": "hvdY5bZt9vXBHGITeSpOv0",
    "reports/retirement": "bC2xgdrgB7PLkxPnwsv9I2",
+   "scenarios/stress-tests but the job loss": "XZ9BVrqq5QqWSSVMo2o4vu",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "round8 equityPlan": {
@@ -612,6 +645,7 @@
    "overview/timeline": "fLYa7hK82Vpkl29yUA2PRR",
    "overview/quick": "E219psxzeKBtuHo8OGqiIw",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "round8 firstRmdPlan": {
@@ -630,6 +664,7 @@
    "overview/timeline": "3CjrH1HgT2ID1HHwLjFKq4",
    "overview/quick": "dVkBPAx7Kb6oC2vErfsAD_",
    "reports/retirement": "gs3VpRA0ztCKmrG2mlCCx0",
+   "scenarios/stress-tests but the job loss": "eKclfqDv2zYQzrjPTkvMql",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "round8 freelancerPlan": {
@@ -648,6 +683,7 @@
    "overview/timeline": "SSI0rvIxvN4zn1UR2u4dhT",
    "overview/quick": "HfacR35SUtMzmKnrI1FrDB",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "round8 highFreelancerPlan": {
@@ -666,6 +702,7 @@
    "overview/timeline": "Y6mfCgazAbpIcqokfJFhPL",
    "overview/quick": "qS7xWo_zePTwVLDw_w1IRX",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "round8 landlordBusinessPlan": {
@@ -684,6 +721,7 @@
    "overview/timeline": "_CvWW-jqlX7Ud588YCE6Eb",
    "overview/quick": "812swKzYKjeasjy9JG7hiw",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "round8 landlordPlan": {
@@ -702,6 +740,7 @@
    "overview/timeline": "5kQ_bhxhbCa7GdPIEu5JdU",
    "overview/quick": "fVIyyZ9FDkAw4vLc83mF3T",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "round8 parentLoanPlan": {
@@ -720,6 +759,7 @@
    "overview/timeline": "2MJSJHc7ilhSmm02KqCQEC",
    "overview/quick": "2ia1QcxWpwem1VZvBeV3N5",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "round8 stockAndBusinessPlan": {
@@ -738,6 +778,7 @@
    "overview/timeline": "WS6JiT4nKHsOyvRhJz3UVZ",
    "overview/quick": "yMeCO0BtKHaGid0SEBNGXP",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "round8 studentLoanPlan": {
@@ -756,6 +797,7 @@
    "overview/timeline": "f6Wkc7ON06OCLDPR8MR8ZW",
    "overview/quick": "VJ5RWciBgYJDf84VpxPWJh",
    "reports/retirement": "FM0mMF7yk94OCFQHfwG4LS",
+   "scenarios/stress-tests but the job loss": "FM0mMF7yk94OCFQHfwG4LS",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "round8 widowPlan": {
@@ -774,6 +816,7 @@
    "overview/timeline": "yMTehitTw08j5dITbJ9Tsk",
    "overview/quick": "HyjmSM667VG8iWXbcS-mHo",
    "reports/retirement": "s_Qt_atUVvBBLj2V-iuGKz",
+   "scenarios/stress-tests but the job loss": "0bfUrXDftyjGMMeW4Oj7GX",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "persona sam": {
@@ -792,6 +835,7 @@
    "overview/timeline": "d_JCEHlWnL452x27k_hGjG",
    "overview/quick": "0gfsOnzZ4PUYS6_qY1qZiw",
    "reports/retirement": "qUbl603XKT0NkeKvdmJojE",
+   "scenarios/stress-tests but the job loss": "IThBarQEA1SdxsIKV-idy2",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "persona jordan": {
@@ -810,6 +854,7 @@
    "overview/timeline": "MOQQSIlHYvwsedNfTK75J4",
    "overview/quick": "BkXPzh-72f-jXzH0tapC81",
    "reports/retirement": "N66fN751DqrQB-m0M2VFFV",
+   "scenarios/stress-tests but the job loss": "5IQKdu3s-53OoEV9Pb2Ek3",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   },
   "persona patLee": {
@@ -828,6 +873,7 @@
    "overview/timeline": "6sg6OxEJ4WusLRzzqAWefh",
    "overview/quick": "BX67rJCvR0iYOwNgytl4E7",
    "reports/retirement": "lM1QD8pZJuI92usbtsht7T",
+   "scenarios/stress-tests but the job loss": "VEW0J-pz4W5Got8FEVsH2d",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "persona ruth": {
@@ -846,6 +892,7 @@
    "overview/timeline": "6nowaQnGlq96XZLap357Zs",
    "overview/quick": "g1IPhibl3W1byIallYD85C",
    "reports/retirement": "pPFhcsvE6fzWeoNULTR1mx",
+   "scenarios/stress-tests but the job loss": "ina5XyYBrM12gPr9zUQI3v",
    "scenarios/goal-seek nothingSaved": "tb6kG2xiP3wJ8b8k3K5Y66"
   },
   "empty plan": {
@@ -864,6 +911,7 @@
    "overview/timeline": "rjqP5NMGHee5JGuxPoZEpn",
    "overview/quick": "nMzT-eq7zLDadDTbmv4C28",
    "reports/retirement": "yL3jhXybNonmsEcWH37p5J",
+   "scenarios/stress-tests but the job loss": "yL3jhXybNonmsEcWH37p5J",
    "scenarios/goal-seek nothingSaved": "_LzxZZCN0YqeSff_J4EBdt"
   }
  }

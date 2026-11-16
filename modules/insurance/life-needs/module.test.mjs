@@ -1512,3 +1512,9 @@ test("round 8 verify: with the cover the page asks for, a survivor who retires f
   const w = compute(q, { today: R8 }).people.find((x) => x.name === "Priya").plan.withCover;
   assert.ok(w.success || w.failYear >= priya.plan.jointFailYear, `Tom runs out ${w.failYear}, the plan together ${priya.plan.jointFailYear}`);
 });
+
+test("lifetime earnings says on screen that its take-home is a rough 75% of pay, where Disability and the Stress tests take Paycheck's (whole-app sweep x3 fix round, critic F3)", async () => {
+  const { pageText } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const text = await pageText(new URL("./view.js", import.meta.url), familyPlan(TODAY), TODAY, { computeRemote: { "insurance/life-needs": compute } });
+  assert.match(text, /The family's share of Ana's take-home pay \(taken as 75% of pay, a rough share for a whole working life\) for \d+ more working years/);
+});

@@ -525,3 +525,12 @@ Tests: module.test.mjs "round 8 verify" and the updated item 14 / UX 5 tests.
   README), so it is not the couple's first move.
 - The warning's link reads "Will the money last? ›" (it read "Will the money last? shows what is ›").
 Final check (2026-11-07): the list of what the plan still needs uses the words every page uses (`core/words.js` `needItem`: "a birth date on the People page", "what you will spend in retirement (on the Expenses page, or on the Will the money last? page)"). Test in `tests/wording-verify.test.mjs`.
+
+## Take-home: a planning share here, Paycheck's on Disability and the Stress tests (whole-app sweep x3, fix round, 2026-11-16)
+Disability and the Stress tests' job loss now take the take-home the Paycheck page works out (`cashflow/paycheck` `takeHomeOf`;
+critic F3: Disability said $6,257 a month for Ana and the stress test 75% of her pay). This page keeps `TAKE_HOME` (75% of pay):
+lifetime earnings is a rule of thumb over a whole working life, where tax and payroll deductions change from year to year, and the
+survivor's own answer takes their retirement saving off separately (Paycheck's take-home already has the payroll 401(k) out, so
+using it here would take that off twice). The lifetime-earnings line now says so on screen: "The family's share of Ana's take-home
+pay (taken as 75% of pay, a rough share for a whole working life) for ..." (`module.test.mjs` pins the words). No figure moved.
+

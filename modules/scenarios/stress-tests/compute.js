@@ -9,6 +9,7 @@ import { buildInputs, retirementUnknown } from "../../retirement/projection/comp
 import { RETURNS } from "../../retirement/historical/data/returns.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
+import { takeHomeOf } from "../../cashflow/paycheck/compute.js";
 import { survival } from "../../retirement/longevity/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
 import { money as fmtMoney } from "../../../core/format.js";
@@ -120,11 +121,14 @@ export function compute(plan, params = {}) {
   // in a sentence the unnamed first adult ("Me") is "you", the partner "your spouse" (review 2026-11-06, round 7)
   if (earners.length) {
     const e = earners[0];
-    const out = e.pay * TAKE_HOME * JOB_LOSS_MONTHS / 12;
+    // the take-home the job loss takes away is the Paycheck page's, as Disability says it (cashflow/paycheck `takeHomeOf`: each
+    // salary and bonus at that page's share, business income and pay it cannot work out at TAKE_HOME; whole-app sweep x3 fix round,
+    // critic F3: Disability said Ana's take-home is $6,257 a month and this story 75% of her pay, $6,338)
+    const out = takeHomeOf(plan, { today, fallback: TAKE_HOME })(e.id) * JOB_LOSS_MONTHS;
     const j = cloneInputs(I);
     j.events.push({ year: startYear, amount: out, label: "job loss" });
     for (const c of j.contributions) if (c.personIndex === e.index) c.skipYears = [...(c.skipYears ?? []), startYear];
-    add({ id: "job-loss", group: "life", icon: "📦", title: `${NameIn(e.name)} ${verbFor(e.name, "is", "are")} out of work for ${JOB_LOSS_MONTHS} months`, story: `About ${money(out)} of take-home pay is missing (${Math.round(TAKE_HOME * 100)}% of ${money(e.pay * JOB_LOSS_MONTHS / 12)} gross). It comes out of savings, cash first, and ${nameOf(e.name)} retirement saving stops for the year. The emergency fund is what this is for.`, go: ["balance", "liquidity"] }, run(j));
+    add({ id: "job-loss", group: "life", icon: "📦", title: `${NameIn(e.name)} ${verbFor(e.name, "is", "are")} out of work for ${JOB_LOSS_MONTHS} months`, story: `About ${money(out)} of take-home pay is missing (${money(e.pay * JOB_LOSS_MONTHS / 12)} before tax). It comes out of savings, cash first, and ${nameOf(e.name)} retirement saving stops for the year. The emergency fund is what this is for.`, go: ["balance", "liquidity"] }, run(j));
 
     // never working again: the plan is rebuilt with that person retiring now; Social Security disability pays the full-retirement-age amount from next year
     const p2 = JSON.parse(JSON.stringify(plan));
