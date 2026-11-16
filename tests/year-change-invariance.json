@@ -1,0 +1,313 @@
+{
+ "note": "digests of Year by year, the projection and its answer before 'Change this year' (commit dca545e); tests/year-change-invariance.test.mjs says how to write them again",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "cashFlow": "pK2UPJgGaVewXTeQyROpf7",
+   "cashFlowNominal": "tFYDEOYrZZDzUAuiv9Mxcm",
+   "projection": "xU7XB8Eg9sALNzd4yvebU3",
+   "answer": "W90qlHMIVcpfg50_1RWy8U",
+   "page": "40tuikxVcQaZex-yBtKgMB"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "cashFlow": "yMu25mpwMG2XZFzTVo-lnD",
+   "cashFlowNominal": "yMu25mpwMG2XZFzTVo-lnD",
+   "projection": "4g8YFP90pQ0T8Oy2EipMlE",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "KzOTO5V3pytBqDfJ2DoH5N"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "cashFlow": "pK2UPJgGaVewXTeQyROpf7",
+   "cashFlowNominal": "tFYDEOYrZZDzUAuiv9Mxcm",
+   "projection": "xU7XB8Eg9sALNzd4yvebU3",
+   "answer": "W90qlHMIVcpfg50_1RWy8U",
+   "page": "40tuikxVcQaZex-yBtKgMB"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "cashFlow": "357Q7pFk9cW9Z0XVirXKKt",
+   "cashFlowNominal": "YqbjPS0rzwTy5jF4QEtq9A",
+   "projection": "CzL-TOWRLOm_xF4KloDSFi",
+   "answer": "vx_vVGUHimvcjX5Uq_HH6B",
+   "page": "MnWCFD9DKk48PB1aCldTBx"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "cashFlow": "4AMMsE4VZ1vrT4R7Hvkt8X",
+   "cashFlowNominal": "CoBJZs7bu24FlhBzL-nUpW",
+   "projection": "bWRpJJJw0lF7VJaHsWxADk",
+   "answer": "CgKyGUxOOwkV0vJS6TP6be",
+   "page": "YHZkrEDGDltZRgnFIpTSFQ"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "cashFlow": "yEXmlw-_5C4z3cOAnobDgA",
+   "cashFlowNominal": "fBLo54ZOmQmg7aTbH0MVfl",
+   "projection": "a3mMiwMHUMKL96etY6JbKG",
+   "answer": "D8tDsLGaSuQA0fe5BrWq1m",
+   "page": "ibkbLLkd-X2B9MU9GbJsTM"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "cashFlow": "Q6CHITj03rC7AORQXzYLgT",
+   "cashFlowNominal": "Mhjj1hQ1izzfdL3ApSCTgc",
+   "projection": "2NXzhajaRPTPa2lT_wM8Hs",
+   "answer": "M4Z1fcaVmyrYMZcimUZ9gC",
+   "page": "FKj1vtenaU_9gg6DX7WnLq"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "cashFlow": "Q6CHITj03rC7AORQXzYLgT",
+   "cashFlowNominal": "Mhjj1hQ1izzfdL3ApSCTgc",
+   "projection": "2NXzhajaRPTPa2lT_wM8Hs",
+   "answer": "M4Z1fcaVmyrYMZcimUZ9gC",
+   "page": "FKj1vtenaU_9gg6DX7WnLq"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "cashFlow": "Wr8C-IBlFacfCbUbC9b_83",
+   "cashFlowNominal": "dGPcxU24kHvq05hLCfzQwx",
+   "projection": "X9YTISX6zoIDCx6KQgZVKW",
+   "answer": "_CoTpNCLf1s-B4odypv6Y7",
+   "page": "FeLDoy2HoGwPlqosDAXp4a"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "cashFlow": "akk6mdH17KPIOQPCcR9oCc",
+   "cashFlowNominal": "kJ4PJhzcWt-UxeRL1CA5CR",
+   "projection": "SpHaB6tpE1xM_UUgoc7wOD",
+   "answer": "ZE4tjBpzYhewIxHV8Papf0",
+   "page": "NAQXwmJaJn-4ZrGiqCqNWd"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "cashFlow": "yMu25mpwMG2XZFzTVo-lnD",
+   "cashFlowNominal": "yMu25mpwMG2XZFzTVo-lnD",
+   "projection": "4g8YFP90pQ0T8Oy2EipMlE",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "KzOTO5V3pytBqDfJ2DoH5N"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "cashFlow": "KmzfAOoZa3LY5pr9MAIgLa",
+   "cashFlowNominal": "xnk_Wc2Zql5CNBPC5kdocu",
+   "projection": "sOxE1V6Rvy3iw49XBIUZnA",
+   "answer": "sHQ1BIQuflvNm_1ADdWykC",
+   "page": "OpVd0Od8a3TtwHsQROle5W"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "cashFlow": "V7A36t9vyTql35XoYLKXxf",
+   "cashFlowNominal": "yEiO7YvJdkSg0GfI7QyRUw",
+   "projection": "z-JrWdzpE2p85x0hIMIpfd",
+   "answer": "Fvf5ztrkft6plwSZsZ765X",
+   "page": "w2X2km6LR64M7swWwnWMSh"
+  },
+  "01-single-adult/base": {
+   "cashFlow": "ZZdWJUYj1txkxr1ujHSnCW",
+   "cashFlowNominal": "PRFEBUfziKSimrunm1stht",
+   "projection": "fktnOurdDzlToEJcr-JACG",
+   "answer": "Kb7oDN_i1CA2IlBYcWIw_k",
+   "page": "9qZlqCg_j7rJscC4W0eK7K"
+  },
+  "02-couple-no-kids/base": {
+   "cashFlow": "pLf46Dg9hlhkiBRENvRZvx",
+   "cashFlowNominal": "lPSfsGiGCbiIEXygoUJc-o",
+   "projection": "iUipSPIbAUgi5gu1ZObB-W",
+   "answer": "vmv0lRiYJ6ceWu4zJHiTrE",
+   "page": "Mz_S5enyCD0WO6tdgXg47a"
+  },
+  "03-single-parent/base": {
+   "cashFlow": "zBhVMmZHdMXE0x-BXpfNVM",
+   "cashFlowNominal": "6UtguLjP-OYJMSBuKykddS",
+   "projection": "gSeuGyfABhMiPFf9bREMzD",
+   "answer": "Kb7oDN_i1CA2IlBYcWIw_k",
+   "page": "hhrvYQmi5KMXBOFgydt9U1"
+  },
+  "04-two-parents/base": {
+   "cashFlow": "W5GRPn7Z38At77-3dFZqxi",
+   "cashFlowNominal": "QzuA7Fd1YPuDAUameijMOz",
+   "projection": "2pAYfNXVtoanylv52b6kV2",
+   "answer": "E8SLcrqDULFgWQ4db3Nxdm",
+   "page": "94VgJIwQBjYFyj7CzUh64J"
+  },
+  "05-stay-at-home-parent/base": {
+   "cashFlow": "sSF6nckljaGDXuPwEWd3Bl",
+   "cashFlowNominal": "hTAIwaHBGmMv-1_lzcOcoZ",
+   "projection": "FlMw8Jtrf9J-0Kf18TiXQh",
+   "answer": "LY8w8WjWorsW9AFwOCigtx",
+   "page": "HUhNLWug25IwZli6XifBlP"
+  },
+  "06-blended-family/base": {
+   "cashFlow": "dP1oh8_lRZQdBF_dihZALG",
+   "cashFlowNominal": "1yJh0L9NkTlEdTwTngaR_n",
+   "projection": "pW8Bp_Kzf2movaVmX5MOBx",
+   "answer": "7I_VTVwnaB92Upc0-qKb-t",
+   "page": "1GGsv1jTw_dk0Sudmi3K8n"
+  },
+  "07-multigenerational/base": {
+   "cashFlow": "4dRxGPznqbjfhqKhA1A7tq",
+   "cashFlowNominal": "OYAEvQpf60dVmMCIazytLU",
+   "projection": "WN4zWib-l18TGv_cy8WKzK",
+   "answer": "a3X10AMfl5pUdzGeXs7joq",
+   "page": "5eQ7aA9w9oo_nRTJdfFXDk"
+  },
+  "08-retired/base": {
+   "cashFlow": "c7bFlpkHVVC-UmMY199Tvz",
+   "cashFlowNominal": "zTIGH11tMhngIV15PVwjal",
+   "projection": "_EPfwcHVc_RjXFRAe3rwTq",
+   "answer": "_CoTpNCLf1s-B4odypv6Y7",
+   "page": "_M-lu_cfTwisIV1abCTt26"
+  },
+  "09-near-retirement/base": {
+   "cashFlow": "q3Dr9zpLo_WwX-KkHtHeXl",
+   "cashFlowNominal": "JA8y3G8yykqyhjTkJxQztt",
+   "projection": "j_bJyPHkf2Fi5N7pP87wBH",
+   "answer": "qFOOHCY_7OrIMcND0xfQa5",
+   "page": "vuGLuYEVA99BuCtNao-ONp"
+  },
+  "10-student-and-starter/base": {
+   "cashFlow": "hPdXjP7nf2goczzdTrMnz1",
+   "cashFlowNominal": "x30f4jKfJoU1_kDgRSRxl3",
+   "projection": "K4et2D5GKCloFSMJGXQ0fb",
+   "answer": "M4Z1fcaVmyrYMZcimUZ9gC",
+   "page": "WTD0lAeubpkTsFrTQtPxYa"
+  },
+  "11-self-employed/base": {
+   "cashFlow": "YLMj7CfOMXDtrR6rx4gSr4",
+   "cashFlowNominal": "hzm3FdRcrFH10Ie-qywaUu",
+   "projection": "_6iZYVig4q5SqgBMqCFLGE",
+   "answer": "d1A0y4obiQUYfbr0rgjlCK",
+   "page": "lOwiQDaMbpKRXK3OHrTnYq"
+  },
+  "12-high-net-worth/base": {
+   "cashFlow": "FKTuDHNKTzwEmtzZoT2cRu",
+   "cashFlowNominal": "evAyJN_nmEeOwkPUM9DYuJ",
+   "projection": "VXiAK-CUhqdHDRYhJTSDq6",
+   "answer": "18Jub5HEHTcmAU6mHIglix",
+   "page": "4AQ8Cmm6laN_pHEP_r05bE"
+  },
+  "13-in-crisis/base": {
+   "cashFlow": "duxGQT3rwJeeOm-06ll1Sj",
+   "cashFlowNominal": "Um62oD0Qg6TSjMg5r1dTqn",
+   "projection": "d29szkJ9igj4wPtlYgxouF",
+   "answer": "Qk46KrftEtS4q7qkbzlqGz",
+   "page": "gjzxl8H4_PPdl7uIuI7DZH"
+  },
+  "14-unusual-structures/base": {
+   "cashFlow": "kFujLwW1uoVEdX3FE4PQ6-",
+   "cashFlowNominal": "HoZLrgrjom0lS16EwkHFpG",
+   "projection": "s-S8gx-s0D5p_npz-2ILK-",
+   "answer": "Qj4K0zQRMP_RspuHfe2Sll",
+   "page": "TdxhwKI7kWmOOX9xEkwaQG"
+  },
+  "phone casey": {
+   "cashFlow": "aMnRIUGOLLZIQW9kKbe9Tb",
+   "cashFlowNominal": "yFz_W40GvfV3ifMsk4nz0V",
+   "projection": "yRiujhdP59tZN8noCAAZOM",
+   "answer": "d1A0y4obiQUYfbr0rgjlCK",
+   "page": "EeniCrZg_V-DcS8AMvkG_T"
+  },
+  "phone danaLee": {
+   "cashFlow": "rDhI23W4LrCFGsGN6hV-no",
+   "cashFlowNominal": "FZUlK6N6BN8SGBdQsnQqc8",
+   "projection": "hH9Q9CmNV_6Zxu3XiHX11T",
+   "answer": "ejKDAKKRSQ3mCLP3BjfBjo",
+   "page": "0I_Fh4QM5TJ47RBTOROdOY"
+  },
+  "phone jamie": {
+   "cashFlow": "UxiTgOCRFceUXK8G-WSouA",
+   "cashFlowNominal": "EMp1E2iI8oQ97HMWUJFwgd",
+   "projection": "hqg--sscVsyAzWjEgcBLN0",
+   "answer": "a3X10AMfl5pUdzGeXs7joq",
+   "page": "F-KV4ZBbJC5hmMT5G7pcRR"
+  },
+  "phone morgan": {
+   "cashFlow": "PaC7Nut1rETm9vjS0ziVMV",
+   "cashFlowNominal": "qUYy8PQq805sDBcR5EIcKB",
+   "projection": "KF0x0brmvc_Kcg0BAQTQLU",
+   "answer": "M4Z1fcaVmyrYMZcimUZ9gC",
+   "page": "LhqswjjEmXDRltPJ-jZkrI"
+  },
+  "phone robin": {
+   "cashFlow": "TmhBEPwvR-soRp0ZVhbg3l",
+   "cashFlowNominal": "CqHm2JrHZYiF5lqTAYaTdu",
+   "projection": "Y9yz0l1l2-NwDXl_25UPZ8",
+   "answer": "5mRlmz-oK9gS0nRzy-oeV4",
+   "page": "w91_h7xrdC_CaTREvvReQS"
+  },
+  "round8 earlyRetireePlan": {
+   "cashFlow": "5mVv3iDFcORX2XcP16zUR3",
+   "cashFlowNominal": "bkIKbPo9hbsBsyIhZ6mm8V",
+   "projection": "HRobfvCOPO3pZMnXLub-39",
+   "answer": "vhnQkRPGDAb5vA0JfbMjdI",
+   "page": "5D3EhpsEa2_lZUUJtOnqq1"
+  },
+  "round8 equityPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "XZn26JSf4AWXKiyQ2GwQ9S",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 firstRmdPlan": {
+   "cashFlow": "xT_w6x4xVaOi69Co_bn8BU",
+   "cashFlowNominal": "fvIVZcb5C4ebQOR9uJwzeZ",
+   "projection": "FLqyHd6ROxvA_1_8JWOkpL",
+   "answer": "2-hAFasS1XASOuq2iBEh8T",
+   "page": "24CuXzkhq-mpgqJoJpWg9c"
+  },
+  "round8 freelancerPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "tb7kRFJnnYCcaItziPf4SK",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 highFreelancerPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "EAVfA9vINGMcjPFCBrYVBl",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 landlordBusinessPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "upUdiMMtTAzNinM0wkEYTT",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 landlordPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "EYnLibcOnfJrOhAv8KDCb_",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 parentLoanPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "hNeVLGagVKtFAtoqEyrPhd",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 stockAndBusinessPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "tMUYs4tdJl1H5fmjOg5hqH",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 studentLoanPlan": {
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv",
+   "cashFlowNominal": "EZzUPTdEjn4XvT0xPi62Pv",
+   "projection": "jDrFcGAJY8vx4BnjIJetQ9",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mFoXPloyaVT6X4umUThqXF"
+  },
+  "round8 widowPlan": {
+   "cashFlow": "sqQmh140K8FlEnxHNqx1kr",
+   "cashFlowNominal": "EBfgVsBT2F9ImdwDwBjOFv",
+   "projection": "3EDSBSvkZPu9tp5KpFOvM7",
+   "answer": "yImGNmWdy1YP_ayZ3I7MSM",
+   "page": "4CSJFZ4S4XnL6aenNC_N0V"
+  },
+  "empty plan": {
+   "cashFlow": "XlTqZOtW5y5LwW8hTXX9YX",
+   "cashFlowNominal": "XlTqZOtW5y5LwW8hTXX9YX",
+   "projection": "4HFngKILSNyKfIGxtV5Gbd",
+   "answer": "dCNOmK_nSY-12vHzasLXis",
+   "page": "mTCAc-Bu8pnYf2bceXuYo0"
+  }
+ }
+}
