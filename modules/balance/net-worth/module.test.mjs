@@ -1345,3 +1345,405 @@ test("one figure: a kind whose name other pages read keeps the kept row's own na
   const q = emptyPlan(); q.accounts.push({ id: "a", name: "Chase", type: "checking", balance: 1 }, { id: "b", name: "Credit union", type: "checking", balance: 2 });
   assert.equal(OF.asOne(q, "checking||0|", T).name, "Checking");
 });
+
+// =============================================================================================================================
+// Invariance of gold and silver by weight and the private investment (gap list, next 60, item 45; metals.js, private-fund.js):
+// with no account holding `metal` or `private`, Net worth's compute and the page's words (as it opens, and with the add form
+// open) are what they were at dca545e, before either existed. Over every qa fixture plan, every invented household, the phone,
+// round 8 and persona households and the empty plan.
+// `PRINT=1 node --test modules/balance/net-worth/module.test.mjs` writes the digests again; only do that on the old code.
+// =============================================================================================================================
+test("invariance: with no gold or silver by weight and no private investment, Net worth's figures and words are those of dca545e", async () => {
+  const fs = await import("node:fs"); const path = await import("node:path"); const nodeCrypto = await import("node:crypto");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const TI = "2026-11-16";
+  const file = new URL("./special-invariance.json", import.meta.url);
+  const digest = (x) => nodeCrypto.createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x, (k, v) => (v instanceof Map ? [...v] : v)) ?? "undefined").digest("base64url").slice(0, 22);
+  const plans = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push([`fixture ${f}:${name}`, fn(TI)]);
+  }
+  for (const a of ARCHETYPES) plans.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") plans.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) plans.push([`persona ${n}`, personas.finishSetup(n, personas[n](TI), TI)]);
+  plans.push(["empty plan", emptyPlan()]);
+  const safe = async (f) => { try { return await f(); } catch (e) { return `THROW ${e.message}`; } };
+  const now = { today: TI, plans: {} };
+  for (const [name, raw] of plans) {
+    const p = migrate(structuredClone(raw));
+    now.plans[name] = {
+      netWorth: digest(await safe(() => compute(structuredClone(p), { today: TI }))),
+      page: digest(await safe(async () => (await renderPage(view, p, TI, { computeOf })).text())),
+      addForm: digest(await safe(async () => (await renderPage(view, p, TI, { computeOf, route: { rest: [], query: { add: "checking" } } })).text())),
+    };
+  }
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at dca545e, before gold and silver by weight and the private investment; module.test.mjs says how to write them again", ...now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.ok(Object.keys(was.plans).length >= 45, `${Object.keys(was.plans).length} plans`);
+  assert.deepEqual(Object.keys(now.plans), Object.keys(was.plans), "the same plans");
+  for (const name of Object.keys(was.plans)) assert.deepEqual(now.plans[name], was.plans[name], name);
+});
+
+// =============================================================================================================================
+// Gold and silver by weight; a private investment with its own return and the calls still promised (gap list, next 60, item
+// 45; metals.js, private-fund.js): every formula against a hand calculation, every sentence case, the form and the row
+// =============================================================================================================================
+const MT = await import("./metals.js");
+const PF = await import("./private-fund.js");
+const TW = "2026-11-16";
+const near6 = (a, b, tol = 1e-9, msg = "") => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b} ${msg}`);
+const dollars0 = (n) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+
+test("by weight: a troy ounce is 480 grains of 64.79891 mg = 31.1034768 g; grams and ounces; worth = ounces x the price, to the cent", () => {
+  near6(MT.TROY_OUNCE_GRAMS, MT.GRAINS_PER_TROY_OUNCE * MT.GRAIN_MG / 1000, 1e-12);
+  assert.equal(MT.TROY_OUNCE_GRAMS, 31.1034768);
+  near6(MT.ouncesOf(31.1034768, "g"), 1, 1e-15);
+  near6(MT.ouncesOf(1000, "g"), 32.150746568627980, 1e-12, "a kilo bar: 1,000 / 31.1034768");
+  assert.equal(MT.ouncesOf(10, "oz"), 10);
+  for (const bad of [0, -1, "", null, "abc", Infinity]) assert.equal(MT.ouncesOf(bad, "oz"), 0, String(bad));
+  // a unit not on the list is not read as ounces (critic F3): no weight at all; no unit saved is ounces (the form's first choice)
+  assert.deepEqual([MT.unitOf("oz"), MT.unitOf("g"), MT.unitOf(undefined), MT.unitOf(null), MT.unitOf(""), MT.unitOf("kg"), MT.unitOf("lb"), MT.unitOf("OZ")], ["oz", "g", "oz", "oz", "oz", null, null, null]);
+  assert.equal(MT.ouncesOf(5, "kg"), 0);
+  assert.equal(MT.metalValue({ weight: 5, unit: "kg", price: 2400 }), 0);
+  // 10 one-ounce coins at 2,400 = 24,000; 100 g at 2,400: 3.2150747 oz x 2,400 = 7,716.179 -> 7,716.18
+  assert.equal(MT.metalValue({ weight: 10, unit: "oz", price: 2400 }), 24000);
+  assert.equal(MT.metalValue({ weight: 100, unit: "g", price: 2400 }), 7716.18);
+  // silver: 500 oz at 31.45 = 15,725.00; a kilo of silver at 31.45 = 32.1507466 x 31.45 = 1,011.14
+  assert.equal(MT.metalValue({ weight: 500, unit: "oz", price: 31.45 }), 15725);
+  assert.equal(MT.metalValue({ weight: 1000, unit: "g", price: 31.45 }), 1011.14);
+  assert.equal(MT.metalValue({ weight: 10, unit: "oz", price: null }), 0);
+  assert.deepEqual([MT.weightText(10), MT.weightText(1), MT.weightText(0.25), MT.weightText(31.1, "g"), MT.weightText(1, "g"), MT.weightText(1234.5678, "g")], ["10 ounces", "1 ounce", "0.25 ounces", "31.1 grams", "1 gram", "1,234.5678 grams"]);
+});
+
+test("by weight: metalOf says the price typed while the worth still follows it, else the price the worth on file means; the row's line", () => {
+  const a = { id: "g1", name: "Gold coins", type: "other_asset", balance: 24000, asOf: "2026-11-16", metal: { kind: "gold", weight: 10, unit: "oz", price: 2400 } };
+  assert.ok(MT.isMetal(a));
+  assert.deepEqual(MT.metalOf(a), { id: "g1", name: "Gold coins", kind: "gold", weight: 10, unit: "oz", ounces: 10, price: 2400, typed: true, value: 24000, asOf: "2026-11-16" });
+  // the worth changed on Update all balances: 25,000 for 10 ounces means 2,500 an ounce
+  assert.deepEqual([MT.metalOf({ ...a, balance: 25000 }).price, MT.metalOf({ ...a, balance: 25000 }).typed], [2500, false]);
+  for (const bad of [{ ...a, type: "brokerage" }, { ...a, metal: { ...a.metal, kind: "copper" } }, { ...a, metal: { ...a.metal, weight: 0 } }, { ...a, metal: { ...a.metal, unit: "kg" } }, { ...a, metal: null }, { ...a, metal: "gold" }, null])
+    assert.equal(MT.isMetal(bad), false, JSON.stringify(bad));
+  // a unit not on the list: the account reads as a plain thing with its balance, never "5 ounces" (critic F3)
+  assert.equal(MT.metalOf({ ...a, metal: { ...a.metal, weight: 5, unit: "kg" } }), null);
+  assert.equal(MT.metalOf({ ...a, metal: { kind: "gold", weight: 10, price: 2400 } }).unit, "oz", "no unit saved: ounces");
+  const price = (n) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const day = (iso) => `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(0, 4)}`;
+  assert.equal(MT.metalLine(MT.metalOf(a), price, day), "10 ounces of gold at $2,400.00 an ounce, your price of 11/16/2026");
+  assert.equal(MT.metalLine(MT.metalOf({ ...a, asOf: "" }), price, day), "10 ounces of gold at $2,400.00 an ounce, your price, with no day typed");
+  // the balance changed somewhere else (Update all balances): the price is only what that balance means, never "your price"
+  // (critic F2): 24,500 / 10 = 2,450
+  assert.equal(MT.metalLine(MT.metalOf({ ...a, balance: 24500, asOf: "2026-11-20" }), price, day), "10 ounces of gold, about $2,450.00 an ounce going by its balance of 11/20/2026");
+  assert.equal(MT.metalLine(MT.metalOf({ ...a, balance: 24500, asOf: "" }), price, day), "10 ounces of gold, about $2,450.00 an ounce going by its balance");
+  const s = { id: "s1", name: "Silver bar", type: "other_asset", balance: 1011.14, asOf: "2026-11-01", metal: { kind: "silver", weight: 1000, unit: "g", price: 31.45 } };
+  assert.equal(MT.metalLine(MT.metalOf(s), price, day), "1,000 grams of silver at $31.45 an ounce, your price of 11/01/2026");
+  assert.equal(MT.metalSaid("Silver bar", MT.metalOf(s), true, price, dollars0), "Silver bar added: 1,000 grams of silver at $31.45 an ounce, $1,011.");
+  assert.equal(MT.metalSaid("Gold coins", MT.metalOf(a), false, price, dollars0), "Gold coins saved: 10 ounces of gold at $2,400.00 an ounce, $24,000.");
+  assert.equal(MT.NEED_WEIGHT("silver"), "Type how much silver you hold.");
+  assert.equal(MT.NEED_PRICE, "Type the price of one ounce.");
+});
+
+const fund = (flows, extra = {}) => ({ id: "f1", name: "Fund II", type: "other_asset", balance: 0, asOf: TW, private: { flows: flows.map(([date, kind, amount], i) => ({ id: `x${i}`, date, kind, amount })) }, ...extra });
+
+test("a private investment's own yearly return: the internal rate of return on the dated amounts, against hand calculations", () => {
+  // (1) 100,000 in on Jan 1, 2021; worth 121,000 on Jan 1, 2023: 730 days = 730 / 365.25 years, so (1 + r)^(730/365.25) = 1.21
+  const one = PF.privateOf(fund([["2021-01-01", "in", 100000]], { balance: 121000, asOf: "2023-01-01" }), { today: TW });
+  assert.equal(one.state, "rate");
+  near6(one.irr, Math.pow(1.21, 365.25 / 730) - 1, 1e-8);
+  near6(one.irr, 0.10007, 1e-5, "about 10.0% a year");
+  assert.deepEqual([one.putIn, one.paidBack, one.worth, one.firstIn, one.days], [100000, 0, 121000, "2021-01-01", 730]);
+  near6(one.multiple, 1.21); near6(one.soFar, 0.21);
+  // (2) 100 in on Jan 1, 2021, 50 back on Jan 1, 2022, worth 60 on Jan 1, 2023: with a = 365/365.25 and y = (1 + r)^a,
+  // -100 + 50 / y + 60 / y^2 = 0, so 100 y^2 - 50 y - 60 = 0 and y = (50 + sqrt(2,500 + 24,000)) / 200 = 1.0639410
+  const two = PF.privateOf(fund([["2021-01-01", "in", 100], ["2022-01-01", "back", 50]], { balance: 60, asOf: "2023-01-01" }), { today: TW });
+  const y = (50 + Math.sqrt(2500 + 24000)) / 200;
+  near6(y, 1.0639410, 1e-7);
+  near6(two.irr, Math.pow(y, 365.25 / 365) - 1, 1e-8);
+  near6(two.multiple, 1.1);
+  // (3) a loss: 100,000 in, worth 81,000 two years on: (1 + r)^(730/365.25) = 0.81
+  const lost = PF.privateOf(fund([["2021-01-01", "in", 100000]], { balance: 81000, asOf: "2023-01-01" }), { today: TW });
+  near6(lost.irr, Math.pow(0.81, 365.25 / 730) - 1, 1e-8);
+  // (4) money in twice, some back, worth now: the rate makes every amount add up to nothing on its own day (npv = 0)
+  const four = PF.privateOf(fund([["2021-03-01", "in", 60000], ["2022-06-15", "in", 20000], ["2024-12-31", "back", 10000]], { balance: 95000, asOf: "2026-10-31" }), { today: TW });
+  const t = (d) => (Date.parse(`${d}T00:00:00`) - Date.parse("2021-03-01T00:00:00")) / 864e5 / 365.25;
+  const npv = -60000 + -20000 / Math.pow(1 + four.irr, t("2022-06-15")) + 10000 / Math.pow(1 + four.irr, t("2024-12-31")) + 95000 / Math.pow(1 + four.irr, t("2026-10-31"));
+  near6(npv, 0, 1e-4, "npv at the rate");
+  assert.ok(four.irr > 0.05 && four.irr < 0.06, String(four.irr));
+  near6(four.multiple, 105000 / 80000);
+});
+
+test("a private investment: none typed, under a year, all gone, a worth older than an amount; what is promised to keep ready", () => {
+  assert.equal(PF.privateOf(fund([], { balance: 70000 }), { today: TW }).state, "none");
+  // under a year from the first money in: no yearly rate, the plain change so far (56,000 - 50,000) / 50,000 = 12%
+  const early = PF.privateOf(fund([["2026-06-01", "in", 50000]], { balance: 56000, asOf: TW }), { today: TW });
+  assert.deepEqual([early.state, early.irr, early.days], ["early", null, 168]);
+  near6(early.soFar, 0.12);
+  const at364 = PF.privateOf(fund([["2025-11-17", "in", 1000]], { balance: 1100, asOf: TW }), { today: TW });
+  const at365 = PF.privateOf(fund([["2025-11-16", "in", 1000]], { balance: 1100, asOf: TW }), { today: TW });
+  assert.deepEqual([at364.days, at364.state, at365.days, at365.state], [364, "early", 365, "rate"], "a yearly rate from 365 days on");
+  // nothing back and worth nothing
+  assert.equal(PF.privateOf(fund([["2020-01-01", "in", 50000]], { balance: 0 }), { today: TW }).state, "gone");
+  // no day on the worth: today's
+  assert.equal(PF.privateOf(fund([["2026-06-01", "in", 50000]], { balance: 56000, asOf: "" }), { today: TW }).worthOn, TW);
+  // the worth is of Jun 30, 2026; 10,000 went in on Aug 1, 2026
+  const stale = PF.privateOf(fund([["2021-03-01", "in", 60000], ["2026-08-01", "in", 10000]], { balance: 80000, asOf: "2026-06-30" }), { today: TW });
+  assert.equal(stale.staleAfter, "2026-08-01");
+  assert.equal(PF.staleLine(stale), "What it is worth is from Jun 30, 2026, before the money of Aug 1, 2026: update it with Edit, above, for a truer return.");
+  assert.equal(PF.staleLine(early), "");
+  // a flow with no day on the calendar, an unknown kind, or no amount is not read
+  assert.equal(PF.flowsOf(fund([["2026-02-31", "in", 5], ["2026-01-01", "out", 5], ["2026-01-01", "in", 0], ["2026-01-02", "in", 5]])).length, 1);
+  // promised: money to keep ready, never in net worth
+  const p = emptyPlan();
+  p.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 10000 }, { ...fund([["2021-03-01", "in", 60000]], { balance: 70000 }), private: { flows: [], promised: 40000 } });
+  const d = compute(p, { today: TW });
+  assert.equal(d.netWorth, 80000, "what is promised is not a debt");
+  assert.equal(d.keepReady, 40000);
+  assert.equal(PF.keepReadyLine(d.privates[0], dollars0), "Fund II can still ask you for $40,000: keep that much ready, in cash or something easy to sell.");
+  assert.equal(PF.rowPromised(d.privates[0], dollars0), "It can still ask for $40,000: keep that ready.");
+  assert.equal(PF.keepReadyLine(early, dollars0), "");
+});
+
+test("a private investment: one written sentence per case (R5), the row's words and the row's status", () => {
+  const S = (f, extra) => PF.privateSentence(PF.privateOf(fund(f, extra), { today: TW }), dollars0);
+  assert.equal(S([], { balance: 70000 }), "Add what you put into Fund II and when, and what it paid back, to see its own yearly return.");
+  assert.equal(S([["2020-01-01", "in", 50000]], { balance: 0 }), "Nothing is left of the $50,000 you put in: nothing came back and it is worth $0 now.");
+  assert.equal(S([["2026-06-01", "in", 50000]], { balance: 56000 }), "Up 12% so far: you put in $50,000, got nothing back yet, and it is worth $56,000. Its yearly return shows once the first money has been in a year.");
+  assert.equal(S([["2026-06-01", "in", 50000], ["2026-09-01", "back", 2000]], { balance: 44000 }), "Down 8% so far: you put in $50,000, got $2,000 back, and it is worth $44,000. Its yearly return shows once the first money has been in a year.");
+  assert.equal(S([["2026-06-01", "in", 50000]], { balance: 50000 }), "Even so far: you put in $50,000, got nothing back yet, and it is worth $50,000. Its yearly return shows once the first money has been in a year.");
+  assert.equal(S([["2021-01-01", "in", 100], ["2022-01-01", "back", 50]], { balance: 60, asOf: "2023-01-01" }), "About 6.4% a year since January 2021: you put in $100, got $50 back, and it is worth $60 now, 1.10 times what you put in.");
+  assert.equal(S([["2021-01-01", "in", 100000]], { balance: 81000, asOf: "2023-01-01" }), "It has lost about 10.0% a year since January 2021: you put in $100,000, got nothing back yet, and it is worth $81,000 now, 0.81 times what you put in.");
+  assert.equal(PF.privateSentence({ ...PF.privateOf(fund([["2021-01-01", "in", 100]], { balance: 60, asOf: "2023-01-01" }), { today: TW }), state: "unknown" }, dollars0),
+    "Its yearly return could not be worked out from these amounts: you put in $100, got nothing back yet, and it is worth $60 now.");
+  const R = (f, extra) => PF.rowRate(PF.privateOf(fund(f, extra), { today: TW }));
+  assert.deepEqual([R([], { balance: 1 }), R([["2026-06-01", "in", 50000]], { balance: 56000 }), R([["2021-01-01", "in", 100000]], { balance: 121000, asOf: "2023-01-01" }), R([["2021-01-01", "in", 100000]], { balance: 81000, asOf: "2023-01-01" }), R([["2020-01-01", "in", 5]], { balance: 0 })],
+    [null, "up 12% so far", "about 10.0% a year", "lost about 10.0% a year", "nothing left"]);
+  const all = (list) => ({ list, keepReady: list.reduce((s, r) => s + r.promised, 0) });
+  const r1 = PF.privateOf(fund([["2021-01-01", "in", 100000]], { balance: 121000, asOf: "2023-01-01" }), { today: TW });
+  assert.equal(PF.privateStatus(all([r1]), dollars0), "about 10.0% a year");
+  assert.equal(PF.privateStatus(all([{ ...r1, promised: 40000 }]), dollars0), "keep $40,000 ready");
+  assert.equal(PF.privateStatus(all([{ ...r1, promised: 1250000 }]), dollars0), "$1,250,000 promised", "at most 20 characters");
+  assert.equal(PF.privateStatus(all([{ ...r1, state: "none" }]), dollars0), "not set yet");
+  assert.equal(PF.privateStatus(all([r1, r1]), dollars0), "2 investments");
+  assert.equal(PF.keepReadyAll(all([{ ...r1, promised: 40000 }, { ...r1, promised: 10000 }]), dollars0), "Keep $50,000 ready in all: money your investments can still ask you for.");
+  assert.equal(PF.keepReadyAll(all([{ ...r1, promised: 40000 }]), dollars0), "");
+  for (const s of ["keep $40,000 ready", "$1,250,000 promised", "about 10.0% a year", "not set yet", "2 investments"]) assert.ok(s.length <= 20, s);
+});
+
+test("a private investment's amounts: added in date order, a call paid comes off what is promised; removed; what is refused", () => {
+  const p = emptyPlan();
+  p.accounts.push({ ...fund([["2021-03-01", "in", 60000]], { balance: 200000 }), private: { flows: [{ id: "x0", date: "2021-03-01", kind: "in", amount: 60000 }], promised: 40000 } });
+  assert.ok(PF.addFlow(p, "f1", { date: "2022-01-10", kind: "in", amount: 10000 }, "x1", { fromPromised: true }));
+  assert.ok(PF.addFlow(p, "f1", { date: "2021-12-01", kind: "back", amount: 3000 }, "x2"));
+  assert.deepEqual(p.accounts[0].private.flows.map((f) => [f.id, f.date]), [["x0", "2021-03-01"], ["x2", "2021-12-01"], ["x1", "2022-01-10"]]);
+  assert.equal(p.accounts[0].private.promised, 30000, "40,000 - 10,000");
+  PF.addFlow(p, "f1", { date: "2023-01-10", kind: "in", amount: 50000 }, "x3", { fromPromised: true });
+  assert.ok(!("promised" in p.accounts[0].private), "a call bigger than what is left uses all of it");
+  PF.addFlow(p, "f1", { date: "2023-02-10", kind: "back", amount: 5000 }, "x4", { fromPromised: true });
+  assert.deepEqual(PF.removeFlow(p, "f1", "x4"), { id: "x4", date: "2023-02-10", kind: "back", amount: 5000 });
+  assert.equal(PF.removeFlow(p, "f1", "nope"), null);
+  assert.equal(PF.addFlow(p, "zz", { date: "2023-01-10", kind: "in", amount: 1 }, "y"), false);
+  const no = (input, field, error) => assert.deepEqual(PF.planFlow(input, { today: TW }), { ok: false, field, error });
+  no({ kind: "in", amount: "", date: "2026-01-01" }, "amount", "Type how much you put in.");
+  no({ kind: "back", amount: 0, date: "2026-01-01" }, "amount", "Type how much it paid back.");
+  no({ kind: "in", amount: 5, date: "" }, "date", "Type the day it happened.");
+  no({ kind: "in", amount: 5, date: "2026-02-30" }, "date", "That day is not on the calendar: check the day and the month.");
+  no({ kind: "in", amount: 5, date: "2026-11-17" }, "date", "Money that has not moved yet cannot be typed here: type it on its day.");
+  assert.deepEqual(PF.planFlow({ kind: "back", amount: "1234.567", date: "2026-11-16" }, { today: TW }), { ok: true, flow: { date: "2026-11-16", kind: "back", amount: 1234.57 } });
+  // the green lines name the new answer
+  const r = PF.privateOf(p.accounts[0], { today: TW });
+  assert.ok(r.irr > 0, String(r.irr));
+  const lossy = PF.privateOf({ ...p.accounts[0], balance: 50000 }, { today: TW });
+  assert.match(PF.flowAddedSaid({ date: "2023-01-10", kind: "in", amount: 50000 }, lossy, dollars0), /^Added: \$50,000 put into Fund II on Jan 10, 2023\. Its own return is now a loss of about \d+\.\d% a year\.$/);
+  assert.equal(PF.flowAddedSaid({ date: "2023-01-10", kind: "in", amount: 50000 }, r, dollars0, undefined, { fromPromised: true }), `Added: $50,000 put into Fund II on Jan 10, 2023. Its own return is now about ${(Math.round(r.irr * 1000) / 10).toFixed(1)}% a year. Nothing is promised any more.`);
+  assert.equal(PF.flowAddedSaid({ date: "2021-12-01", kind: "back", amount: 3000 }, { ...r, promised: 30000 }, dollars0), `Added: $3,000 paid back from Fund II on Dec 1, 2021. Its own return is now about ${(Math.round(r.irr * 1000) / 10).toFixed(1)}% a year.`);
+  assert.equal(PF.flowAddedSaid({ date: "2026-10-01", kind: "in", amount: 10000 }, { ...r, promised: 30000 }, dollars0, undefined, { fromPromised: true }).endsWith(" Still promised: $30,000."), true);
+  assert.equal(PF.flowAsk({ date: "2023-01-10", kind: "in", amount: 50000 }, dollars0), "Remove the $50,000 put in on Jan 10, 2023?");
+  assert.equal(PF.flowRemovedSaid({ date: "2021-12-01", kind: "back", amount: 3000 }, PF.privateOf(fund([["2026-06-01", "in", 50000]], { balance: 56000 }), { today: TW }), dollars0), "Removed: the $3,000 paid back on Dec 1, 2021. Up 12% so far.");
+  assert.equal(PF.flowTitle({ date: "2021-03-01", kind: "in" }), "Mar 1, 2021 · Put in");
+  assert.equal(PF.flowTitle({ date: "2021-12-01", kind: "back" }), "Dec 1, 2021 · Paid back to you");
+});
+
+test("by weight and a private investment change no total: net worth reads the balance; compute adds metals and privates only when there are some", () => {
+  const base = emptyPlan();
+  base.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 10000 }, { id: "g1", name: "Gold coins", type: "other_asset", balance: 24000, asOf: TW });
+  const plain = compute(base, { today: TW });
+  const withKinds = structuredClone(base);
+  withKinds.accounts[1].metal = { kind: "gold", weight: 10, unit: "oz", price: 2400 };
+  const d = compute(withKinds, { today: TW });
+  for (const k of Object.keys(plain)) assert.deepEqual(d[k], plain[k], k);
+  assert.deepEqual(Object.keys(d).filter((k) => !(k in plain)), ["metals"]);
+  assert.ok(!("metals" in plain) && !("privates" in plain) && !("keepReady" in plain));
+});
+
+/** Net worth drawn with a store that keeps its changes and draws again (as the app does), for the form and the new row. */
+async function nwPage(plan, query = {}, today = TW) {
+  const { FakeElement, textOf: tx } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const P = { plan: migrate(structuredClone(plan)), saved: [], textOf: tx };
+  const route = { rest: [], query };
+  P.draw = () => { P.root = new FakeElement("main"); render(P.root, { ui, fmt: { ...fmt, today: () => today }, plan: P.plan, route, modules: new Map(), computeOf: (key, params = {}) => (key === "balance/net-worth" ? compute(P.plan, { today, ...params }) : null),
+    store: { get: () => P.plan, update: (fn) => { const d = structuredClone(P.plan); fn(d); P.saved.push(d); P.plan = d; P.draw(); } }, redraw: () => P.draw() }); return P; };
+  P.text = () => tx(P.root);
+  P.form = () => P.root.all().find((e) => e.tagName === "FORM");
+  // a form sent as Save does it (the stand-in DOM has no reset; the add form clears itself after a save)
+  P.submit = (f = P.form()) => { f.reset ??= () => {}; f.dispatch("submit"); };
+  P.box = (n, within = P.root) => within.all().find((e) => e.getAttribute?.("name") === n) ?? null;
+  P.label = (n) => P.box(n)?.closest("label");
+  P.part = (id) => P.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.part === id);
+  P.button = (text, within = P.root) => within.all().find((e) => e.tagName === "BUTTON" && tx(e) === text);
+  P.notice = (within = P.root) => within.all().filter((e) => String(e.className).split(/\s+/).includes("notice")).map((e) => tx(e));
+  return P.draw();
+}
+const withAccount = () => { const p = emptyPlan(); p.household.people = [{ id: "p1", name: "Sam", role: "self", birthDate: "1990-01-01" }]; p.accounts.push({ id: "c", name: "Checking", type: "checking", balance: 5000, asOf: TW, history: [] }); return p; };
+
+test("the form: What it is shows only for Something else I own; gold asks the weight and the price in place of the worth, saves the worth, says it in green with Undo", async () => {
+  const P = await nwPage(withAccount(), { add: "checking" });
+  for (const k of ["kindOf", "weight", "unit", "price", "promised"]) assert.equal(P.label(k).hidden, true, `${k} hidden for a checking account`);
+  assert.ok(!/What it is|How much gold|Price of one ounce|Still promised/.test(P.text()), "nothing new said for another kind");
+  P.box("type").value = "other_asset"; P.box("type").dispatch("change");
+  assert.equal(P.label("kindOf").hidden, false);
+  assert.match(P.text(), /What it is Something else: I type what it is worth Gold, by its weight Silver, by its weight A private fund, or a share in a business/);
+  for (const k of ["weight", "unit", "price", "promised"]) assert.equal(P.label(k).hidden, true, k);
+  P.box("kindOf").value = "gold"; P.box("kindOf").dispatch("change");
+  for (const k of ["weight", "unit", "price"]) assert.equal(P.label(k).hidden, false, k);
+  assert.equal(P.label("balance").hidden, true, "the worth is worked out");
+  assert.equal(P.textOf(P.label("asOf").querySelector(".field-label")), "Price as of", "critic P4: not 'Price of that day'");
+  assert.match(P.text(), /How much gold the metal's own weight: a one-ounce coin is 1 Weighed in ounces \(troy\) grams Price of one ounce \$ Type the price you see: this app never looks prices up\./);
+  // nothing typed: refused, nothing saved
+  P.box("name").value = "Gold coins";
+  P.submit();
+  assert.equal(P.saved.length, 0, "no weight: refused");
+  P.box("weight").value = "10";
+  P.submit();
+  assert.equal(P.saved.length, 0, "no price: refused");
+  P.box("price").value = "2400";
+  P.submit();
+  assert.equal(P.saved.length, 1);
+  const g = P.plan.accounts.find((a) => a.name === "Gold coins");
+  assert.deepEqual([g.type, g.balance, g.asOf, g.metal], ["other_asset", 24000, TW, { kind: "gold", weight: 10, unit: "oz", price: 2400 }]);
+  assert.ok(!("kindOf" in g) && !("weight" in g) && !("price" in g) && !("promised" in g) && !("private" in g), "the boxes never go on the account as typed");
+  assert.deepEqual(P.notice(), ["Gold coins added: 10 ounces of gold at $2,400.00 an ounce, $24,000. Undo"]);
+  assert.match(P.text(), /Gold coins Edit Delete Something else I own \$24,000 10 ounces of gold at \$2,400\.00 an ounce, your price of 11\/16\/2026/);
+  // Undo: off the list
+  P.button("Undo").click();
+  assert.ok(!P.plan.accounts.some((a) => a.name === "Gold coins"));
+});
+
+test("the form: grams of silver; editing the price works the worth out again (the old worth kept on its day); back to Something else drops the weight", async () => {
+  const p = withAccount();
+  p.accounts.push({ id: "s1", name: "Silver bar", type: "other_asset", balance: 1011.14, asOf: "2026-11-01", history: [], metal: { kind: "silver", weight: 1000, unit: "g", price: 31.45 } });
+  const P = await nwPage(p, { edit: "s1" });
+  assert.equal(P.box("kindOf").value, "silver");
+  assert.equal(P.box("unit").value, "g");
+  assert.equal(P.box("weight").value, "1000");
+  assert.equal(P.textOf(P.label("weight").querySelector(".field-label")), "How much silver");
+  assert.equal(P.label("balance").hidden, true);
+  P.box("price").value = "32";
+  P.box("asOf").value = TW;
+  P.submit();
+  const s = P.plan.accounts.find((a) => a.id === "s1");
+  // 1,000 g = 32.1507466 oz x 32 = 1,028.82
+  assert.deepEqual([s.balance, s.asOf, s.metal.price], [1028.82, TW, 32]);
+  assert.deepEqual(s.history, [{ date: "2026-11-01", balance: 1011.14 }], "the old worth stays a point on its own day");
+  assert.deepEqual(P.notice(), ["Silver bar saved: 1,000 grams of silver at $32.00 an ounce, $1,029. Undo"]);
+  // back to "Something else": the worth is typed again and the weight is no longer kept
+  const Q = await nwPage(P.plan, { edit: "s1" });
+  Q.box("kindOf").value = ""; Q.box("kindOf").dispatch("change");
+  assert.equal(Q.label("balance").hidden, false);
+  Q.box("balance").value = "1100";
+  Q.submit();
+  const t = Q.plan.accounts.find((a) => a.id === "s1");
+  assert.deepEqual([t.balance, "metal" in t], [1100, false]);
+  // another Type puts the worth box back as it was
+  const R = await nwPage(p, { edit: "s1" });
+  R.box("type").value = "savings"; R.box("type").dispatch("change");
+  assert.equal(R.label("balance").hidden, false);
+  assert.equal(R.label("kindOf").hidden, true);
+  assert.equal(R.textOf(R.label("asOf").querySelector(".field-label")), "Worth that on");
+});
+
+test("a private investment: added from the form, its row opens; amounts added name the new return in green with Undo; Remove asks first; promised is money to keep ready", async () => {
+  const had = globalThis.window.confirm, asked = [];
+  try {
+    const P = await nwPage(withAccount(), { add: "checking" });
+    P.box("type").value = "other_asset"; P.box("type").dispatch("change");
+    P.box("kindOf").value = "private"; P.box("kindOf").dispatch("change");
+    assert.equal(P.label("promised").hidden, false);
+    // plain words, no "capital calls" (critic P3)
+    assert.equal(P.textOf(P.label("promised")), "Still promised $ money you agreed to put in but have not put in yet; leave it empty if none");
+    assert.ok(!/capital/i.test(P.text()), "no 'capital calls' on screen");
+    assert.equal(P.textOf(P.label("balance").querySelector(".field-label")), "What it is worth now");
+    P.box("name").value = "Fund II"; P.box("balance").value = "70000"; P.box("asOf").value = "2026-10-31"; P.box("promised").value = "40000";
+    P.submit();
+    const f = P.plan.accounts.find((a) => a.name === "Fund II");
+    assert.deepEqual([f.type, f.balance, f.private], ["other_asset", 70000, { flows: [], promised: 40000 }]);
+    assert.deepEqual(P.notice()[0], "Fund II added. Next: what you put in and when, under Private investments below. Undo");
+    // the row under the list: open once, saying what to keep ready; the form open (nothing typed yet)
+    const part = P.part("private");
+    assert.equal(part.hasAttribute("open"), true);
+    assert.equal(P.textOf(part.querySelector(".fold-title")), "Private investments");
+    assert.equal(P.textOf(part.querySelector(".fold-status")), "keep $40,000 ready");
+    assert.match(P.textOf(part), /Fund II Add what you put into Fund II and when, and what it paid back, to see its own yearly return\. Fund II can still ask you for \$40,000: keep that much ready, in cash or something easy to sell\. Add money in or out/);
+    assert.match(P.text(), /It can still ask for \$40,000: keep that ready\./, "the row says it too");
+    assert.equal(part.all().filter((e) => e.tagName === "BUTTON" && !String(e.className).includes("secondary")).length, 1, "one filled button: Add it");
+    // 60,000 in on Mar 1, 2021 (not one of the calls promised)
+    P.box("flowAmount").value = "60000"; P.box("flowDate").value = "2021-03-01"; P.box("fromPromised").checked = false;
+    P.submit(P.part("private").all().find((e) => e.tagName === "FORM"));
+    const r1 = PF.privateOf(P.plan.accounts.find((a) => a.name === "Fund II"), { today: TW });
+    assert.equal(r1.state, "rate");
+    assert.deepEqual(P.notice(P.part("private"))[0], `Added: $60,000 put into Fund II on Mar 1, 2021. Its own return is now about ${(Math.round(r1.irr * 1000) / 10).toFixed(1)}% a year.`);
+    assert.equal(P.part("private").hasAttribute("open"), true, "the saved row stays open (R17)");
+    assert.equal(P.plan.accounts.find((a) => a.name === "Fund II").private.promised, 40000, "not ticked: promised stays");
+    assert.match(P.textOf(P.part("private")), /About \d+\.\d% a year since March 2021: you put in \$60,000, got nothing back yet, and it is worth \$70,000 now, 1\.17 times what you put in\./);
+    assert.match(P.text(), /as of 10\/31\/2026 · about \d+\.\d% a year/);
+    // a call paid: 10,000 in on Aug 1, 2026, ticked: off what is promised
+    P.button("+ Add money in or out", P.part("private")).click();
+    P.box("flowAmount").value = "10000"; P.box("flowDate").value = "2026-08-01";
+    P.submit(P.part("private").all().find((e) => e.tagName === "FORM"));
+    assert.equal(P.plan.accounts.find((a) => a.name === "Fund II").private.promised, 30000);
+    assert.match(P.notice(P.part("private"))[0], /Still promised: \$30,000\.$/);
+    assert.match(P.textOf(P.part("private")), /Fund II can still ask you for \$30,000: keep that much ready/);
+    assert.ok(!/What it is worth is from/.test(P.textOf(P.part("private"))), "the worth (Oct 31) is newer than the call (Aug 1): no line about it");
+    // Undo puts the call back, promised too
+    P.button("Undo", P.part("private")).click();
+    assert.equal(P.plan.accounts.find((a) => a.name === "Fund II").private.promised, 40000);
+    assert.deepEqual(P.notice(P.part("private"))[0], "Undone: the amounts are back as they were.");
+    // Remove asks first; No changes nothing
+    globalThis.window.confirm = (t) => { asked.push(t); return false; };
+    const n = P.saved.length;
+    P.button("Remove", P.part("private")).click();
+    assert.equal(P.saved.length, n);
+    globalThis.window.confirm = (t) => { asked.push(t); return true; };
+    P.button("Remove", P.part("private")).click();
+    assert.deepEqual(asked, ["Remove the $60,000 put in on Mar 1, 2021?", "Remove the $60,000 put in on Mar 1, 2021?"]);
+    assert.deepEqual(P.plan.accounts.find((a) => a.name === "Fund II").private.flows, []);
+    assert.deepEqual(P.notice(P.part("private"))[0], "Removed: the $60,000 put in on Mar 1, 2021.");
+    assert.ok(P.button("Undo", P.part("private")), "with Undo under it");
+  } finally { globalThis.window.confirm = had; }
+});
+
+test("a private investment saved as something else asks first when its amounts would be lost", async () => {
+  const had = globalThis.window.confirm, asked = [];
+  try {
+    const p = withAccount();
+    p.accounts.push({ ...fund([["2021-03-01", "in", 60000]], { balance: 70000 }), history: [] });
+    const P = await nwPage(p, { edit: "f1" });
+    assert.equal(P.box("kindOf").value, "private");
+    P.box("kindOf").value = ""; P.box("kindOf").dispatch("change");
+    globalThis.window.confirm = (t) => { asked.push(t); return false; };
+    P.submit();
+    assert.equal(P.saved.length, 0);
+    assert.deepEqual(asked, ["Fund II has 1 amount put in or paid back on file. Saved as something else, it is no longer kept. Save it anyway?"]);
+    globalThis.window.confirm = () => true;
+    P.submit();
+    assert.ok(!("private" in P.plan.accounts.find((a) => a.id === "f1")));
+  } finally { globalThis.window.confirm = had; }
+});

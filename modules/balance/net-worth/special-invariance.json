@@ -1,0 +1,246 @@
+{
+ "note": "digests at dca545e, before gold and silver by weight and the private investment; module.test.mjs says how to write them again",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "netWorth": "RD80V2JF6LcNPSJmYDxe_r",
+   "page": "P3W5WZ_rDnjcqBpoBTZsXa",
+   "addForm": "yv-akyLy3vYqtdw6WnYOqQ"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "netWorth": "DrWePtZ3PSstPUneGPR4jk",
+   "page": "KzH9S8CnLp-uLJLDd_fbFi",
+   "addForm": "U-tZx2Hd-7oDLeLr3NeyJP"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "netWorth": "RD80V2JF6LcNPSJmYDxe_r",
+   "page": "P3W5WZ_rDnjcqBpoBTZsXa",
+   "addForm": "yv-akyLy3vYqtdw6WnYOqQ"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "netWorth": "hFhQx_cU54gNpfTrZ-Aaig",
+   "page": "3bZexn5T2i8rpn-DR65jFW",
+   "addForm": "0mG8HBUWp96NWUAjficC3C"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "netWorth": "BsRiOswuKzRRT-oMYeUf3l",
+   "page": "DM3S60adKuD4kUKMlboWwe",
+   "addForm": "pLeqpVlKNRMFUZzeS9HStz"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "netWorth": "8u8h1SYV0WBWPkXT5a65hV",
+   "page": "atQ9J5hqR5Sv1DqWCt_EQX",
+   "addForm": "rQFq9LjQVZtMno2NrWIe-4"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "netWorth": "CDNTxkMfNzdC3YClI7iU1T",
+   "page": "_lBHbKat9-ox1yziM7HOUN",
+   "addForm": "eZqlQr2UU9naUXP1IAi9h5"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "netWorth": "sCB7OfsFK2riGtyo04K0W0",
+   "page": "Tfx7j06fMY6osRdGuw-aqq",
+   "addForm": "bEKvVdI3uWEhVkJh14mDv_"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "netWorth": "8fK03ab2g5yW0a-ZT-0qJi",
+   "page": "-W31Fjn4bl3VYqotYDkqZM",
+   "addForm": "J7ODXWGEg2Dw1vWQ1E7pb7"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "netWorth": "8BRJAp5n2158oHKlIFNM6o",
+   "page": "tP9x6J-O156Cr_r1j3e_ke",
+   "addForm": "qbuRinX9bfEByqhO48S8S5"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "netWorth": "HcjfTE2VY_kcGzeqhbSKky",
+   "page": "-Yo9sDjTyrAKFdx9045p3i",
+   "addForm": "-VHUy1CLo98kDuEKGwEArK"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "netWorth": "8BRJAp5n2158oHKlIFNM6o",
+   "page": "tP9x6J-O156Cr_r1j3e_ke",
+   "addForm": "eZFdMVQb3ntl81TWE7z3gO"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "netWorth": "2kZfoYJ28p-hJ-Qg6hwKQV",
+   "page": "EUsvKvEelgt68p0e7k0Drg",
+   "addForm": "CZDBeYSb2ssQ1XLh0AXfOh"
+  },
+  "01-single-adult/base": {
+   "netWorth": "kJVZZ7lbqfTEUR4o9JwbGP",
+   "page": "bV65ClAYml_6WvFUB0Bu6N",
+   "addForm": "lGT_HNgts-McQ_DCxY6f7s"
+  },
+  "02-couple-no-kids/base": {
+   "netWorth": "y2SJCKq4hzT_2usexpR_DC",
+   "page": "uIpUSoDMCmrOhAnGVnRu6z",
+   "addForm": "rzS7MHCMdDIEXRw2GZPy1s"
+  },
+  "03-single-parent/base": {
+   "netWorth": "UPCY3PWtfCcGUcliq_NPBk",
+   "page": "hXdaxCQgnjIWofkpWaobU3",
+   "addForm": "vvNz_qaQBbTJFVeQd17CCH"
+  },
+  "04-two-parents/base": {
+   "netWorth": "4dzgmBGZe5WaQsbsW8gIxh",
+   "page": "KcJJGo-oyI9ocszOz_ddFe",
+   "addForm": "snGydA-gBayMkyeKNdEdMN"
+  },
+  "05-stay-at-home-parent/base": {
+   "netWorth": "2sMFH9SlvfLX50jFMoJQ2v",
+   "page": "wn_2QtjDs5NbjBgLcZAHJ-",
+   "addForm": "Rf6arWN1UJKZW8i_7N0uoY"
+  },
+  "06-blended-family/base": {
+   "netWorth": "WWwr1PZHGtCvdJY8OkXxFP",
+   "page": "3kTHPYwWDS-4d1VNyfnYKC",
+   "addForm": "hRQd_fQ2eMPSqQM1IP4UV7"
+  },
+  "07-multigenerational/base": {
+   "netWorth": "Dl70YmnQPl4HztEjgf1X8s",
+   "page": "ahfXQndW_RvszIvd6cZpl7",
+   "addForm": "3wAvX1fOnNvZTIa97suKPR"
+  },
+  "08-retired/base": {
+   "netWorth": "YGJ5QHTc7B96uVLKhHl-Vk",
+   "page": "uhwthU9FlsMRSYUPdTKeSC",
+   "addForm": "FLbTeCZe1AcrFfQBPIpnTH"
+  },
+  "09-near-retirement/base": {
+   "netWorth": "c--6qO0GzggwRcOMKKCa88",
+   "page": "294beEFhlV33S7B21zBete",
+   "addForm": "yu7g1KaAhQhP1FVsp9JPpd"
+  },
+  "10-student-and-starter/base": {
+   "netWorth": "TYU_HInvyzVDMalqCoAm7-",
+   "page": "j5w5jT5blbv7iygWrigXzd",
+   "addForm": "9AxibuorFlhvPDhCJutS27"
+  },
+  "11-self-employed/base": {
+   "netWorth": "2qdxk4Sk8Q0Ui7qVeOEd8f",
+   "page": "XB5pHOgdtuOYcthP_I7doI",
+   "addForm": "FFB1djc5qBNpDD-yMSAJ3h"
+  },
+  "12-high-net-worth/base": {
+   "netWorth": "PuJatF9Yim3FfnH1HA8e8G",
+   "page": "HFR0jZwOfVquY10hheKC7y",
+   "addForm": "d2Y3SnO0bo4cxGk_Zue9jy"
+  },
+  "13-in-crisis/base": {
+   "netWorth": "_ABLcZOsAOK1Vogf5qpFjK",
+   "page": "LV3cHxbAG4wAREYKAmmeHx",
+   "addForm": "BSc46wmFj9tUouTcmreuhF"
+  },
+  "14-unusual-structures/base": {
+   "netWorth": "9xd3GXJWFSMKJ63t4f7fCL",
+   "page": "8CN-wgGAmzwrCKnepZlCYy",
+   "addForm": "i6zkjJSs83cwTJWda1fZl2"
+  },
+  "phone casey": {
+   "netWorth": "gO-cCzSVFq40Z7tgnNdBvu",
+   "page": "ET907Hm0rcnACfkhuXoWEy",
+   "addForm": "4t_gGR_qCRCqrpClKVZwPY"
+  },
+  "phone danaLee": {
+   "netWorth": "cbjeqlP6JP7Op24cDEgK3-",
+   "page": "3pVuvZWXJFazYPO9Qdtai_",
+   "addForm": "nU8Ja-GKdfmT4wQ9-sV0E3"
+  },
+  "phone jamie": {
+   "netWorth": "nbd8J2vHpnmg9oy9sd11j-",
+   "page": "JJqmKcPBIWGoy6rTLBEIGv",
+   "addForm": "h7CM2WPgDJeeeQR0KMKlek"
+  },
+  "phone morgan": {
+   "netWorth": "Iltyy9GbWgQY7yCGZDjKjm",
+   "page": "GN5mKo6FYyeR42mvjJNbJL",
+   "addForm": "ZKfpbPN6x32QAmEgNTYsYk"
+  },
+  "phone robin": {
+   "netWorth": "PzqzvaRVKTlEbYczT0IQFz",
+   "page": "8eYwVFDzFAVC04k9oZRefL",
+   "addForm": "wlEeOlvksSaQ3Tyoz5G1wd"
+  },
+  "round8 earlyRetireePlan": {
+   "netWorth": "ZtaIo8QnJbVGmIFZqPam_P",
+   "page": "TOmcE1Cu_-CQ-yKDpuffNw",
+   "addForm": "l1Sk-nR7hmfib9QJ3ObKzo"
+  },
+  "round8 equityPlan": {
+   "netWorth": "ZwlxuSPAQnalVaGvtMoW1n",
+   "page": "A275eAfiiFtCQbaJxE0LIM",
+   "addForm": "uxurBioqXRiY9cCdSOnBhk"
+  },
+  "round8 firstRmdPlan": {
+   "netWorth": "K1RlosUSkSQxDriDOPjHAC",
+   "page": "45ZyPs7NWIqzhbQtMAyZjn",
+   "addForm": "BT1s4kfj7v_HQd2uUlkLiu"
+  },
+  "round8 freelancerPlan": {
+   "netWorth": "mvtCXyfNaHKI0b-p49tBou",
+   "page": "kGzxMtv66-YRvE8R6VJRFH",
+   "addForm": "qNjZDWyJ9TjAcGr67CII6J"
+  },
+  "round8 highFreelancerPlan": {
+   "netWorth": "GDRJdoKHp_3Qk_ZzVBhxiE",
+   "page": "dAATxB1pBjWIayeBRjm40t",
+   "addForm": "3-bnN4dSy-x3Nsy4clYa9d"
+  },
+  "round8 landlordBusinessPlan": {
+   "netWorth": "QHN8lijQFsX2gYZXAJa5eE",
+   "page": "G3U9hLRO65yoTSVVw10ZxV",
+   "addForm": "xcrftOyLWUOohvlOxcLmK-"
+  },
+  "round8 landlordPlan": {
+   "netWorth": "3MyGhAD7rlJR6-4DDQeGEW",
+   "page": "JFkdVtKro9njXKXkHeooGC",
+   "addForm": "JCJSMt5GOVxOte6YbZhMyY"
+  },
+  "round8 parentLoanPlan": {
+   "netWorth": "vNbLWbllowUkL5D4abwYh0",
+   "page": "0IFFcFoOPwfSOs-ORboU6S",
+   "addForm": "SWEePtkL2X2qpPGNM9t4xB"
+  },
+  "round8 stockAndBusinessPlan": {
+   "netWorth": "kW6x7mo0CqEk1d1pTzb8UH",
+   "page": "l-ar2B306z0OA82cFpRrkh",
+   "addForm": "cwgg0mTw7R7o1IRicO_46R"
+  },
+  "round8 studentLoanPlan": {
+   "netWorth": "SqQ1ci2eAevkK4QpMf9kbv",
+   "page": "xUTLE1VznfYg8tCx2ttZqU",
+   "addForm": "pKpdzh4elQfinIpgT8Bde1"
+  },
+  "round8 widowPlan": {
+   "netWorth": "vG9NyTN-WZP90UEn7N4ZAs",
+   "page": "jy4Yk0FxbpNXM8AMOac-Xd",
+   "addForm": "5L2OzPs1wcgtNZJAIEosFs"
+  },
+  "persona sam": {
+   "netWorth": "Pcz8T-4cq1WGskvf_BqCFr",
+   "page": "EbZGf_Y1byYAUSS_6Ood28",
+   "addForm": "I_PcCJN4EDa1kbZNe7_VkJ"
+  },
+  "persona jordan": {
+   "netWorth": "Iv-Ys4OlNTYSMKENEe9wdw",
+   "page": "n8JLyzUfG-RjSv5zHaCu3X",
+   "addForm": "gijX9IU3QHfJ4zGulYxHUt"
+  },
+  "persona patLee": {
+   "netWorth": "w5Ulto0ur1_mr6UEJYHQFv",
+   "page": "lXk_A8lcfuYcQJm-eelbr4",
+   "addForm": "bGn62IpCNosDaujZGMiDzV"
+  },
+  "persona ruth": {
+   "netWorth": "U72w_0hyfSahnukLMbnu_-",
+   "page": "3n5O76jLfbfXFdwQSw2P1C",
+   "addForm": "P59qOs4BJ5NRRVJTVdKJs-"
+  },
+  "empty plan": {
+   "netWorth": "MjRCxAmwtWfBuixHQHh5aG",
+   "page": "w-6nhzC_3X4SDGVbqUW62o",
+   "addForm": "SKLIrn9mV3_a4y-R9fr7mQ"
+  }
+ }
+}

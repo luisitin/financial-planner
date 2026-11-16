@@ -7,7 +7,10 @@ import { isGuess, clearGuess, guessAt, markGuess, applies, same } from "../../..
 import { escrowBefore, escrowKept } from "../../overview/guesses/estimators/home.js";
 import { guessTwins } from "../../overview/guesses/compute.js";
 import { snapshotOf, keepSnapshot, dropSnapshot, against, sentenceOf, statusWords, staleWords, comingOn, comingWords, savedWords, wouldKeep, tooSmall } from "./path.js";
-import { part, choice } from "../../../core/ui/more.js";
+import { part, parts, choice } from "../../../core/ui/more.js";
+import { isMetal, metalOf, metalValue, metalLine, metalSaid, NEED_WEIGHT, NEED_PRICE } from "./metals.js";
+import { isPrivate, privateOf, privatesOf, promisedOf, flowsOf, planFlow, addFlow, removeFlow, privateSentence, staleLine, keepReadyLine, keepReadyAll, rowRate, rowPromised,
+  privateStatus, flowTitle, flowAsk, flowAddedSaid, flowRemovedSaid, FLOW_UNDONE, HOW } from "./private-fund.js";
 import { sectionsOf, sectionKey, asOne, itemize, unmarkOnAdd, rowLine, statusWords as oneStatus, sectionLine, holdWords, askWords, doneWords, itemizeWords, undoneWords as oneUndone, addWords, INTRO, PART_TITLE } from "./one-figure.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
@@ -28,6 +31,24 @@ let landedOn = null;
 // visit, whether the person acted in it (it stays open, R17) and which kinds they changed (still listed with one row left)
 let oneSaid = null, oneOpen = false;
 const oneTouched = new Set();
+// "Private investments" (gap list, next 60, item 45): the green line after a change in that row ({ text, undo?, error? }), whether
+// it opens on the next draw (an investment just added there by the form), "+ Add money in or out" tapped, and what was typed in
+// that form when another investment was picked (it is drawn again for it)
+let privSaid = null, privOpen = false, privAdding = false, privDraft = null;
+// gold and silver by weight, a private investment: the kinds of "Something else I own" (the box "What it is", shown only for it)
+const KIND_OPTIONS = [{ value: "", label: "Something else: I type what it is worth" }, { value: "gold", label: "Gold, by its weight" }, { value: "silver", label: "Silver, by its weight" }, { value: "private", label: "A private fund, or a share in a business" }];
+const UNIT_OPTIONS = [{ value: "oz", label: "ounces (troy)" }, { value: "g", label: "grams" }];   // the troy ounce: the one gold and silver are priced in
+const kindOfAccount = (a) => (isMetal(a) ? a.metal.kind : isPrivate(a) ? "private" : "");
+/** The boxes that hold the new kinds' details, hidden (and not read) unless Type is "Something else I own" and its kind asks. */
+const KIND_FIELDS = [
+  { key: "kindOf", label: "What it is", type: "select", options: KIND_OPTIONS },
+  { key: "weight", label: "How much gold", type: "number", min: 0, max: 1e9, step: "any", help: "the metal's own weight: a one-ounce coin is 1" },
+  { key: "unit", label: "Weighed in", type: "select", options: UNIT_OPTIONS },
+  { key: "price", label: "Price of one ounce", type: "money", min: 0, max: 1e7, help: "Type the price you see: this app never looks prices up." },
+  { key: "promised", label: "Still promised", type: "money", min: 0, help: "money you agreed to put in but have not put in yet; leave it empty if none" },
+];
+/** Sets an account's kind details as the form saved them (`kp`: { metal?, private?, drop }); nothing without `kp`. */
+const applyKind = (acc, kp) => { if (!acc || !kp) return; for (const k of kp.drop ?? []) delete acc[k]; if (kp.metal) acc.metal = kp.metal; if (kp.private) acc.private = kp.private; };
 const ADD_AS = {
   debt: { type: "credit", title: "Add a loan or card", hint: "e.g. Visa card or Car loan", help: "Pick the kind under Type." },
   credit: { title: "Add a credit card", hint: "e.g. Visa card" },
@@ -97,6 +118,8 @@ export function render(root, ctx) {
   const d = ctx.computeOf?.("balance/net-worth", { today: fmt.today() }) ?? derived;
   const savedToday = (d.history ?? []).some((h) => h.date === fmt.today());
   const cur = plan.meta.currency;
+  // a price with its cents (an ounce of silver is a few dollars): "$2,400.00"
+  const price = (n) => { try { return new Intl.NumberFormat("en-US", { style: "currency", currency: cur || "USD" }).format(Number(n) || 0); } catch { return `$${(Number(n) || 0).toFixed(2)}`; } };
   const q = ctx.route?.query ?? {};
   const fresh = ctx.route !== landedOn; landedOn = ctx.route;
   if (fresh) { oneOpen = false; oneTouched.clear(); }
@@ -131,7 +154,7 @@ export function render(root, ctx) {
 
   const said = (card) => {
     if (pending?.card !== card) return null;
-    const n = ui.notice("ok", pending.text);
+    const n = ui.notice("ok", pending.text, pending.undo ? { undo: pending.undo, undone: pending.undone } : {});
     if (pending.links?.length) n.append(ui.h("div", { class: "row", style: { marginTop: "8px" } }, ...pending.links.map((l) => ui.h("a", { class: l.filled ? "btn" : "btn secondary", href: l.href }, l.label))));
     pending = null; return n;
   };
@@ -187,7 +210,7 @@ export function render(root, ctx) {
     };
     const ask = ui.h("div");   // "was the old figure a typing mistake?", above the form
     formHost.append(ask);
-    const save = (v, typo, g = null) => {
+    const save = (v, typo, g = null, kp = null) => {
       const was = editing;
       const id = newId;
       // the green line is drawn where the form was (where the thumb is), with what comes next: the page that sent you here,
@@ -209,12 +232,13 @@ export function render(root, ctx) {
       // another account of a kind kept as one figure lists that kind item by item again (gap next-60 #11)
       const unmark = !was ? sectionsOf(plan).find((s) => s.mode === "one" && s.key === sectionKey({ ...v, ownerId: v.ownerId ?? "" })) : null;
       const relisted = unmark ? ` ${addWords(unmark.name)}` : "";
-      pending = { card: "form", links, text: !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.${labelled}${relisted}` : `${v.name} added.${ours}${labelled}${relisted}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.${labelled}` : `${v.name || was.name} saved.${ours}${labelled}` };
+      const specialText = kindWords(v, was, kp, labelled);
+      pending = { card: "form", links, text: specialText ? specialText : !was ? (v.later ? `${v.name} added at ${fmt.money(0, cur)} for now. When you know its balance, tap Edit beside it here.${labelled}${relisted}` : `${v.name} added.${ours}${labelled}${relisted}`) : typo ? `${v.name || was.name} corrected to ${fmt.money(Math.abs(Number(v.balance)), cur)}, with its history: no fall is shown.${labelled}` : `${v.name || was.name} saved.${ours}${labelled}` };
       const setLabels = (acc) => { if (!acc || labelsNow === null) return; if (labelsNow.length) acc.labels = labelsNow; else delete acc.labels; };
       // a mortgage balance of ours saved here becomes the person's: the tax and insurance its payment was read with stay in that
       // payment, so the payoff date does not jump (home.js escrowKept; fix round 1, 2026-11-11)
       const held = escrowBefore(plan, fmt.today());
-      store.update((p) => {
+      const mutate = (p) => {
         if (was) {
           const i = p.accounts.findIndex((a) => a.id === was.id);
           if (i >= 0 && g) {
@@ -222,11 +246,12 @@ export function render(root, ctx) {
             p.accounts[i] = { ...p.accounts[i], ...v, balance: g.value };
             markGuess(p, `accounts[${was.id}].balance`, g, fmt.today());
             setLabels(p.accounts[i]);
+            applyKind(p.accounts[i], kp);
           } else if (i >= 0) {
             const old = p.accounts[i];
             const moved = Number(v.balance) !== Number(old.balance);
             // a typing mistake is fixed where it stood (its points and the saved totals), never kept as a point
-            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; markTyped(p, old.id, fmt.today()); setLabels(p.accounts[i]); return; }
+            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; markTyped(p, old.id, fmt.today()); setLabels(p.accounts[i]); applyKind(p.accounts[i], kp); return; }
             // a new balance is today's unless you dated it yourself; the old one stays a point on its own date
             if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
             p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
@@ -235,6 +260,7 @@ export function render(root, ctx) {
             clearGuess(p, `accounts[${old.id}].balance`);
             escrowKept(p, held, fmt.today());
             setLabels(p.accounts[i]);
+            applyKind(p.accounts[i], kp);
           }
         }
         else {
@@ -242,9 +268,19 @@ export function render(root, ctx) {
           p.accounts.push({ id, ...typed, ...(g ? { balance: g.value } : {}), history: [] });
           if (g) markGuess(p, `accounts[${id}].balance`, g, fmt.today());
           setLabels(p.accounts.at(-1));
+          applyKind(p.accounts.at(-1), kp);
           if (unmark) unmarkOnAdd(p, p.accounts.at(-1));
         }
-      });
+      };
+      // gold and silver by weight, a private investment: the green line has Undo (every other save stays as it was)
+      if (kp) {
+        let undo = null;
+        const name = v.name || was?.name || "";
+        pending.undo = () => undo?.();
+        pending.undone = (res) => { pending = { card: "form", text: ui.undoneWords(res, was ? `Undone: ${name} is back as it was.` : `Undone: ${name} is off your list.`) }; };
+        if (kp.private && !was) privOpen = true;   // the row where its amounts go opens once, under the list
+        undo = ui.undoable(store, mutate);
+      } else store.update(mutate);
       // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
       // the history entry is replaced, so no page change happens
       if (q.add || q.edit) {
@@ -263,24 +299,35 @@ export function render(root, ctx) {
       : f.key === "balance" ? { ...f, label: w.balance, help: (ctx.guess && applies(plan)) || isLiability(values.type) || w === WORDS.thing ? null : f.help, guess: g0 }
       : f.key === "asOf" && w !== WORDS.asset ? { ...f, label: w === WORDS.thing ? "Worth that on" : "Owed that on" }
       : f.key === "institution" ? (w.institution ? { ...f, label: w.institution } : null) : f).filter(Boolean);
+    // gold and silver by weight, a private investment (gap list, next 60, item 45): their boxes come right after Type, hidden
+    // unless Type is "Something else I own" (showKind below), so every other kind's form says and saves what it did
+    fields.splice(fields.findIndex((f) => f.key === "type") + 1, 0, ...KIND_FIELDS);
+    const mo = editing ? metalOf(editing) : null;
+    const kindStart = { kindOf: editing ? kindOfAccount(editing) : "", weight: mo?.weight ?? null, unit: mo?.unit ?? "oz", price: mo ? mo.price : null, promised: editing && isPrivate(editing) ? promisedOf(editing) || null : null };
     const owner = ownerField(plan, values.ownerId);
     // your own labels (gap next-60 #44): not asked on the first account (the empty page's first view stays as it was)
     const known = planLabels(plan);
     const askLabels = !empty;
     let labelsNow = null;   // what Save writes: null = the form had no labels box (nothing changes)
     if (askLabels && editing) values.labelsText = labelsOf(editing).join(", ");
-    const start = { ownerId: "", ...values };
+    const start = { ownerId: "", ...values, ...kindStart };
     // cleared on Edit, a typed balance is asked for again with the way back in view (P5, round 2: "Type an amount first." alone)
     const keepWords = typedBalance ? `Type the ${w === WORDS.debt ? "amount owed" : w === WORDS.thing ? "value" : "balance"}, or tap Cancel to keep ${fmt.money(Math.abs(Number(editing.balance) || 0), cur)}.` : null;
     const theForm = ui.form([...fields.map((f) => (keepWords && f.key === "balance" ? { ...f, missing: keepWords } : f)), ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : []), ...(askLabels ? [LABELS_FIELD] : [])], start, (typed0, meta) => {
-      // the labels box is read apart: Save writes `labels` (or takes it off), never the box's text
-      const { labelsText, ...typed } = typed0;
+      // the labels box is read apart: Save writes `labels` (or takes it off), never the box's text; the kind's boxes are read
+      // apart too (kindPatch): only for "Something else I own", and they never go on the account as they are typed
+      const { labelsText, kindOf, weight, unit, price, promised, ...typed } = typed0;
       if (askLabels) { const r = readLabels(labelsText, known); if (r.error) return ui.fieldError(theForm.querySelector('[name="labelsText"]'), r.error); labelsNow = r.list; }
       // no "Whose account" box (one adult): the owner saved is what the box would have held, as before
       let v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
+      const kk = kindPatch(v, { kindOf, weight, unit, price, promised });
+      if (kk === false) return false;
+      if (kk?.error) return ui.fieldError(theForm.querySelector(`[name="${kk.field}"]`), kk.error);
+      const kp = kk?.kp ?? null;
+      if (kk?.balance !== undefined) v = { ...v, balance: kk.balance, asOf: v.asOf || fmt.today() };
       // the balance box left empty over our grey figure: that guess, for the kind and owner the form holds now
       const g = meta?.guessed?.has("balance") ? guessFor(v.type, v.ownerId ?? "") ?? meta.guess.balance : null;
-      if (g) { save({ ...v, balance: g.value }, false, g); return; }
+      if (g) { save({ ...v, balance: g.value }, false, g, kp); return; }
       // added for a file on Import with the balance left empty: $0 for now, with no date (it is not a balance anyone saw)
       if (forImport && !editing && (v.balance === null || v.balance === undefined || v.balance === "")) v = { ...v, balance: 0, asOf: "", later: true };
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was (never about our
@@ -290,15 +337,15 @@ export function render(root, ctx) {
         // "it changed" is the default answer (a real change can look like a slip); the other rewrites the history (review 2026-11-02)
         ask.replaceChildren(ui.notice("warn", `${wrong} on file, ${right} typed. Did it change, or was ${wrong} a typing slip?`),
           ui.h("div", { class: "row" },
-            ui.button("It changed", () => save(v, false)),
-            ui.button(`${wrong} was a mistake`, () => save(v, true), { class: "secondary" }),
+            ui.button("It changed", () => save(v, false, null, kp)),
+            ui.button(`${wrong} was a mistake`, () => save(v, true, null, kp), { class: "secondary" }),
             ui.button("Let me fix what I typed", () => { ask.replaceChildren(); ask.style.marginBottom = ""; const box = formHost.querySelector('input[name="balance"]'); box?.focus(); box?.select?.(); }, { class: "secondary" })),
           ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened."));
         ask.style.marginBottom = "16px";
         ask.scrollIntoView({ behavior: "smooth", block: "center" });
         return false;   // keep the form as typed behind the question
       }
-      save(v, false);
+      save(v, false, null, kp);
     }, { submitLabel: editing ? "Save changes" : asked && w !== WORDS.asset ? w.submit : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null });
     formHost.append(theForm);
     if (askLabels) labelPicks(ui, theForm, known);
@@ -309,15 +356,78 @@ export function render(root, ctx) {
       const lab = (k) => formHost.querySelector(`[name="${k}"]`)?.closest("label");
       const set = (k, t) => { const l = lab(k)?.querySelector(".field-label"); if (l && t) l.textContent = t; };
       set("name", x.name); set("balance", x.balance);
-      if (lab("institution")) { set("institution", x.institution ?? WORDS.asset.institution); lab("institution").hidden = !x.institution; }
+      // (hidden for a thing; its inline display too, as base.css's flex label outranks the hidden attribute)
+      if (lab("institution")) { set("institution", x.institution ?? WORDS.asset.institution); lab("institution").hidden = !x.institution; lab("institution").style.display = x.institution ? "" : "none"; }
+      showKind();   // (first: a kind's guess, set next, decides whether the worth box is asked)
       ui.setGuess?.(theForm, "balance", guessFor(typeSel.value, ownerSel?.value ?? start.ownerId ?? ""));
     });
+    // "What it is" (only for "Something else I own"): gold or silver ask the weight and the price of one ounce in place of the
+    // worth (the worth is worked out from them); a private investment asks what is still promised. Hidden boxes are not asked.
+    const kindSel = formHost.querySelector('select[name="kindOf"]');
+    const balBox = formHost.querySelector('input[name="balance"]');
+    const balRequired = !!balBox?.required;
+    const kLab = (key) => formHost.querySelector(`[name="${key}"]`)?.closest("label");
+    const asOf0 = kLab("asOf")?.querySelector(".field-label")?.textContent ?? null;
+    let balHidden = false, asOfSet = false;   // what showKind changed, so it is put back for another Type
+    function showKind() {
+      const t = typeSel?.value ?? values.type;
+      const k = t === "other_asset" ? kindSel?.value ?? "" : "";
+      const metal = k === "gold" || k === "silver";
+      // (a label is a flex box in base.css, which outranks the hidden attribute: the inline display hides it in a browser)
+      const hide = (key, h) => { const l = kLab(key); if (l) { l.hidden = h; l.style.display = h ? "none" : ""; } };
+      const set = (key, text) => { const l = kLab(key)?.querySelector(".field-label"); if (l && text && l.textContent !== text) l.textContent = text; };
+      hide("kindOf", t !== "other_asset");
+      for (const key of ["weight", "unit", "price"]) hide(key, !metal);
+      hide("promised", k !== "private");
+      // gold or silver: the worth is worked out, so its box goes (and is not asked); any other choice puts it back as it was
+      if (metal !== balHidden) { hide("balance", metal); if (balBox) balBox.required = metal ? false : balRequired; balHidden = metal; }
+      if (t === "other_asset") {
+        set("weight", `How much ${k === "silver" ? "silver" : "gold"}`);
+        set("asOf", metal ? "Price as of" : "Worth that on"); asOfSet = true;
+        set("balance", k === "private" ? "What it is worth now" : WORDS.thing.balance);
+      } else if (asOfSet) { set("asOf", asOf0); asOfSet = false; }
+    }
+    kindSel?.addEventListener("change", showKind);
+    showKind();
     // a retirement account's guess is its owner's: it follows "Whose account"
     const ownerSel = formHost.querySelector('select[name="ownerId"]');
     ownerSel?.addEventListener("change", () => ui.setGuess?.(theForm, "balance", guessFor(typeSel?.value ?? values.type, ownerSel.value)));
   };
   drawForm();
 
+  /**
+   * What the form's kind boxes save (gap list, next 60, item 45), for the account `v` the form holds now: null for every
+   * kind but "Something else I own" when the account had no such details (nothing changes); else { kp: { metal?, private?,
+   * drop }, balance? (gold or silver: ounces x the price of one ounce) }, { field, error } for an empty box it needs, or
+   * false when a private investment's amounts would be lost and the person says no.
+   */
+  function kindPatch(v, { kindOf, weight, unit, price, promised }) {
+    const k = v.type === "other_asset" ? kindOf || "" : "";
+    const hadMetal = !!editing && isMetal(editing), hadPrivate = !!editing && isPrivate(editing);
+    if (k === "gold" || k === "silver") {
+      if (!(Number(weight) > 0)) return { field: "weight", error: NEED_WEIGHT(k) };
+      if (!(Number(price) > 0)) return { field: "price", error: NEED_PRICE };
+      const metal = { kind: k, weight: Number(weight), unit: unit === "g" ? "g" : "oz", price: Number(price) };
+      return { kp: { metal, drop: ["private"] }, balance: metalValue(metal) };
+    }
+    if (k === "private") {
+      const pv = { ...(hadPrivate ? structuredClone(editing.private) : { flows: [] }) };
+      if (Number(promised) > 0) pv.promised = Math.round(Number(promised) * 100) / 100; else delete pv.promised;
+      return { kp: { private: pv, drop: ["metal"] } };
+    }
+    if (!hadMetal && !hadPrivate) return null;
+    const n = hadPrivate ? flowsOf(editing).length : 0;
+    if (n && !ui.confirm(`${editing.name} has ${n} ${n === 1 ? "amount" : "amounts"} put in or paid back on file. Saved as something else, ${n === 1 ? "it is" : "they are"} no longer kept. Save it anyway?`)) return false;
+    return { kp: { drop: ["metal", "private"] } };
+  }
+  /** The green line after the form saves one of these kinds (null for every other save: its own words, as before). */
+  function kindWords(v, was, kp, labelled) {
+    if (!kp?.metal && !kp?.private) return null;
+    const name = v.name || was?.name || "";
+    if (kp.metal) return `${metalSaid(name, { ...metalOf({ type: "other_asset", metal: kp.metal, balance: v.balance }), value: v.balance }, !was, price, (n) => fmt.money(n, cur))}${labelled}`;
+    if (!was) return `${name} added. Next: what you put in and when, under Private investments below.${labelled}`;
+    return `${name} saved.${kp.private.promised ? ` Still promised: ${fmt.money(kp.private.promised, cur)}.` : ""}${labelled}`;
+  }
   const edit = (a) => { editing = a; showForm = true; drawForm(); formHost.scrollIntoView({ behavior: "smooth" }); };
   const del = (a) => { if (ui.confirm(`Delete ${a.name}?`)) { pending = { card: "accounts", text: `${a.name} removed.` }; store.update((p) => { p.accounts = p.accounts.filter((x) => x.id !== a.id); }); } };
   const guessed = (a) => isGuess(plan, `accounts[${a.id}].balance`);
@@ -331,6 +441,16 @@ export function render(root, ctx) {
   // a row that holds its kind as one figure says so ("One figure for your savings accounts"; gap next-60 #11)
   const kinds = sectionsOf(plan);
   const oneLine = (a) => rowLine(plan, a, kinds);
+  // gold or silver by weight, a private investment (gap list, next 60, item 45): the row says how its worth is made, or its own
+  // return; null for every other row (which reads as before)
+  const kindLine = (a) => {
+    const m = metalOf(a);
+    if (m) return metalLine(m, price, fmt.date);
+    if (!isPrivate(a)) return null;
+    const rr = rowRate(privateOf(a, { today: fmt.today() }));
+    return `${a.asOf ? `as of ${fmt.date(a.asOf)}` : "no day typed"}${rr ? ` \u00b7 ${rr}` : ""}`;
+  };
+  const callsLine = (a) => (isPrivate(a) ? rowPromised(privateOf(a, { today: fmt.today() }), (n) => fmt.money(n, cur)) : "");
   const rows = [...plan.accounts].filter((a) => !shownLabel || hasLabel(a, shownLabel)).sort((a, b) => Number(isLiability(a.type)) - Number(isLiability(b.type)) || Math.abs(b.balance) - Math.abs(a.balance));
   const redrawHere = () => (ctx.redraw ? ctx.redraw() : (root.replaceChildren(), render(root, ctx)));
   const filter = ownLabels.length ? ui.h("div", { dataset: { labels: "" } },
@@ -338,7 +458,7 @@ export function render(root, ctx) {
     shownLabel ? ui.h("p", { class: "small" }, labelLine(labelTotals(plan, shownLabel), (n) => fmt.money(n, cur))) : null) : null;
   // Desktop: a table. Phone: one stacked record per account (tester F-002).
   const table = ui.h("div", { class: "only-wide" }, ui.table([
-    { key: "name", label: "Account", render: (a) => (labelsOf(a).length || oneLine(a) ? ui.h("span", {}, a.name ?? "", ...pills(a), oneLine(a) ? ui.h("div", { class: "muted small" }, oneLine(a)) : null) : (a.name ?? "")) },
+    { key: "name", label: "Account", render: (a) => (labelsOf(a).length || oneLine(a) || kindLine(a) ? ui.h("span", {}, a.name ?? "", ...pills(a), oneLine(a) ? ui.h("div", { class: "muted small" }, oneLine(a)) : null, kindLine(a) ? ui.h("div", { class: "muted small" }, kindLine(a)) : null, callsLine(a) ? ui.h("div", { class: "small" }, callsLine(a)) : null) : (a.name ?? "")) },
     { key: "type", label: "Type", render: typeLabel },
     { key: "institution", label: "Bank or company" },
     { key: "balance", label: "Balance", align: "right", render: balance },
@@ -353,7 +473,8 @@ export function render(root, ctx) {
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.name),
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
-    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : oneLine(a) ? `${oneLine(a)}${a.asOf ? `, as of ${fmt.date(a.asOf)}` : ""}` : a.asOf ? `as of ${fmt.date(a.asOf)}` : "", ...pills(a)))));
+    ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : kindLine(a) ?? (oneLine(a) ? `${oneLine(a)}${a.asOf ? `, as of ${fmt.date(a.asOf)}` : ""}` : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""), ...pills(a)),
+    callsLine(a) ? ui.h("div", { class: "rec-sub" }, callsLine(a)) : null)));
   // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
   const twins = guessTwins(plan);
   if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
@@ -366,6 +487,9 @@ export function render(root, ctx) {
     formHost,
   ));
 
+  // "Private investments" (gap list, next 60, item 45): one quiet row under the list, drawn only while one is on file
+  const pp = privatePart();
+  if (pp) root.append(ui.h("div", {}, parts(ctx, pp)));
   // the green line with its next steps, in view (on a small phone it sat under the top bar after the form folded away)
   if (shownNote) { const r = shownNote.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) shownNote.scrollIntoView({ block: "start" }); }
   // landed here to add or change one thing: the form in view and its first box ready (the page scrolls itself, so the shell's
@@ -425,6 +549,93 @@ export function render(root, ctx) {
     const note = said ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (res) => { oneOpen = true; oneSaid = { text: ui.undoneWords(res, oneUndone(said.r, money, said.nw)) }; } } : {}) : null;
     return ui.h("div", { class: "folds", style: { marginTop: "8px" } }, part(ctx, { id: "asOne", kind: "own", title: PART_TITLE, says: oneStatus(shown),
       open: !!said || oneOpen, body: [note, ui.h("p", {}, INTRO), ...shown.map(block)] }));
+  }
+  // ---- "Private investments": each one's own yearly return from its dated amounts, what it can still ask for, and the form
+  // that adds money put in or paid back (private-fund.js; asked first and with Undo for a removal, Undo after an add)
+  function privatePart() {
+    const all = privatesOf(plan, { today: fmt.today() });
+    if (!all.list.length) { privSaid = null; privOpen = false; return null; }
+    const said = privSaid, open = !!said || privOpen;
+    privSaid = null; privOpen = false;
+    const m0 = (n) => fmt.money(n, cur);
+    return { id: "private", kind: "item", title: "Private investments", says: privateStatus(all, m0), open: open ? true : undefined, holds: ["flowAmount", "flowDate"], body: () => privateBody(all, said) };
+  }
+  function privateBody(all, said) {
+    const m0 = (n) => fmt.money(n, cur);
+    const out = [];
+    if (said) {
+      // the list above the tapped button changes: the green line is brought under the top bar (ui.reveal)
+      const n = ui.notice(said.error ? "error" : "ok", said.text);
+      out.push(n, said.undo ? ui.row(ui.button("Undo", said.undo, { class: "secondary" })) : null);
+      ui.reveal?.(n, { block: "start" });
+    }
+    const allLine = keepReadyAll(all, m0);
+    if (allLine) out.push(ui.h("p", {}, ui.h("strong", {}, allLine)));
+    for (const r of all.list) {
+      out.push(ui.h("h3", {}, r.name), ui.h("p", {}, privateSentence(r, m0)));
+      const st = staleLine(r);
+      if (st) out.push(ui.h("p", { class: "small" }, st));
+      const kr = keepReadyLine(r, m0);
+      if (kr) out.push(ui.h("p", {}, ui.h("strong", {}, kr)));
+      if (r.flows.length) {
+        const shown = [...r.flows].reverse().slice(0, 10);
+        out.push(ui.h("ul", { class: "records" }, shown.map((f) => ui.h("li", {},
+          ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, flowTitle(f)), ui.h("span", { class: "rec-value" }, m0(f.amount))),
+          ui.h("div", { class: "rec-foot" }, ui.button("Remove", () => takeOff(r, f), { class: "secondary small" }))))));
+        if (r.flows.length > 10) out.push(ui.h("p", { class: "muted small" }, `and ${r.flows.length - 10} earlier amounts, counted above.`));
+      }
+    }
+    const host = ui.h("div");
+    drawFlowForm(host, all, all.list.some((r) => r.flows.length) && !privAdding);
+    out.push(host, ui.h("p", { class: "muted small" }, HOW));
+    return out;
+  }
+  // an amount taken off asks first, says the new return in green, and offers Undo
+  function takeOff(r, f) {
+    const m0 = (n) => fmt.money(n, cur);
+    if (!ui.confirm(flowAsk(f, m0))) return;
+    const dry = structuredClone(plan);
+    removeFlow(dry, r.id, f.id);
+    let undo = null;
+    privSaid = { text: flowRemovedSaid(f, privateOf(dry.accounts.find((x) => x.id === r.id), { today: fmt.today() }), m0), undo: () => { privSaid = { text: FLOW_UNDONE }; undo?.(); } };
+    undo = ui.undoable(store, (p) => { removeFlow(p, r.id, f.id); });
+  }
+  // "Add money in or out": open while nothing is typed, else behind an outlined "+ Add money in or out" (R20)
+  function drawFlowForm(host, all, folded) {
+    host.replaceChildren?.();
+    if (folded) { host.append(ui.row(ui.button("+ Add money in or out", () => { privAdding = true; drawFlowForm(host, all, false); host.querySelector?.("input, select")?.focus?.({ preventScroll: true }); }, { class: "secondary" }))); return; }
+    const m0 = (n) => fmt.money(n, cur);
+    const list = all.list;
+    const r = list.find((x) => x.id === privDraft?.inv) ?? list[0];
+    const fields = [
+      list.length > 1 ? { key: "inv", label: "Which one", type: "select", options: list.map((x) => ({ value: x.id, label: x.name })) } : null,
+      { key: "flowKind", label: "What happened", type: "select", options: [{ value: "in", label: "You put money in" }, { value: "back", label: "It paid money back to you" }] },
+      { key: "flowAmount", label: "How much", type: "money", required: true, min: 0, max: 1e10 },
+      { key: "flowDate", label: "On", type: "date", required: true, max: fmt.today() },
+      r.promised > 0 ? { key: "fromPromised", label: "It was money the fund asked for: take it off what is still promised", type: "checkbox" } : null,
+    ].filter(Boolean);
+    const values = { inv: r.id, flowKind: privDraft?.flowKind ?? "in", flowAmount: privDraft?.flowAmount ?? null, flowDate: privDraft?.flowDate ?? fmt.today(), fromPromised: privDraft?.fromPromised ?? true };
+    const f = ui.form(fields, values, (v) => {
+      const target = list.find((x) => x.id === (v.inv ?? r.id)) ?? r;
+      const w = planFlow({ kind: v.flowKind, amount: v.flowAmount, date: v.flowDate }, { today: fmt.today() });
+      if (!w.ok) {
+        const box = f.elements?.[w.field === "amount" ? "flowAmount" : "flowDate"];
+        if (box) return ui.fieldError(box, w.error);
+        f.prepend(ui.notice("error", w.error));
+        return false;
+      }
+      const fromPromised = !!v.fromPromised && w.flow.kind === "in" && target.promised > 0;
+      const id = ui.uid();
+      const dry = structuredClone(plan);
+      addFlow(dry, target.id, w.flow, id, { fromPromised });
+      let undo = null;
+      privSaid = { text: flowAddedSaid(w.flow, privateOf(dry.accounts.find((x) => x.id === target.id), { today: fmt.today() }), m0, undefined, { fromPromised }), undo: () => { privSaid = { text: FLOW_UNDONE }; undo?.(); } };
+      privAdding = false; privDraft = null;
+      undo = ui.undoable(store, (p) => { addFlow(p, target.id, w.flow, id, { fromPromised }); });
+    }, { submitLabel: "Add it", onCancel: all.list.some((x) => x.flows.length) ? () => { privAdding = false; privDraft = null; drawFlowForm(host, all, true); host.querySelector?.("button")?.focus?.(); } : undefined });
+    // another investment: the form is drawn again for it (its tick follows what it still has promised), keeping what was typed
+    f.elements?.inv?.addEventListener?.("change", () => { privDraft = { inv: f.elements.inv.value, flowKind: f.elements.flowKind?.value ?? "in", flowAmount: f.elements.flowAmount?.value ?? null, flowDate: f.elements.flowDate?.value ?? "", fromPromised: f.elements.fromPromised?.checked ?? true }; drawFlowForm(host, all, false); });
+    host.append(ui.h("h3", {}, "Add money in or out"), f);
   }
   // "Your earlier plan" (gap #35): one quiet row in Over time, drawn only once a path kept by "Save today's totals"
   // is six months old. It reads the plan and writes nothing; without a kept path the page is as it was. While a kept path

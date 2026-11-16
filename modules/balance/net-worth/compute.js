@@ -8,6 +8,8 @@
 // 2026-11-13; SPEC 13.1); typeName() gives them, falling back to the label.
 import { isGuess } from "../../../core/estimate/index.js";
 import { hasLabel } from "./labels.js";
+import { isMetal, metalOf } from "./metals.js";
+import { isPrivate, privatesOf } from "./private-fund.js";
 
 export const ACCOUNT_TYPES = {
   checking:        { label: "Checking",            side: "asset",     liquid: true,  invested: false, taxBucket: "taxable" },
@@ -83,7 +85,10 @@ export function balanceGuessPath(plan, type, id, ownerId = "") {
  *   count, history: [{ date, assets, liabilities, netWorth }], change: { sinceLast, sinceLastPct } | null,
  *   guessedAssets?, guessedLiabilities?, partlyGuessed?   (only when a balance is one of our guesses: docs/CONVENTIONS.md
  *   "Guesses"; partlyGuessed when the guessed balances are half or more of what you own, or of what you owe, so the
- *   figure is said as "partly our guesses" and never praised as "a solid base")
+ *   figure is said as "partly our guesses" and never praised as "a solid base"),
+ *   metals?   (only with gold or silver held by weight: metals.js metalOf for each: { id, name, kind, weight, unit, ounces,
+ *   price, typed, value, asOf }), privates?, keepReady? (only with a private investment: private-fund.js privateOf for
+ *   each, and what they can still ask for in all; never in net worth)
  * }
  * Asset balances keep their sign (an overdrawn checking account is negative and lowers what you own);
  * debts count as positive amounts owed whatever sign was typed.
@@ -118,7 +123,16 @@ export function compute(plan, params = {}) {
     guessedAssets, guessedLiabilities,
     partlyGuessed: (assets > 0 && guessedAssets / assets >= 0.5) || (liabilities > 0 && guessedLiabilities / liabilities >= 0.5),
   } : {};
-  return { assets, liabilities, netWorth, liquid, cash, investable, byType, bySide: { asset: assets, liability: liabilities }, byTaxBucket, count: accounts.length, history, change, ...guesses };
+  return { assets, liabilities, netWorth, liquid, cash, investable, byType, bySide: { asset: assets, liability: liabilities }, byTaxBucket, count: accounts.length, history, change, ...guesses, ...specialsOf(plan, today) };
+}
+
+/** Gold and silver by weight and the private investments (gap list, next 60, item 45), only when the plan holds one: a plan
+ *  without them gives the very output it gave before. Neither moves a total: both are read from the balances above. */
+function specialsOf(plan, today) {
+  const list = Array.isArray(plan.accounts) ? plan.accounts : [];
+  const metals = list.filter(isMetal).map(metalOf);
+  const pv = list.some(isPrivate) ? privatesOf(plan, { today }) : null;
+  return { ...(metals.length ? { metals } : {}), ...(pv ? { privates: pv.list, keepReady: pv.keepReady } : {}) };
 }
 
 /**

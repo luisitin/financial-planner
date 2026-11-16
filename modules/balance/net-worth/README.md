@@ -16,6 +16,9 @@ before): `guessedAssets` and `guessedLiabilities` (the sums of the balances that
 "accounts[<id>].balance")`, core/estimate) and `partlyGuessed` (a guessed side is 50% or more of what you own, or of
 what you owe). Get started's done screen reads it ("Partly our guesses", "● Our guesses for now" in place of "A solid
 base"); this page's view and the Dashboard tile are the designer's to change (see the C2 notes).
+Only when the plan holds one (gap list, next 60, item 45; additive): `metals` (each account held by weight, `metals.js`
+`metalOf`), `privates` and `keepReady` (each private investment, `private-fund.js` `privateOf`, and what they can still ask
+for in all). Neither moves a total: both read the balances above. See "Gold and silver by weight; a private investment".
 
 ## Formulas
 Sums. Liability balances are stored as positive amounts owed and subtracted. The type table
@@ -87,7 +90,98 @@ view through `qa/fixtures/fake-dom.mjs`).
 ## Review fixes 2026-11-02
 The edit form's slip question has "It changed" as the filled default and "$X was a mistake" outlined. A changed balance records `typedOn` and refreshes today's saved total (update's `markTyped`).
 
+## Gold and silver by weight; a private investment (gap list, next 60, item 45) -- `metals.js`, `private-fund.js`
+
+**What a person sees.** Nothing new on a plan without them (digests, below). The way in is the add or edit form, which is
+not in the first view once there are accounts: when Type is "Something else I own", one box shows under it, **"What it
+is"**: "Something else: I type what it is worth" / "Gold, by its weight" / "Silver, by its weight" / "A private fund, or a
+share in a business". The Type list is unchanged and the box is hidden for every other kind (its label gets `hidden` and an
+inline `display: none`: base.css's `.field { display: flex }` outranks the hidden attribute, which is also why the old
+"Bank or company" box still showed for a thing picked under Type; it is hidden the same way now).
+- Gold or silver: in place of the worth box, "How much gold" (or silver), "Weighed in" (ounces (troy) / grams), "Price of
+  one ounce" ("Type the price you see: this app never looks prices up."); the date box reads "Price as of". Save
+  writes the balance (ounces x price, to the cent) and that day as `asOf`, and says "Gold coins added: 10 ounces of gold at
+  $2,400.00 an ounce, $24,000." with Undo. The row: "10 ounces of gold at $2,400.00 an ounce, your price of 11/10/2026";
+  once the balance is changed elsewhere (Update all balances), "10 ounces of gold, about $2,450.00 an ounce going by its
+  balance of 11/20/2026" (that price was never typed, so it is not called "your price").
+  An empty weight or price is refused at its box ("Type how much gold you hold.", "Type the price of one ounce.").
+- A private investment: the worth box reads "What it is worth now", the date "Worth that on", and one more box, "Still
+  promised" ("money you agreed to put in but have not put in yet; leave it empty if none"). Save says
+  "Fund II added. Next: what you put in and when, under Private investments below." with Undo, and that row opens once.
+  The account's row: "as of 9/30/2026 · about 5.5% a year" and, with something promised, "It can still ask for $40,000:
+  keep that ready." (never folded: money the person must have on hand).
+- **"Private investments"**, one quiet row (kind `item`) in a parts card under the list, drawn only while one is on file.
+  Status: "keep $40,000 ready" (or "$1,250,000 promised" when that does not fit 20 characters), else the one investment's
+  "about 5.5% a year", "not set yet", or "2 investments". Inside, for each: its name, one sentence (six cases, below), the
+  stale line when its worth is older than money that moved, the keep-ready line, its dated amounts newest first ("Dec 15,
+  2025 · Paid back to you" / "$8,000", each with an outlined "Remove" that asks first; at most 10, then "and N earlier
+  amounts, counted above."), then one form, "Add money in or out" (open while nothing is typed, else behind "+ Add money in
+  or out"): Which one (two or more), "What happened" (You put money in / It paid money back to you), "How much", "On", and,
+  when something is promised, the tick "It was money the fund asked for: take it off what is still promised" (on). Its
+  "Add it" is the row's one filled button. The green line names the new return ("Added: $25,000 put into Cafe share on
+  Apr 1, 2023. Its own return is now about 5.2% a year."), with Undo; the row stays open (R17). Last, one muted line on
+  how the return is worked out.
+
+**Data** (optional, no version bump; the type stays `other_asset`, so every other page counts these exactly as before):
+`accounts[].metal?: { kind: "gold" | "silver", weight, unit: "oz" | "g", price }` and `accounts[].private?: { flows: [{ id,
+date, kind: "in" | "back", amount }], promised? }` (docs/DATA_MODEL.md). The balance stays the one figure every page reads.
+
+**Formulas.**
+- A troy ounce = 480 grains x 64.79891 mg = 31,103.4768 mg = 31.1034768 g (the grain is defined as exactly 64.79891 mg;
+  gold and silver are priced per troy ounce). nist.gov (Handbook 44, Appendix C), uscode.house.gov (31 U.S.C. 5112) and
+  usmint.gov refused this session's reads (2026-11-16), so the definition is written out and the arithmetic is a test.
+  Ounces = grams / 31.1034768. Worth = round(ounces x price of one ounce, to the cent): 10 oz at $2,400 = $24,000; 100 g at
+  $2,400 = 3.2150747 x 2,400 = $7,716.18; 1,000 g of silver at $31.45 = $1,011.14.
+- The price the row says: the one typed while the balance still equals weight x it (to the cent); once the balance is
+  changed elsewhere (Update all balances), the price that balance means, balance / ounces, said as "about ... going by its
+  balance" (critic F2). The row never contradicts the balance.
+- A unit of weight not on the list (a plan edited by hand: "kg") is not read as ounces: the account is not one held by
+  weight and reads as a plain thing with its balance (critic F3). No unit saved is ounces, the form's first choice.
+- Its own yearly return (`privateOf`, through core/math/returns.js `xirr`, the money-weighted return Performance uses too):
+  the one rate r with sum(amount_i / (1 + r)^(t_i)) = 0 over money put in (negative, on its day), money paid back
+  (positive, on its day) and what it is worth now (positive, on the worth's day; today when none), t_i in years of 365.25
+  days from the first amount (Newton's method, bisection when it wanders). The reference pages for this rate (a
+  spreadsheet's XIRR help, the SEC's investor glossary) refused this session's reads, so the formula is written out and
+  tested against hand calculations: 100,000 in, worth 121,000 730 days later: (1 + r)^(730/365.25) = 1.21, r = 10.007%;
+  100 in, 50 back a year on, worth 60 a year after that: with y = (1 + r)^(365/365.25), 100y^2 - 50y - 60 = 0, y =
+  (50 + sqrt(26,500)) / 200 = 1.0639410, r = 6.39% (the sentence says "about 6.4% a year").
+- Under a year from the first money in (365 days): no yearly rate (a few months made yearly misleads); the plain change so
+  far, (paid back + worth - put in) / put in ("Up 12% so far"). Nothing back and worth $0: "Nothing is left".
+- How many times = (paid back + worth) / put in ("1.30 times what you put in").
+- Still promised: never a debt and never in net worth (nothing is owed until the fund calls it); it is the money to keep
+  ready, said on the row and in the part, and summed as `keepReady`. A call added with the tick comes off it (at most all
+  of it; none left removes the figure); removing that amount later does not put it back (Undo does).
+
+**The sentences** (R5, each tested): none typed ("Add what you put into Fund II and when, and what it paid back, to see its
+own yearly return."); under a year (up, down or even so far); a rate ("About 6.4% a year since January 2021: you put in
+$100, got $50 back, and it is worth $60 now, 1.10 times what you put in."); a loss ("It has lost about 10.0% a year since
+..."); all gone; no rate found ("Its yearly return could not be worked out from these amounts: ..."); the stale worth; what
+to keep ready (one, and in all for two or more).
+
+**Builder's choices.** No separate row for gold and silver (the form and the row line carry them; one price box for all
+gold is an idea below). Platinum, palladium and a coin's purity are not asked (the person types the metal's own weight).
+The dated amounts of a private investment live in its own row, not the account form, so that form stays at its boxes.
+Saved as another kind, a private investment's amounts go after a question ("... they are no longer kept. Save it
+anyway?"); Undo brings them back. Every save of these two kinds has the green line with Undo; every other save is as it
+was.
+
+**Tests** (`module.test.mjs`): the troy ounce and the weight conversion, the worth in ounces and grams, the price said,
+every row line and green line; the rate against the hand calculations above, a loss, four amounts (npv 0 at the rate),
+under a year (364 and 365 days), all gone, a worth older than an amount, what is promised (not in net worth); every
+sentence and status (each at most 20 characters); adding in date order, a call off what is promised, removing, every
+refusal; compute adds `metals` / `privates` only when there are some and moves no total; the form (hidden for another
+kind, gold refuses an empty weight or price, saves the worth and says it with Undo, grams of silver edited with the old
+worth kept on its day, back to "Something else" drops the weight, another Type puts the worth box back), a private
+investment from the form to its row (open once, keep ready, an amount added and its new return, the tick, Undo, Remove
+asks first), and saving one as something else asks first; invariance against dca545e (Net worth's compute, the page as it
+opens, the page with the add form open, 48 plans).
+
+**Found, not mine to change:** adding a "Something else I own" through the form shows "Not saved yet: what you typed in
+'Add an account'" after the save, already at dca545e (a box hidden by a Type change seems to change the form's identity
+for core/place.js, so the save does not forget its typing). Reported in the build log.
+
 ## Ideas / not yet
+- One price box for all of a person's gold (or silver) at once, in a quiet row (each item is edited on its own now).
 - Per-account balance history from imported statements (feed from transactions/import).
 - Chart of the snapshot history (uPlot).
 - Owner filter (each person / joint) and a per-person net worth.
