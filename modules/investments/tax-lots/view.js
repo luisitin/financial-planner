@@ -3,10 +3,11 @@
 // (how short- and long-term losses are counted; Settings' "Show how answers are worked out" opens it), "Compare ways to
 // sell part of a fund" (which shares to sell first: two ways, and the purchases you pick once checked; only when a fund has
 // two or more purchases) and "Sales for your tax return" (the year's sales, their totals, a CSV and a printout for a tax
-// preparer); then each holding's lots, each card with its own folded "+ Add a lot".
+// preparer; when the year has a coin sale, the way to Crypto's file for tax software); then each holding's lots, each card
+// with its own folded "+ Add a lot".
 import { compute, costAfterLot, shareText } from "./compute.js";
 import { salesOf } from "../../taxes/federal/compute.js";
-import { sellOrders, sellable, hasChoice, yearSales, salesYear, salesCsv, leastSentence, orderValue, orderLine, washLine, salesSentence, saleLine, ORDER_TITLES } from "./sell.js";
+import { sellOrders, sellable, hasChoice, yearSales, salesYear, salesCsv, leastSentence, orderValue, orderLine, washLine, salesSentence, saleLine, ORDER_TITLES, COIN_TXF, hasCoinSale } from "./sell.js";
 import { part, parts } from "../../../core/ui/more.js";
 import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
 
@@ -45,6 +46,8 @@ export function render(root, ctx) {
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, r.name), ui.h("span", { class: "rec-value", style: r.gain < 0 ? { color: "var(--bad)" } : null }, signed(r.gain))),
         ui.h("div", { class: "rec-sub" }, saleLine(r, money))))),
       ui.h("p", { class: "muted small" }, DATES),
+      // coin sales recorded on Crypto: the way to their file for tax software (typed sales keep no dates, so none here)
+      hasCoinSale(s) ? ui.h("a", { href: "#/investments/crypto", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, COIN_TXF) : null,
       say,
       ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(s, say), { class: "secondary" }), ui.button("Print this list", () => printList(s, sheetHost), { class: "secondary" })),
       ui.h("a", { href: "#/taxes/capital-gains", class: "small", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Add or change a sale on Capital gains ›"),

@@ -561,3 +561,26 @@ test("invariance: with whatIfs.taxLots saved, every page's compute gives byte-id
   const readers = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core"))].filter((f) => !f.includes(`${path.sep}tax-lots${path.sep}`) && /taxLots\b/.test(fs.readFileSync(f, "utf8")));
   assert.deepEqual(readers, []);
 });
+
+test("Sales for your tax return: no word of a file for tax software without a coin sale (P3); a coin sale recorded on Crypto gets one link there", async () => {
+  // gap list, next 60, item 51: the file for tax software (TXF) carries the dates bought and sold, which typed sales do not keep
+  assert.equal(S.NO_TXF, undefined, "no sentence about a file this page does not make");
+  assert.equal(S.COIN_TXF, "Save your coin sales for tax software on Crypto ›");
+  const P = await page(investmentsPlan());
+  const sales = P.open("sales");
+  assert.match(P.textOf(sales), /The dates bought and sold are on the broker's Form 1099-B \(boxes 1b and 1c\): this list does not keep them\. Save as a spreadsheet/);
+  assert.ok(!/tax software|TXF/.test(P.textOf(sales)), "sales with no coin sale: nothing about a file for tax software");
+  assert.ok(!sales.all().some((e) => e.tagName === "A" && e.getAttribute("href") === "#/investments/crypto"), "no coin sale: no link");
+  assert.equal(S.hasCoinSale(S.yearSales(investmentsPlan(), { today: T4 })), false);
+  // a coin sale recorded on Crypto (a Capital gains row with its `coin`): the link to Crypto's file
+  const p = investmentsPlan();
+  p.taxes.gains.push({ id: "s1-1", name: "0.1 BTC", proceeds: 9400, basis: 2500, held: "long", coin: { sale: "s1", holding: "c1", account: "w", symbol: "BTC", units: 0.1, acquired: "2023-03-01", sold: "2026-10-03", lot: "l1" } });
+  assert.equal(S.hasCoinSale(S.yearSales(p, { today: T4 })), true);
+  const Q = await page(p);
+  const link = Q.open("sales").all().find((e) => e.tagName === "A" && e.getAttribute("href") === "#/investments/crypto");
+  assert.equal(Q.textOf(link), "Save your coin sales for tax software on Crypto ›");
+  assert.equal((Q.textOf(Q.part("sales")).match(/tax software/g) ?? []).length, 1, "one line about it: the link");
+  // the spreadsheet and the printout are as they were (the sentence is on the screen only)
+  assert.equal(S.salesCsv(S.yearSales(investmentsPlan(), { today: T4 }), investmentsPlan()).includes("tax software"), false);
+  assert.equal(P.saved.length + Q.saved.length, 0);
+});

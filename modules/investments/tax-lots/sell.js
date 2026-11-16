@@ -255,6 +255,13 @@ export function salesSentence(s, money = dollars) {
 /** The line under one sale in the list. */
 export const saleLine = (r, money = dollars) => `sold for ${money(r.proceeds)}, cost ${money(r.basis)} · ${r.held === "long" ? "long-term" : "short-term"}`;
 
+/** The way to the file for tax software (gap list, next 60, item 51), shown only when the year's sales include a coin sale
+ *  recorded on Crypto: a TXF record carries the dates bought and sold, which the sales typed on Capital gains do not keep (the
+ *  broker's Form 1099-B has them), so this page has no file; coin sales keep both, and Crypto saves them as that file. */
+export const COIN_TXF = "Save your coin sales for tax software on Crypto ›";
+/** The year's sales include a coin sale recorded on Crypto (a Capital gains row with its `coin`). */
+export const hasCoinSale = (s) => (s?.rows ?? []).some((r) => r?.coin && typeof r.coin === "object");
+
 /** The columns of the file for the tax preparer, in Form 8949's order (Instructions for Form 8949, 2025: (a) description, (d)
  *  proceeds, (e) cost, (h) gain or loss; short-term on Part I, long-term on Part II) and in plain words, without the form's
  *  letters. The plan keeps no dates bought and sold (columns (b) and (c)), so the file has no date columns rather than two

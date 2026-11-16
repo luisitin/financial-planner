@@ -170,6 +170,19 @@ with a carryover ("$3,000 comes off your other income and $7,000 carries to next
 
 **Tests**: "this year's sales: ..." and "Sales for your tax return: ..." in `module.test.mjs`.
 
+## The way to Crypto's file for tax software (gap list, next 60, item 51, 2026-11-16)
+A file for tax software (TXF) carries each sale's day bought and day sold, and the sales typed on Capital gains keep neither
+(above), so this page makes none. When the year's sales include a coin sale recorded on Crypto (a row with its `coin`,
+`hasCoinSale`), its "Sales for your tax return" has one link under the line on dates (`COIN_TXF`: "Save your coin sales for
+tax software on Crypto ›"), where those sales keep both dates and Crypto saves them as that file (crypto/README.md, "A file
+for tax software (TXF)"). Without a coin sale the page says nothing of a file it does not make (the review of 2026-11-16: a
+sentence about a missing feature, shown to everyone with sales, was one more thing to read). On the screen only: the
+spreadsheet and the printout are as they were. The part is built when opened, so the first view is unchanged (`node
+qa/first-view-node.mjs investments/tax-lots`: 38/0/0/0/1/0 before and after). Test: "Sales for your tax return: no word of a
+file for tax software without a coin sale ...". Builder's choice: a TXF with the dates left blank would make the program ask
+for every one, and would bring the same sales in a second time beside the broker's own Form 1099-B, which has the dates;
+dates on Capital gains' typed sales would be new plan fields on another page, outside this item.
+
 ## A blank entry in the sales list (smart guesses C11, 2026-11-15)
 The row's status counts the year's sales with taxes/federal `salesOf`, the list the figures are worked from, so a blank entry
 (a null or an empty object in a hand-edited file) no longer reads "2 in 2026" for one sale. Test: taxes/federal module.test.mjs
