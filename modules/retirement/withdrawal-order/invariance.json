@@ -1,0 +1,181 @@
+{
+ "today": "2026-11-16",
+ "compute": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "order": "3RPK-1ykrySZRbqi5qAr8f",
+   "roth": "FSY2nqllUXC0rrFduVeG_g"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "order": "WICO0hOsyXp6KEkUDLKYnF",
+   "roth": "WICO0hOsyXp6KEkUDLKYnF"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "order": "3RPK-1ykrySZRbqi5qAr8f",
+   "roth": "FSY2nqllUXC0rrFduVeG_g"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "order": "lCg3IfxOJnGodQ1Ewx8Mvv",
+   "roth": "y_VHBBV1XfwHSLFkPCugle"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "order": "y82bypbG0JcLUu-HzdUqPw",
+   "roth": "cLBWa6y9gk-oCyMbtDSRx5"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "order": "xcbrK-f9kATGRSPg2qY52e",
+   "roth": "nWSNq0DEkkYaNSCTDqZks7"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "order": "LzksFZmVENQ8QvJCKgiHJU",
+   "roth": "iIYhSqKM8xHor7bcaWkdTF"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "order": "LzksFZmVENQ8QvJCKgiHJU",
+   "roth": "iIYhSqKM8xHor7bcaWkdTF"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "order": "59tIVTfqG19NjbxoosQR1O",
+   "roth": "pbul9dRyDhSr0EurJ-iIO9"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "order": "ccmoeEtAupxfN5Y3F6moIN",
+   "roth": "i2YEKvHaRiPwBzG-IX9W3K"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "order": "WICO0hOsyXp6KEkUDLKYnF",
+   "roth": "WICO0hOsyXp6KEkUDLKYnF"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "order": "AeYweRO7V0koPPP42m90Ql",
+   "roth": "Dfgm8BeGbLB5G4K0jZCSJ3"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "order": "9FDZiaFnerWcE2W4sTITMq",
+   "roth": "gaY1Y3vgo2_wMLREpGkrUx"
+  },
+  "01-single-adult/base": {
+   "order": "eMFi437jLnroj7zU_30-mT",
+   "roth": "HQBFqQ6lyQvLs8xLID0wyg"
+  },
+  "02-couple-no-kids/base": {
+   "order": "fhVb4A2zuEogSYZVkxiVaY",
+   "roth": "z8kH3eKoU9jpxSmtng-j7W"
+  },
+  "03-single-parent/base": {
+   "order": "X4mewkk6VVOBgcOXpL3e26",
+   "roth": "1BX4ojSkfkClmVcU_sgU4e"
+  },
+  "04-two-parents/base": {
+   "order": "oD42Z_rj0kNgBqGoD9Reyr",
+   "roth": "RPh6vddfUs5pWplTKqxnSB"
+  },
+  "05-stay-at-home-parent/base": {
+   "order": "5kiaZYij7Gc0Oyx4RKHzbT",
+   "roth": "NP0MOZ1-C3XSObpMAoF2vA"
+  },
+  "06-blended-family/base": {
+   "order": "33LfEEQf14qUwTNXLSzy-M",
+   "roth": "Nf_Dqp71c0-5EDsr78mnww"
+  },
+  "07-multigenerational/base": {
+   "order": "WcYrrZY1UEOLE9u_JqzNYh",
+   "roth": "bEyBJIvoT6H2Agmmxlf5j_"
+  },
+  "08-retired/base": {
+   "order": "59tIVTfqG19NjbxoosQR1O",
+   "roth": "pbul9dRyDhSr0EurJ-iIO9"
+  },
+  "09-near-retirement/base": {
+   "order": "LA5TY8fbDKwYBp9HDKXFjz",
+   "roth": "_VhbZHKfskiR9A99FeuMpT"
+  },
+  "10-student-and-starter/base": {
+   "order": "TScJ1bdzfRPKPWij0Bg6O0",
+   "roth": "zdMbzZMw4n2NByso6_I1_k"
+  },
+  "11-self-employed/base": {
+   "order": "TjvAYa706WQCuzBo4l6fPO",
+   "roth": "hyLYDQPq9RdLDlM_QOxlTN"
+  },
+  "12-high-net-worth/base": {
+   "order": "3_RIMXc56TJvlbTOOAUhr8",
+   "roth": "sPyrFo-ByWPPCxEj-THhDC"
+  },
+  "13-in-crisis/base": {
+   "order": "u1xEAgC9O0AF0PPTeb5O57",
+   "roth": "xkOx0KJlBrtvda3iPr2HwK"
+  },
+  "14-unusual-structures/base": {
+   "order": "EiABX5IMptkjqkiWuGHfXc",
+   "roth": "OgZv7ezlasQGUDxXq5mQgb"
+  },
+  "phone casey": {
+   "order": "e-jlVKiMNfndg9p5OTW8VO",
+   "roth": "SduZoH5YGvL1L0quwiorbv"
+  },
+  "phone danaLee": {
+   "order": "2yQqDQO-9jHHfrsddPAFKt",
+   "roth": "thjZ1aaNuJi4Y_w13Xbl71"
+  },
+  "phone jamie": {
+   "order": "bfPAduQouBYPc_DzvVXnO_",
+   "roth": "b1JRv7AsDGdUhiwZPDRuwU"
+  },
+  "phone morgan": {
+   "order": "lTWcC22TS39nZimMlq1H6M",
+   "roth": "MdGf7NCdS22rP-CLd5gFag"
+  },
+  "phone robin": {
+   "order": "2uSfswzclXF8MZVGWaf_z9",
+   "roth": "unD69FvwsdAMhImrNgdB1r"
+  },
+  "round8 earlyRetireePlan": {
+   "order": "acmt3PDoai6Sam6umGzKbJ",
+   "roth": "XUbu-uVx8Xgr5Un2daeEH3"
+  },
+  "round8 equityPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 firstRmdPlan": {
+   "order": "sxQIDY5kTAImTbtP59PjXg",
+   "roth": "7_m5godJpusnfX7bpiXsn_"
+  },
+  "round8 freelancerPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 highFreelancerPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 landlordBusinessPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 landlordPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 parentLoanPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 stockAndBusinessPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 studentLoanPlan": {
+   "order": "bO8MoaraQWl0dx7uEUUfTJ",
+   "roth": "bO8MoaraQWl0dx7uEUUfTJ"
+  },
+  "round8 widowPlan": {
+   "order": "_AyajmpwxVECkhdFK9ep1-",
+   "roth": "1W3NBS2BrVlfVi_Ja4tofu"
+  },
+  "empty plan": {
+   "order": "_pY8MvLuPm0XVGDi8iwtHk",
+   "roth": "_pY8MvLuPm0XVGDi8iwtHk"
+  }
+ }
+}

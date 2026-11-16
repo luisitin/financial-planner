@@ -379,3 +379,311 @@ test("r2 invariance: the page's compute is untouched (agesIn is not called by it
   const s = await drawOrder(familyPlan(T22));
   assert.ok(s.outside().trim().startsWith('"A share from every account" works best for you This order leaves about $840,251 at the end, after tax and in today\'s dollars: $3,707 more than yours.'), s.outside().slice(0, 200));
 });
+
+// ---------------------------------------------------------------- invariance (gap list, next 60, item 23: one search over the order
+// and Roth conversions). compute.js is not edited, and neither are Roth conversions or the projection: over every qa/fixtures plan,
+// the 14 households' base plans, the phone-built ones, the round 8 households and the empty plan, Withdrawal order's and Roth
+// conversions' compute() give the very output the code before the search gave (ce79d70). Digests in invariance.json; to write them
+// again after a deliberate change: PRINT=1 node --test --test-name-pattern "x2 invariance" modules/retirement/withdrawal-order/module.test.mjs
+test("x2 invariance: Withdrawal order's and Roth conversions' compute() give the output of ce79d70 over every invented household", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const crypto = await import("node:crypto");
+  const { pathToFileURL, fileURLToPath } = await import("node:url");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const INV_TODAY = "2026-11-16";
+  const digest = (x) => crypto.createHash("sha256").update(JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const plans = [];
+  const dir = path.join(ROOT, "qa", "fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `fixture ${f}:${name}`, plan: fn(INV_TODAY) });
+  }
+  for (const a of ARCHETYPES) plans.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") plans.push({ name: `phone ${name}`, plan: fn() });
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `round8 ${name}`, plan: fn() });
+  plans.push({ name: "empty plan", plan: emptyPlan() });
+  const { compute: roth } = await import("../roth-conversions/compute.js");
+  const run = (fn) => { try { return fn(); } catch (e) { return { threw: e.message }; } };
+  const now = { today: INV_TODAY, compute: {} };
+  for (const { name, plan } of plans) {
+    const p = () => migrate(structuredClone(plan));
+    now.compute[name] = { order: digest(run(() => compute(p(), { today: INV_TODAY }))), roth: digest(run(() => roth(p(), { today: INV_TODAY }))) };
+  }
+  const file = new URL("./invariance.json", import.meta.url);
+  if (process.env.PRINT) fs.writeFileSync(file, JSON.stringify(now, null, 1) + "\n");
+  const was = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.ok(Object.keys(now.compute).length >= 40, `${Object.keys(now.compute).length} plans`);
+  assert.deepEqual(now, was);
+});
+
+// ---------------------------------------------------------------- One search over the order and Roth conversions (gap list, next 60,
+// item 23; mix.js). The invented family (qa/fixtures/family-plan.mjs: Ana, born 1990, retiring at 65, and Bo) and the invented retired
+// couple (Ruth, born 1954, 72 this year, and Sam).
+const MIX = await import("./mix.js");
+const { buildInputs: buildIn } = await import("../projection/compute.js");
+const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+const fam = () => migrate(familyPlan(T22));
+const ret = () => migrate(retiredCouplePlan(T22));
+const usd = (n) => "$" + Math.round(n).toLocaleString("en-US");
+
+test("x2 grid: 35 mixes for the family, 50 retiring at 62, 20 for the retired couple, the five orders alone with nothing to convert", () => {
+  const g = MIX.mixGrid(fam(), { today: T22 });
+  // Ana is 65 in the first retired year and her required withdrawals begin at 75 (born 1990): 63 changes no year, 70 does
+  assert.equal(g.convert, true); assert.equal(g.startAge, 65); assert.equal(g.rmdStartAge, 75);
+  assert.deepEqual(g.rates, [0.1, 0.12, 0.22]); assert.deepEqual(g.stops, [null, 70]);
+  assert.equal(g.cells.length, 5 * (1 + 3 * 2)); assert.equal(g.tried, 35); assert.equal(new Set(g.cells.map((c) => c.key)).size, 35);
+  assert.deepEqual(g.cells.slice(0, 7).map((c) => c.key), ["taxable-first|off", "taxable-first|0.1@rmd", "taxable-first|0.1@70", "taxable-first|0.12@rmd", "taxable-first|0.12@70", "taxable-first|0.22@rmd", "taxable-first|0.22@70"]);
+  assert.deepEqual([...new Set(g.cells.map((c) => c.order.key))], ["taxable-first", "deferred-first", "roth-last-taxable", "roth-first", "proportional"]);
+  assert.deepEqual(g.own, { key: "taxable-first|off", inGrid: true, mix: { order: { key: "taxable-first", label: "Taxable, then pre-tax, then Roth", order: ["taxable", "deferred", "free"] }, conv: null } });
+  // retiring at 62: the stop at 63 now changes a year: 5 x (1 + 3 x 3)
+  const p62 = fam(); p62.household.people[0].retirementAge = 62;
+  const g62 = MIX.mixGrid(p62, { today: T22 });
+  assert.deepEqual(g62.stops, [null, 63, 70]); assert.equal(g62.cells.length, 50); assert.equal(g62.tried, 50);
+  // Ruth is 72 and her required withdrawals begin at 73: only "until required withdrawals begin" changes a year: 5 x (1 + 3)
+  const gr = MIX.mixGrid(ret(), { today: T22 });
+  assert.equal(gr.startAge, 72); assert.equal(gr.rmdStartAge, 73); assert.deepEqual(gr.stops, [null]); assert.equal(gr.tried, 20);
+  // nothing to convert: no 401(k) or IRA money (the renter), or no retired year before required withdrawals (Ruth born 1950)
+  const gn = MIX.mixGrid(migrate(renterDebtPlan()), { today: T22 });
+  assert.equal(gn.convert, false); assert.equal(gn.why, "no-pretax"); assert.equal(gn.tried, 5); assert.ok(gn.cells.every((c) => c.conv === null));
+  const old = ret(); old.household.people[0].birthDate = "1950-03-10";
+  const go = MIX.mixGrid(old, { today: T22 });
+  assert.equal(go.convert, false); assert.equal(go.why, "no-years"); assert.equal(go.tried, 5);
+  // the plan's own setting is none of the cells (the 24% rate): one more run, and said
+  const own = fam(); own.retirement.rothConversion = { on: true, fillRate: 0.24, untilAge: null };
+  const go2 = MIX.mixGrid(own, { today: T22 });
+  assert.equal(go2.own.inGrid, false); assert.equal(go2.tried, 36); assert.ok(MIX.triedWords(go2).includes("until age 75, when required withdrawals begin, and your plan as it is."));
+  // a stop at or before the first retired year converts nothing (the same as off); one at or past required withdrawals is no stop
+  const s60 = fam(); s60.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: 60 };
+  assert.equal(MIX.mixGrid(s60, { today: T22 }).own.key, "taxable-first|off");
+  const s80 = fam(); s80.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: 80 };
+  assert.equal(MIX.mixGrid(s80, { today: T22 }).own.key, "taxable-first|0.12@rmd");
+  // the empty plan: not ready, with what is missing
+  assert.equal(MIX.mixGrid(emptyPlan(), { today: T22 }).ready, false);
+});
+
+test("x2 F3: a saved setting the engine cannot run is read as nothing moved, never 'the NaN% rate'; the plan as it is stays the engine's run", () => {
+  // critic of x2, F3: { on: true, fillRate: "abc", untilAge: "x" } (hand-edited or damaged data) read "the NaN% rate" and counted one
+  // more mix; the engine converts nothing on it (no bracket has that rate; a stop that is not a number is never reached)
+  for (const [rc, key, conv] of [
+    [{ on: true, fillRate: "abc", untilAge: "x" }, "taxable-first|off", null],
+    [{ on: true, fillRate: 0.5, untilAge: null }, "taxable-first|off", null],          // no bracket's rate
+    [{ on: true, fillRate: 0.12, untilAge: "x" }, "taxable-first|off", null],          // a stop that is not a number
+    [{ on: true, fillRate: "0.12", untilAge: "70" }, "taxable-first|0.12@70", { fillRate: 0.12, untilAge: 70 }],   // numbers as text: as the engine reads them
+    [{ on: true, fillRate: 0.32, untilAge: null }, "taxable-first|0.32@rmd", { fillRate: 0.32, untilAge: null }],   // a bracket's rate outside the grid: its own run
+    ["yes", "taxable-first|off", null],
+  ]) {
+    for (const mode of ["flat", "brackets"]) {
+      const p = fam(); p.retirement.rothConversion = rc; p.retirement.taxMode = mode;
+      const r = MIX.mixes(p, { today: T22 });
+      assert.equal(r.grid.own.key, key, JSON.stringify(rc)); assert.deepEqual(r.grid.own.mix.conv, conv, JSON.stringify(rc));
+      // the plan as it is: the engine's run of the plan as saved (Will the money last? runs the same once the real rates are on)
+      const raw = MIX.runMix(p, null, { today: T22 });
+      near(r.asIs.endAfterTaxReal, raw.endAfterTaxReal, 1e-6); near(r.asIs.convertedReal, raw.convertedReal, 1e-6);
+      for (const x of [r.asIs, ...r.shown]) assert.ok(!/NaN|undefined|Infinity/.test(MIX.rowWords(x, r.asIs, usd, 75) + MIX.valueWords(x, usd)), MIX.rowWords(x, r.asIs, usd, 75));
+      assert.ok(!/NaN/.test(MIX.leadWords(r, usd) + MIX.triedWords(r.grid)));
+    }
+  }
+  assert.equal(MIX.savedConv({ on: false, fillRate: 0.12 }), null); assert.equal(MIX.savedConv(null), null);
+  assert.deepEqual(MIX.savedConv({ on: true }), { fillRate: 0.22, untilAge: null }, "no rate saved: the engine's 22%");
+});
+
+/** One mix run by hand: the plan with it saved, written out here (not through mix.js), on the engine at the same spending every year. */
+function byHand(plan, order, conv) {
+  const p = structuredClone(plan);
+  p.retirement.taxMode = "brackets";
+  if (order === "share") p.retirement.withdrawalSplit = "proportional"; else { p.retirement.withdrawalOrder = order; delete p.retirement.withdrawalSplit; }
+  p.retirement.rothConversion = conv ? { ...p.retirement.rothConversion, on: true, fillRate: conv[0], untilAge: conv[1] } : { ...p.retirement.rothConversion, on: false };
+  const r = project({ ...buildIn(p, { today: T22 }).inputs, strategy: "fixed-real" });
+  return { ok: r.success, fail: r.failYear, E: r.endAfterTaxReal, T: r.rows.reduce((t, x) => t + x.taxes / x.priceLevel, 0), C: r.rows.reduce((t, x) => t + x.conversion / x.priceLevel, 0) };
+}
+const HAND_ORDERS = { "taxable-first": ["taxable", "deferred", "free"], "deferred-first": ["deferred", "taxable", "free"], "roth-last-taxable": ["deferred", "free", "taxable"], "roth-first": ["free", "taxable", "deferred"], proportional: "share" };
+function handRanking(plan, g) {
+  const rows = g.cells.map((c) => ({ key: c.key, ...byHand(plan, HAND_ORDERS[c.order.key], c.conv ? [c.conv.fillRate, c.conv.untilAge] : null) }));
+  return rows.sort((a, b) => (b.ok - a.ok) || (a.ok ? Math.round(b.E) - Math.round(a.E) : b.fail - a.fail) || Math.round(a.T) - Math.round(b.T));
+}
+
+test("x2 ranking: the family's 35 runs and the retired couple's 20 are the engine's own, made by hand here, and rank the same", () => {
+  for (const [name, plan, expect] of [["family", fam(), { top: "roth-first|0.12@rmd", E: 874277, asIs: 836544, gain: 37733, lead: "better" }], ["retired couple", ret(), { top: "taxable-first|0.22@rmd", E: 907032, asIs: 888771, gain: 18261, lead: "better" }]]) {
+    const r = MIX.mixes(plan, { today: T22 });
+    const hand = handRanking(plan, r.grid);
+    // every run is the hand-made one, to a millionth of a dollar
+    for (const h of hand) {
+      const c = r.grid.cells.find((x) => x.key === h.key), f = r.runs.get(MIX.runKey(r.grid, c));
+      near(f.endAfterTaxReal, h.E, 1e-6); near(f.taxesReal, h.T, 1e-6); near(f.convertedReal, h.C, 1e-6); assert.equal(f.success, h.ok, `${name} ${h.key}`);
+    }
+    // the best is the hand ranking's first (the five orders tie for the couple: the plan's own order stands for them)
+    assert.equal(Math.round(r.top.endAfterTaxReal), Math.round(hand[0].E), name); assert.equal(Math.round(r.top.endAfterTaxReal), expect.E, name);
+    assert.equal(r.top.key, expect.top, name); assert.equal(r.lead, expect.lead); assert.equal(r.gain, expect.gain);
+    assert.equal(Math.round(r.asIs.endAfterTaxReal), expect.asIs, name);
+    // the plan as it is is the Withdrawal order page's own row for its order, to the cent
+    const d = compute(plan, { today: T22 });
+    near(r.asIs.endAfterTaxReal, d.options.find((o) => o.current).endAfterTaxReal, 1e-6); near(r.asIs.taxesReal, d.options.find((o) => o.current).taxesReal, 1e-6);
+  }
+});
+
+test("x2 ranking: the five orders against the Roth page and the order page, for both households", async () => {
+  const { compute: roth } = await import("../roth-conversions/compute.js");
+  for (const plan of [fam(), ret()]) {
+    const r = MIX.mixes(plan, { today: T22 });
+    const rc = roth(plan, { today: T22 });
+    for (const o of rc.options.filter((x) => x.fillRate !== 0.24)) {
+      const c = r.grid.cells.find((x) => x.key === `taxable-first|${MIX.convKey(o.fillRate ? { fillRate: o.fillRate, untilAge: null } : null)}`);
+      near(r.runs.get(MIX.runKey(r.grid, c)).endAfterTaxReal, o.endAfterTaxReal, 1e-6);
+    }
+    // the orders with no conversions are the order page's rows: these plans' health cover does not move with the order
+    const d = compute(plan, { today: T22 });
+    for (const o of [...d.options, d.share]) near(r.runs.get(MIX.runKey(r.grid, r.grid.cells.find((x) => x.key === `${o.key}|off`))).endAfterTaxReal, o.endAfterTaxReal, 1e-6);
+  }
+});
+
+test("x2 F1: health cover priced on income is priced on each mix's own income; the five orders above price it once, on the plan's own order", async () => {
+  // critic of x2, F1: the README said each order with nothing moved equals the page's row; true only where health cover does not move
+  // with the order. The stay-at-home parent of qa/households 05 (Medicare's surcharge and the marketplace): her own order (taxable
+  // first) is the same; Roth first runs out in 2058 here, 2059 on the page, whose health line is priced once on the plan's own order
+  // (compute.js, untouched)
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const plan = migrate(ARCHETYPES.find((a) => a.id === "05-stay-at-home-parent").build());
+  const r = MIX.mixes(plan, { today: T22 }), d = compute(plan, { today: T22 });
+  const cell = (k) => r.runs.get(MIX.runKey(r.grid, r.grid.cells.find((x) => x.key === k)));
+  const page = (k) => d.options.find((o) => o.key === k);
+  // the plan's own order is the page's row, to the cent
+  near(cell("taxable-first|off").taxesReal, page("taxable-first").taxesReal, 1e-6); assert.equal(cell("taxable-first|off").failYear, page("taxable-first").failYear);
+  // Roth first: the mix's run is the engine's on the plan with Roth first saved (health priced on that run's own income), made by hand
+  const h = byHand(plan, ["free", "taxable", "deferred"], null);
+  near(cell("roth-first|off").taxesReal, h.T, 1e-6); assert.equal(cell("roth-first|off").failYear, h.fail);
+  assert.equal(h.fail, 2058); assert.equal(page("roth-first").failYear, 2059, "the page's row prices health on the plan's own order");
+  // it is never one of the rows the part lists (every mix runs out: only those that last longer than the plan as it is)
+  assert.ok(![r.asIs, ...r.shown].some((x) => x.key === "roth-first|off"));
+  // and the method says so (under "How this is worked out")
+  assert.ok(MIX.triedWords(r.grid).includes("with health insurance priced on that mix's own income"));
+});
+
+test("x2 ties: runs the same in effect are one row, the simplest; the plan as it is wins a tie and is never offered", () => {
+  const g = MIX.mixGrid(fam(), { today: T22 });
+  const f = (E, T, C = 0, ok = true, fail = null) => ({ success: ok, failYear: fail, endAfterTaxReal: E, endBalanceReal: E, taxesReal: T, convertedReal: C });
+  // every mix leaves the same: one row, the plan as it is, and "None ... leaves more"
+  const same = new Map(MIX.runsNeeded(g).map((x) => [x.rk, f(500000, 90000)]));
+  const r1 = MIX.rankMixes(g, same);
+  assert.equal(r1.ranked.length, 1); assert.equal(r1.top, r1.asIs); assert.equal(r1.lead, "yours"); assert.deepEqual(r1.others, []); assert.equal(r1.better.size, 0);
+  assert.equal(MIX.leadWords(r1, usd), "None of the 35 mixes we tried leaves more than your plan as it is.");
+  // two mixes tie for the best: the one with fewer changes (the plan's own order, conversions on) stands for both
+  const two = new Map(same);
+  two.set(MIX.runKey(g, g.cells.find((c) => c.key === "roth-first|0.12@rmd")), f(520000, 80000, 10000));
+  two.set(MIX.runKey(g, g.cells.find((c) => c.key === "taxable-first|0.12@rmd")), f(520000.4, 80000.3, 10000.2));
+  const r2 = MIX.rankMixes(g, two);
+  assert.equal(r2.top.key, "taxable-first|0.12@rmd"); assert.equal(r2.top.changes, 1);
+  assert.ok(!r2.ranked.some((x) => x.key === "roth-first|0.12@rmd"), "the twin is not shown again");
+  assert.equal(r2.lead, "better"); assert.equal(r2.gain, 20000); assert.ok(r2.better.has("taxable-first|0.12@rmd"));
+  // same left at the end, less tax: ranked above, but nothing that leaves more, so not offered
+  const t = new Map(same);
+  t.set(MIX.runKey(g, g.cells.find((c) => c.key === "deferred-first|off")), f(500000, 85000));
+  const r3 = MIX.rankMixes(g, t);
+  assert.equal(r3.top.key, "deferred-first|off"); assert.equal(r3.lead, "barely"); assert.equal(r3.better.size, 0);
+  assert.equal(MIX.rowWords(r3.top, r3.asIs, usd), "Nothing moved to a Roth. The same left at the end; $5,000 less tax over the plan.");
+  // the real retired couple: the five orders give the same with 22% conversions; the plan's own order stands for them, once
+  const rc = MIX.mixes(ret(), { today: T22 });
+  assert.equal(rc.top.key, "taxable-first|0.22@rmd");
+  for (let i = 0; i < rc.ranked.length; i++) for (let j = i + 1; j < rc.ranked.length; j++) assert.ok(!MIX.sameInEffect(rc.ranked[i], rc.ranked[j]), `${rc.ranked[i].key} = ${rc.ranked[j].key}`);
+  assert.ok(rc.ranked.length < 20, `${rc.ranked.length} distinct of 20`);
+});
+
+
+
+
+test("x2 chooseMix writes through the two pages' own paths: a stop, conversions off, and the share", () => {
+  const g = MIX.mixGrid(fam(), { today: T22 });
+  const cell = (k) => g.cells.find((c) => c.key === k);
+  const a = fam(); MIX.chooseMix(a, cell("deferred-first|0.22@70"), { withRates: false });
+  assert.deepEqual(a.retirement.withdrawalOrder, ["deferred", "taxable", "free"]); assert.deepEqual(a.retirement.rothConversion, { on: true, fillRate: 0.22, untilAge: 70 }); assert.equal(a.retirement.taxMode, "brackets");
+  // conversions off: "Turn conversions off" ({ ...rc, on: false }) only when they were on; the order alone on a flat plan, with the rates when asked
+  const b = fam(); b.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: 70 };
+  MIX.chooseMix(b, cell("roth-last-taxable|off"), { withRates: true });
+  assert.deepEqual(b.retirement.rothConversion, { on: false, fillRate: 0.12, untilAge: 70 }); assert.equal(b.retirement.taxMode, "brackets");
+  const c = fam(); const rc0 = JSON.stringify(c.retirement.rothConversion);
+  MIX.chooseMix(c, cell("deferred-first|off"), { withRates: false });
+  assert.equal(JSON.stringify(c.retirement.rothConversion), rc0, "already off: not written"); assert.equal(c.retirement.taxMode ?? "flat", "flat");
+  // the stop back to "until required withdrawals begin": the box's null
+  const d = fam(); d.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: 70 };
+  MIX.chooseMix(d, cell("taxable-first|0.12@rmd"));
+  assert.deepEqual(d.retirement.rothConversion, { on: true, fillRate: 0.12, untilAge: null });
+});
+
+test("x2 words: one sentence per case", () => {
+  const x = (E, T, extra = {}) => ({ success: true, failYear: null, endAfterTaxReal: E, taxesReal: T, convertedReal: 0, conv: null, order: { label: "Taxable, then pre-tax, then Roth" }, asIs: false, ...extra });
+  const runs = (y, extra = {}) => x(0, 0, { success: false, failYear: y, ...extra });
+  const base = { tried: 35, converts: true, convert: true };
+  // the first sentence
+  assert.equal(MIX.leadWords({ ...base, lead: "better", top: x(874277, 0), gain: 37733 }, usd), "The best of the 35 mixes we tried leaves about $874,277 at the end, after tax and in today's dollars: $37,733 more than your plan as it is.");
+  assert.equal(MIX.leadWords({ ...base, lead: "barely", top: x(1, 0), gain: 300 }, usd), "The best of the 35 mixes we tried leaves about as much as your plan as it is: for this plan the mix barely matters.");
+  assert.equal(MIX.leadWords({ ...base, lead: "yours" }, usd), "None of the 35 mixes we tried leaves more than your plan as it is.");
+  assert.equal(MIX.leadWords({ ...base, lead: "rescues", top: x(612400, 0), asIs: runs(2061) }, usd), "The best of the 35 mixes we tried lasts to the end of your plan and leaves about $612,400, after tax and in today's dollars; your plan as it is runs out in 2061.");
+  assert.equal(MIX.leadWords({ ...base, lead: "fails-longer", top: runs(2065), asIs: runs(2064) }, usd), "None of the 35 mixes we tried lasts to the end of your plan. With the best, the money runs out in 2065 instead of 2064.");
+  assert.equal(MIX.leadWords({ ...base, lead: "fails-yours", top: runs(2059), asIs: runs(2059) }, usd), "None of the 35 mixes we tried lasts to the end of your plan, or longer than your plan as it is: the money runs out in 2059.");
+  assert.equal(MIX.leadWords({ ...base, lead: "fails-same", top: runs(2051) }, usd), "Every one of the 35 mixes we tried runs out in 2051: the order and Roth conversions cannot change that.");
+  assert.equal(MIX.moveWords({ converts: false, convert: true }), "At these rates your other income already fills the room, so no mix moves money to a Roth.");
+  assert.equal(MIX.moveWords({ converts: true, convert: true }), "");
+  // a row against the plan as it is (P3: plain words for a conversion, the age required withdrawals begin at; P4: more tax, yet more left)
+  const mine = x(836544, 174664, { asIs: true });
+  assert.equal(MIX.rowWords(mine, mine, usd), "Nothing moved to a Roth. Tax over the plan $174,664.");
+  assert.equal(MIX.rowWords({ ...runs(2064), asIs: true }, mine, usd), "Nothing moved to a Roth.");
+  assert.equal(MIX.rowWords(x(874277, 136990, { conv: { fillRate: 0.12, untilAge: null } }), mine, usd, 75), "Money moved to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. $37,733 more left at the end; $37,674 less tax over the plan.");
+  assert.equal(MIX.rowWords(x(874277, 136990, { conv: { fillRate: 0.12, untilAge: null } }), mine, usd), "Money moved to a Roth each year up to the 12% tax rate, until required withdrawals begin. $37,733 more left at the end; $37,674 less tax over the plan.", "no age at hand");
+  assert.equal(MIX.rowWords(x(835000, 180000, { conv: { fillRate: 0.1, untilAge: 70 } }), mine, usd, 75), "Money moved to a Roth each year up to the 10% tax rate, until age 70. $1,544 less left at the end; $5,336 more tax over the plan.");
+  // the retired couple's best: $18,261 more left for $7,790 more tax (its tax here is a round stand-in; the difference is the couple's)
+  assert.equal(MIX.rowWords(x(907032, 107790, { conv: { fillRate: 0.22, untilAge: null } }), x(888771, 100000, { asIs: true }), usd, 73), "Money moved to a Roth each year up to the 22% tax rate, until age 73, when required withdrawals begin. Pays $7,790 more tax over the plan, yet leaves $18,261 more at the end, after tax.");
+  assert.equal(MIX.rowWords(x(836544, 174664), mine, usd), "Nothing moved to a Roth. The same left at the end; the same tax over the plan.");
+  assert.equal(MIX.rowWords(x(500000, 1), { ...runs(2061), asIs: true }, usd), "Nothing moved to a Roth. Lasts to the end of your plan.");
+  assert.equal(MIX.rowWords(runs(2061), mine, usd), "Nothing moved to a Roth. Runs out in 2061.");
+  assert.equal(MIX.rowWords(runs(2066), { ...runs(2064), asIs: true }, usd), "Nothing moved to a Roth. Lasts 2 years longer.");
+  assert.equal(MIX.rowWords(runs(2063), { ...runs(2064), asIs: true }, usd), "Nothing moved to a Roth. Runs out 1 year sooner.");
+  assert.equal(MIX.rowWords(runs(2064), { ...runs(2064), asIs: true }, usd), "Nothing moved to a Roth. Runs out the same year.");
+  // the best row's pill (P1): it never reads as a second answer to the hero's question about the order alone
+  assert.equal(MIX.bestWords(x(1, 0, { conv: { fillRate: 0.12, untilAge: null } })), "best with conversions");
+  assert.equal(MIX.bestWords(x(1, 0)), "best mix");
+  assert.equal(MIX.ROTH_WORDS, "Moving money from your regular retirement account to a Roth account is a Roth conversion: you pay tax on it now, and later withdrawals are tax-free.");
+  assert.equal(MIX.valueWords(x(874277, 0), usd), "$874,277"); assert.equal(MIX.valueWords(runs(2061), usd), "runs out 2061");
+  assert.equal(MIX.orderTitle({ key: "custom", label: null }), "Your own order");
+  // what was tried (under "How this is worked out", P5), with the health clause (F1)
+  const g = MIX.mixGrid(fam(), { today: T22 });
+  assert.equal(MIX.triedWords(g), "For \"Try Roth conversions too\" we tried 35 mixes: the five orders, each with nothing moved to a Roth or with money moved each year up to the 10%, 12% or 22% tax rate, until age 70 or until age 75, when required withdrawals begin. Each runs your whole plan year by year at the real tax rates and the same spending every year, with health insurance priced on that mix's own income; what is left is counted after tax, in today's dollars.");
+  const p62 = fam(); p62.household.people[0].retirementAge = 62;
+  assert.ok(MIX.triedWords(MIX.mixGrid(p62, { today: T22 })).startsWith("For \"Try Roth conversions too\" we tried 50 mixes: the five orders, each with nothing moved to a Roth or with money moved each year up to the 10%, 12% or 22% tax rate, until age 63, until age 70 or until age 75, when required withdrawals begin."));
+  assert.ok(MIX.triedWords(MIX.mixGrid(ret(), { today: T22 })).startsWith("For \"Try Roth conversions too\" we tried 20 mixes: the five orders, each with nothing moved to a Roth or with money moved each year up to the 10%, 12% or 22% tax rate, until age 73, when required withdrawals begin. Each"));
+  assert.ok(MIX.triedWords(MIX.mixGrid(migrate(renterDebtPlan()), { today: T22 })).startsWith("For \"Try Roth conversions too\" we tried 5 mixes: the five orders, with nothing moved to a Roth. Each"));
+  assert.equal(MIX.busyWords(g), "Trying 35 mixes of order and Roth conversions...");
+  // on a flat-rate plan (F2): with nothing moved, under "How this is worked out"; with conversions saved, in the part, beside "your plan"
+  assert.equal(MIX.ownConverts(g), false);
+  const fc = fam(); fc.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: null };
+  assert.equal(MIX.ownConverts(MIX.mixGrid(fc, { today: T22 })), true);
+  const f60 = fam(); f60.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: 60 };
+  assert.equal(MIX.ownConverts(MIX.mixGrid(f60, { today: T22 })), false, "a stop before the first retired year moves nothing");
+  assert.equal(MIX.FLAT_MIX_WORDS, "Your plan works out tax at one flat rate. These figures use the real rates, and \"Use this mix\" turns them on too.");
+  assert.equal(MIX.FLAT_CONV_WORDS, "Your plan works out tax at one flat rate, so its Roth conversions do not run yet and the five orders above leave them out. Here they run, at the real rates; \"Use this mix\" turns those on too.");
+  // asked first, the green line and after Undo
+  const share = { order: { key: "proportional", label: "A share from every account", split: true }, conv: null, success: true, endAfterTaxReal: 840251 };
+  assert.equal(MIX.confirmMixWords(share), "Use this mix? Your plan will take a share from every account and move nothing to a Roth. You can undo it.");
+  assert.equal(MIX.confirmMixWords({ order: { label: "Pre-tax, then taxable, then Roth" }, conv: { fillRate: 0.22, untilAge: 70 } }, { withRates: true }), 'Use this mix? Your plan will take money out in the order "Pre-tax, then taxable, then Roth" and move money to a Roth each year up to the 22% tax rate, until age 70. It will also work out tax at the real rates, which changes the figures on every retirement page. You can undo it.');
+  assert.equal(MIX.confirmMixWords({ order: { label: "Pre-tax, then taxable, then Roth" }, conv: { fillRate: 0.12, untilAge: null } }, { rmdAge: 75 }), 'Use this mix? Your plan will take money out in the order "Pre-tax, then taxable, then Roth" and move money to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. You can undo it.');
+  assert.equal(MIX.savedMixWords(share, { money: usd }), "Saved: your plan now takes a share from every account and moves nothing to a Roth. It leaves about $840,251 at the end, after tax and in today's dollars.");
+  assert.equal(MIX.savedMixWords({ ...share, success: false, failYear: 2069, conv: { fillRate: 0.1, untilAge: 63 } }, { money: usd, withRates: true }), "Saved: your plan now takes a share from every account and moves money to a Roth each year up to the 10% tax rate, until age 63. The money still runs out, in 2069. Tax is now worked out at the real rates, so every retirement page's figures change with it.");
+  assert.equal(MIX.backMixWords(), "Back to your plan as it was.");
+  assert.equal(MIX.backMixWords({ withRates: true }), "Back to your plan as it was, with the flat tax rate.");
+  assert.equal(MIX.convWords(null), "Nothing moved to a Roth");
+  assert.equal(MIX.MIX_TITLE.split(" ").length, 4, "two to four words (R24's pin)");
+});
+
+test("x2 the plans that run out: the rows that last no longer are left out; a mix that lasts a year longer is offered", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const couple = ARCHETYPES.find((a) => a.id === "02-couple-no-kids").build();
+  const r = MIX.mixes(migrate(couple), { today: T22 });
+  assert.equal(r.lead, "fails-longer"); assert.equal(r.shown.length, 1); assert.equal(r.shown[0].key, "proportional|off"); assert.ok(r.better.has("proportional|off"));
+  assert.equal(MIX.leadWords(r, usd), "None of the 35 mixes we tried lasts to the end of your plan. With the best, the money runs out in 2065 instead of 2064.");
+  const single = MIX.mixes(migrate(ARCHETYPES.find((a) => a.id === "03-single-parent").build()), { today: T22 });
+  assert.equal(single.lead, "fails-same"); assert.equal(single.listed, false); assert.deepEqual(single.shown, []);
+});
+

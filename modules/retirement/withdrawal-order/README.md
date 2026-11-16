@@ -106,7 +106,91 @@ every order runs out the same year.
 
 ## Ideas / not yet
 - The step-up in basis on taxable money left to heirs.
-- One search over the order, Roth conversions and gain harvesting together (gap list, next 60, item 23).
+- Gains taken at the 0% rate as a third axis of the search below: it needs the engine to keep a cost basis for taxable money
+  (today a fixed share of every sale is profit), which is an engine change of its own.
+- The Roth conversions page's 24% rate and its "Stop sooner" lines as more axes of the search (each multiplies the runs).
+
+## One search over the order and Roth conversions (2026-11-16, gap list next 60, item 23)
+`mix.js` (pure; `compute()` does not call it, so the page's answer is what it was). The plan's own engine
+(`core/math/retirement.js` `project`) is run on a small, stated grid and the runs are ranked:
+
+- **The grid.** The five orders (the four of `WITHDRAWAL_ORDERS`, then a share from every account) x no Roth conversions, or
+  conversions that fill the 10%, 12% or 22% rate (`MIX_RATES`) until age 63, until 70 (`MIX_STOPS`) or until required
+  withdrawals begin. A stop age `a` is tried only when it changes a year: `startAge < a < min(rmdStartAge, lastAge + 1)`, where
+  `startAge` is the first person's age in the first retired year (the engine converts by the first person's age, in retired years
+  before their required withdrawals), `rmdStartAge` the plan's start age as Roth conversions reads it (`inputs.rmd.startAge`, 75
+  when absent) and `lastAge` the first person's age in the plan's last year. Runs = 5 x (1 + 3 x stops): 35 for the invented family
+  (Ana, 65 in her first retired year 2055: 70 and "until required withdrawals begin"), 50 when she retires at 62 (63 too), 20 for
+  the invented retired couple (Ruth, 72, required withdrawals at 73: only "until required withdrawals begin"); one more when the
+  plan's own setting is none of them (the 24% rate, say). With no 401(k) or IRA money, or no retired year before required
+  withdrawals, the grid is the five orders alone (`convert: false`) and the page draws no part: the five orders are above.
+- **One run.** `runMix(plan, mix)` = `project({ ...buildInputs(planWith(plan, mix)).inputs, strategy: "fixed-real" })`, where
+  `planWith` is the plan with that mix saved: `taxMode: "brackets"`, the order (or `withdrawalSplit`, keeping the plan's own order
+  for money that comes in during a year), `rothConversion: { ...rc, on, fillRate, untilAge }`. This is what Roth conversions runs
+  for each setting (one `buildInputs` per setting, so the health line, the marketplace credit and Medicare's surcharge, is priced on
+  that mix's own income) and what Withdrawal order runs for each order (the same spending every year, the real rates). For the
+  plan's own order each rate equals Roth conversions' option, and the plan as it is equals this page's row for its order (module
+  tests "x2 ranking"). Another order with nothing moved equals this page's row only where health cover does not move with the
+  order: this page builds its inputs once and prices that cover on the plan's own order (`compute.js`, not touched: the golden key
+  and the tax pages' tests hold its figures), the search on each mix's own income, as Roth conversions does. For the family and the
+  retired couple they are equal to the cent; for the stay-at-home parent of qa/households 05, "Roth, then taxable, then pre-tax" with
+  nothing moved runs out in 2058 here and 2059 on this page, and for the high-net-worth household (12) the tax over the plan of two
+  orders differs by a few hundred dollars (test "x2 F1", critic of x2 F1). No invented plan lists such a row in the part (in both
+  every mix runs out, and only rows that last longer are listed); "How this is worked out" says the cover is priced on each mix's
+  own income.
+- **The plan's own setting** (`savedConv`): its conversions as the engine runs them once the real rates are on. Off, a rate that is
+  none of the brackets' (the engine finds no top and converts nothing) or a stop that is not a number (never reached) is read as
+  nothing moved, so the plan as it is stays the engine's own run and no row reads "the NaN% rate" (test "x2 F3", critic of x2 F3;
+  hand-edited or damaged data only). Numbers saved as text are read as numbers, as `buildInputs` reads them.
+- **The figures.** Left at the end `E = endAfterTaxReal` (savings at the plan's end less the tax still owed on pre-tax money, in
+  today's dollars: the engine's own); tax over the plan `T = sum over years of taxes_y / priceLevel_y`; converted
+  `C = sum of conversion_y / priceLevel_y`. Both pages sum them the same way.
+- **The ranking** (`better`): lasts before runs out; then more `round(E)` (when both run out, the later year); then less
+  `round(T)`; then fewer changes from the plan as it is (0 to 2: the order, the conversions); then the grid's order. Runs that are
+  the same in effect (`sameInEffect`: the same ending, and within $1 the same E, T and C) are one entry, shown as the simplest
+  (the plan as it is stands for its group): for the retired couple the five orders give the same with conversions, so the best is
+  their own order with conversions at the 22% rate, once.
+- **What is shown** (`rankMixes`): the plan as it is and the best three other entries, each with its difference; when every run
+  runs out, only those that last longer (a row that runs out the same year says nothing the first sentence does not). "Use this
+  mix" only on an entry that does more: it lasts and the plan does not, leaves $1 or more more at the end, or, both running out,
+  runs out later. "About as much": $500 or less more (the page's own line for the orders).
+- **What "Use this mix" saves** (`chooseMix`), through the two pages' own paths and nothing else: the order through this page's
+  `chooseOrder` (and `taxMode: "brackets"` on a flat-rate plan, as its first button does, since the figures are worked out at the
+  real rates); conversions on: Roth conversions' "Use this" (`{ ...rc, on: true, fillRate }`, `taxMode: "brackets"`) and its
+  "Convert until" box (`untilAge`, a number or null, only when it differs); conversions off: its "Turn conversions off"
+  (`{ ...rc, on: false }`), only when they were on.
+
+Results for the invented households (2026-11-15): the family as it is leaves $836,544 after tax (no conversions, taxable first);
+the best of 35 mixes is "Roth, then taxable, then pre-tax" with conversions at the 12% rate until required withdrawals begin,
+$874,277, $37,733 more, with $37,674 less tax over the plan ($136,990 against $174,664). The retired couple: $888,771 as it is;
+conversions at the 22% rate leave $907,032, $18,261 more for $7,790 more tax. The couple of qa/households 02: every mix runs out;
+a share from every account lasts to 2065 instead of 2064. The near-retirement household (09): a share with conversions at the 10%
+rate until 70, $31,483 more.
+
+Builder's choices (the brief's grid where the code says otherwise):
+- **Gains at 0% are not an axis.** The engine keeps no cost basis: `tax.gainShare` (half, unless the plan says) of every sale from
+  taxable money is profit. Selling and buying back in a low year raises the basis, so the gain on later sales is smaller; with a
+  fixed share it is not smaller, so the engine cannot see it, and the brief says not to change the engine. Tax, year by year shows
+  each year's room under the 0% line (`gainsRoom`, which never enters the engine); "How this is worked out" says so in one sentence
+  with a link. (The gap list's item reads "withdrawal order, conversions and gain harvesting together": this is a stated narrowing,
+  for the lead to accept or to schedule the engine change; critic of x2 F4.)
+- **63 instead of 75.** Required withdrawals begin at 73 for people born 1951 to 1959 and 75 from 1960 (`core/math/rmd.js`:
+  SECURE 2.0 s.107, 26 CFR 1.401(a)(9)-2(b)(2); the IRS "Retirement plan and IRA required minimum distributions FAQs",
+  https://www.irs.gov/retirement-plans/retirement-plan-and-ira-required-minimum-distributions-faqs, read 2026-11-16, says 73 for
+  today's retirees). So "until 75" is always the same as "until required withdrawals begin". 63 is the stop Roth conversions
+  already offers and explains: Medicare's surcharge is set by income two years earlier (that page's README, CMS fact sheet read
+  2026-11-14; not read again here). "Until retirement" in the brief cannot be a stop: the engine converts only in retired years.
+- The 24% rate and the "Stop sooner" lines are left out to keep the grid small; the plan's own "Stop sooner" choice
+  (`conversionCeiling`) is kept in every run, as Roth conversions keeps it.
+- No new figure: the rates are the federal table's own brackets, read through `core/math/tax.js` (Roth conversions README has
+  their source); the ages are choices, not limits.
+- Each run is on the same spending every year, whatever way the plan uses (Batch 5b below): the same as both pages.
+Tests (`module.test.mjs`, "x2 ..."): the grid's size for four plans and the stops kept; every run against the engine run by hand
+for the family and the retired couple, and the ranking; the runs against Roth conversions' options and this page's rows; ties;
+plans that run out; health cover priced on each mix's own income (05, "x2 F1"); a saved setting the engine cannot run ("x2 F3");
+`chooseMix` through both pages' paths; every sentence; and invariance: Withdrawal order's and Roth
+conversions' `compute()` over 44 invented plans give the digests written from ce79d70 before the search existed
+(`invariance.json`; `PRINT=1` writes them again after a deliberate change).
 
 ## A share from every account (2026-11-15, gap list next 60, item 22)
 A fifth order beside the four: after cash, every account pays its share of what the year needs, by what it held at the start
