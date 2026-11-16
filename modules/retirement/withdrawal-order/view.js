@@ -1,16 +1,81 @@
 // modules/retirement/withdrawal-order/view.js -- DOM only. Which order wins for this plan and
 // by how much, the best order and yours, the others one tap away, and one tap to make an order the
 // plan's, with a way back. The fifth order takes a share from every account (gap list, next 60,
-// item 22); the page is drawn simple first (docs/OPTIONAL.md; opt spec C14 for this page, done with it).
+// item 22); the page is drawn simple first (docs/OPTIONAL.md; opt spec C14 for this page, done with it). "Try Roth conversions too"
+// searches the five orders and Roth conversions together (gap list, next 60, item 23; mix.js), one quiet row before the method.
 import { needButtons } from "../needs.js";
 import { needItem } from "../../../core/words.js";
 import { compute, chooseOrder, agesIn } from "./compute.js";
 import { parts, rest } from "../../../core/ui/more.js";
+import { mixGrid, runsNeeded, runMix, rankMixes, chooseMix, MIX_TITLE, ROTH_WORDS, leadWords, moveWords, rowWords, valueWords, orderTitle, bestWords, triedWords, GAINS_WORDS, ownConverts, FLAT_MIX_WORDS, FLAT_CONV_WORDS, confirmMixWords, savedMixWords, backMixWords, busyWords } from "./mix.js";
 
 let pending = null;
+let mixPending = null;   // the green line after "Use this mix" (with its Undo) or after that Undo, shown on the next draw
+let mixOpen = false;     // "Use this mix" or its Undo was tapped: the part is drawn open on the draw that follows (R17), then forgotten
+// The search's runs for one plan. Every run sets the order, the conversions and the tax setting itself (mix.js planWith), so the
+// runs are kept while only those change: after "Use this mix" or Undo the answer is there at once. Any other change starts afresh.
+let memo = { key: null, runs: new Map() };
+let job = null;          // the runs being worked out: { key, runs, todo, waiters }
+/** The longest one slice of runs may take before the phone gets a turn (milliseconds). */
+export const SLICE_MS = 25;
+
+/** The plan as the search reads it: all of it but the fields every run sets itself and the plan's stamp (meta changes on every save). */
+export function searchKey(plan, today) {
+  const { meta, ...rest } = plan ?? {};
+  const rt = { ...(rest.retirement ?? {}) };
+  delete rt.taxMode; delete rt.withdrawalOrder; delete rt.withdrawalSplit;
+  if (rt.rothConversion && typeof rt.rothConversion === "object") { const { on, fillRate, untilAge, ...rc } = rt.rothConversion; rt.rothConversion = rc; }
+  return JSON.stringify([today, { ...rest, retirement: rt }]);
+}
+const runsOf = (plan, today) => { const key = searchKey(plan, today); if (memo.key !== key) { memo = { key, runs: new Map() }; job = null; } return memo; };
+const clock = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
+/** Work out the missing runs a slice at a time (SLICE_MS), a turn for the phone between slices; then call each waiter. Each
+ * run carries the plan of the drawing that asked for it: a share from every account is run on that plan's own order. */
+function work(plan, today, todo, done) {
+  if (job && job.key === memo.key) {
+    job.waiters.push(done);
+    for (const x of todo) if (!job.todo.some((y) => y.rk === x.rk)) job.todo.push(x);
+    return job;
+  }
+  const j = (job = { key: memo.key, runs: memo.runs, todo: [...todo], waiters: [done] });
+  const step = () => {
+    if (job !== j) return;   // the plan changed meanwhile: a newer search took over
+    const t0 = clock();
+    while (j.todo.length && clock() - t0 < SLICE_MS) {
+      const x = j.todo.shift();
+      if (j.runs.has(x.rk)) continue;
+      let f = null;
+      try { f = runMix(x.plan ?? plan, x.mix, { today }); } catch (e) { try { console.error("[planner] withdrawal-order mix", e); } catch { /* no console */ } }
+      j.runs.set(x.rk, f);
+    }
+    if (j.todo.length) { setTimeout(step, 0); return; }
+    job = null;
+    for (const w of j.waiters) w();
+  };
+  setTimeout(step, 0);
+  return j;
+}
+/** The search's answer for this plan if every run is done (null while runs are missing): for tests and the shell's own checks. */
+export function searched(plan, today) {
+  const grid = mixGrid(plan, { today });
+  if (!grid.ready) return null;
+  const m = runsOf(plan, today);
+  return runsNeeded(grid).every((x) => m.runs.has(x.rk)) ? { grid, runs: m.runs, ...rankMixes(grid, m.runs) } : null;
+}
+/** Resolves once no runs are being worked out (tests). */
+export const searchDone = () => new Promise((resolve) => { const wait = () => (job ? setTimeout(wait, 5) : resolve()); wait(); });
 
 /** The order said in a sentence: only its first letter lower-cased ("pre-tax, then taxable, then Roth", never "roth"). */
 const said = (o) => o.label.replace(/^./, (c) => c.toLowerCase());
+/**
+ * An order's note in its row, its first letter upper-cased. The order marked best for this plan never says "the usual worst" beside
+ * its "best" (critic of x2, P2: after "Use this mix" the family read "best", "your plan" and "The usual worst: spends the tax-free
+ * money first" on one row): "Spends the tax-free money first: usually the worst order, but the best for this plan."
+ */
+export function noteWords(o, best = false) {
+  const n = best && /^the usual worst: /.test(o.note) ? `${o.note.replace(/^the usual worst: /, "")}: usually the worst order, but the best for this plan` : o.note;
+  return n.replace(/^./, (c) => c.toUpperCase());
+}
 /**
  * The green line after a "Use ..." on this page (one sentence per case; module.test.mjs reads each). o: the order chosen;
  * bracketsOn: the plan already works out tax at the real rates; withRates: the tap also turns them on (the first card's button
@@ -119,6 +184,8 @@ export function flatWords({ yoursBest, allFail = false, sameYear = false }) {
 
 export function render(root, ctx) {
   const { ui, fmt, store, plan } = ctx;
+  const openMix = mixOpen;   // read once, on the draw after "Use this mix" or its Undo
+  mixOpen = false;
   const cur = plan.meta.currency;
   const d = compute(plan, { today: fmt.today() });
   const money = (n) => fmt.money(n, cur);
@@ -180,13 +247,32 @@ export function render(root, ctx) {
   // the best order and yours in sight, the others one tap away (opt spec C14: "3 more orders")
   const row = (o) => ui.h("li", { style: isBest(o) && !sameYear ? { background: "var(--accent-soft)", borderRadius: "8px" } : null },
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, o.label, isBest(o) && !sameYear ? ui.h("span", { class: "pill accent" }, "best") : null, o.current ? ui.h("span", { class: "pill ok" }, "your plan") : null), ui.h("span", { class: "rec-value" }, o.success ? money(o.endAfterTaxReal) : `runs out ${o.failYear}`)),
-    ui.h("div", { class: "rec-sub" }, `${o.note.replace(/^./, (c) => c.toUpperCase())}. ${o.success ? `Left at the end after tax; ${money(o.endBalanceReal)} before it. ` : ""}Tax over the plan ${money(o.taxesReal)}; ${money(o.rmdReal)} of required withdrawals. Today's dollars.`),
+    // "Today's dollars." only where the headline does not say it already (every order runs out); the row before "With Roth
+    // conversions too" kept the page's first view at its count (gap list, next 60, item 23)
+    ui.h("div", { class: "rec-sub" }, `${noteWords(o, isBest(o) && !sameYear)}. ${o.success ? `Left at the end after tax; ${money(o.endBalanceReal)} before it. ` : ""}Tax over the plan ${money(o.taxesReal)}; ${money(o.rmdReal)} of required withdrawals.${d.five.allFail ? " Today's dollars." : ""}`),
     // the best order's own button is the hero's (one path: P4, it was offered twice)
     o.current || isBest(o) ? null : ui.h("div", { style: { marginTop: "8px" } }, ui.button(`Use this order`, () => choose(o), { class: "secondary" })));
   root.append(ui.card("The five orders",
     ...rest(ctx, { id: "orders", items: all, row, first: 0, keep: (o) => isBest(o) || o.current, noun: "orders", one: "order" })));
-  // How this is worked out: the method, the fifth order, and why the order matters (moved from the first screen, word for word)
-  root.append(parts(ctx, { id: "how", kind: "how", body: () => [
+  // the five orders with Roth conversions, searched together (mix.js): one quiet row, only when there is money to convert and years
+  // to do it in (otherwise the search is the five orders above); its green line sits just above it, outside the parts; what it tried,
+  // why gains at 0% are not in it and, on a flat-rate plan, the rates it uses are under "How this is worked out" (critic of x2, P5)
+  const grid = mixGrid(plan, { today: fmt.today() });
+  const mix = grid.ready && grid.convert ? mixPart(ctx, grid, money, openMix) : null;
+  if (mixPending) {
+    const pend = mixPending;
+    mixPending = null;
+    if (typeof pend === "string") root.append(ui.notice("ok", pend));
+    else root.append(ui.notice("ok", pend.text, { action: { label: "Undo", run: () => {
+      if (!pend.undo) return;
+      mixPending = pend.back; mixOpen = true;
+      const r = pend.undo();
+      if (!r?.done) mixPending = r?.kept ? ui.undoneWords(r, pend.back) : null; else if (r.kept) mixPending = ui.undoneWords(r, pend.back);
+    } } }));
+  }
+  // How this is worked out: the method, the fifth order, and why the order matters (moved from the first screen, word for word); then
+  // the search's own method, when the page has it
+  root.append(parts(ctx, mix, { id: "how", kind: "how", body: () => [
     ui.h("p", { class: "small" }, "Everyday cash always goes first. The page works each order through the federal tax brackets year by year, so the difference is actual tax, including the effect of required withdrawals and Social Security. What is left is counted after tax, because tax is still owed on pre-tax money."),
     ui.h("p", { class: "small" }, `"${d.share.label}": after everyday cash and any required withdrawal, each account pays its share of what the year needs, by what it held at the start of the year. One holding 60% of your savings pays 60%. Tax is worked out the same way as for the other orders.`),
     ui.h("ul", { class: "records" }, [
@@ -195,5 +281,68 @@ export function render(root, ctx) {
       ["Roth money last", "Nothing is ever taxed and nothing is required: the best money to leave growing, and the best to leave behind."],
       ["A mix beats a pure order", "The real answer is usually to take from pre-tax up to the top of a low bracket every year and the rest from taxable: that is what the Roth conversions page does."],
     ].map(([t, s]) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, t)), ui.h("div", { class: "rec-sub" }, s)))),
+    ...(mix ? mixHow(ui, grid) : []),
   ] }));
+}
+
+/** The search's method, under "How this is worked out": what was tried, why gains at 0% are not in it (with its link), and on a
+ * flat-rate plan whose own setting moves nothing to a Roth, that the figures use the real rates (with conversions saved that is said
+ * in the part itself, beside "your plan": FLAT_CONV_WORDS). */
+function mixHow(ui, grid) {
+  return [
+    ui.h("p", { class: "small" }, triedWords(grid)),
+    ui.h("p", { class: "small" }, GAINS_WORDS, " ", ui.h("a", { href: "#/taxes/projection?show=gains", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Gains you could take tax-free ›")),
+    grid.bracketsOn || ownConverts(grid) ? null : ui.h("p", { class: "small" }, FLAT_MIX_WORDS),
+  ].filter(Boolean);
+}
+
+/**
+ * The part "Try Roth conversions too" (kind own: it holds "Use this mix", never a box; title pinned in qa/first-view-lib.mjs): built
+ * when first opened. What a Roth conversion is, in one sentence; the runs are worked out a slice at a time with "Trying 50 mixes of
+ * order and Roth conversions..." in their place; then the first sentence, on a flat-rate plan with conversions saved why "your plan"
+ * differs from the five orders' (FLAT_CONV_WORDS), the plan as it is and the best three, each with its difference and, when it does
+ * more, "Use this mix" (outlined: the page's one filled button is the hero's). The rest of what it says is under "How this is worked
+ * out" (mixHow; critic of x2, P5: three paragraphs of method under the rows).
+ */
+function mixPart(ctx, grid, money, open) {
+  const { ui, store, fmt, plan } = ctx;
+  const today = fmt.today();
+  const rmdAge = grid.rmdStartAge;
+  const use = (x) => {
+    const withRates = !grid.bracketsOn;
+    if (!ui.confirm(confirmMixWords(x, { withRates, rmdAge }))) return;
+    const pend = { text: savedMixWords(x, { withRates, money, rmdAge }), back: backMixWords({ withRates }), undo: null };
+    mixPending = pend; mixOpen = true;
+    const change = (d) => chooseMix(d, x, { withRates });
+    // one change; Undo takes back only what it changed (the kit's undoable)
+    if (ui.undoable) pend.undo = ui.undoable(store, change); else store.update(change);
+  };
+  const row = (r) => (x) => ui.h("li", {},
+    ui.h("div", { class: "rec-head" },
+      ui.h("span", { class: "rec-title" }, orderTitle(x.order), x.asIs ? ui.h("span", { class: "pill ok" }, "your plan") : x === r.top && r.better.has(x.key) ? ui.h("span", { class: "pill accent" }, bestWords(x)) : null),
+      ui.h("span", { class: "rec-value" }, valueWords(x, money))),
+    ui.h("div", { class: "rec-sub" }, rowWords(x, r.asIs, money, rmdAge)),
+    r.better.has(x.key) ? ui.h("div", { style: { marginTop: "8px" } }, ui.button("Use this mix", () => use(x), { class: "secondary" })) : null);
+  const answer = (r) => [
+    ui.h("p", {}, leadWords(r, money)),
+    moveWords(r) ? ui.h("p", {}, moveWords(r)) : null,
+    // a flat-rate plan with conversions saved: the five orders above leave them out, "your plan" here has them (critic of x2, F2)
+    !grid.bracketsOn && ownConverts(grid) ? ui.h("p", { class: "small muted" }, FLAT_CONV_WORDS) : null,
+    r.listed ? ui.h("ul", { class: "records" }, [r.asIs, ...r.shown].map(row(r))) : null,
+  ].filter(Boolean);
+  const body = () => {
+    const holder = ui.h("div", { style: { display: "grid", gap: "12px" }, "aria-live": "polite" });
+    const key = searchKey(plan, today);   // worked out only once the part is opened
+    const fill = () => {
+      if (memo.key !== null && memo.key !== key && holder.childNodes?.length) return;   // a drawing of an older plan: a newer one has its own
+      const m = runsOf(plan, today);
+      const todo = runsNeeded(grid).filter((x) => !m.runs.has(x.rk)).map((x) => ({ ...x, plan }));
+      if (todo.length) { holder.replaceChildren(ui.h("p", { class: "muted", "aria-busy": "true" }, busyWords(grid))); work(plan, today, todo, fill); return; }
+      const r = rankMixes(grid, m.runs);
+      holder.replaceChildren(...(r.ready ? answer(r) : [ui.h("p", {}, "This could not be worked out for your plan. Will the money last? shows what is missing.")]));
+    };
+    fill();
+    return [ui.h("p", { class: "small muted" }, ROTH_WORDS), holder];
+  };
+  return { id: "mix", kind: "own", title: MIX_TITLE, open: open || undefined, lazy: true, body };
 }

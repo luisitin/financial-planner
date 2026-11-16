@@ -160,6 +160,42 @@ every order runs out the same year.
   "Convert until" box (`untilAge`, a number or null, only when it differs); conversions off: its "Turn conversions off"
   (`{ ...rc, on: false }`), only when they were on.
 
+What the person sees (view.js `mixPart`; the simple-first rules of docs/OPTIONAL.md):
+- **First view**: one quiet row, "Try Roth conversions too" (kind `own`: it holds "Use this mix" and no box; the title is pinned in
+  `qa/first-view-lib.mjs` `PINNED_TITLES`, two to four words, R24; "Try" says there is something to gain by opening it, critic of
+  x2 P6), first in the parts card, before "How this is worked out". No
+  row when there is nothing to convert. To keep the page's first view at its count (180 words, 10 figures for the family, the
+  `tests/first-view.known.json` entry), each order's row no longer ends "Today's dollars." while the headline says "in today's
+  dollars" (every case but "every order runs out", where the rows keep it): the family's first view is 180 words before and after,
+  the retired couple's 158 then 160.
+- **One tap**: nothing is worked out until the row is opened. Then what a Roth conversion is, in one sentence (`ROTH_WORDS`, the
+  Roth conversions page's own), and "Trying 35 mixes of order and Roth conversions..." while the runs are worked out a slice at a
+  time (`SLICE_MS`, 25 ms, then the phone gets a turn): on a desktop the family's 35 runs take about 0.3 s; with the processor
+  slowed four times (a phone) 1.3 s, and no stretch over 90 ms where a tap would wait. Then the first sentence (`leadWords`, one
+  per case), one more when no mix moves money ("At these rates your other income already fills the room, ..."), the plan as it is
+  ("your plan") and the best three, each with its figure and its line (`rowWords`: "Money moved to a Roth each year up to the 12%
+  tax rate, until age 75, when required withdrawals begin", the age the first person's required withdrawals begin at; a mix that
+  leaves more for more tax says "Pays $7,790 more tax over the plan, yet leaves $18,261 more at the end, after tax"), and "Use this
+  mix" (outlined) on those that do more. The first row's pill, when it does more, says what it is best at (`bestWords`: "best with
+  conversions", or "best mix" when it moves nothing): the hero's "works best" is the best order alone, worked out without the search
+  (the search runs only once the row is opened), so a plain second "best" read as a second answer to one question (critic of x2,
+  P1). On a flat-rate plan with Roth conversions saved, one line before the rows (`FLAT_CONV_WORDS`): the five orders above leave
+  them out (the engine runs conversions only at the real rates), "your plan" here has them, so the two figures differ ($836,544 and
+  $842,697 for the family with 12% conversions saved; critic of x2, F2).
+- **Under "How this is worked out"** (`mixHow`; critic of x2, P5: three paragraphs of method sat between the rows and the next part):
+  what was tried (`triedWords`, with the count and the health clause), why gains at 0% are not in it with a link to "Gains you
+  could take tax-free" on Tax, year by year (`?show=gains`), and on a flat-rate plan with nothing moved that the figures use the real
+  rates (`FLAT_MIX_WORDS`).
+- **The five orders' note**: the order marked best for the plan never says "the usual worst" beside its "best" (`noteWords`: "Spends
+  the tax-free money first: usually the worst order, but the best for this plan"; critic of x2, P2, seen after "Use this mix"). The
+  note itself is `WITHDRAWAL_ORDERS` in retirement/projection, which the golden key holds; only this row's words change.
+- **Use this mix** asks first (`confirmMixWords`), then one change through `chooseMix`; the green line (`savedMixWords`) names the new
+  answer, sits just above the parts card (outside the parts, as this page's other lines), and has Undo (the kit's `undoable`: only
+  what the tap changed, `backMixWords` after). The part stays open on the next draw and the others are as they were (R17).
+- **Kept for the visit**: the runs are kept in memory for one plan (`searchKey`: the plan without the order, the conversions, the
+  tax setting and its stamp, which every run sets itself), so after "Use this mix" and Undo the answer comes back without running
+  the 35 again (only a share from every account's runs are made again when the plan's own order changed). Nothing is stored.
+
 Results for the invented households (2026-11-15): the family as it is leaves $836,544 after tax (no conversions, taxable first);
 the best of 35 mixes is "Roth, then taxable, then pre-tax" with conversions at the 12% rate until required withdrawals begin,
 $874,277, $37,733 more, with $37,674 less tax over the plan ($136,990 against $174,664). The retired couple: $888,771 as it is;
@@ -190,7 +226,12 @@ for the family and the retired couple, and the ranking; the runs against Roth co
 plans that run out; health cover priced on each mix's own income (05, "x2 F1"); a saved setting the engine cannot run ("x2 F3");
 `chooseMix` through both pages' paths; every sentence; and invariance: Withdrawal order's and Roth
 conversions' `compute()` over 44 invented plans give the digests written from ce79d70 before the search existed
-(`invariance.json`; `PRINT=1` writes them again after a deliberate change).
+(`invariance.json`; `PRINT=1` writes them again after a deliberate change). The page: no part with nothing to convert; the row
+shut and nothing run before a tap; the slices; the answer; asked first ("no" saves nothing); "Use this mix" writes the order, the
+conversions and the real rates and nothing else; the green line outside the parts, the part open (S11); Undo puts the plan back
+byte for byte; on a plan already on the real rates, the share and its Undo; the method under "How this is worked out", not in the
+part; the retired couple's best that pays more tax; a flat-rate plan with conversions saved; the order marked best never called
+"the usual worst"; opening, shutting and searching never save.
 
 ## A share from every account (2026-11-15, gap list next 60, item 22)
 A fifth order beside the four: after cash, every account pays its share of what the year needs, by what it held at the start

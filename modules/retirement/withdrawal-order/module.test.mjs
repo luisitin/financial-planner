@@ -211,9 +211,9 @@ test("share page: the family reads that a share from every account works best, u
   assert.ok(bestRow && !bestRow.all().some((e) => e.tagName === "BUTTON"), "no 'Use this order' on the best row");
   assert.equal(s.root.all().filter((e) => e.tagName === "BUTTON" && e.textContent === "Use this order").length, 3, "the three others, inside 3 more orders");
   // the best and yours in sight; the three others one quiet tap away; the method and why it matters in "How this is worked out"
-  assert.deepEqual(s.parts(), ["orders", "how"]);
+  assert.deepEqual(s.parts(), ["orders", "mix", "how"]);
   const first = s.outside();
-  assert.ok(first.includes("The five orders") && first.includes("3 more orders") && first.includes("How this is worked out"), first);
+  assert.ok(first.includes("The five orders") && first.includes("3 more orders") && first.includes("Try Roth conversions too") && first.includes("How this is worked out"), first);
   assert.ok(!first.includes("Roth, then taxable, then pre-tax") && !first.includes("Pre-tax money is a tax bill waiting") && !first.includes("Everyday cash always goes first"), first);
   assert.ok(t.includes("Each account pays its share of what comes out, by what it holds at the start of the year, so pre-tax, taxable and Roth money go down together. Left at the end after tax; $880,072 before it. Tax over the plan $174,093; $851,841 of required withdrawals."), t);
   assert.ok(t.includes('"A share from every account": after everyday cash and any required withdrawal, each account pays its share of what the year needs, by what it held at the start of the year. One holding 60% of your savings pays 60%. Tax is worked out the same way as for the other orders.'));
@@ -239,15 +239,15 @@ test("share page: the family reads that a share from every account works best, u
   assert.ok(s.text().includes('Back to "Taxable, then pre-tax, then Roth", as before.'));
 });
 
-test("S11: after a save only the saved part changes: the two parts keep their state, the green line and its way back are outside them", async () => {
+test("S11: after a save only the saved part changes: the parts keep their state, the green line and its way back are outside them", async () => {
   const s = await drawOrder(familyPlan(T22));
   const state = () => s.root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.dataset.kind, e.hasAttribute("open")]);
-  assert.deepEqual(state(), [["orders", "more", false], ["how", "how", false]], "two parts, shut; no fold by hand");
+  assert.deepEqual(state(), [["orders", "more", false], ["mix", "own", false], ["how", "how", false]], "three parts, shut; no fold by hand");
   // "Use this order" on a row inside "3 more orders" (pre-tax first): the plan takes it, the parts are as they were
   const inside = s.root.all().find((e) => e.dataset?.part === "orders").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this order");
   inside.click();
   assert.deepEqual(s.p.retirement.withdrawalOrder, ["deferred", "taxable", "free"]);
-  assert.deepEqual(state(), [["orders", "more", false], ["how", "how", false]]);
+  assert.deepEqual(state(), [["orders", "more", false], ["mix", "own", false], ["how", "how", false]]);
   const line = s.root.all().find((e) => /\bnotice\b/.test(e.className) && /\bok\b/.test(e.className));
   assert.ok(line && !s.root.all().filter((e) => e.tagName === "DETAILS").some((d) => d.all().includes(line)), "the green line is outside the parts");
   assert.equal(line.textContent.replace(/\s+/g, " "), "The plan now draws pre-tax, then taxable, then Roth. It changes nothing until tax is worked out at the real rates (the button below).Put it back");
@@ -424,12 +424,15 @@ test("x2 invariance: Withdrawal order's and Roth conversions' compute() give the
 // item 23; mix.js). The invented family (qa/fixtures/family-plan.mjs: Ana, born 1990, retiring at 65, and Bo) and the invented retired
 // couple (Ruth, born 1954, 72 this year, and Sam).
 const MIX = await import("./mix.js");
+const VIEW = await import("./view.js");
 const { buildInputs: buildIn } = await import("../projection/compute.js");
 const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
 const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
 const fam = () => migrate(familyPlan(T22));
 const ret = () => migrate(retiredCouplePlan(T22));
 const usd = (n) => "$" + Math.round(n).toLocaleString("en-US");
+const mixPartOf = (s) => s.root.all().find((e) => e.dataset?.part === "mix");
+const openMix = (s) => { const d = mixPartOf(s); d.open = true; d.dispatch("toggle"); return d; };
 
 test("x2 grid: 35 mixes for the family, 50 retiring at 62, 20 for the retired couple, the five orders alone with nothing to convert", () => {
   const g = MIX.mixGrid(fam(), { today: T22 });
@@ -592,8 +595,146 @@ test("x2 ties: runs the same in effect are one row, the simplest; the plan as it
   assert.ok(rc.ranked.length < 20, `${rc.ranked.length} distinct of 20`);
 });
 
+test("x2 nothing to convert: the renter and a couple past required withdrawals get no part; the search would be the five orders above", async () => {
+  const s = await drawOrder(renterDebtPlan());
+  assert.ok(!s.parts().includes("mix"), JSON.stringify(s.parts()));
+  const old = retiredCouplePlan(T22); old.household.people[0].birthDate = "1950-03-10";
+  const t = await drawOrder(old);
+  assert.ok(!t.parts().includes("mix"), JSON.stringify(t.parts()));
+  const r = MIX.mixes(migrate(renterDebtPlan()), { today: T22 });
+  assert.equal(r.tried, 5); assert.equal(r.convert, false); assert.equal(MIX.moveWords(r), "", "no 'other income fills the room' when there is nothing to convert");
+});
 
+test("x2 the part: one quiet row before the method; nothing runs until it opens; then slices, the answer, Use this mix (asked first) and Undo", async () => {
+  const p0 = familyPlan(T22);
+  const s = await drawOrder(p0);
+  const before = JSON.stringify(s.p);
+  // the first view: the row's title only; nothing worked out yet
+  const part = mixPartOf(s);
+  assert.equal(part.dataset.kind, "own"); assert.equal(part.hasAttribute("open"), false);
+  assert.equal(part.querySelector(".fold-title").textContent, "Try Roth conversions too");
+  assert.ok(!part.all().some((e) => e.tagName === "INPUT" || e.tagName === "SELECT" || e.tagName === "TEXTAREA"), "no box: a pick from a list (R24 pin)");
+  assert.equal(VIEW.searched(s.p, T22), null, "no run before the part is opened");
+  // opened: the runs are worked out a slice at a time (SLICE_MS), the phone gets a turn between slices
+  const real = globalThis.setTimeout; let slices = 0;
+  globalThis.setTimeout = (fn, ms, ...a) => { slices++; return real(fn, ms, ...a); };
+  try {
+    openMix(s);
+    assert.ok(s.text().includes("Trying 35 mixes of order and Roth conversions..."), "said while it works");
+    await VIEW.searchDone();
+  } finally { globalThis.setTimeout = real; }
+  assert.ok(slices >= 2, `${slices} slices`); assert.equal(VIEW.SLICE_MS, 25);
+  const t = s.text();
+  // what a Roth conversion is, first (P3); the answer; the rows in plain words with the age required withdrawals begin at (P3); the
+  // best row's pill says what it is best at (P1: the hero's "best" is the best order alone)
+  const pt = part.textContent;
+  assert.ok(pt.includes(`${MIX.ROTH_WORDS}The best of the 35 mixes we tried leaves about $874,277 at the end, after tax and in today's dollars: $37,733 more than your plan as it is.`), pt);
+  assert.ok(t.includes("Taxable, then pre-tax, then Rothyour plan$836,544Nothing moved to a Roth. Tax over the plan $174,664."), t);
+  assert.ok(t.includes("Roth, then taxable, then pre-taxbest with conversions$874,277Money moved to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. $37,733 more left at the end; $37,674 less tax over the plan.Use this mix"), t);
+  assert.ok(t.includes("A share from every account$863,788Money moved to a Roth each year up to the 12% tax rate, until age 70. $27,244 more left at the end; $25,566 less tax over the plan."), t);
+  assert.equal(part.all().filter((e) => /\bpill\b/.test(e.className) && /^best/.test(e.textContent)).length, 1, "one best");
+  // the method is under "How this is worked out", not between the rows and the next part (P5): what was tried, why gains at 0% are
+  // not in it with its link, and on this flat-rate plan with nothing moved, that the figures use the real rates
+  const gridNow = MIX.mixGrid(s.p, { today: T22 });
+  for (const w of [MIX.triedWords(gridNow), MIX.GAINS_WORDS, MIX.FLAT_MIX_WORDS, MIX.FLAT_CONV_WORDS]) assert.ok(!pt.includes(w), w);
+  assert.equal(part.all().filter((e) => e.tagName === "P").length, 2, "what a Roth conversion is and the answer; the rest is in the list");
+  const how = s.root.all().find((e) => e.dataset?.part === "how");
+  how.open = true; how.dispatch("toggle");
+  const ht = how.textContent;
+  assert.ok(ht.includes(MIX.triedWords(gridNow)) && ht.includes(MIX.GAINS_WORDS) && ht.includes(MIX.FLAT_MIX_WORDS), ht);
+  const link = how.all().find((e) => e.tagName === "A" && /tax-free/.test(e.textContent));
+  assert.equal(link.getAttribute("href"), "#/taxes/projection?show=gains");
+  how.open = false; how.dispatch("toggle");
+  const uses = () => s.root.all().filter((e) => e.tagName === "BUTTON" && e.textContent === "Use this mix");
+  assert.equal(uses().length, 3); assert.ok(uses().every((b) => /secondary/.test(b.className)), "outlined: the hero's button stays the one filled");
+  assert.equal(s.saved.length, 0, "opening and searching saved nothing");
+  // asked first: "no" saves nothing
+  const ask = window.confirm; let asked = "";
+  window.confirm = (q) => { asked = q; return false; };
+  try { uses()[0].click(); } finally { window.confirm = ask; }
+  assert.equal(asked, 'Use this mix? Your plan will take money out in the order "Roth, then taxable, then pre-tax" and move money to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. It will also work out tax at the real rates, which changes the figures on every retirement page. You can undo it.');
+  assert.equal(s.saved.length, 0);
+  // "yes": one change, the order and the conversion and the real rates, nothing else
+  uses()[0].click();
+  assert.equal(s.saved.length, 1);
+  assert.deepEqual(s.p.retirement.withdrawalOrder, ["free", "taxable", "deferred"]);
+  assert.deepEqual(s.p.retirement.rothConversion, { on: true, fillRate: 0.12, untilAge: null });
+  assert.equal(s.p.retirement.taxMode, "brackets");
+  const strip = (p) => { const c = structuredClone(p); delete c.meta; for (const k of ["withdrawalOrder", "taxMode", "rothConversion", "withdrawalSplit"]) delete c.retirement[k]; return JSON.stringify(c); };
+  assert.equal(strip(s.p), strip(JSON.parse(before)), "nothing else is saved");
+  // the green line names the new answer, outside the parts; the part stays open, the others as they were (R17); the answer is there at once
+  const line = s.root.all().find((e) => /\bnotice\b/.test(e.className) && /\bok\b/.test(e.className));
+  assert.equal(line.firstChild.textContent, 'Saved: your plan now takes money out in the order "Roth, then taxable, then pre-tax" and moves money to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. It leaves about $874,277 at the end, after tax and in today\'s dollars. Tax is now worked out at the real rates, so every retirement page\'s figures change with it.');
+  assert.ok(!s.root.all().filter((e) => e.tagName === "DETAILS").some((d) => d.all().includes(line)), "outside the parts");
+  const state = () => s.root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.hasAttribute("open")]);
+  assert.deepEqual(state(), [["orders", false], ["mix", true], ["how", false]]);
+  // a share from every account pays from the plan's own order what comes in during a year: its seven runs are made again for the new
+  // order (the other 28 are kept); then the answer
+  assert.ok(s.text().includes("Trying 35 mixes of order and Roth conversions..."));
+  await VIEW.searchDone();
+  assert.ok(s.text().includes("None of the 35 mixes we tried leaves more than your plan as it is."), s.text());
+  assert.ok(s.text().includes("Roth, then taxable, then pre-taxyour plan$874,277"), s.text());
+  // the five orders: Roth first is now the best for this plan, and its row no longer says "the usual worst" beside "best" (P2)
+  const roRow = s.root.all().find((e) => e.tagName === "LI" && e.textContent.startsWith("Roth, then taxable, then pre-taxbestyour plan"));
+  assert.ok(roRow, s.text().slice(0, 1200));
+  assert.ok(roRow.textContent.includes("Spends the tax-free money first: usually the worst order, but the best for this plan. Left at the end after tax"), roRow.textContent);
+  assert.ok(!/usual worst/.test(roRow.textContent));
+  // Undo: the plan as it was, byte for byte; said; the part still open
+  const undo = line.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Undo");
+  undo.click();
+  assert.equal(JSON.stringify({ ...s.p, meta: null }), JSON.stringify({ ...JSON.parse(before), meta: null }));
+  assert.ok(s.text().includes("Back to your plan as it was, with the flat tax rate."), s.text().slice(0, 900));
+  assert.deepEqual(state(), [["orders", false], ["mix", true], ["how", false]]);
+  assert.ok(s.text().includes("The best of the 35 mixes we tried leaves about $874,277"), "the first answer again, at once: every run of the plan as it was is kept");
+});
 
+test("x2 S11: Use this mix on a plan already on the real rates: only the order and conversions change, the saved part stays open", async () => {
+  const p0 = familyPlan(T22); p0.retirement = { ...(p0.retirement ?? {}), taxMode: "brackets" };
+  const s = await drawOrder(p0);
+  openMix(s); await VIEW.searchDone();
+  const share = s.root.all().filter((e) => e.tagName === "LI" && e.textContent.startsWith("A share from every account$873,681"))[0];
+  assert.ok(share, s.text());
+  share.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this mix").click();
+  assert.equal(s.p.retirement.withdrawalSplit, "proportional"); assert.deepEqual(s.p.retirement.withdrawalOrder, ["taxable", "deferred", "free"], "the order is kept");
+  assert.deepEqual(s.p.retirement.rothConversion, { on: true, fillRate: 0.12, untilAge: null });
+  const line = s.root.all().find((e) => /\bnotice\b/.test(e.className) && /\bok\b/.test(e.className));
+  assert.equal(line.firstChild.textContent, "Saved: your plan now takes a share from every account and moves money to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. It leaves about $873,681 at the end, after tax and in today's dollars.");
+  assert.deepEqual(s.root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset.part, e.hasAttribute("open")]), [["orders", false], ["mix", true], ["how", false]]);
+  line.all().find((e) => e.tagName === "BUTTON" && e.textContent === "Undo").click();
+  assert.equal("withdrawalSplit" in s.p.retirement, false); assert.equal(s.p.retirement.rothConversion.on, false); assert.equal(s.p.retirement.taxMode, "brackets");
+  assert.ok(s.text().includes("Back to your plan as it was."));
+});
+
+test("x2 the part on three plans: the retired couple's best pays more tax and says why; a flat plan with conversions saved says why its own figure differs", async () => {
+  // the retired couple (P4): the best moves money at the 22% rate and pays more tax over the plan; its row says it still leaves more
+  const c = await drawOrder(retiredCouplePlan(T22));
+  const cp = openMix(c); await VIEW.searchDone();
+  assert.ok(cp.textContent.includes("best with conversions$907,032Money moved to a Roth each year up to the 22% tax rate, until age 73, when required withdrawals begin. Pays $7,790 more tax over the plan, yet leaves $18,261 more at the end, after tax."), cp.textContent);
+  // a flat-rate plan with conversions saved (F2): the five orders above leave them out ($836,544 on the plan's own row), "your plan"
+  // here has them ($842,697): said in the part, before the rows; not again under "How this is worked out"
+  const p0 = familyPlan(T22); p0.retirement = { ...(p0.retirement ?? {}), rothConversion: { on: true, fillRate: 0.12, untilAge: null } };
+  const f = await drawOrder(p0);
+  const fp = openMix(f); await VIEW.searchDone();
+  const ft = fp.textContent;
+  assert.ok(ft.includes(`${MIX.FLAT_CONV_WORDS}Taxable, then pre-tax, then Rothyour plan$842,697Money moved to a Roth each year up to the 12% tax rate, until age 75, when required withdrawals begin. Tax over the plan`), ft);
+  assert.ok(f.root.all().find((e) => e.dataset?.part === "orders").parentNode.textContent.includes("Taxable, then pre-tax, then Rothyour plan$836,544"), "the five orders' row, without the conversions");
+  const how = f.root.all().find((e) => e.dataset?.part === "how"); how.open = true; how.dispatch("toggle");
+  assert.ok(!how.textContent.includes(MIX.FLAT_MIX_WORDS) && !how.textContent.includes(MIX.FLAT_CONV_WORDS), how.textContent);
+  // the same plan on the real rates: the two "your plan" figures are one, and nothing about the flat rate is said
+  const b0 = structuredClone(p0); b0.retirement.taxMode = "brackets";
+  const b = await drawOrder(b0);
+  const bp = openMix(b); await VIEW.searchDone();
+  assert.ok(!bp.textContent.includes(MIX.FLAT_CONV_WORDS) && bp.textContent.includes("your plan$842,697"), bp.textContent);
+  assert.equal(f.saved.length + b.saved.length + c.saved.length, 0);
+});
+
+test("x2 P2: the order marked best never says it is the usual worst; every other note is as it was", () => {
+  const rf = { key: "roth-first", note: "the usual worst: spends the tax-free money first" };
+  assert.equal(VIEW.noteWords(rf, true), "Spends the tax-free money first: usually the worst order, but the best for this plan");
+  assert.equal(VIEW.noteWords(rf, false), "The usual worst: spends the tax-free money first");
+  const tf = { key: "taxable-first", note: "the textbook order: let tax-sheltered money grow longest" };
+  assert.equal(VIEW.noteWords(tf, true), "The textbook order: let tax-sheltered money grow longest");
+});
 
 test("x2 chooseMix writes through the two pages' own paths: a stop, conversions off, and the share", () => {
   const g = MIX.mixGrid(fam(), { today: T22 });
@@ -687,3 +828,41 @@ test("x2 the plans that run out: the rows that last no longer are left out; a mi
   assert.equal(single.lead, "fails-same"); assert.equal(single.listed, false); assert.deepEqual(single.shown, []);
 });
 
+test("x2 invariance: drawing the page, opening the part and letting the search finish saves nothing; mixes() never changes the plan it reads", async () => {
+  for (const p of [familyPlan(T22), retiredCouplePlan(T22)]) {
+    const s = await drawOrder(p);
+    const was = JSON.stringify(s.p);
+    openMix(s); await VIEW.searchDone();
+    const d = mixPartOf(s); d.open = false; d.dispatch("toggle"); d.open = true; d.dispatch("toggle");
+    assert.equal(s.saved.length, 0); assert.equal(JSON.stringify(s.p), was);
+    const copy = migrate(structuredClone(p)), before = JSON.stringify(copy);
+    MIX.mixes(copy, { today: T22 });
+    assert.equal(JSON.stringify(copy), before);
+  }
+  // the search's key leaves out only what every run sets itself, and the plan's stamp
+  const a = fam(), b = fam();
+  b.meta.updatedAt = "2030-01-01"; b.retirement.taxMode = "brackets"; b.retirement.withdrawalOrder = ["free", "taxable", "deferred"]; b.retirement.rothConversion = { on: true, fillRate: 0.12, untilAge: 70 };
+  assert.equal(VIEW.searchKey(a, T22), VIEW.searchKey(b, T22));
+  b.retirement.spendingMonthly = 4321;
+  assert.notEqual(VIEW.searchKey(a, T22), VIEW.searchKey(b, T22));
+  assert.notEqual(VIEW.searchKey(a, T22), VIEW.searchKey(a, "2027-01-02"));
+});
+
+test("x2 a change of order while the search runs: each run is made on the plan that asked for it", async () => {
+  // the plan's own setting is none of the cells (conversions at the 24% rate), so the plan as it is is a run of its own, and the
+  // order changed mid-search changes it
+  const p0 = familyPlan(T22); p0.retirement = { ...(p0.retirement ?? {}), taxMode: "brackets", rothConversion: { on: true, fillRate: 0.24, untilAge: null } };
+  const s = await drawOrder(p0);
+  openMix(s);
+  // before the runs are done, "Use this order" on pre-tax first (inside "3 more orders"): the page draws again, the part with it
+  s.root.all().find((e) => e.dataset?.part === "orders").all().find((e) => e.tagName === "BUTTON" && e.textContent === "Use this order").click();
+  assert.deepEqual(s.p.retirement.withdrawalOrder, ["deferred", "taxable", "free"]);
+  openMix(s);
+  await VIEW.searchDone();
+  const fresh = MIX.mixes(migrate(structuredClone(s.p)), { today: T22 });
+  const got = VIEW.searched(s.p, T22);
+  assert.ok(got, "every run done");
+  for (const c of fresh.grid.cells) { const k = MIX.runKey(fresh.grid, c); assert.deepEqual(got.runs.get(k), fresh.runs.get(k), k); }
+  assert.equal(fresh.grid.own.inGrid, false);
+  assert.equal(got.top.key, fresh.top.key); assert.equal(got.asIs.endAfterTaxReal, fresh.asIs.endAfterTaxReal);
+});
