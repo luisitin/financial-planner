@@ -16,11 +16,14 @@ let pending = null;
 
 const STYLE = `
 .km-root .km-pick { margin: 12px 0 4px; font-size: var(--fs-sm); color: var(--text-2); }
-.km-root .records .rec-foot { justify-content: flex-end; }
+.km-root .records .rec-foot { margin-top: 2px; }
 .km-root ol.km-how { margin: 0; padding-left: 20px; display: grid; gap: 8px; }
 .km-root .km-note { margin-top: 10px; }
+.km-root .rec-form h3 { margin: 6px 0 10px; }
 `;
 const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+// a button's own display beats the hidden attribute in the page's styles, so both are set
+const show = (el, on) => { el.hidden = !on; el.style.display = on ? "" : "none"; };
 
 export function render(root, ctx) {
   const { ui, fmt, plan, store } = ctx;
@@ -54,11 +57,12 @@ export function render(root, ctx) {
   const rowsOf = new Map(), opened = new Map();
   const kidRow = (k) => {
     const w = rowWords(k, money);
-    const act = ui.button(w.action, () => openForm(k), { class: "secondary small", "aria-label": `${w.action}: ${k.name}'s money`, "aria-expanded": "false" });
+    const act = ui.button(w.action, () => openForm(k), { class: "secondary small", "aria-label": w.aria, "aria-expanded": "false" });
+    // the last line (what is saved) shares its line with the row's button, so a row stays two or three lines tall
     const li = h("li", { dataset: { key: k.id } },
       h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, w.title), h("span", { class: "rec-value" }, w.value)),
-      ...w.lines.map((t) => h("div", { class: "rec-sub" }, t)),
-      h("div", { class: "rec-foot" }, act),
+      ...w.lines.slice(0, -1).map((t) => h("div", { class: "rec-sub" }, t)),
+      h("div", { class: "rec-foot" }, h("span", {}, w.lines[w.lines.length - 1]), h("span", { class: "rec-actions" }, act)),
       note(`row:${k.id}`));
     rowsOf.set(k.id, { li, act });
     return li;
@@ -114,14 +118,14 @@ export function render(root, ctx) {
     const shut = () => {
       const c = close; close = null; opened.delete(k.id); c?.();
       r.act.setAttribute?.("aria-expanded", "false");
-      if (startBtn && !opened.size) startBtn.hidden = false;
+      if (startBtn && !opened.size) show(startBtn, true);
     };
     const build = (holder) => holder.append(h("h3", {}, `${k.name}'s money`), formFor(k, shut));
     if (ui.openUnder && r.li.parentElement) close = ui.openUnder(r.li, build);
     else { const holder = h("li", { class: "rec-form" }); r.li.after(holder); build(holder); close = () => holder.remove(); }
     opened.set(k.id, shut);
     r.act.setAttribute?.("aria-expanded", "true");
-    if (startBtn) startBtn.hidden = true;   // one filled button on the screen: the form's Save
+    if (startBtn) show(startBtn, false);   // one filled button on the screen: the form's Save
   }
   function formFor(k, shut) {
     const m = k.money;

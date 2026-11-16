@@ -503,6 +503,8 @@ test("page, nothing typed: the sentence, one filled button that opens the first 
   assert.equal(outside(root, a.textOf), "Children's money Start with Mia's allowance: how much, how often and what it is meant to cover. What Mia has saved goes in the same place. Then the same for Leo. Set Mia's allowance Each child Mia, 9 No allowance Nothing saved yet Set allowance Leo, 5 No allowance Nothing saved yet Set allowance More on this Is everyone in your plan? People › What do you spend each month? Expenses › What will college cost? Education (529) ›");
   assert.deepEqual(filled(root).map((x) => a.textOf(x)), ["Set Mia's allowance"]);
   assert.equal(boxes(root).length, 0, "no box on the first view"); assert.equal(partsOf(root).length, 0, "nothing to grow yet");
+  // each row's button says what it does, to the eye and to a screen reader: "Set allowance", read "Set Leo's allowance"
+  assert.deepEqual(root.querySelectorAll("button").filter((b) => a.textOf(b) === "Set allowance").map((b) => b.getAttribute("aria-label")), ["Set Mia's allowance", "Set Leo's allowance"]);
   btn(root, "Set Mia's allowance").click();
   assert.equal(filled(root).length, 0, "while the form is open its Save is the one filled button");
   const form = root.querySelector("form");
@@ -582,6 +584,7 @@ test("page, something typed: one line per child and no box; the custodial line; 
   assert.equal(first, "Children's money Mia's allowance comes to $87 a month, and the children have $1,540 saved. Each child Mia, 9 $87 a month $20 every week $340 saved: $40 in a jar, $300 in a bank account Change Leo, 5 No allowance $1,200 saved in a custodial account Change " +
     "Money in a custodial account belongs to the child: you manage it for them until the age your state sets, and then it is theirs. Your budget does not count this allowance until you add it. Add the allowance to spending Growing it our guess · half, 2% › How this is worked out 5 steps › More on this Is everyone in your plan? People › What do you spend each month? Expenses › What will college cost? Education (529) ›");
   assert.equal(boxes(root).length, 0, "no box on the first view of a list with rows");
+  assert.deepEqual(root.querySelectorAll("button").filter((b) => a.textOf(b) === "Change").map((b) => b.getAttribute("aria-label")), ["Change Mia's money", "Change Leo's money"]);
   assert.equal(filled(root).length, 0, "no filled button: the rows and the outlined actions");
   assert.deepEqual(partsOf(root).map((x) => [x.dataset.part, x.dataset.kind, a.textOf(x.querySelector(".fold-title")), a.textOf(x.querySelector(".fold-status")), x.hasAttribute("open")]),
     [["grow", "own", "Growing it", "our guess · half, 2%", false], ["how", "how", "How this is worked out", "5 steps", false]]);
