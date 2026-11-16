@@ -140,3 +140,13 @@ test("Financial independence: nothing saved -> the page's own we-can't-say-yet s
   assert.doesNotMatch(f.text, /can't say/);
   assert.match(f.text, /could stop work|would need to work until|Working out when/);
 });
+
+test("Stress tests: nothing saved -> the page's own we-can't-say-yet sentence, no 'survives 0 of 10 shocks'; the family's answer unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/scenarios/stress-tests/view.js");
+  await saysUnknown("scenarios/stress-tests", UNKNOWN_WHAT, { title: "Stress tests" });
+  const r = await drawn("scenarios/stress-tests", rd());
+  assert.doesNotMatch(r.text, /survives 0 of/);
+  const f = await drawn("scenarios/stress-tests", fam());
+  assert.match(f.text, /Your plan survives/);
+  assert.doesNotMatch(f.text, /can't say/);
+});

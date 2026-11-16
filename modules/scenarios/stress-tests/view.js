@@ -4,6 +4,11 @@
 import { lineChart } from "../../retirement/charts.js";
 import { TAKE_HOME, SURVIVOR_SPENDING, JOB_LOSS_MONTHS, CARE_HOME_YEARLY, FUNERAL, LOWER_RETURNS } from "./compute.js";
 import { needItem } from "../../../core/words.js";
+import { unknownHero } from "../../retirement/needs.js";
+import { unknownWords } from "../../retirement/projection/compute.js";
+
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "which shocks your plan would survive";
 
 let when = "retire";   // when the market shocks hit; a view choice on this device
 
@@ -40,6 +45,9 @@ export function render(page, ctx) {
         ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
+    // nothing saved for retirement and nothing going in: the same "we can't say yet" as Will the money last?, and nothing under it
+    // (whole-app sweep x3, 2026-11-16: "Your plan survives 0 of 10 shocks" beside its "We don't know yet")
+    if (d.unknown) { host.append(unknownHero(ui, unknownWords(d.unknown, UNKNOWN_WHAT), { title: "Stress tests" })); return; }
     const failed = d.scenarios.filter((s) => !s.success);
     host.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, failed.length ? `Your plan survives ${d.passed} of ${d.total} shocks` : `Your plan survives all ${d.total} shocks`),

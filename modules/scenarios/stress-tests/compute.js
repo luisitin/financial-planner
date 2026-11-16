@@ -5,7 +5,7 @@
 // changed, so the answer is "this plan, if that happened", and the spending each version can still
 // carry says by how much to cut, or how much room there is.
 import { project, affordableSpending, copyInputs as cloneInputs, levelFactor } from "../../../core/math/retirement.js";
-import { buildInputs } from "../../retirement/projection/compute.js";
+import { buildInputs, retirementUnknown } from "../../retirement/projection/compute.js";
 import { RETURNS } from "../../retirement/historical/data/returns.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
@@ -185,7 +185,10 @@ export function compute(plan, params = {}) {
   }
 
   const passed = scenarios.filter((s) => s.success).length;
-  return { ready: true, missing: [], when, hitYear, base, scenarios, passed, total: scenarios.length, years, notes, retireYear: I.retireYear, startYear };
+  // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "survives 0 of 10 shocks"
+  // (whole-app sweep x3, 2026-11-16); absent for every other plan
+  const unknown = retirementUnknown(plan, { today });
+  return { ready: true, missing: [], when, hitYear, base, scenarios, passed, total: scenarios.length, years, notes, retireYear: I.retireYear, startYear, ...(unknown ? { unknown } : {}) };
 }
 
 /**

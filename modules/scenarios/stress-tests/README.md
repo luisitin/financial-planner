@@ -67,3 +67,11 @@ out of work, a partner left alone who draws on their own 401(k)) costs that much
 inside their own copy of the plan (`retirement.early.free`, never saved): "can never work again" frees that person's own
 accounts (IRC 72(t)(2)(A)(iii), disability), and the survivor's plan (`survivorInputs`, shared with Life insurance) frees what
 the one who died owned (72(t)(2)(A)(ii)).
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page said
+"Your plan survives 0 of 10 shocks ... The money runs out in 10 of them" on the same plan (Riley, 24, an empty Work 401(k)).
+`compute` now adds `unknown: { nothingSaved }` (projection `retirementUnknown`, the projection's own rule) only when that holds,
+and the page then shows, under its title, the projection's sentence with this page's question ("which shocks your plan would
+survive", `UNKNOWN_WHAT`) and one filled link, "Add what you own ›"; nothing else. For every other plan the result is the same
+as before (absent field; the invariance test compares it with ce79d70 over the invented households).
