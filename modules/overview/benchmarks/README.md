@@ -120,3 +120,11 @@ Words only: every figure, verdict, line and id is as before.
 - "debt-to-income guide" reads "guide to debt payments"; the lede says "These comparisons are a compass", not "Benchmarks";
   the bar's spoken label names the dashed line as the bar does ("aim", "under", "median"), not "benchmark".
 Test: `module.test.mjs` ("C10 plain words", "critic C10 #3").
+
+## Nothing saved yet: no "runs short" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; the two
+retirement rows here added "Your own plan runs short at 65 (see the Will the money last? page)" on the same plan (Riley, 24, an
+empty Work 401(k)), and Quick answers' "Am I saving enough?" repeated it. When the plan's own verdict is short and
+retirement/projection's `retirementUnknown` holds, the clause is left out: the row keeps the rule of thumb's own sentence ("$0 a
+year goes into retirement accounts, employer money included: 0% of pay. The usual aim is 15%."). A short plan with savings
+still says it. No figure or verdict changes.

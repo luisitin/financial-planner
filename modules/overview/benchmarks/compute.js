@@ -10,7 +10,7 @@ import { compute as computeExpenses } from "../../cashflow/expenses/compute.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities, rentsHome, lenderWithHousing, DTI_LINES, shownShare, renterLevel } from "../../balance/liabilities/compute.js";
 import { compute as computeContributions } from "../../retirement/contributions/compute.js";
-import { savingVerdict, householdRetired } from "../../retirement/projection/compute.js";
+import { savingVerdict, householdRetired, retirementUnknown } from "../../retirement/projection/compute.js";
 import { countedBalance } from "../../balance/net-worth/compute.js";
 import { money as fmtMoney, monthsText, monthsWords } from "../../../core/format.js";
 import { monthsNear } from "../../../core/words.js";
@@ -94,9 +94,12 @@ export function compute(plan, params = {}) {
   // them matters: behind but lasting reads "behind the rule of thumb" (not amber), short says so
   let own = null;
   try { own = savingVerdict(plan, { today }); } catch { own = null; }
+  // nothing saved for retirement and nothing going in: Will the money last? says "We don't know yet", so no "Your own plan runs
+  // short at 65" here (whole-app sweep x3, 2026-11-16); the rule of thumb's own sentence stands alone
+  const unknown = own?.verdict === "short" ? retirementUnknown(plan, { today }) : null;
   for (const x of items.filter((y) => (y.id === "savings-multiple" || y.id === "saving-rate") && y.verdict === "behind")) {
     if (own && own.verdict !== "short") { x.verdict = "rule"; x.sentence += " Behind the rule of thumb, but your own plan lasts (see the Will the money last? page)."; }
-    else if (own?.verdict === "short") x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (see the Will the money last? page).`;
+    else if (own?.verdict === "short" && !unknown) x.sentence += ` Your own plan runs short${own.shortAge ? ` at ${own.shortAge}` : ""} (see the Will the money last? page).`;
   }
 
   // 4. cash: months of the bills you have to pay, against the plan's own aim (liquidity's targetMonths: assumptions.emergencyMonths, the

@@ -206,3 +206,20 @@ test("Tax year by year: nothing saved -> the lede says we can't say whether the 
   assert.match(f.text, /of federal tax over retirement/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("How am I doing and Quick answers: nothing saved -> the two retirement rows keep the rule of thumb's sentence without 'Your own plan runs short at 65'; a short plan with savings still says it", async () => {
+  for (const [who, plan] of [["renterDebt", rd()], ["sam", sam()]]) {
+    for (const key of ["overview/benchmarks", "overview/quick"]) {
+      const r = await drawn(key, plan);
+      assert.doesNotMatch(r.text, RUNS_OUT, `${key} for ${who}`);
+    }
+  }
+  const { compute: bench } = await import("../modules/overview/benchmarks/compute.js");
+  const d = bench(rd(), { today: T });
+  const rate = d.items.find((x) => x.id === "saving-rate");
+  assert.equal(rate.sentence, "$0 a year goes into retirement accounts, employer money included: 0% of pay. The usual aim is 15%.");
+  // the clause is still said when the plan has savings and runs short: one dollar in the 401(k) makes it an answer
+  const one = rd(); one.accounts.find((a) => a.type === "401k").balance = 1;
+  const d1 = bench(one, { today: T });
+  assert.match(d1.items.find((x) => x.id === "saving-rate").sentence, /Your own plan runs short at \d+ \(see the Will the money last\? page\)\.$/);
+});
