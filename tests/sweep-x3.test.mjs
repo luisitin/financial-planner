@@ -122,3 +122,11 @@ test("How much to take out: nothing saved -> the page's own we-can't-say-yet sen
   assert.match(f.text, /about \$[\d,]+ a month/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("Order of returns: nothing saved -> the page's own we-can't-say-yet sentence, no 'runs out at 65' rows; the family's rows unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/retirement/sequence-risk/view.js");
+  await saysUnknown("retirement/sequence-risk", UNKNOWN_WHAT, { title: "Why the order of returns matters" });
+  const f = await drawn("retirement/sequence-risk", fam());
+  assert.match(f.text, /Same years, three orders/);
+  assert.doesNotMatch(f.text, /can't say/);
+});

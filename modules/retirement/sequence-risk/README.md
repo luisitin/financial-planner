@@ -42,3 +42,11 @@ is used to calculate expected outputs.
 
 ## Stress test 2026-11-11 (claude-e, retirement leftovers)
 The not-ready page has one button per missing answer (`../needs.js`) (R-A9).
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page said
+"runs out at 65" in all four rows on the same plan (Riley, 24, an empty Work 401(k)). `compute` now adds `unknown: {
+nothingSaved }` (projection `retirementUnknown`, the projection's own rule) only when that holds, and the page then shows, under
+its title, the projection's sentence with this page's question ("how the order of good and bad years would change your plan",
+`UNKNOWN_WHAT`) and one filled link, "Add what you own ›"; nothing else. For every other plan the result is the same as before
+(absent field; the invariance test compares it with ce79d70 over the invented households).

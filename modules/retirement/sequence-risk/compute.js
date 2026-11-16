@@ -3,7 +3,7 @@
 // lasting damage. This page shows it on the household's own plan with three orderings of one
 // real stretch of history plus the plan's own steady assumption.
 import { project } from "../../../core/math/retirement.js";
-import { buildInputs } from "../projection/compute.js";
+import { buildInputs, retirementUnknown } from "../projection/compute.js";
 import { RETURNS } from "../historical/data/returns.js";
 import { worstWindow } from "../withdrawal-strategy/compute.js";
 
@@ -35,5 +35,9 @@ export function compute(plan, params = {}) {
     ready: true, startYear: w.startYear, years, average: { stocks: geo(tail, "stocks"), bonds: geo(tail, "bonds"), inflation: geo(tail, "inflation") },
     runs, steady: { name: "Steady, as assumed", note: `${Math.round(b.inputs.returns.stocks * 1000) / 10}% stocks, ${Math.round(b.inputs.returns.bonds * 1000) / 10}% bonds every year`, ...run(null) },
     retireYear: b.inputs.retireYear, spendingYearly: b.inputs.spending.yearly,
+    // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet", never "runs out at 65" four
+    // times (whole-app sweep x3, 2026-11-16); absent for every other plan
+    ...unknownOf(plan, params),
   };
 }
+const unknownOf = (plan, params) => { const u = retirementUnknown(plan, { today: params.today ?? null }); return u ? { unknown: u } : {}; };
