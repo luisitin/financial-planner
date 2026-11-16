@@ -1006,3 +1006,90 @@ test("critic C10 #2: an optional IRA, 401(k) or business-plan step says what it 
   // the figures and order are as before
   assert.equal(ira.roomYearly, compute(familyPlan(T), { today: T }).steps.find((x) => x.id === "ira").roomYearly);
 });
+
+test("gy1: a tax filed on Expenses is counted once: estimated tax left out of spending, a property tax kept (one rule with Budget (50/30/20))", async () => {
+  const { spendingWords } = await import("./compute.js");
+  const { inMonthsTax } = await import("../../cashflow/forecast/compute.js");
+  const { compute: budget } = await import("../../cashflow/budget-percent/compute.js");
+  const base = compute(familyPlan(), { today: TODAY }).spare;
+  assert.equal(base.taxesListed, undefined, "no key without such a line");
+  // $4,200 of quarterly estimated tax ($1,400 a month) pays the tax the lines above already take off: by hand, nothing moves
+  const estLine = { id: "x-est", name: "Quarterly estimated taxes", category: "taxes", amount: 4200, period: "quarterly", essential: true };
+  assert.equal(inMonthsTax(estLine), true);
+  const est = familyPlan(); est.expenses.push(estLine);
+  const e = compute(est, { today: TODAY }).spare;
+  near(e.taxesListed, 1400, 1e-9);
+  near(e.spending, base.spending, 1e-9);
+  near(e.monthly, base.monthly, 1e-9);
+  near(e.federalTax + e.payrollTax + e.stateTax, base.federalTax + base.payrollTax + base.stateTax, 1e-9);
+  // a property tax filed there ($4,800 a year) is a bill of its own: $400 a month more spending, $400 less left over
+  const prop = familyPlan(); prop.expenses.push({ id: "x-pt", name: "Property tax", category: "taxes", amount: 4800, period: "annual", essential: true });
+  const t = compute(prop, { today: TODAY }).spare;
+  assert.equal(t.taxesListed, undefined);
+  near(t.spending - base.spending, 400, 1e-9);
+  near(t.monthly - base.monthly, -400, 1e-9);
+  // the same figure as Budget (50/30/20) in all three
+  for (const p of [familyPlan(), est, prop]) { const b = budget(p, { today: TODAY }); near(b.saving.leftover - b.saving.short, compute(p, { today: TODAY }).spare.monthly, 0.01); }
+  // the lines on screen still add up to the spare money
+  near(e.gross - monthLines(e).reduce((s, x) => s + x.amount, 0), e.monthly, 1e-6);
+  // the note under the lines, each case (gy1 fix P4: the figure, the Expenses total and the line's own name)
+  const mo = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  assert.equal(spendingWords(base, mo), "Spending is the Expenses page's monthly total");
+  assert.deepEqual(e.taxesNames, ["Quarterly estimated taxes"]); assert.equal(e.taxesTyped, undefined, "all of it in the tax above");
+  assert.equal(spendingWords(e, mo), `Spending is ${mo(e.spending)}: your Expenses list (${mo(e.spending + 1400)}) without the $1,400 a month of "Quarterly estimated taxes", because the tax lines above already cover it.`);
+  assert.equal(spendingWords({ taxesListed: 0.3 }, mo), "Spending is the Expenses page's monthly total", "under half a dollar: not worth a clause");
+  assert.equal(spendingWords({ spending: 5795.57, taxesListed: 1137.76, taxesTyped: 1400, taxesNames: ["Quarterly estimated taxes"] }, mo),
+    'Spending is $5,796: your Expenses list ($6,933) without $1,138 of the $1,400 a month of "Quarterly estimated taxes": the tax lines above cover that much, and the other $262 stays in spending.');
+  assert.equal(spendingWords({ spending: 4000, taxesListed: 500, taxesNames: ["Federal estimated tax", "State estimated tax"] }, mo),
+    'Spending is $4,000: your Expenses list ($4,500) without the $500 a month of "Federal estimated tax" and "State estimated tax", because the tax lines above already cover it.');
+});
+
+test("gy1 fix F3, F4: a tax filed on Expenses is left out only as far as the tax lines hold it: what she pays above them, and a state's tax where none is counted, stay spending", () => {
+  const base = compute(familyPlan(), { today: TODAY }).spare, tax = base.federalTax + base.payrollTax + base.stateTax;
+  // estimated tax $300 a month above the month's whole tax: the tax lines hold all they can, $300 stays in spending
+  const big = Math.ceil(tax) + 300;
+  const p = familyPlan(); p.expenses.push({ id: "x-big", name: "Estimated tax", category: "taxes", amount: big, period: "monthly", essential: true });
+  const s = compute(p, { today: TODAY }).spare;
+  near(s.taxesListed, tax, 1e-6); near(s.taxesTyped, big, 1e-6);
+  near(s.spending - base.spending, big - tax, 1e-6);
+  near(s.monthly - base.monthly, -(big - tax), 1e-6, "the month counts what is paid, the larger of the two");
+  near(s.gross - monthLines(s).reduce((t, x) => t + x.amount, 0), s.monthly, 1e-6);
+  // a state income tax in Washington (no state income tax): a bill like any other, and no note about it
+  const wa = (fn) => { const q = familyPlan(); q.household.state = "WA"; fn?.(q); return compute(q, { today: TODAY }).spare; };
+  const w0 = wa(), w = wa((q) => q.expenses.push({ id: "x-st", name: "State income tax", category: "taxes", amount: 300, period: "monthly", essential: true }));
+  assert.equal(w.stateTax, 0); assert.equal(w.taxesListed, undefined);
+  near(w.monthly - w0.monthly, -300, 1e-6);
+  // no state set: the same
+  const none = (fn) => { const q = familyPlan(); q.household.state = ""; fn?.(q); return compute(q, { today: TODAY }).spare; };
+  near(none((q) => q.expenses.push({ id: "x-st", name: "State income tax", category: "taxes", amount: 300, period: "monthly", essential: true })).monthly - none().monthly, -300, 1e-6);
+});
+
+test("gy1 fix P1: the spending list may be missing money: the same amount the Dashboard names, under the figure it could lower", async () => {
+  const { missingWords } = await import("./compute.js");
+  const money = (n) => "$" + (Math.round(n / 10) * 10).toLocaleString("en-US");
+  assert.equal(missingWords({ monthly: 3003 }, 1218, money), "Your spending list may be missing about $1,220 a month, so what is left over could be that much lower.");
+  assert.equal(missingWords({ monthly: -538 }, 1218, money), "Your spending list may be missing about $1,220 a month, so the month could be that much further short.");
+  assert.equal(missingWords({ monthly: -2000 }, 1218, money, true), "Your spending list may be missing about $1,220 a month, so you may take that much more from savings.");
+  // the page: Ruth and Sam, whose list the Dashboard says may be missing about $1,220 a month
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const guesses = await import("../guesses/module.js");
+  const { spendMissing, estimators, TABLES } = await import("../guesses/compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k], isAttrs(a) ? { attrs: a } : {}), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), table: () => node("table"), uid: () => "x" };
+  const gm = { ...guesses.default, group: "overview", id: "guesses" };
+  const draw = (plan, on = true) => { const root = node("root"); render(root, { ui, fmt: { ...fmt, today: () => T }, plan, store: { update() {} }, modules: new Map(on ? [["overview/guesses", gm]] : []), isReady: () => true, features: { enabled: () => true } }); return root.textContent.replace(/\s+/g, " "); };
+  const rest = spendMissing(retiredCouplePlan(T), { estimators, tables: TABLES, today: T }).rest;
+  assert.ok(rest > 1000, `${rest}`);
+  const text = draw(retiredCouplePlan(T));
+  assert.ok(text.includes(`Your spending list may be missing about ${money(rest)} a month, so what is left over could be that much lower. Check your list ›`), text.slice(0, 900));
+  assert.match(text, /Left over each month \$3,003/);
+  // said everything is listed ("That's everything" on the Dashboard or Expenses): no such line, as the card is gone there too
+  const done = retiredCouplePlan(T); done.guide = { ...(done.guide ?? {}), spendComplete: T };
+  assert.doesNotMatch(draw(done), /may be missing/);
+  // our guesses' page not in use: no line (the Dashboard shows no card then either)
+  assert.doesNotMatch(draw(retiredCouplePlan(T), false), /may be missing/);
+});

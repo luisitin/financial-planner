@@ -17,6 +17,7 @@ import { savingVerdict, drawingAsPlanned } from "../../retirement/projection/com
 import { compute as computeLimits } from "../../investments/limits/compute.js";
 import { offer as payoffOffer, savedPlan } from "../../debt/payoff/compute.js";
 import { yearTaxes, heldAfterTax, aboutTen, fullKind } from "../../cashflow/budget-percent/compute.js";
+import { monthsTaxOf, taxNamesWords } from "../../cashflow/forecast/compute.js";
 import { compute as computeBusiness } from "../../career/business/compute.js";
 import { compute as computeBenefits, DEFAULT_TIERS, matchAt, fullMatchAt } from "../../career/benefits/compute.js";
 import { thisYear as rmdThisYear } from "../../retirement/rmd/compute.js";
@@ -63,7 +64,9 @@ export const FROM_CASH_MONTHS = 3;
  * compute(plan, { today }) -> {
  *   ready, missing, needs (when not ready: [{ key, words, label, go }], the pages that fill what is missing, in order),
  *   spare: { monthly, leftOver (core/math/leftover.js leftOverOf: before goal saving), year (core/math/leftover.js yearSaving: what the month builds up in a year), fromLeft? (the left-over note while spending was worked out from it), gross, guessedShare?, guessedMonthly?, waits? (Expenses' guessed share of the month, only when the plan
- *            holds guesses; waits: half or more of it is ours, so the figure is not a verdict and no step is dated from it), businessCosts, federalTax, payrollTax, stateTax, careLost (the child care account's money it would lose), stateKnown, state, spending, retirementSaving, goalSaving, debtExtra,
+ *            holds guesses; waits: half or more of it is ours, so the figure is not a verdict and no step is dated from it), businessCosts, federalTax, payrollTax, stateTax, careLost (the child care account's money it would lose), stateKnown, state, spending (Expenses' month less taxesListed),
+ *            taxesListed? (a month: the part of lines filed under "Taxes not withheld" that the tax above already holds, cashflow/forecast monthsTaxOf; only when there is one), taxesNames? (those lines' names, with it),
+ *            taxesTyped? (those lines' whole month, only when more than taxesListed: the rest stays in spending), retirementSaving, goalSaving, debtExtra,
  *     heldGross (uneven pay the plan does not count on: income's heldMonthly), held (that, less the tax on it: what the month loses),
  *     full (monthly + held: what a month that brings the Income page's amount leaves), fullAbout (full to the nearest $10),
  *     fullKind ("ahead" | "even" | "short": Budget (50/30/20)'s fullKind, how every page words the full month) }
@@ -81,6 +84,42 @@ export const FROM_CASH_MONTHS = 3;
  * }
  * Steps that do not apply to this household (no 401(k), no HSA) are left out.
  */
+/**
+ * spendingWords(spare, mo) -> what the Spending line of "Each month's money" holds, for the note under the lines (gy1,
+ * 2026-11-16; gy1 fix P4: the figure, the Expenses total it differs from and the line's own name, in its own sentence), one
+ * case each (`mo` formats a month's figure):
+ *   no tax filed on Expenses   "Spending is the Expenses page's monthly total" (the note goes on "; saving is ...")
+ *   all of it in the tax above 'Spending is $5,826: your Expenses list ($7,226) without the $1,400 a month of "Estimated tax",
+ *                               because the tax lines above already cover it.'
+ *   more than the tax above    'Spending is $5,796: your Expenses list ($6,933) without $1,138 of the $1,400 a month of
+ *                               "Quarterly estimated taxes": the tax lines above cover that much, and the other $262 stays in
+ *                               spending.'
+ * A sentence of its own ends with a period; the view goes on "Saving is ...".
+ */
+export function spendingWords(s, mo) {
+  const out = Number(s?.taxesListed) || 0;
+  if (!(out > 0.5)) return "Spending is the Expenses page's monthly total";
+  const typed = Math.max(out, Number(s.taxesTyped) || 0), what = taxNamesWords(s.taxesNames), lead = `Spending is ${mo(s.spending)}: your Expenses list (${mo(s.spending + out)}) without`;
+  return typed - out > 0.5
+    ? `${lead} ${mo(out)} of the ${mo(typed)} a month of ${what}: the tax lines above cover that much, and the other ${mo(typed - out)} stays in spending.`
+    : `${lead} the ${mo(typed)} a month of ${what}, because the tax lines above already cover it.`;
+}
+
+/**
+ * missingWords(spare, rest, money, drawing) -> the line under "Each month's money" while Expenses' list looks far short of
+ * what households like this one spend (overview/guesses spendMissing, the Dashboard's "Is something missing?" card; gy1 fix
+ * P1: the Dashboard said "Depends on your spending: your list may be missing about $1,220 a month" while this page said
+ * $3,003 left with no word of it). `rest`: what the list may be missing, a month; `money` formats it (to the $10, as the
+ * Dashboard says it). One sentence each case:
+ *   left over        "Your spending list may be missing about $1,220 a month, so what is left over could be that much lower."
+ *   short            "Your spending list may be missing about $1,220 a month, so the month could be that much further short."
+ *   living on savings "Your spending list may be missing about $1,220 a month, so you may take that much more from savings."
+ */
+export function missingWords(s, rest, money, drawing = false) {
+  const lead = `Your spending list may be missing about ${money(rest)} a month, so`;
+  return drawing ? `${lead} you may take that much more from savings.` : (Number(s?.monthly) || 0) >= 0 ? `${lead} what is left over could be that much lower.` : `${lead} the month could be that much further short.`;
+}
+
 /**
  * monthLines(spare, debtPlan) -> [{ key, label, amount }]: the lines "Each month's money" shows between the pay and what is
  * spare, in order, so that pay less the lines is the spare money (gross - sum = monthly; `amount` a month, the federal tax
@@ -153,8 +192,17 @@ export function monthOf(plan, today) {
   const goalSaving = gl.goals.filter((g) => g.status !== "done").reduce((s, g) => s + (Number(g.monthly) || 0), 0);
   // a rental typed only on Rental analysis brings its rent in too (yearTaxes `rentOwn`; left2 fix round 2, N-1): in "Pay and
   // other income", its empty months and costs on the rental line
+  // spending: Expenses' month, less a line filed under "Taxes not withheld" that pays the tax worked out above (estimated
+  // tax, income tax, plain "Taxes"), as much of it as that tax holds, by the one rule Budget (50/30/20) asks too
+  // (cashflow/forecast monthsTaxOf), so that tax is not taken twice; a property tax or another bill filed there stays
+  // spending (gy1, 2026-11-16: $1,400 a month of quarterly estimated tax on top of the $1,138 the month takes off), and so
+  // does the part of such a line above the month's tax ($262 of that $1,400: the month counts what she pays) and a state's
+  // income tax where the month counts none (gy1 fix F3, F4). `taxesListed` (and the lines' names, and their whole month
+  // when more than that) only when there is one.
+  const tax = monthsTaxOf(exp.items, { tax: (federalYear + payroll + stateYear) / 12, state: stateKnown ? stateYear / 12 : 0 }), taxesListed = tax.listed;
   const spare = { gross: inc.monthly + rentOwn / 12, businessCosts: businessCosts / 12, federalTax: federalYear / 12, payrollTax: payroll / 12, stateTax: stateYear / 12, careLost: careLost / 12, rentCosts: rentCosts / 12, rentLoan: rentLoan / 12, rentOwn: rentOwn / 12, stateKnown, state: plan.household?.state ?? "",
-    spending: exp.monthly, retirementSaving: con.yearly / 12, goalSaving };
+    spending: taxesListed > 0.005 ? exp.monthly - taxesListed : exp.monthly, retirementSaving: con.yearly / 12, goalSaving,
+    ...(taxesListed > 0.005 ? { taxesListed, taxesNames: tax.names, ...(tax.typed - taxesListed > 0.005 ? { taxesTyped: tax.typed } : {}) } : {}) };
   // the saved debt plan (Pay off debts): an extra a month on top of the required payments is money already spoken for, until
   // the debts it is aimed at are gone (all of them, when it is aimed at none: it rolls from one to the next)
   // (Pay off debts' savedPlan: the one reading Budget (50/30/20) takes too, review 2026-11-02, round 5)

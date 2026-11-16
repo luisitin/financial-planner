@@ -110,9 +110,24 @@ spending". No yearly figure is stated here, so no number on this page contradict
 
 `yearTaxes` is also Next best action's tax for the month (2026-11-02), and `heldAfterTax` its careful month (review
 2026-11-02), and the saved debt plan's extra the same `savedPlan` (round 5), so the left over here (left over − short) and
-the app's left-over figure are the same number **unless** (review 2026-11-02, round 5, narrowed to what is true)
-Expenses lists a tax (category "taxes", such as a property tax): this page leaves it out of needs, as it takes taxes off
-income itself, while Next best action counts it as spending (Ruth and Sam: $400 a month, $2,528 here against $2,128).
+the app's left-over figure are the same number. **A tax filed on Expenses** (gy1, 2026-11-16): a line filed under "Taxes
+not withheld" is left out of needs only when it pays the tax this page takes off income (estimated or quarterly tax, a
+federal, state or income tax, self-employment tax, "Taxes", or no name), by the rule Next best action asks too
+(`cashflow/forecast` `inMonthsTax`), and only as much of it as this page's tax holds (`monthsTaxOf(going, { tax: (federal
++ payroll + state) / 12, state })`, gy1 fix): `taxesListed` is what is left out, a month; the part of a line above the
+month's tax, and a state's income tax where the month counts none, stays in its group as a bill (`items` carries the line
+with its kept part), so the month counts the larger of what is paid and what is worked out. A property tax, a car tax, a
+city's or county's tax, a fee for filing or a debt to the tax office filed there is a need like any bill. Before, every
+line filed there was left out, so Ruth and Sam's $400-a-month property tax read as $400 more left over here ($3,403) than
+on every other page ($3,003); both now say $3,003. Nadia (11-self-employed) pays $1,400 a month of quarterly estimated tax
+where this page works out $1,138: $262 stays a need, and both pages say she is $800 a month short. A line below zero (a
+refund or credit typed on Expenses) counts here as on Expenses and Next best action (it lowers its group; before, it was
+dropped and this page read lower than the others, gy1 fix F5). `taxesNames` and, while more is typed than is left out,
+`taxesTyped` say the notice (`taxesListedWords`, one sentence each case):
+'The $1,400 a month of "Estimated tax" on Expenses is left out here: this page already takes that tax off income.' /
+'$1,138 of the $1,400 a month of "Quarterly estimated taxes" on Expenses is left out here: this page takes that much tax
+off income already. The other $262 stays in your spending.' Sources: IRS "Estimated taxes" and Topic no. 503, in
+`modules/overview/next-best-action/README.md`, "A tax filed on Expenses is counted once".
 **The full month**: `saving.full` = left over − short + `month.held`, what a month that brings the Income page's amount
 leaves, and `saving.fullAbout` = `aboutTen(full)`, to the nearest $10, the one rounding every page uses for it (`aboutTen`
 lives here beside `heldAfterTax`; Next best action imports it). The short-month notice says "about $X" with it.
@@ -157,9 +172,8 @@ gives another figure, the sentence in How this is worked out, and no new key any
 
 ## Ideas / not yet
 - The month's actual spending from the ledger instead of the Expenses page; extra debt payments counted as saving.
-- Keep a property tax filed under taxes on Expenses among the needs (only income tax is taken off here), so the left over
-  is always the app's left-over figure (review 2026-11-02, round 5; tested as a known gap in `module.test.mjs`). The saved
-  debt plan's extra, the other gap, is counted since the second review of round 5.
+- (Done, gy1 2026-11-16: a property tax filed under taxes on Expenses is a need, and the left over is the app's figure; the
+  saved debt plan's extra, the other gap, is counted since the second review of round 5.)
 
 ## Child care account and separate returns, fourth pass (2026-11-02)
 - **Money the account would lose** (`yearTaxes` `careLost`, `month.careLost`): the election beyond the care it can pay back

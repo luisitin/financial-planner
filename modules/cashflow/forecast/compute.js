@@ -362,6 +362,69 @@ export function typedIncomeTax(x) {
   return /estimat|quarter|\bq[1-4]\b/i.test(name) || (generic && x.period !== "annual" && x.period !== "once");
 }
 
+/** A city's, county's or school district's own tax: the month's tax (Budget (50/30/20)'s yearTaxes) holds no local tax. */
+const LOCAL_TAX_NAME = /\b(city|local|county|municipal|borough|township|nyc|school\s+district)\b/i;
+/**
+ * inMonthsTax(expense) -> true when a line filed under "Taxes not withheld" on Expenses pays tax the month's one tax figure
+ * already takes off income (Budget (50/30/20)'s `yearTaxes`: federal income tax, Social Security and Medicare or
+ * self-employment tax, the state's income tax), so the money left each month leaves it out of spending instead of taking
+ * that tax twice: an estimated or quarterly tax, a federal, state or income tax, self-employment tax, or a line with no name
+ * or just "Taxes" (the category's own meaning). A line filed there whose name says it is something else is spending like
+ * any other bill: another tax ("Property tax", "Car tax", "Sales tax": OTHER_TAX_NAME), a city's or county's tax
+ * (LOCAL_TAX_NAME), a fee for filing ("Tax preparer": TAX_FEE_NAME), or a debt to the tax office (last year's tax, back
+ * taxes, a penalty, an installment agreement: TAX_DEBT_NAME; a payment plan, what is owed or a balance: TAX_SOFT_DEBT_NAME,
+ * unless the name says estimated or quarterly). Filed under any other category: spending. How much of such a line the month
+ * holds (its tax, a state's line only the state's part) is monthsTaxOf's. Budget (50/30/20) and Next best
+ * action both ask it, so their money left each month is one figure (gy1, 2026-11-16: Budget left a $400 property tax out,
+ * Next best action took $1,400 of quarterly estimated tax on top of the tax it works out). IRS "Estimated taxes": estimated
+ * tax pays income tax and self-employment tax; IRS Topic 503: real property taxes are a kind of tax of their own.
+ */
+export function inMonthsTax(x) {
+  if (x?.category !== "taxes") return false;
+  const name = String(x?.name ?? "").trim();
+  if (OTHER_TAX_NAME.test(name) || LOCAL_TAX_NAME.test(name) || TAX_FEE_NAME.test(name) || TAX_DEBT_NAME.test(name)) return false;
+  return !(TAX_SOFT_DEBT_NAME.test(name) && !SAYS_ESTIMATE.test(name) && !/\bquarter(ly|s)?\b|\bq[1-4]\b/i.test(name));
+}
+/** A line that pays only a state's income tax ("State income tax", "NY estimated tax"): it names a state and not the federal tax. */
+export function stateOnlyTax(x) {
+  const name = String(x?.name ?? "").trim();
+  return !FEDERAL_NAME.test(name) && (STATE_NAME.test(name) || STATE_CODE.test(name));
+}
+/**
+ * monthsTaxOf(items, cover) -> { listed, typed, names, lines: [{ x, out, kept }] }: how much of the active Expenses lines
+ * (Expenses' compute `items`) that inMonthsTax names the month's one tax figure already holds, so that much is left out of
+ * spending and no more (gy1 fix, 2026-11-16). `cover` (a month): `tax`, the month's tax (federal income tax + Social Security
+ * and Medicare or self-employment tax + the state's income tax, below zero counted as none), and `state`, the state's part
+ * (0 while the state's tax is not counted). A line that pays only a state's tax (stateOnlyTax) is left out up to `state`, so
+ * where the month counts no state tax (Washington, Texas, or no state set) a typed state income tax stays spending; every
+ * other line up to what is left of `tax`, in Expenses' order. The part of a line above it stays spending (`kept`): a
+ * self-employed person paying $1,400 a month of estimated tax where the month works out $1,138 has $262 more spending, so
+ * the month counts the larger of the two, what she pays. Without `cover` nothing is capped (every such line is left out).
+ * `listed`: the month left out; `typed`: those lines' whole month; `names`: their names (the category's label for one with
+ * no name), for the words.
+ */
+export function monthsTaxOf(items, cover = null) {
+  const lines = (items ?? []).filter((x) => x && x.active && x.monthly > 0 && inMonthsTax(x));
+  const cap = (n) => (Number.isFinite(Number(n)) ? Math.max(0, Number(n)) : 0);
+  let left = cover ? cap(cover.tax) : Infinity, stateLeft = cover ? Math.min(cap(cover.state), left) : Infinity;
+  const out = new Map();
+  // the state's own lines first, against the state's part; then the rest against what is left of the month's tax
+  for (const x of lines.filter(stateOnlyTax)) { const o = Math.min(x.monthly, stateLeft, left); out.set(x, o); if (cover) { stateLeft -= o; left -= o; } }
+  for (const x of lines.filter((y) => !stateOnlyTax(y))) { const o = Math.min(x.monthly, left); out.set(x, o); if (cover) left -= o; }
+  const rows = lines.map((x) => ({ x, out: out.get(x), kept: x.monthly - out.get(x) }));
+  const counted = rows.filter((r) => r.out > 0.005);
+  return { listed: counted.reduce((t, r) => t + r.out, 0), typed: counted.reduce((t, r) => t + r.x.monthly, 0), names: counted.map((r) => String(r.x.name ?? "").trim() || r.x.categoryLabel || "Taxes not withheld"), lines: rows };
+}
+/** taxesListedOf(items, cover) -> a month: the part of the active Expenses lines that monthsTaxOf leaves out of spending. */
+export function taxesListedOf(items, cover = null) {
+  return monthsTaxOf(items, cover).listed;
+}
+/** The tax lines a page names, in its own words: one or two by their names in quotes, more as "your 3 tax lines". */
+export function taxNamesWords(names) {
+  const n = (names ?? []).map((x) => `"${x}"`);
+  return n.length === 1 ? n[0] : n.length === 2 ? `${n[0]} and ${n[1]}` : n.length ? `your ${n.length} tax lines` : "the tax listed";
+}
+
 /**
  * The Debts page's monthly payments the Expenses page adds (its `debtFromDebts`, the debts in its `fromDebts`): each debt still owed with a payment, until its
  * payoff month (the Debts page's own date), the mortgage left out when it is filed under housing. Each line carries the words that

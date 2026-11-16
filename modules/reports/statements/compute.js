@@ -61,6 +61,12 @@ export function compute(plan, params = {}) {
   if (nb.ready) {
     const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
     const s = nb.spare;
+    // Spending's lines add up to Total spending: a tax filed on Expenses that the tax lines above already hold (Next best
+    // action's spare.taxesListed, cashflow/forecast monthsTaxOf) comes off the "Taxes not withheld" line, which goes when
+    // nothing is left of it and is named for what stays when something is (gy1 fix F1: Nadia's lines came to $83,200 and the
+    // total said $66,400)
+    const listed = Number(s.taxesListed) || 0;
+    const cats = exp.byCategory.map((c) => (c.category === "taxes" && listed > 0.005 ? { ...c, monthly: c.monthly - listed, less: true } : c)).filter((c) => !c.less || c.monthly * 12 >= 0.5);
     income = {
       // rent from a rental no Income line holds (Next best action's rentOwn, typed only on Rental analysis): its own line, so
       // the lines add up to Total income (left2 fix round 3, NEW-1)
@@ -68,7 +74,7 @@ export function compute(plan, params = {}) {
       federalTax: s.federalTax * 12, payrollTax: s.payrollTax * 12, stateTax: (s.stateTax ?? 0) * 12, businessCosts: (s.businessCosts ?? 0) * 12,
       careLost: (s.careLost ?? 0) * 12, rentCosts: (s.rentCosts ?? 0) * 12, rentLoan: (s.rentLoan ?? 0) * 12,
       debtExtra: (s.debtExtra ?? 0) * 12, held: (s.held ?? 0) * 12,
-      expenses: exp.byCategory.map((c) => ({ label: c.label, yearly: c.monthly * 12 })), expensesTotal: s.spending * 12,
+      expenses: cats.map((c) => ({ label: c.less ? `${c.label}, beyond the tax above` : c.label, yearly: c.monthly * 12 })), expensesTotal: s.spending * 12,
       retirementSaving: s.retirementSaving * 12, goalSaving: s.goalSaving * 12, net: s.monthly * 12,
     };
     if (m) {
@@ -79,7 +85,7 @@ export function compute(plan, params = {}) {
       const catMark = (c) => sumMark([...exp.active.filter((x) => x.category === c).map((x) => ({ ours: m.expenses.has(x.id), amount: x.monthly })), ...(c === "debt" ? debtPay : [])]);
       const incMarks = Object.keys(inc.byType).map(typeMark);
       income.lines = income.lines.map((l) => { const t = Object.keys(inc.byType).find((k) => (INCOME_TYPES[k]?.label ?? k) === l.label); const mk = t ? typeMark(t) : null; return mk ? { ...l, ours: mk } : l; });
-      income.expenses = income.expenses.map((e, i) => { const mk = catMark(exp.byCategory[i]?.category); return mk ? { ...e, ours: mk } : e; });
+      income.expenses = income.expenses.map((e, i) => { const mk = catMark(cats[i]?.category); return mk ? { ...e, ours: mk } : e; });
       const ours = { total: incMarks.some(Boolean) ? PARTLY : null, expensesTotal: s.guessedMonthly > 0 ? (s.spending - s.guessedMonthly < 5 ? GUESS : PARTLY) : null };
       if (ours.total || ours.expensesTotal) income.ours = ours;
     }

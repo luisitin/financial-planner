@@ -51,3 +51,31 @@ test("verify: net worth grows by the year's saving (core/math/leftover.js) plus 
   }
   assert.ok(extra > 0, "a plan with a saved debt plan's extra was checked");
 });
+
+test("gy1 fix F1: Spending's lines add up to Total spending, a tax filed on Expenses that the tax lines hold taken off its line", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const T = "2026-11-16";
+  let n = 0;
+  for (const a of ARCHETYPES) {
+    const d = compute(migrate(structuredClone(a.build())), { today: T });
+    if (!d.income) continue;
+    near(d.income.expenses.reduce((t, e) => t + e.yearly, 0), d.income.expensesTotal, 0.5);
+    n++;
+  }
+  assert.ok(n >= 10, `${n} households`);
+  // Nadia, who works for herself: $16,800 a year of quarterly estimated tax, of which the tax lines above hold $13,653; the
+  // other $3,147 stays a line of its own, named for it, and the lines add up (they came to $83,200 against $66,400)
+  const p = migrate(structuredClone(ARCHETYPES.find((x) => x.id === "11-self-employed").build()));
+  const i = compute(p, { today: T }).income;
+  const tax = i.expenses.find((e) => /^Taxes not withheld/.test(e.label));
+  assert.equal(tax.label, "Taxes not withheld, beyond the tax above");
+  near(tax.yearly, 16800 - (i.federalTax + i.payrollTax + i.stateTax), 0.5);
+  near(i.expenses.reduce((t, e) => t + e.yearly, 0), i.expensesTotal, 0.5);
+  near(i.total - i.federalTax - i.payrollTax - i.stateTax - i.businessCosts - i.expensesTotal - i.retirementSaving - i.goalSaving - i.debtExtra - i.held, i.net, 0.5);
+  // all of it held by the tax lines: the line goes
+  const small = migrate(structuredClone(familyPlan())); small.expenses.push({ id: "x-est", name: "Estimated tax", category: "taxes", amount: 300, period: "monthly", essential: true });
+  const s = compute(small, { today: TODAY }).income;
+  assert.ok(!s.expenses.some((e) => /^Taxes not withheld/.test(e.label)));
+  near(s.expenses.reduce((t, e) => t + e.yearly, 0), s.expensesTotal, 0.5);
+});

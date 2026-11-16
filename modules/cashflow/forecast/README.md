@@ -216,3 +216,30 @@ Its "Add ..." / "Update this balance" button opens Net worth with that form open
 ## Touch and input stress test (2026-11-11, claude-g)
 - Under the day-by-day line, "Change bills on Expenses" and "Change what comes in" as buttons (F2: the pages were named with no
   link).
+
+## Which tax filed on Expenses the month already holds (gy1, 2026-11-16, claude-b)
+Not used by this page's forecast; it lives here beside `typedIncomeTax` because it reads a line's name with the same rules
+(`OTHER_TAX_NAME`, `TAX_FEE_NAME`, `TAX_DEBT_NAME`, `TAX_SOFT_DEBT_NAME`, `SAYS_ESTIMATE`), so there is one copy of them.
+`inMonthsTax(line)` -> true when a line filed under "Taxes not withheld" pays tax the month's one tax figure (Budget
+(50/30/20)'s `yearTaxes`: federal income tax, Social Security and Medicare or self-employment tax, the state's income tax)
+already takes off: an estimated or quarterly tax, a federal, state or income tax, self-employment tax, "Taxes", or no
+name. False for a line filed under any other category, and for a name that says another tax (property, real estate, car,
+sales, payroll, franchise ...), a city's, county's or school district's tax (`LOCAL_TAX_NAME`: the month holds no local
+tax), a fee for filing, or a debt to the tax office (last year's tax, back taxes, a penalty, an installment agreement; a
+payment plan, what is owed or a balance unless the name says estimated or quarterly).
+
+How much of such a line the month holds (gy1 fix, 2026-11-16): `monthsTaxOf(items, { tax, state })` -> `{ listed, typed,
+names, lines: [{ x, out, kept }] }`. `tax` is the month's tax (federal + payroll or self-employment + state, a month; below
+zero counted as none), `state` its state part (0 while the state's tax is not counted). A line that pays only a state's
+tax (`stateOnlyTax`: it names a state, a state code or a revenue department and not the federal tax) is left out up to
+`state`; every other line up to what is left of `tax`, in Expenses' order:
+`out = min(line, what the month's tax still holds)`, `kept = line − out` (spending), `listed = Σ out`.
+So a typed state income tax in Washington, Texas or with no state set stays spending (the month takes no state tax), and
+the part of an estimated tax above the month's whole tax stays spending: Nadia (invented, 11-self-employed) pays $1,400 a
+month where the month works out $1,138, so $1,138 is left out and $262 stays, and the month counts the larger of the two,
+what she pays. `taxesListedOf(items, cover)` -> `listed`. `taxNamesWords(names)` -> the lines as the pages name them
+('"Estimated tax"', '"A" and "B"', "your 3 tax lines"). Budget (50/30/20) and Next best action both ask it with their own
+(equal) month's tax, so their money left each month is one figure; the reasons and sources are in
+`modules/overview/next-best-action/README.md`, "A tax filed on Expenses is counted once". Tests: `module.test.mjs`
+"inMonthsTax: ..." (each family of names kept and left out) and "monthsTaxOf: ..." (above the month's tax, a state's
+line where none is counted and in New York, a federal and a state line together, a credit, an absurd amount, the names).

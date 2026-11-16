@@ -100,7 +100,39 @@ test("needs are the bills marked \"I must pay this\", wants the rest, savings re
   near(done.saving.goals, d.saving.goals - 300);
 });
 
-test("taxes listed on Expenses are left out (they come off income already); the Debts page's payments are needs when Expenses lists none", () => {
+test("the notice while income tax is filed on Expenses (gy1; gy1 fix P4, F4: the line's own name, and the part above this page's tax)", async () => {
+  const { taxesListedWords } = await import("./compute.js");
+  const dollars = (n) => "$" + Math.round(n).toLocaleString("en-US");
+  assert.equal(taxesListedWords({ taxesListed: 1400, taxesNames: ["Estimated tax"] }, dollars), 'The $1,400 a month of "Estimated tax" on Expenses is left out here: this page already takes that tax off income.');
+  assert.equal(taxesListedWords({ taxesListed: 1137.76, taxesTyped: 1400, taxesNames: ["Quarterly estimated taxes"] }, dollars),
+    '$1,138 of the $1,400 a month of "Quarterly estimated taxes" on Expenses is left out here: this page takes that much tax off income already. The other $262 stays in your spending.');
+  assert.equal(taxesListedWords({ taxesListed: 500, taxesNames: ["Federal estimated tax", "State estimated tax"] }, dollars), 'The $500 a month of "Federal estimated tax" and "State estimated tax" on Expenses is left out here: this page already takes that tax off income.');
+});
+
+test("gy1 fix: a tax filed on Expenses is left out only as far as this page's tax holds it, a state's only against the state's tax, and a line below zero counts, as on Next best action", async () => {
+  const { compute: next } = await import("../../overview/next-best-action/compute.js");
+  const one = (p) => { const b = compute(p, { today: TODAY }), n = next(p, { today: TODAY }).spare; near(b.saving.leftover - b.saving.short, n.monthly); return { b, n }; };
+  const base = one(fam()), tax = base.b.month.federal + base.b.month.payroll + base.b.month.state;
+  // estimated tax above the month's whole tax: that much is left out, the rest is a bill in its group (F4)
+  const big = Math.ceil(tax + 300);
+  const { b, n } = one(fam((q) => { q.expenses.push({ id: "x-big", name: "Estimated tax", category: "taxes", amount: big, period: "monthly", essential: true }); }));
+  near(b.taxesListed, tax); near(b.taxesTyped, big); assert.deepEqual(b.taxesNames, ["Estimated tax"]);
+  near(b.needs.find((x) => x.id === "x-big").monthly, big - tax);
+  near((b.saving.leftover - b.saving.short) - (base.b.saving.leftover - base.b.saving.short), -(big - tax));
+  near(n.taxesListed, tax); near(n.taxesTyped, big);
+  // a state's income tax where the state counts none: a bill like any other on both (F3)
+  const wa = one(fam((q) => { q.household.state = "WA"; q.expenses.push({ id: "x-st", name: "State income tax", category: "taxes", amount: 300, period: "monthly", essential: true }); }));
+  const wa0 = one(fam((q) => { q.household.state = "WA"; }));
+  assert.equal(wa.b.month.state, 0); assert.equal(wa.b.taxesListed, 0); assert.equal(wa.b.taxesNames, undefined);
+  near(wa.b.needs.find((x) => x.id === "x-st").monthly, 300);
+  near((wa.b.saving.leftover - wa.b.saving.short) - (wa0.b.saving.leftover - wa0.b.saving.short), -300);
+  // a refund typed below zero lowers the month's spending here as on Next best action and Expenses (F5)
+  const ref = one(fam((q) => { q.expenses.push({ id: "x-ref", name: "Health plan refund", category: "other", amount: -500, period: "monthly", essential: false }); }));
+  near((ref.b.saving.leftover - ref.b.saving.short) - (base.b.saving.leftover - base.b.saving.short), 500);
+  near(ref.b.wants.find((x) => x.id === "x-ref").monthly, -500);
+});
+
+test("income tax listed on Expenses is left out (it comes off income already); the Debts page's payments are needs when Expenses lists none", () => {
   const base = compute(fam(), { today: TODAY });
   const t = compute(fam((q) => { q.expenses.push({ id: "x-tax", name: "Estimated tax", category: "taxes", amount: 900, period: "quarterly", essential: true }); }), { today: TODAY });
   near(by(t).needs.monthly, by(base).needs.monthly); near(t.taxesListed, 300);
@@ -188,7 +220,7 @@ test("not ready without income or regular spending (one-offs and taxes do not co
   assert.deepEqual(compute(once, { today: TODAY }).missing, ["expenses"]);
 });
 
-test("the full month and where this page's left over is not the app's left-over figure (review 2026-11-02, round 5)", async () => {
+test("the full month, and this page's left over is the app's left-over figure (review 2026-11-02, round 5; gy1, 2026-11-16)", async () => {
   const { compute: next } = await import("../../overview/next-best-action/compute.js");
   const { aboutTen } = await import("./compute.js");
   // what a month that brings the Income page's amount leaves: left over (or short) plus the part held back; said to $10
@@ -197,16 +229,26 @@ test("the full month and where this page's left over is not the app's left-over 
   near(d.saving.full, d.saving.leftover - d.saving.short + d.month.held, 1e-9);
   assert.equal(d.saving.fullAbout, aboutTen(d.saving.full));
   near(d.saving.full, nb.full, 0.01); assert.equal(d.saving.fullAbout, nb.fullAbout);
-  // the same number as the app's left-over figure only while Expenses lists no tax and no debt plan pays an extra:
-  // a tax on Expenses (a property tax filed under taxes) is left out of needs here, and counted as spending there
+  // a property tax filed under "Taxes not withheld" is a bill like any other: a need here and spending on Next best action, so
+  // the two say one figure (gy1: before, it was left out here and the left over read $400 more than everywhere else)
+  const d0 = compute(fam(), { today: TODAY }), left0 = d0.saving.leftover - d0.saving.short;
   const taxed = fam((q) => { q.expenses.push({ id: "x-ptax", name: "Property tax", category: "taxes", amount: 4800, period: "annual", essential: true }); });
   const dt = compute(taxed, { today: TODAY }), nt = next(taxed, { today: TODAY }).spare;
-  near(dt.taxesListed, 400, 1e-9);
-  near((dt.saving.leftover - dt.saving.short) - nt.monthly, 400, 0.01);
+  assert.equal(dt.taxesListed, 0);
+  assert.ok(dt.needs.some((x) => x.name === "Property tax" && Math.abs(x.monthly - 400) < 1e-9), "a need");
+  near((dt.saving.leftover - dt.saving.short) - left0, -400, 1e-9);
+  near((dt.saving.leftover - dt.saving.short) - nt.monthly, 0, 0.01);
+  // quarterly estimated tax filed there pays the tax this page takes off already: left out on both (by forecast's inMonthsTax)
+  const est = fam((q) => { q.expenses.push({ id: "x-est", name: "Quarterly estimated taxes", category: "taxes", amount: 900, period: "quarterly", essential: true }); });
+  const de0 = compute(est, { today: TODAY }), ne0 = next(est, { today: TODAY }).spare;
+  near(de0.taxesListed, 300, 1e-9);
+  near((de0.saving.leftover - de0.saving.short) - left0, 0, 1e-9);
+  near((de0.saving.leftover - de0.saving.short) - ne0.monthly, 0, 0.01);
+  near(ne0.taxesListed, 300, 1e-9);
   // the saved debt plan's extra (Pay off debts) is spoken for on both, read by the one helper (savedPlan): saving here,
   // under "extra on debts", and the left over is the app's figure again (round 5; it used to be $150 more here)
   const extra = fam((q) => { q.debtPlan = { ...(q.debtPlan ?? {}), extra: 150, order: "avalanche" }; });
-  const de = compute(extra, { today: TODAY }), ne = next(extra, { today: TODAY }), d0 = compute(fam(), { today: TODAY });
+  const de = compute(extra, { today: TODAY }), ne = next(extra, { today: TODAY });
   assert.equal(ne.spare.debtExtra, 150);
   assert.equal(de.saving.debtPlan, 150);
   near(de.saving.debts - d0.saving.debts, 150, 1e-9);

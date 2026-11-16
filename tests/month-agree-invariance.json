@@ -1,0 +1,593 @@
+{
+ "note": "digests of Next best action's, Budget (50/30/20)'s, the Forecast's, Expenses', the Dashboard's compute and Get started's standing(), with both left-over figures, at commit 398a01e; tests/month-agree-invariance.test.mjs says how to write them again",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "nextBest": "-sJoRfaSIVTxofjUcngUIE",
+   "budget": "tXh8E8WHxMV9Ca_oSItNTv",
+   "forecast": "AZO3ORKDJ1qSs3-VTJqW63",
+   "expenses": "6HrGfiHqSSEqzBYAFVgcgO",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "yrG0VDn4qNFn5e1-luC5yN",
+   "left": {
+    "nextBest": 3884.22,
+    "budget": 3884.22
+   }
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "-nVm2Vv8r-P0j8b-qsQJCR",
+   "forecast": "5TBk65Th403AubMJuTlGxv",
+   "expenses": "WSH0kplgL9u-_VQVFei7ok",
+   "dashboard": "uCSsxMJ1v3XtKjs7zsUCa5",
+   "standing": "rFhNIZAbP7PvLWA-ezavXg",
+   "left": {
+    "nextBest": null,
+    "budget": 4513.32
+   }
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "nextBest": "-sJoRfaSIVTxofjUcngUIE",
+   "budget": "tXh8E8WHxMV9Ca_oSItNTv",
+   "forecast": "dYeY2_961N2nPlWhvxHlvm",
+   "expenses": "6HrGfiHqSSEqzBYAFVgcgO",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "9Z3NZtxqvubJGHOKfOk2cP",
+   "left": {
+    "nextBest": 3884.22,
+    "budget": 3884.22
+   }
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "nextBest": "uF8efe-PmsydM1UBJtRHLK",
+   "budget": "aJckburTTjiKUP1McDxZkJ",
+   "forecast": "N2qbzEA8rIxgF8YESLR2PL",
+   "expenses": "sukZZInKT6TxGYPKjaygiw",
+   "dashboard": "5eTwbAm9M_Zl8Ha3ZrQwjU",
+   "standing": "sevMSU2zUay779juUeByMf",
+   "left": {
+    "nextBest": 3581.73,
+    "budget": 3581.73
+   }
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "nextBest": "WpAhn3pU-R-Up_V5F36O2c",
+   "budget": "tXh8E8WHxMV9Ca_oSItNTv",
+   "forecast": "dYeY2_961N2nPlWhvxHlvm",
+   "expenses": "6HrGfiHqSSEqzBYAFVgcgO",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "Y0_1E00jqBlVzUSxVmjKte",
+   "left": {
+    "nextBest": 3884.22,
+    "budget": 3884.22
+   }
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "nextBest": "s1YEaKk6y16nlgjJOq2Lfo",
+   "budget": "8bXku0vCfvyhLENUr-WqFz",
+   "forecast": "r9bORa7Oa3eCDPdjZrYkoe",
+   "expenses": "1h9NawKNAARHpsmM4P0KnK",
+   "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+   "standing": "tkxaqbCPye5LnjSiQf-xd3",
+   "left": {
+    "nextBest": 1059.12,
+    "budget": 1059.12
+   }
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "nextBest": "K6qtC5Zh-4Hc_OEAlZcLEX",
+   "budget": "-LRBVQCWwJlyWnyVGBJ5h8",
+   "forecast": "jGcaOPjNJNKKi_0RRQjBN4",
+   "expenses": "F2XzFcFwqBofp_bmiCRY3j",
+   "dashboard": "iy5tHjxTFvDZjcgv5XsxSx",
+   "standing": "xqSxKpA0UDKtYDJOoBIuwr",
+   "left": {
+    "nextBest": 3.36,
+    "budget": 3.36
+   }
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "nextBest": "TJd2h64SQMa_KZ0e5UMDte",
+   "budget": "jdPmb1gMIYDcvrGYh0PtT9",
+   "forecast": "ZaK-lLXqNqWu642e6Gu08f",
+   "expenses": "zaFS-j8dnKZhlFO9E5o95x",
+   "dashboard": "iy5tHjxTFvDZjcgv5XsxSx",
+   "standing": "RzN7LJ-oJopQjr5VcdxG6I",
+   "left": {
+    "nextBest": -46.64,
+    "budget": -46.64
+   }
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "nextBest": "agHn2MP9x24kiwzvdTMEfa",
+   "budget": "rSvnLkifC1MgFRKqLSznee",
+   "forecast": "l8J61C5OQQVWzI6hRNuGR3",
+   "expenses": "kuDePYgSf4v6JRB9ByC5dK",
+   "dashboard": "H_V3hvz5aENOvbF-Cc1U3A",
+   "standing": "OiNINibN9Wymh2sJ9sxPvV",
+   "left": {
+    "nextBest": 3003.44,
+    "budget": 3403.44
+   }
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "nextBest": "0YkTXXyXQuYwk9xFy3GoUp",
+   "budget": "3ntvtdyKjKkTsOje-UMQXI",
+   "forecast": "OV-MYSRQyHqAEHWJe9WeWo",
+   "expenses": "1h9NawKNAARHpsmM4P0KnK",
+   "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+   "standing": "-8pwvNVLOAj6N3ewW3CKdF",
+   "left": {
+    "nextBest": 999.42,
+    "budget": 999.42
+   }
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "nextBest": "WYjwNi71q3NGxAEYuZOA1_",
+   "budget": "chfzfD2orGweglv2yFUG5z",
+   "forecast": "GJ7949BK_gLLkgIwahufH-",
+   "expenses": "Vs2CzWUwYUOZhFfhFNjq45",
+   "dashboard": "TMHw8vgntFzGFk6dPLB5qm",
+   "standing": "0jo_fQuMPla4wPqaiesSvM",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "nextBest": "zprPyEzeI27rKOVwklBPud",
+   "budget": "PpjN_nnuLX_NsAT98ynqP3",
+   "forecast": "r9bORa7Oa3eCDPdjZrYkoe",
+   "expenses": "1h9NawKNAARHpsmM4P0KnK",
+   "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+   "standing": "u2nNPBveYoEhgDv7vaJBhJ",
+   "left": {
+    "nextBest": 2059.12,
+    "budget": 2059.12
+   }
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "nextBest": "4eH5tezqt-wABJu76tF5Rr",
+   "budget": "trHCpJwg74DTyCT_hjAuiB",
+   "forecast": "tWJHpWwY9l4_SVqUu2T6iH",
+   "expenses": "tx2IDw0aggGd202Wx-Ow_P",
+   "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+   "standing": "XbDsiOCiWAfSYt56ixCoyq",
+   "left": {
+    "nextBest": 1155.33,
+    "budget": 1155.33
+   }
+  },
+  "01-single-adult/base": {
+   "nextBest": "CJ1DQuu6Z2mTn9qKBkT7HZ",
+   "budget": "vu9L68hFSkVkDbhVvGmwkM",
+   "forecast": "BALTqPTgxMgqsETw4z32hk",
+   "expenses": "gvdS9kMAorbhPssaTsKCNv",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "Rj5HZuUxUfx2H9RURWOMx3",
+   "left": {
+    "nextBest": 987.38,
+    "budget": 987.38
+   }
+  },
+  "02-couple-no-kids/base": {
+   "nextBest": "LmRAeNWaCkkXbCmCJj2kyG",
+   "budget": "-vF7rftKuGUO8rDO9Voynz",
+   "forecast": "jWA6mYVu69SjUGC2k8en8b",
+   "expenses": "adtD5kp9ad0vo1bZPuftxq",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "AjkL-4key6JhG6kDuxJeRZ",
+   "left": {
+    "nextBest": 4861.02,
+    "budget": 4861.02
+   }
+  },
+  "03-single-parent/base": {
+   "nextBest": "NqZeivY7y6_D7VVb4USrHE",
+   "budget": "9zgU6QwJat8vtqGykeXtkf",
+   "forecast": "ouiVSH80pIgmR-wHpHQIwE",
+   "expenses": "euUP6YL69pmGJp2V09isMI",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "SZJ_JGV9ZGuz1qcX4sshH0",
+   "left": {
+    "nextBest": 1754.86,
+    "budget": 1754.87
+   }
+  },
+  "04-two-parents/base": {
+   "nextBest": "MftU75Np5gIV0Exv1enw3B",
+   "budget": "nYj-skZishooQQ0dA0nRbH",
+   "forecast": "xT6XmEU68X3zXox29BeWaO",
+   "expenses": "ZiXTmFPnLWU2he_-ou7q_a",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "MnM9i5xqrIfuHbSnsh2uI1",
+   "left": {
+    "nextBest": 4316.87,
+    "budget": 4316.87
+   }
+  },
+  "05-stay-at-home-parent/base": {
+   "nextBest": "ZZrAgttuOfK9MdAHryMO10",
+   "budget": "nJ7Zp3eEbhwEl-clsOEVeO",
+   "forecast": "QPhtxgW2OORnWqXNRner5P",
+   "expenses": "AT7kpMwDYI2sr16_qKlFx2",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "50cN2SLPcgl5Naw3i1dKKe",
+   "left": {
+    "nextBest": 674.83,
+    "budget": 674.83
+   }
+  },
+  "06-blended-family/base": {
+   "nextBest": "PvZ9dBVkUAikVdll-rH3-8",
+   "budget": "-z6T-AxgptMgmVAtjzwXo6",
+   "forecast": "QuhFhMtIFUSPxTvxgfmdxm",
+   "expenses": "-5utgRL67Ct3Ro1WAZ0WCM",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "dZAJBkkzIxd7csZDB-7esu",
+   "left": {
+    "nextBest": 7817.98,
+    "budget": 7817.98
+   }
+  },
+  "07-multigenerational/base": {
+   "nextBest": "ghI8PeLl8_Cixrafn80rrc",
+   "budget": "iK5xLLS3zP84JzC3VabowK",
+   "forecast": "HyE2VQ_Uv9CALGRuw6yj_Y",
+   "expenses": "Bx8oYpJuuvwipYknSE2o8h",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "WIAcCxVZcK8etZMkvH8SWf",
+   "left": {
+    "nextBest": -126.13,
+    "budget": -126.13
+   }
+  },
+  "08-retired/base": {
+   "nextBest": "aGVS1qSHMFE-QyjOoutlCG",
+   "budget": "PqhnxyJ8cf6VRdy5ibZwr6",
+   "forecast": "Gmntxz4uRnLP7YDY8s-m39",
+   "expenses": "aHJlJ5c1aksnI4NWKGtEcI",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "KeTRlgszb7TfaO2kWox-H-",
+   "left": {
+    "nextBest": 2328.44,
+    "budget": 2728.44
+   }
+  },
+  "09-near-retirement/base": {
+   "nextBest": "q3t-8HyESt8YUkgW3Z9_nc",
+   "budget": "8XhmPEJ-6jXto2h4BZ2Jnl",
+   "forecast": "QTqVNFTaio_eNm51o1A3So",
+   "expenses": "GuzFLeRnoYyq3nLbDg80-3",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "wdTMi7pnma2_NXRGkr46Vl",
+   "left": {
+    "nextBest": 2959,
+    "budget": 2959
+   }
+  },
+  "10-student-and-starter/base": {
+   "nextBest": "0Gh0XWdM0Wti_RJK1udpYS",
+   "budget": "6gAENqtxq_g__TcW1GyKXV",
+   "forecast": "2wfT2HRdw8LJIic8vd7-Pj",
+   "expenses": "v9cwNOMpHxBU45jA5KdhRa",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "eFRYgbyXdCG2RxWgnWHkcP",
+   "left": {
+    "nextBest": 865.06,
+    "budget": 865.06
+   }
+  },
+  "11-self-employed/base": {
+   "nextBest": "-_wwkP43e1SwQsQv70xGMM",
+   "budget": "PPWhBjDUKYBRaRF80uWGvl",
+   "forecast": "5lWU58zYoJBQa3eyH3ZK3X",
+   "expenses": "B5XyZE9A3MSftO2KoV1b4M",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "nEyFzBfqyCXMKIGNEUvP71",
+   "left": {
+    "nextBest": -1937.76,
+    "budget": -537.76
+   }
+  },
+  "12-high-net-worth/base": {
+   "nextBest": "XThkNxGMvisCAUx1k2rsFU",
+   "budget": "-OoGHFmQ27Qlv9kSHTPofw",
+   "forecast": "fiVNlSsDbaMJUiCUsHBR9K",
+   "expenses": "TL2i7LB-rL41Sc1liHi6vu",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "vO-u4_lc8AFyqD6rJHKsKu",
+   "left": {
+    "nextBest": -6474.15,
+    "budget": -3807.48
+   }
+  },
+  "13-in-crisis/base": {
+   "nextBest": "KZzuAD1yOnlriAXx4MsVoE",
+   "budget": "sCWkpRSbKPECA1x_r4fvtT",
+   "forecast": "5G2YK93QvKkd36XTReWh9y",
+   "expenses": "zPny178RcZcCc6NX_J_XXd",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "t_xb5qwV6My0ScQZqA-u-9",
+   "left": {
+    "nextBest": -1022.4,
+    "budget": -1022.4
+   }
+  },
+  "14-unusual-structures/base": {
+   "nextBest": "s0D1ad-r8izKNgn9DZCiRP",
+   "budget": "VwNfnz8eOO3_iG3MPcKdj1",
+   "forecast": "ypkHQ0wkmprqz8cFhFrdDa",
+   "expenses": "L4bUndcPllSxkNvXRKUskJ",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "6KyDRg-jEuQbLo97UotyD7",
+   "left": {
+    "nextBest": 1989.93,
+    "budget": 2439.93
+   }
+  },
+  "phone casey": {
+   "nextBest": "QXaNZmKwrae9IGerCD294D",
+   "budget": "_EXJs5aGLIDYO3lzKVLsbt",
+   "forecast": "3zXLEbW1_44qTZ7ebkIz-f",
+   "expenses": "LNndobkrBLVGb0CM3JovEP",
+   "dashboard": "Li2YJ5qSJWqMUf_E_wkqxe",
+   "standing": "qlvcaPxjmVSN8DoyxAOJue",
+   "left": {
+    "nextBest": 572.63,
+    "budget": 572.63
+   }
+  },
+  "phone danaLee": {
+   "nextBest": "fpEj9fOlnm3Hsq37mI6TjG",
+   "budget": "qUzI42Qp_CHc2AGwkbZr1w",
+   "forecast": "qaMAvawv5kV-yQQYdsqB-u",
+   "expenses": "fLqTr6Pg3TWkLr5pnPs-S3",
+   "dashboard": "Li2YJ5qSJWqMUf_E_wkqxe",
+   "standing": "QJhvIDH-5wXqmspFfYXGzM",
+   "left": {
+    "nextBest": 1828.4,
+    "budget": 1828.4
+   }
+  },
+  "phone jamie": {
+   "nextBest": "aJrTPIzsLtKvXWGJJcE9_d",
+   "budget": "CGLVUuWPnnrHGPGhrQ5KkV",
+   "forecast": "THcZHNDO2Z4sSnM5LIwbe8",
+   "expenses": "lK3GZidt8TLLyl1ITEUz-I",
+   "dashboard": "pjDhVF8Eap3bEQEhH4ewp-",
+   "standing": "gHqZrqoEcryBkF5tagBJMt",
+   "left": {
+    "nextBest": 566.91,
+    "budget": 566.91
+   }
+  },
+  "phone morgan": {
+   "nextBest": "fHohwjLtD_CbAMh9CG1cjY",
+   "budget": "Oi6FZxtCXEQoi1I4bJvT4Y",
+   "forecast": "ZqXO1ZRWFN9eMpCb6pBRUY",
+   "expenses": "I4yoQQlvIxioruqbcIddWO",
+   "dashboard": "9kxw4sq0hMEMQctlalmKEY",
+   "standing": "5k7JdBuOAAl_6Ao_kgXMfJ",
+   "left": {
+    "nextBest": 532.4,
+    "budget": 532.4
+   }
+  },
+  "phone robin": {
+   "nextBest": "_XfE6wKJRhtoLHavdrKczp",
+   "budget": "ejDztMOxjrrXfh5aTRLpir",
+   "forecast": "2Rw9Z5-zD35zegL-u3IX04",
+   "expenses": "NXWnkO28LMx0iyBxPWLiGE",
+   "dashboard": "Li2YJ5qSJWqMUf_E_wkqxe",
+   "standing": "nVlZ7Lpb0IpyYiGnOpvpBe",
+   "left": {
+    "nextBest": 438.88,
+    "budget": 438.88
+   }
+  },
+  "round8 earlyRetireePlan": {
+   "nextBest": "WYjwNi71q3NGxAEYuZOA1_",
+   "budget": "chfzfD2orGweglv2yFUG5z",
+   "forecast": "J8BShy9A1siog56QlnWsOu",
+   "expenses": "Vs2CzWUwYUOZhFfhFNjq45",
+   "dashboard": "FEd8REqKYpX5xeLEleBWTj",
+   "standing": "6NmLPRzhGOn2UzYTwyBo9-",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 equityPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "1d8l8VFKHULDIvvvrO8yQo",
+   "expenses": "VHBsSFOljers_RyOh0JHyo",
+   "dashboard": "rORKdolvgFyAnIn2qetifE",
+   "standing": "rCqhq1nhoxYXvXExqmXBOY",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 firstRmdPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "5TBk65Th403AubMJuTlGxv",
+   "expenses": "jVDyFvep8JJ2qVIFtOQcsr",
+   "dashboard": "z0SzzwdXAG5QNQ8xQOzNuT",
+   "standing": "nB_QsfHV010niq_pEYnMkh",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 freelancerPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "FhAIn1SHcIWUEltoQ0fAMr",
+   "expenses": "y21_9CfZaAwT4L0QAXSBZ1",
+   "dashboard": "CW4VEPjANE-VkGc5npGDKx",
+   "standing": "NVY_d4CyvWPcA16Wq5UKbG",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 highFreelancerPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "GzJXj7pxtsQHoyTZ0uh3Fp",
+   "expenses": "xU2V7JXUjBK5g0JwqcmWrh",
+   "dashboard": "1TQfNE30GvbVGuoJtnOAkI",
+   "standing": "UtcVhyxBOMVTYSLU9t6mR1",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 landlordBusinessPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "YZ4hGPpnv5PJCwedasMRLq",
+   "expenses": "1luinKwrEtY3Wcl5kzqMk2",
+   "dashboard": "WSOn1MknEhXNir95I9eR85",
+   "standing": "Fyx1NigESBGmr1qn-IFvln",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 landlordPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "XZyF8XC9rgOZtvt5H_xdz8",
+   "forecast": "4fr2AZUY6LgUzHVRLbtrsq",
+   "expenses": "DH88SFs7q5Grhnt-2h6CXq",
+   "dashboard": "5faIIhAsYuHcUnXQG0KfHZ",
+   "standing": "w0RdJ4zhVg26ObpZv5e74_",
+   "left": {
+    "nextBest": null,
+    "budget": 10712.04
+   }
+  },
+  "round8 parentLoanPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "6XFwNNSbA8HJacvP3inmWt",
+   "forecast": "2uaSN8pJO_kfLY1H5FzZLh",
+   "expenses": "vR1JQ8BnoQ2N4JND8Evtas",
+   "dashboard": "AC5VyOE98SlEiX_qNG1Lqr",
+   "standing": "q_L4-e-wn4iLcOHsFLZkN8",
+   "left": {
+    "nextBest": null,
+    "budget": 3874.17
+   }
+  },
+  "round8 stockAndBusinessPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "jxhwmmqpy5i_fWFxB76zWz",
+   "expenses": "k7WfsvGOidSjnJQQAVw4CM",
+   "dashboard": "rUVExf6s7TtyqVXBqEf2Ee",
+   "standing": "a8nrUrIeP704tVzkj5ADzM",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "round8 studentLoanPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "kE8B_ez6EU1Y1ELA1wu-UY",
+   "forecast": "B6KiMKvx4utCMJdjIdFB4b",
+   "expenses": "KyjpbNBX1gimGAOxkE6Y5j",
+   "dashboard": "PkldJrvFhiWFY_v7qyCMRl",
+   "standing": "lgzQNcgZzRxOg-ihZtzAJm",
+   "left": {
+    "nextBest": null,
+    "budget": 7514.7
+   }
+  },
+  "round8 widowPlan": {
+   "nextBest": "sZiIRIWV5o5Vnf9T7eAwqY",
+   "budget": "ZddqgrESSwRitKnsy9JfCP",
+   "forecast": "gwjRiKMQydxq3nWwA807XC",
+   "expenses": "30YHITSMRHUvIugY3jO6KL",
+   "dashboard": "yqO3mt2vlL19QyBAhYUTAa",
+   "standing": "c60MumjGZ-5RjpQueGTAF1",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  },
+  "persona sam": {
+   "nextBest": "YGP2UC2QsPvM9HDZ3OFYXK",
+   "budget": "ge00LzLJP3ovXgv2ad66Vc",
+   "forecast": "-dSzI59dZylTM-Cpg75teG",
+   "expenses": "3nrwQRgHAGEY_3rIGXEUKQ",
+   "dashboard": "hyLkIVTUM6R_NLrpnTlTJb",
+   "standing": "e7CvDZlG1u6_y2JjDgyCy5",
+   "left": {
+    "nextBest": 745.67,
+    "budget": 745.67
+   }
+  },
+  "persona jordan": {
+   "nextBest": "r4yOdU3r28B-VnkaezYq4b",
+   "budget": "oX9Csg8buk-g6c3mATl9EO",
+   "forecast": "5TBk65Th403AubMJuTlGxv",
+   "expenses": "Q65oEmIeNQXqUyXOr_pahp",
+   "dashboard": "FtNP1YEVc8OhGnYZosw59_",
+   "standing": "PzSXQQTV1oRh1P2qQZ4uLv",
+   "left": {
+    "nextBest": 398.03,
+    "budget": 398.03
+   }
+  },
+  "persona patLee": {
+   "nextBest": "7BKeUFX7Ehly8BeqzF9GwP",
+   "budget": "sbzX3EtKWqjCT1ZYoNLEc4",
+   "forecast": "wDalN78u47q7hLtVUwEIua",
+   "expenses": "9Ov3buLMLhzIrQ2lxmTrTW",
+   "dashboard": "xaa2pt2krsHK43g5BqG6hE",
+   "standing": "NVwpRrCAckMLFdwYQPkLl2",
+   "left": {
+    "nextBest": 5989.79,
+    "budget": 5989.79
+   }
+  },
+  "persona ruth": {
+   "nextBest": "rOP7BjiVFScFrEM1P4iYF5",
+   "budget": "lxsmbDIqpnLpYNVvNUtGvV",
+   "forecast": "aZCCCj5URKceVk5ldtQGkr",
+   "expenses": "Oo-ji6vvzsyTIHENVLCwUP",
+   "dashboard": "CkxW4gbUL5eNb7NOP3OdD4",
+   "standing": "rh2Wp5nMW8D-swRGUe9UPH",
+   "left": {
+    "nextBest": 550,
+    "budget": 550
+   }
+  },
+  "demo": {
+   "nextBest": "xHL5V0tL0JuWcxae-3Eumw",
+   "budget": "wVLQ01zzGwMypMAoCinV60",
+   "forecast": "dYeY2_961N2nPlWhvxHlvm",
+   "expenses": "6HrGfiHqSSEqzBYAFVgcgO",
+   "dashboard": "K3CzRrPXmHo3-8-EbKORzf",
+   "standing": "jqbbiqZf1mhkdhooTShCj7",
+   "left": {
+    "nextBest": 4147.56,
+    "budget": 4147.56
+   }
+  },
+  "empty plan": {
+   "nextBest": "WYjwNi71q3NGxAEYuZOA1_",
+   "budget": "chfzfD2orGweglv2yFUG5z",
+   "forecast": "5TBk65Th403AubMJuTlGxv",
+   "expenses": "Vs2CzWUwYUOZhFfhFNjq45",
+   "dashboard": "57C0wZNyEDxSAHEU3tDu5-",
+   "standing": "88-TVRmO7mxRli0yuEsZXI",
+   "left": {
+    "nextBest": null,
+    "budget": null
+   }
+  }
+ }
+}

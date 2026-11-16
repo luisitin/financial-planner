@@ -7,7 +7,7 @@
 `income`, `expenses`, `accounts`, `debts`, `goals`, `retirement.contributions`, `taxes` (through the Federal page), `assumptions.emergencyMonths`, `household`. Writes nothing.
 
 ## Outputs
-`{ ready, missing, spare, steps[], next }`. `spare` (all a month): `gross`, `federalTax` (`taxes/federal` total / 12), `payrollTax`, `spending` (the Expenses page's monthly total), `retirementSaving` (own contributions, not the match), `goalSaving` (open goals' monthly), `monthly` = gross minus the rest. Each step: `{ id, n, title, why, status: done|now|later|check, detail, gap, roomYearly, doneDate, startDate, monthly, go }`; `next` is the first step not done.
+`{ ready, missing, spare, steps[], next }`. `spare` (all a month): `gross`, `federalTax` (`taxes/federal` total / 12), `payrollTax`, `spending` (the Expenses page's monthly total, less `taxesListed`: see "A tax filed on Expenses is counted once"), `retirementSaving` (own contributions, not the match), `goalSaving` (open goals' monthly), `monthly` = gross minus the rest. Each step: `{ id, n, title, why, status: done|now|later|check, detail, gap, roomYearly, doneDate, startDate, monthly, go }`; `next` is the first step not done.
 
 ## The order
 The r/personalfinance wiki's "How to handle $" (the prime directive) and the Bogleheads wiki's "Prioritizing investments":
@@ -66,6 +66,60 @@ saved debt plan's extra. Before, the federal estimate's total and a simple payro
 tax was left out, so the left-over figure read about $405 a month high for this family in Pennsylvania, and Budget and
 the Cash-flow statement each showed a different month (round-4 finding). The simple reckoning is kept only for a plan
 the tax cannot be worked out for. Each month's money lists "State income tax" and "Business costs" when there are any.
+
+## A tax filed on Expenses is counted once (gy1, 2026-11-16)
+The whole-app sweep found this page saying $3,003 a month left for the invented retired couple and Budget (50/30/20)
+$3,403: Budget left every line filed under "Taxes not withheld" out of spending, this page counted every one. Neither was
+right for every line. Both pages now ask one rule, `cashflow/forecast` `inMonthsTax(line)` (beside `typedIncomeTax`, with
+its name rules):
+- a line filed under "Taxes not withheld" that pays tax the month already takes off (estimated or quarterly tax, a federal,
+  state or income tax, self-employment tax, "Taxes", or no name) is left out of spending: the tax lines above hold it;
+- a line filed there whose name says it is something else stays spending: another tax ("Property tax", "Car tax", "Sales
+  tax"), a city's or county's tax (the month holds no local tax), a fee for filing ("Tax preparer"), or a debt to the tax
+  office (last year's tax, back taxes, a penalty, a payment plan). A line filed under any other category is spending.
+
+Only as much of such a line as the tax lines above hold is left out (gy1 fix F3, F4): `monthsTaxOf(exp.items, { tax:
+(federal + payroll + state) / 12, state })` (`cashflow/forecast`). The part of a line above the month's whole tax stays
+spending, so the month counts the larger of what is paid and what is worked out; a line that pays only a state's tax is
+held only by the state's own line, so a typed state income tax where the month counts none (Washington, Texas, no state
+set) is spending, all of it. `spare.taxesListed` = `monthsTaxOf(...).listed`, what is left out a month (only when above
+half a cent; the key is absent otherwise), with `taxesNames` (the lines' names) and, while the lines come to more,
+`taxesTyped` (their whole month). `spare.spending` = Expenses' `monthly` − `taxesListed`, so
+`spare.monthly` = gross − business costs − federal − payroll − state − care lost − rental costs − rental loan − spending −
+retirement saving − goal saving − the saved debt plan's extra − held. Budget's left over (left over − short) is the same
+figure for every invented household, and with a line of each hard kind added (`tests/month-agree-invariance.test.mjs`).
+The note under "Each month's money" says it in a sentence of its own (`spendingWords`, gy1 fix P4: the figure, the
+Expenses total it differs from and the line's own name), one case each:
+- no such line: "Spending is the Expenses page's monthly total; saving is ..." as before;
+- all of it held: 'Spending is $5,826: your Expenses list ($7,226) without the $1,400 a month of "Estimated tax", because
+  the tax lines above already cover it. Saving is ...';
+- more than the tax lines: 'Spending is $5,796: your Expenses list ($6,933) without $1,138 of the $1,400 a month of
+  "Quarterly estimated taxes": the tax lines above cover that much, and the other $262 stays in spending. Saving is ...'.
+
+Worked examples (the invented households in `qa/`): Ruth and Sam's $4,800-a-year property tax ($400 a month) stays
+spending, $3,003 left on both pages (Budget said $3,403); Nadia's $4,200-a-quarter estimated tax ($1,400 a month) is no
+longer taken on top of the $1,138 a month of income and self-employment tax worked out above; the $262 she pays above it
+stays spending, so she is $800 a month short on both pages, not $1,938 (and not the $538 Budget said, which dropped what
+she pays above the worked-out tax). The Income statement report (`reports/statements`) takes the same amount off its
+"Taxes not withheld" line, so its Spending lines add up to Total spending.
+
+**The list may be missing money** (gy1 fix P1): while our guesses say the Expenses list is far short of what households
+like this one spend (`overview/guesses` `spendMissing`, the Dashboard's and Expenses' "Is something missing?" card, only
+while that page is in use and the spending is not our guesses already), a line under the figures says so with the same
+amount the Dashboard's left-over row names, to the $10 (`missingWords`, one sentence each case: "... so what is left over
+could be that much lower." / "... so the month could be that much further short." / "... so you may take that much more
+from savings."), with "Check your list ›" to Expenses, where the card's two answers are. For Ruth and Sam: "Your spending
+list may be missing about $1,220 a month, so what is left over could be that much lower." "That's everything" ends it on
+every page.
+
+Sources (read 2026-11-16): IRS "Estimated taxes",
+https://www.irs.gov/businesses/small-businesses-self-employed/estimated-taxes (page reviewed 25-Sep-2026): estimated tax
+pays "not only income tax, but other taxes such as self-employment tax"; IRS Topic no. 503 "Deductible taxes",
+https://www.irs.gov/taxtopics/tc503 (reviewed 09-Nov-2026): "State and local real property taxes" are a kind of tax of
+their own, beside state and local income taxes. No figure is taken from them: the rule is about which bill is which.
+Not done: `overview/setup`'s spending-from-a-left-over search reports the most that could be left as the left-over plus
+Expenses' whole month, so with an income-tax line filed it overstates that ceiling by the line (its search still lands on
+the figure typed); `cashflow/shared-costs` still leaves every "Taxes not withheld" line out of the costs to share.
 
 ## Costly debt from savings (2026-11-02)
 When usable cash, after one-time costs coming up, is more than the full cushion (Emergency fund's `nowAfterOneOffs` -

@@ -782,6 +782,10 @@ test("#53 n1 fix F1: nothing going in: the own row has no years from growth alon
   const p = ARCHETYPES.find((a) => a.id === "11-self-employed").build();
   // $400,000 more invested: growth alone would reach the figure in 44 years (age 82), which the row used to say
   p.accounts.find((a) => a.type === "brokerage").balance += 400000;
+  // (gy1, 2026-11-16: the part of her quarterly estimated tax the month's tax already holds is no longer taken twice, so her
+  // month is $800 short, not $1,938, and her $900 a month of goal saving outweighed it: $400 a month more spending keeps the
+  // year short, so nothing goes in, as this test needs)
+  p.expenses.push({ id: "x-studio", name: "Studio rent", category: "housing", amount: 400, period: "monthly", essential: true });
   const d = compute(migrate(structuredClone(p)), { today: T53, ladder: true });
   assert.equal(d.ladder.why, null);
   assert.ok(!(d.saving.yearly > 0.5), "nothing goes in");

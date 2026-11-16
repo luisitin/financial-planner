@@ -17,6 +17,7 @@ import { federalTax } from "../../../core/math/tax.js";
 import { rentalStep, iraStep, loanStep, qbiStep } from "../../taxes/federal/known.js";
 import { provide, isGuess } from "../../../core/estimate/index.js";
 import { rentalsOf, runningOf, rentalValue, loanPaymentOf, rentEndedFor } from "../../property/rental/running.js";
+import { inMonthsTax, monthsTaxOf, taxNamesWords } from "../forecast/compute.js";
 
 /** The rule's split of income after tax (Elizabeth Warren and Amelia Warren Tyagi, "All Your Worth", 2005): needs 50%, wants 30%, savings 20%. */
 export const RULE = { needs: 0.5, wants: 0.3, savings: 0.2 };
@@ -312,25 +313,47 @@ export function heldAfterTax(plan, { today, inc = computeIncome(plan, { today })
  *     unlisted (left over above 10% of income after tax),
  *     full (leftover - short + month.held: what a month that brings the Income page's amount leaves), fullAbout (to the nearest $10),
  *     fullKind ("ahead" | "even" | "short", fullKind) },
- *   taxesListed (a month, on Expenses, left out), notes
+ *   taxesListed (a month: the lines filed under "Taxes not withheld" on Expenses that pay the tax taken off here, as much
+ *     of them as that tax holds, left out; forecast's monthsTaxOf), taxesNames? (their names, while one is left out),
+ *     taxesTyped? (their whole month, only while it is more than is left out: the rest is in needs or wants), notes
  * }
  */
+/**
+ * The notice while a tax filed on Expenses is left out (`d`: compute's taxesListed, taxesTyped, taxesNames; `money` formats a
+ * month), one sentence each case (gy1 fix, 2026-11-16):
+ *   all of it         'The $1,400 a month of "Estimated tax" on Expenses is left out here: this page already takes that tax off income.'
+ *   more than ours    '$1,138 of the $1,400 a month of "Quarterly estimated taxes" on Expenses is left out here: this page takes
+ *                      that much tax off income already. The other $262 stays in your spending.'
+ */
+export function taxesListedWords(d, money) {
+  const out = Number(d?.taxesListed) || 0, typed = Math.max(out, Number(d?.taxesTyped) || 0), what = taxNamesWords(d?.taxesNames);
+  return typed - out > 0.5
+    ? `${money(out)} of the ${money(typed)} a month of ${what} on Expenses is left out here: this page takes that much tax off income already. The other ${money(typed - out)} stays in your spending.`
+    : `The ${money(typed)} a month of ${what} on Expenses is left out here: this page already takes that tax off income.`;
+}
+
 export function compute(plan, params = {}) {
   const today = params.today ?? `${new Date().getFullYear()}-01-01`;
   const inc = computeIncome(plan, { today }), exp = computeExpenses(plan, { today });
-  // the month's spending: Expenses' items going now, and the Debts page's payments Expenses has no expense for;
-  // taxes listed there are left out, as they come off income already
-  const going = exp.items.filter((x) => x.active && x.monthly > 0);
-  const items = going.filter((x) => x.category !== "taxes");
-  const taxesListed = going.filter((x) => x.category === "taxes").reduce((t, x) => t + x.monthly, 0);
+  // the month's spending: Expenses' items going now (a line below zero, a refund or credit, too: Expenses and Next best
+  // action count it, gy1 fix F5), and the Debts page's payments Expenses has no expense for; a line filed under "Taxes not
+  // withheld" that pays the tax this page takes off income is left out, as much of it as that tax holds, by the one rule Next
+  // best action asks too (cashflow/forecast monthsTaxOf); a property tax or another bill filed there is a need (gy1, 2026-11-16)
+  const going = exp.items.filter((x) => x.active && (x.monthly > 0 || x.monthly < 0));
   const fromDebts = pos(exp.debtFromDebts);
   const missing = [];
   if (!inc.count || !(inc.monthly > 0)) missing.push("income");
-  if (!items.length && !(fromDebts > 0)) missing.push("expenses");
+  if (!going.some((x) => !inMonthsTax(x)) && !(fromDebts > 0)) missing.push("expenses");
   if (missing.length) return { ready: false, missing };
   const notes = [];
 
   const T = yearTaxes(plan, { today, inc });
+  // what the month's tax holds of a tax filed on Expenses: left out; the part above it stays a bill (gy1 fix F3, F4)
+  const tax = monthsTaxOf(going, { tax: (T.federal + T.payroll + T.state) / 12, state: T.stateKnown ? T.state / 12 : 0 });
+  const keptOf = new Map(tax.lines.map((l) => [l.x, l.kept]));
+  const items = going.flatMap((x) => (!keptOf.has(x) ? [x] : keptOf.get(x) > 0.005 ? [{ ...x, monthly: keptOf.get(x) }] : []));
+  const taxesListed = tax.listed;
+  const taxesSaid = taxesListed > 0.005 ? { taxesNames: tax.names, ...(tax.typed - taxesListed > 0.005 ? { taxesTyped: tax.typed } : {}) } : {};
   const year = T.year;
   if (!T.stateKnown) notes.push("Your state's income tax is not taken off: set it on the State tax page under Taxes.");
   if (T.otherIncomeOnFederal) notes.push("The Federal tax page also counts income that is not on the Income page (investments sold, amounts typed there). Its tax is left out here, as that money is not part of the month.");
@@ -383,7 +406,7 @@ export function compute(plan, params = {}) {
   const buckets = [bucket("needs", "Needs", needsMonthly), bucket("wants", "Wants", wantsMonthly), bucket("savings", "Savings", savingsMonthly)];
   if (!(A > 0)) notes.push("Taxes (and business expenses) take all of the income on the Income page, so there is nothing to split: check the amounts there.");
   if (!items.some((x) => x.essential) && wants.length) notes.push("No expense is marked \"I must pay this\" yet, so everything counts as a want: mark the bills you must pay below or on the Expenses page.");
-  return { ready: true, missing: [], year, month, targets, buckets, needs, wants, saving: { ...saving, unlisted }, taxesListed, notes };
+  return { ready: true, missing: [], year, month, targets, buckets, needs, wants, saving: { ...saving, unlisted }, taxesListed, ...taxesSaid, notes };
 }
 
 // The guesses' family floor is fitted to this page's month after tax (spend.js fitFloor, findings ssg-M-1 and ssg-B-3,

@@ -1,9 +1,11 @@
 // modules/overview/next-best-action/view.js -- DOM only. The next step for the next spare dollar as the
 // hero, where each month's money goes now, then the whole order with what is left on each step and
 // about when the spare money gets it done.
-import { compute, monthLines, HIGH_RATE, MODERATE_RATE } from "./compute.js";
+import { compute, monthLines, spendingWords, missingWords, HIGH_RATE, MODERATE_RATE } from "./compute.js";
 import { setupCard } from "../start/compute.js";
 import { anyMoving, decidesWords, registryFrom } from "../guesses/ranges.js";
+import { spendMissing } from "../guesses/compute.js";
+import { registryOf } from "../guesses/view.js";
 
 const STYLE = `
 .nb-root .nb-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--line); margin: 10px 0 12px; }
@@ -123,7 +125,17 @@ export function render(page, ctx) {
   const waits = s.waits === true, onSpend = waits && s.waitsOn !== "guess";
   const dm = decidesMonth(s.range), ww = waitWords(s);
   const parts = monthLines(s, d.debtPlan).map((x) => [x.key === "spending" && onSpend ? `Spending (${s.spending - s.guessedMonthly < 5 ? "all" : `about ${mo(s.guessedMonthly)}`} of it our guesses)` : x.label, x.amount, COLOURS[x.key] ?? "var(--line)"]);
+  // the list looks far short of what households like this one spend (our guesses' "Is something missing?" card, which the
+  // Dashboard and Expenses show): the same amount the Dashboard's left-over row names, said under the figure it could lower
+  // (gy1 fix P1); only while that page is in use, never on our own guesses of the spending (they wait already)
+  const gm = ctx.modules?.get?.("overview/guesses");
+  const reg = !waits && gm && ctx.isReady?.(gm) && ctx.features?.enabled?.(gm) ? registryOf(ctx) : null;
+  let miss = null;
+  if (reg) { try { miss = spendMissing(plan, { estimators: reg.estimators, tables: reg.tables, today: fmt.today() }); } catch { miss = null; } }
+  if (!(miss?.rows?.length && miss.rest >= 5)) miss = null;
   const total = Math.max(s.gross, parts.reduce((t, p) => t + p[1], 0));
+  // the Spending line's note: its own sentence while a tax filed on Expenses is in the tax lines (spendingWords), then "Saving is"
+  const spendingOf = (sp) => { const w = spendingWords(sp, mo); return w.endsWith(".") ? `${w} Saving is` : `${w}; saving is`; };
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "Each month's money"),
     ui.h("div", { class: "nb-bar", role: "img", "aria-label": "Where each month's pay goes" }, [...parts, ["Left over", Math.max(0, s.monthly), "var(--accent-soft)"]].map(([, v, c]) => ui.h("span", { style: { width: `${(Math.max(0, v) / total) * 100}%`, background: c } }))),
     ui.h("ul", { class: "nb-key" },
@@ -141,7 +153,8 @@ export function render(page, ctx) {
     // not waiting (a left-over the person gave), but a guess could still turn the month short (or not): one quiet line, never a
     // colour (P7)
     !waits && dm && s.range?.crosses ? ui.h("p", { class: "muted small", "data-decides": "month" }, `${dm.whether}: it is our guess for now. `, ui.h("a", { href: dm.href, style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, `${dm.ask} \u203a`)) : null,
-    ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is worked out on this income from the State tax page, or from your state's own brackets; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State tax page."} Spending is the Expenses page's monthly total; saving is what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
+    miss ? ui.h("p", { "data-missing": "spend" }, `${missingWords(s, miss.rest, money, !!d.drawing)} `, ui.h("a", { href: "#/cashflow/expenses", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Check your list \u203a")) : null,
+    ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is worked out on this income from the State tax page, or from your state's own brackets; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State tax page."} ${spendingOf(s)} what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
 
   // the order
   root.append(ui.h("section", { class: "card" }, ui.h("h2", {}, "The order"),

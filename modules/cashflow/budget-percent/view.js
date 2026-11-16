@@ -3,7 +3,7 @@
 // each group (with a button to move one between needs and wants), and the split to aim for in a fold. The folds are parts
 // (core/ui/more.js, docs/OPTIONAL.md): each group's bills a row of its own card, the split to aim for and how this is
 // worked out in one parts card.
-import { compute, PRESETS } from "./compute.js";
+import { compute, PRESETS, taxesListedWords } from "./compute.js";
 import { part, parts, links } from "../../../core/ui/more.js";
 import { namesOf as namesOfCouple } from "../shared-costs/compute.js";
 import { nameIn, NameIn } from "../../../core/words.js";
@@ -56,7 +56,7 @@ export function render(page, ctx) {
     : `${money(d.saving.short)} a month more goes out than comes in after tax, so the savings and goals below cannot all happen. Spend less, or put less toward goals for now.`));
   for (const n of d.notes) root.append(ui.notice("info", n));
   if (d.month.bizExpenses > 0.5) root.append(ui.notice("info", `Business income is counted after the ${money(d.month.bizExpenses * 12)} a year of business expenses on the Self-employment page.`));
-  if (d.taxesListed > 0.5) root.append(ui.notice("info", `Taxes listed on Expenses (${money(d.taxesListed)} a month) are left out of needs: this page takes taxes off income already.`));
+  if (d.taxesListed > 0.5) root.append(ui.notice("info", taxesListedWords(d, money)));
 
   // the month after tax and the three groups against their targets
   const m = d.month;
@@ -131,7 +131,7 @@ export function render(page, ctx) {
     { id: "split", kind: "own", title: "The split to aim for", says: `${Math.round(T.needs * 100)} / ${Math.round(T.wants * 100)} / ${Math.round(T.savings * 100)}`, holds: ["preset", "needs", "wants", "savings"], open: kept("split"),
       body: [ui.h("p", { class: "muted small" }, "50/30/20 is a starting point, not a law: where housing costs a lot, 60/20/20 is common; while paying off debt or getting by, 70/20/10. For your own split, choose \"My own split\" and type the three shares."), splitForm] },
     { id: "how", kind: "how", open: kept("how"),
-      body: [ui.h("p", {}, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so taxes listed on Expenses are left out."),
+      body: [ui.h("p", {}, "Needs are the bills you marked \"I must pay this\" on Expenses, plus loan payments. Wants are the rest of your spending. Savings are what you put into retirement accounts (not your employer's match), into goals, and whatever is left over. Taxes come off first, so an estimated or income tax listed on Expenses is left out, as much of it as the tax worked out here; a property tax filed there counts like any other bill."),
         m.statePage !== undefined ? ui.h("p", {}, stateWhy(m, money)) : null] }));
   // "More on this" (core/ui/more.js links(): each row the question it answers); a couple also gets Sharing costs as a couple
   // with its answer under it (gap design #22)

@@ -21,6 +21,15 @@ Amounts in brackets are owed or going out. Prints through `../report-kit.js`.
 ## The statements add up (round 4, 2026-11-02)
 The income statement and cash-flow statement show every line Next best action takes off the month: state income tax, business costs, the saved debt extra and uneven pay not counted on (after its tax). Before, their "Left over" and "Left in cash" (Next best action's month) did not follow from the lines printed above them, and the note said state tax was left out.
 
+## A tax filed on Expenses that the tax lines hold (gy1 fix F1, 2026-11-16)
+Total spending is Next best action's `spare.spending`, which leaves out the part of a line filed under "Taxes not withheld"
+that the month's tax already holds (`spare.taxesListed`, `cashflow/forecast` `monthsTaxOf`). The Spending lines come from
+Expenses' categories, so the "Taxes not withheld" line is less that amount: it goes when nothing is left of it, and is
+called "Taxes not withheld, beyond the tax above" when something is (a property tax filed there, or the part of an
+estimated tax above the month's tax). Before, Nadia's (invented, 11-self-employed) lines came to $83,200 against a Total
+spending of $66,400; now both are $69,547 (her $16,800 a year of estimated tax, less the $13,653 the tax lines hold,
+leaves $3,147). Test: `module.test.mjs` "gy1 fix F1" (the lines add up for every one of the 14 households).
+
 ## Ideas / not yet
 - Last year's balance sheet beside this year's (from the net-worth history); the statements over the bank files' categories (operating, investing, financing) once transfers to investment accounts are tagged.
 

@@ -12,7 +12,7 @@
   "career/offer-compare": {"plan":{"words":330,"boxes":18},"empty":{"words":330,"figs":3,"boxes":18}},
   "career/salary": {"plan":{"words":450,"figs":37,"tiles":6}},
   "career/side-income": {"plan":{"words":300,"boxes":12}},
-  "cashflow/budget-percent": {"plan":{"words":270,"figs":35},"empty":{"figs":2}},
+  "cashflow/budget-percent": {"plan":{"words":260,"figs":35},"empty":{"figs":2}},
   "cashflow/expenses": {"plan":{"words":300,"figs":31},"empty":{"boxes":6}},
   "cashflow/forecast": {"plan":{"words":220,"figs":26,"boxes":2}},
   "cashflow/income": {"plan":{"figs":23},"empty":{"words":130,"boxes":8}},

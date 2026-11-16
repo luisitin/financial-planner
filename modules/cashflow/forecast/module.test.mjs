@@ -689,3 +689,78 @@ test("a quarter word wins over 'owe'; NYS and a school district are not the fede
   for (const name of ["Quarterly tax I owe", "Taxes owed (quarterly)", "Taxes I owe each quarter"]) assert.equal(typed({ name }), true, name);
   for (const name of ["NYS estimated tax", "School district income tax", "IRS payment plan", "Taxes owed to the IRS"]) assert.equal(typed({ name }), false, name);
 });
+
+test("inMonthsTax: a line filed under 'Taxes not withheld' that pays the month's own tax, and nothing else (gy1, 2026-11-16)", async () => {
+  const { inMonthsTax, taxesListedOf } = await import("./compute.js");
+  const filed = (name, x = {}) => inMonthsTax({ name, category: "taxes", amount: 100, period: "quarterly", ...x });
+  // the tax the month already takes off (federal income tax, self-employment tax, the state's income tax): left out of spending
+  for (const name of ["Quarterly estimated taxes", "Estimated tax", "Est. tax", "1040-ES", "Federal tax", "IRS", "Income tax", "Self-employment tax",
+    "State estimated tax", "California estimated tax", "CO Dept of Revenue", "Federal and state estimated tax", "Taxes", "Tax savings", "",
+    "Estimated tax installments", "Quarterly tax I owe", "Estimated taxes owed"]) assert.equal(filed(name), true, name);
+  assert.equal(filed("Taxes", { period: "annual" }), true, "any rhythm");
+  assert.equal(inMonthsTax({ category: "taxes", amount: 50, period: "monthly" }), true, "no name: the category's own meaning");
+  // a bill of its own: another tax, a city's or county's tax, a fee for filing, a debt to the tax office -- spending
+  for (const name of ["Property tax", "Property taxes", "Real estate tax", "Car tax", "Vehicle tax", "Sales tax", "Quarterly payroll tax", "Franchise tax",
+    "School tax", "City income tax", "County tax", "Local tax", "NYC tax", "School district income tax", "Tax preparer", "Tax software",
+    "Car registration and tax", "Last year's taxes", "Back taxes (IRS)", "IRS penalty", "IRS installment agreement", "IRS payment plan",
+    "Taxes owed to the IRS", "IRS balance"]) assert.equal(filed(name), false, name);
+  // filed under any other category: spending, whatever its name
+  for (const category of ["other", "housing", "debt", undefined]) assert.equal(inMonthsTax({ name: "Estimated tax", category, amount: 100, period: "quarterly" }), false, String(category));
+  assert.equal(inMonthsTax(null), false);
+  // the month of the active lines it leaves out, from Expenses' compute items
+  const items = [
+    { name: "Quarterly estimated taxes", category: "taxes", active: true, monthly: 1400 },
+    { name: "Property tax", category: "taxes", active: true, monthly: 400 },
+    { name: "State estimated tax", category: "taxes", active: false, monthly: 200 },
+    { name: "Taxes", category: "taxes", active: true, monthly: 0 },
+    { name: "Groceries", category: "groceries", active: true, monthly: 600 },
+  ];
+  assert.equal(taxesListedOf(items), 1400);
+  assert.equal(taxesListedOf([]), 0);
+  assert.equal(taxesListedOf(undefined), 0);
+});
+
+test("monthsTaxOf: as much of a tax filed on Expenses as the month's tax holds, a state's line against the state's part (gy1 fix F3, F4)", async () => {
+  const { monthsTaxOf, taxesListedOf, stateOnlyTax, taxNamesWords } = await import("./compute.js");
+  const line = (name, monthly, x = {}) => ({ name, category: "taxes", active: true, monthly, ...x });
+  // the lines that pay only a state's tax
+  for (const name of ["State income tax", "State estimated tax", "California estimated tax", "NYS estimated tax", "CO Dept of Revenue", "OR estimated tax"]) assert.equal(stateOnlyTax({ name }), true, name);
+  for (const name of ["Federal and state estimated tax", "Quarterly estimated taxes", "IRS", "Taxes", ""]) assert.equal(stateOnlyTax({ name }), false, name);
+  // a self-employed person pays $1,400 a month of estimated tax; the month works out $1,138 (federal, self-employment and state
+  // tax): $1,138 is left out and $262 stays spending, so the month counts the larger of the two, what she pays (F4)
+  const est = monthsTaxOf([line("Quarterly estimated taxes", 1400)], { tax: 1137.76, state: 150 });
+  near(est.listed, 1137.76, 1e-9); near(est.typed, 1400, 1e-9); near(est.lines[0].kept, 262.24, 1e-9);
+  assert.deepEqual(est.names, ["Quarterly estimated taxes"]);
+  // less than the month's tax: all of it is left out, as before
+  const less = monthsTaxOf([line("Estimated tax", 300)], { tax: 1137.76, state: 150 });
+  near(less.listed, 300, 1e-9); near(less.lines[0].kept, 0, 1e-9);
+  // a state's income tax where the month counts none (Washington, Texas, no state set): spending, all of it (F3)
+  for (const state of [0, -5, NaN, undefined]) {
+    const wa = monthsTaxOf([line("State income tax", 300)], { tax: 500, state });
+    assert.equal(wa.listed, 0, String(state)); near(wa.lines[0].kept, 300, 1e-9); assert.deepEqual(wa.names, []);
+  }
+  // New York works out $237 a month: $237 of the typed $300 is left out, $63 stays
+  const ny = monthsTaxOf([line("State income tax", 300)], { tax: 650, state: 237 });
+  near(ny.listed, 237, 1e-9); near(ny.lines[0].kept, 63, 1e-9);
+  // a federal and a state line: the state's against its part, the federal one against the rest of the month's tax
+  const both = monthsTaxOf([line("Federal estimated tax", 900), line("State estimated tax", 400)], { tax: 1000, state: 250 });
+  near(both.lines.find((r) => r.x.name === "State estimated tax").out, 250, 1e-9);
+  near(both.lines.find((r) => r.x.name === "Federal estimated tax").out, 750, 1e-9);
+  near(both.listed, 1000, 1e-9); near(both.typed, 1300, 1e-9);
+  // the month's tax below zero (a refundable credit) holds none of it
+  assert.equal(monthsTaxOf([line("Estimated tax", 200)], { tax: -40, state: 0 }).listed, 0);
+  // no cover: every such line out (the rule alone); a property tax, a stopped line or one under $0 never
+  const items = [line("Quarterly estimated taxes", 1400), line("Property tax", 400), line("State estimated tax", 200, { active: false }), line("Taxes", -50), { name: "Groceries", category: "groceries", active: true, monthly: 600 }];
+  assert.equal(taxesListedOf(items), 1400);
+  assert.equal(taxesListedOf(items, { tax: 1000, state: 0 }), 1000);
+  // an absurd amount never turns the month into NaN (F7): what the month holds is left out, the rest stays
+  const inf = monthsTaxOf([line("Estimated tax", Infinity)], { tax: 500, state: 0 });
+  assert.equal(inf.listed, 500); assert.equal(inf.lines[0].kept, Infinity);
+  // a line with no name is named by its category
+  assert.deepEqual(monthsTaxOf([line("", 120, { categoryLabel: "Taxes not withheld" })], { tax: 500, state: 0 }).names, ["Taxes not withheld"]);
+  // the names, as the pages say them
+  assert.equal(taxNamesWords(["Estimated tax"]), '"Estimated tax"');
+  assert.equal(taxNamesWords(["Federal estimated tax", "State estimated tax"]), '"Federal estimated tax" and "State estimated tax"');
+  assert.equal(taxNamesWords(["A", "B", "C"]), "your 3 tax lines");
+  assert.equal(taxNamesWords([]), "the tax listed");
+});
