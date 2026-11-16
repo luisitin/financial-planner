@@ -21,7 +21,7 @@ import * as phone from "../qa/fixtures/phone-households.mjs";
 import * as round8 from "../qa/fixtures/round8-households.mjs";
 import { familyPlan } from "../qa/fixtures/family-plan.mjs";
 import { project } from "../core/math/retirement.js";
-import { buildInputs, compute as projection, taxSettings } from "../modules/retirement/projection/compute.js";
+import { buildInputs, compute as projection, taxSettings, retirementUnknown } from "../modules/retirement/projection/compute.js";
 import { compute as cashFlow } from "../modules/retirement/cash-flow/compute.js";
 import { compute as equity } from "../modules/career/equity/compute.js";
 
@@ -52,10 +52,15 @@ async function plans() {
 const ALL = (await plans()).map((x) => ({ ...x, plan: migrate(structuredClone(x.plan)) }));
 const digest = (v) => crypto.createHash("sha256").update(JSON.stringify(v) ?? "undefined").digest("base64url").slice(0, 22);
 const run = (fn) => { try { return fn(); } catch (e) { return { threw: e.message }; } };
+// Whole-app sweep x3 (2026-11-16): for a plan with nothing saved for retirement and nothing going in, the retirement pages add
+// `unknown`, the projection's own "We don't know yet" (retirementUnknown). Without that one field each output is what it was
+// before; the field must be the projection's answer. The words those pages now say are pinned by tests/sweep-x3.test.mjs.
+const sansUnknown = (v, u) => { if (!u || !v || typeof v !== "object" || !("unknown" in v)) return v; assert.deepEqual(v.unknown, u); const { unknown: _u, ...rest } = v; return rest; };
 const WAYS = ["fixed-real", "percent", "guardrails", "vpw", "endowment", "ninety-five"];
 /** Every figure the change could reach, for one plan, by what it is. */
 function figures(plan) {
   const p = () => structuredClone(plan);
+  const u = retirementUnknown(plan, { today: T });
   const b = run(() => buildInputs(p(), { today: T }));
   const engine = {}, brackets = {};
   if (b?.inputs) {
@@ -71,7 +76,7 @@ function figures(plan) {
     engine,
     brackets,
     projection: run(() => projection(p(), { today: T })),
-    cashFlow: run(() => cashFlow(p(), { today: T })),
+    cashFlow: run(() => sansUnknown(cashFlow(p(), { today: T }), u)),
   };
 }
 

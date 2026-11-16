@@ -3,7 +3,7 @@
 // out (spending, taxes), what is taken from which bucket, and the balances at year end, in
 // today's dollars or in the dollars of the year. Modelled on the Bogleheads Retiree Portfolio
 // Model's yearly ledger; the numbers come from the Projection page's engine run.
-import { compute as computeProjection, buildInputs } from "../projection/compute.js";
+import { compute as computeProjection, buildInputs, savingsUnknown, nothingSaved } from "../projection/compute.js";
 import { listOf, clean, drawSets, check, apply as applyHappenings, SPEND_FLOOR } from "../happenings.js";
 
 /**
@@ -28,7 +28,10 @@ export function compute(plan, params = {}) {
     ...(r.moves ? { moves: r.moves.map((m) => ({ fromName: m.fromName, toName: m.toName, amount: k(r, m.amount), tax: k(r, m.tax), capped: m.capped })) } : {}),
   }));
   const sum = (f) => rows.reduce((s, r) => s + f(r), 0);
-  return { ready: true, real, rows, order: [...(pr.inputs.withdrawalOrder ?? [])], ...(pr.inputs.withdrawalSplit ? { split: pr.inputs.withdrawalSplit } : {}), retireYear: pr.inputs.retireYear, people: pr.people, totals: { contributions: sum((r) => r.in.contributions), income: sum((r) => r.in.income), spending: sum((r) => r.out.spending), taxes: sum((r) => r.out.taxes), withdrawn: sum((r) => r.from.cash + r.from.taxable + r.from.deferred + r.from.free) }, verdict: pr.verdict, shortYear: pr.shortYear };
+  return { ready: true, real, rows, order: [...(pr.inputs.withdrawalOrder ?? [])], ...(pr.inputs.withdrawalSplit ? { split: pr.inputs.withdrawalSplit } : {}), retireYear: pr.inputs.retireYear, people: pr.people, totals: { contributions: sum((r) => r.in.contributions), income: sum((r) => r.in.income), spending: sum((r) => r.out.spending), taxes: sum((r) => r.out.taxes), withdrawn: sum((r) => r.from.cash + r.from.taxable + r.from.deferred + r.from.free) }, verdict: pr.verdict, shortYear: pr.shortYear,
+    // nothing saved for retirement and nothing going in: the projection's own "We don't know yet" on this same run (whole-app sweep
+    // x3, 2026-11-16: "The money runs out in 2067" beside it); absent for every other plan
+    ...(savingsUnknown(pr) ? { unknown: { nothingSaved: nothingSaved(plan) } } : {}) };
 }
 
 // ---- a change of one year, made from its row (gap list, next 60, item 32; map A10) ----------------------------------------------

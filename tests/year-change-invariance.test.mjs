@@ -20,7 +20,7 @@ import { emptyPlan, migrate } from "../core/schema/migrate.js";
 import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
 import * as phone from "../qa/fixtures/phone-households.mjs";
 import * as round8 from "../qa/fixtures/round8-households.mjs";
-import { compute as projection } from "../modules/retirement/projection/compute.js";
+import { compute as projection, retirementUnknown } from "../modules/retirement/projection/compute.js";
 import { compute as cashFlow } from "../modules/retirement/cash-flow/compute.js";
 import { answerOf } from "../modules/retirement/levers.js";
 
@@ -53,11 +53,18 @@ async function page(plan) {
     return { hero: textOf(hero), rows: list ? list.children.map((li) => textOf(li)) : null };
   } catch (e) { return { threw: e.message }; }
 }
+// Whole-app sweep x3 (2026-11-16): for a plan with nothing saved for retirement and nothing going in, the retirement pages add
+// `unknown`, the projection's own "We don't know yet" (retirementUnknown). Without that one field each output is what it was
+// before; the field must be the projection's answer. The words those pages now say are pinned by tests/sweep-x3.test.mjs.
+const sansUnknown = (v, u) => { if (!u || !v || typeof v !== "object" || !("unknown" in v)) return v; assert.deepEqual(v.unknown, u); const { unknown: _u, ...rest } = v; return rest; };
+/** The plans whose Year by year page now says "we can't say yet" (its words are pinned by tests/sweep-x3.test.mjs, not here). */
+const SAYS_UNKNOWN = new Set(ALL.filter(({ plan }) => retirementUnknown(plan, { today: T })).map((x) => x.name));
 async function figures(plan) {
   const p = () => structuredClone(plan);
+  const u = retirementUnknown(plan, { today: T });
   return {
-    cashFlow: run(() => cashFlow(p(), { today: T })),
-    cashFlowNominal: run(() => cashFlow(p(), { today: T, real: false })),
+    cashFlow: run(() => sansUnknown(cashFlow(p(), { today: T }), u)),
+    cashFlowNominal: run(() => sansUnknown(cashFlow(p(), { today: T, real: false }), u)),
     projection: run(() => projection(p(), { today: T })),
     answer: run(() => answerOf(p(), { today: T })),
     page: await page(plan),
@@ -80,6 +87,10 @@ test("with nothing changed, every figure and every row is what it was before the
   const was = JSON.parse(fs.readFileSync(FILE, "utf8")).plans;
   assert.deepEqual(Object.keys(now).sort(), Object.keys(was).sort(), "the same plans");
   let compared = 0;
-  for (const name of Object.keys(was)) for (const k of Object.keys(was[name])) { assert.equal(now[name][k], was[name][k], `${name}: ${k}`); compared++; }
+  assert.ok(SAYS_UNKNOWN.has("fixture renter-debt-plan.mjs:renterDebtPlan") && SAYS_UNKNOWN.size <= 4, [...SAYS_UNKNOWN].join(", "));
+  for (const name of Object.keys(was)) for (const k of Object.keys(was[name])) {
+    if (k === "page" && SAYS_UNKNOWN.has(name)) continue;
+    assert.equal(now[name][k], was[name][k], `${name}: ${k}`); compared++;
+  }
   assert.ok(compared >= 30 * 5, `${compared} digests`);
 });

@@ -3,10 +3,23 @@
 // "Change this year" under it (gap list, next 60, item 32): spend more or less that year, money in or out once, each saved
 // as a thing that will happen on Will the money last? (modules/retirement/happenings.js), with its green line and Undo.
 import { needButtons } from "../needs.js";
+import { unknownWords } from "../projection/compute.js";
 import { needItem } from "../../../core/words.js";
 import { compute, yearChanges, yearMarks, yearOffers, yearChange, yearFacts, lessRoom, removeYearChange } from "./compute.js";
 import { saveHappening, nextId, check as checkHappening, lineWords, drawSets, AMOUNT_CEILING, MONTHLY_CEILING } from "../happenings.js";
 import { answerOf, answerChangeWords } from "../levers.js";
+/** The page's own question inside the "we can't say yet" sentence (projection unknownWords). */
+export const UNKNOWN_WHAT = "whether the money lasts";
+/**
+ * shortWords(amount, { unknown, every }) -> what a year the money does not cover says: "$29,040 short this year" in red, or, when
+ * the plan's answer is not known yet (nothing saved for retirement and nothing going in; compute's `unknown`), "$29,040 of spending
+ * not covered this year" in the page's plain colour, as the hero says we can't say whether the money lasts (fix round of the
+ * whole-app sweep x3, critic P2: red "$0 left" and "short every year" under "we can't say"). `every`: the folded run of years.
+ */
+export function shortWords(amount, { unknown = false, every = false } = {}) {
+  if (every) return unknown ? `nothing left; about ${amount} of spending a year not covered` : `nothing left; about ${amount} short every year`;
+  return unknown ? `${amount} of spending not covered this year` : `${amount} short this year`;
+}
 
 // `open`: the year whose row shows "Change this year"; `kind`: the change whose form is open in it. Both start again on a new
 // visit (a new route), never in the plan.
@@ -121,7 +134,10 @@ export function render(root, ctx) {
   root.append(page);
   page.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, "Year by year"),
-    ui.h("p", { class: "lede" }, `${d.rows.length} years, from ${d.rows[0].year} to ${d.rows[d.rows.length - 1].year}. ${d.verdict === "short" ? `The money runs out in ${d.shortYear}.` : "The money lasts to the end."} Over the whole plan: ${money(d.totals.income)} of guaranteed income, ${money(d.totals.withdrawn)} taken from savings, ${money(d.totals.taxes)} of tax on withdrawals.`),
+    // nothing saved for retirement and nothing going in: the projection's own "we can't say yet" in place of "The money runs out"
+    // (whole-app sweep x3, 2026-11-16); the years stay below, as they are worked out
+    ui.h("p", { class: "lede" }, `${d.rows.length} years, from ${d.rows[0].year} to ${d.rows[d.rows.length - 1].year}. ${d.unknown ? unknownWords(d.unknown, UNKNOWN_WHAT) : d.verdict === "short" ? `The money runs out in ${d.shortYear}.` : "The money lasts to the end."} Over the whole plan: ${money(d.totals.income)} of guaranteed income, ${money(d.totals.withdrawn)} taken from savings, ${money(d.totals.taxes)} of tax on withdrawals.`),
+    d.unknown ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")) : null,
   ));
   const realSel = ui.select([{ value: "real", label: "today's dollars" }, { value: "nominal", label: "each year's dollars" }], state.real ? "real" : "nominal", { "aria-label": "Dollars", onChange: (e) => { state.real = e.target.value === "real"; redraw(); } });
   const fromSel = ui.select([{ value: "retirement", label: "from retirement on" }, { value: "all", label: "every year" }], state.from, { "aria-label": "Years", onChange: (e) => { state.from = e.target.value; redraw(); } });
@@ -263,7 +279,7 @@ export function render(root, ctx) {
     { key: "spending", label: "Spending", align: "right", render: (r) => money(r.out.spending) },
     { key: "taken", label: "From savings", align: "right", render: (r) => money(taken(r)) },
     { key: "taxes", label: "Tax", align: "right", render: (r) => money(r.out.taxes) },
-    { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall ? "bad" : "" }, money(r.end.total)) },
+    { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall && !d.unknown ? "bad" : "" }, money(r.end.total)) },
   ], rows);
   // what is open, and the green line, under the table's row on a wider screen
   if (wide) {
@@ -295,25 +311,27 @@ export function render(root, ctx) {
     const open = !wide && state.open === r.year;
     const btn = ui.h("button", { type: "button", class: "cf-row", "aria-expanded": open ? "true" : "false", onClick: () => toggle(r, btn, (panel) => { li.append(panel); return panel; }, li) },
       // the bold figure says what it is (stress test 2026-11-11, RB4: "$450,880" with its meaning 3,000 px below)
-      ui.h("span", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall ? "bad" : ""}` }, `${money(r.end.total)} left`)),
+      ui.h("span", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall && !d.unknown ? "bad" : ""}` }, `${money(r.end.total)} left`)),
       ui.h("span", { class: "rec-sub" }, r.retired ? `${money(r.out.spending)} spent${r.out.health > 0.5 ? ` (${money(r.out.health)} health insurance)` : ""} · ${money(r.in.income)} guaranteed income${r.in.lines.length ? ` (${r.in.lines.map((l) => l.name).join(", ")})` : ""} · ${money(taken(r))} from savings${r.rmd ? ` (${money(r.rmd)} required)` : ""} · ${money(r.out.taxes)} tax` : `${money(r.in.contributions)} added · growing`),
       r.moves ? ui.h("span", { class: "rec-sub" }, `${r.moves.map((m) => moveSaid(m, money)).join("; ")}.`) : null,
-      r.shortfall ? ui.h("span", { class: "rec-sub bad" }, `${money(r.shortfall)} short this year`) : null,
+      r.shortfall ? ui.h("span", { class: d.unknown ? "rec-sub" : "rec-sub bad" }, shortWords(money(r.shortfall), { unknown: !!d.unknown })) : null,
       ...(marks[r.year] ? marksLines(marks[r.year]) : []));
     const li = ui.h("li", { class: open ? "cf-open" : "", dataset: { key: `y${r.year}` } }, btn);
     if (notice && noticeYear === r.year) { li.append(notice); notice = null; }
     if (open) { const panel = panelFor(r); li.append(panel); openBtn = btn; shut = () => { panel.remove?.(); btn.setAttribute?.("aria-expanded", "false"); li.classList?.remove("cf-open"); state.open = null; state.kind = null; }; }
     return li;
   };
+  const bad = d.unknown ? "" : " bad";   // the red of a year the money does not cover, left out under "we can't say yet" (critic P2)
   const records = ui.h("ul", { class: "records only-narrow" }, rows.map(recordOf),
-    tailRow ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title bad" }, `${tailRow.first} to ${tailRow.last}`), ui.h("span", { class: "rec-value bad" }, `${money(0)} left`)), ui.h("div", { class: "rec-sub bad" }, `nothing left; about ${money(tailRow.short)} short every year`)) : null);
+    // under "we can't say yet" (compute's `unknown`) the years the money does not cover read in the plain colour (critic P2)
+    tailRow ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: `rec-title${bad}` }, `${tailRow.first} to ${tailRow.last}`), ui.h("span", { class: `rec-value${bad}` }, `${money(0)} left`)), ui.h("div", { class: `rec-sub${bad}` }, shortWords(money(tailRow.short), { unknown: !!d.unknown, every: true }))) : null);
   page.append(ui.card(null,
     // a green line whose year has no row now (the money runs out before it): at the top of the ledger
     notice,
     // how to change a year, first in the ledger (critic of item 32, P2); a chevron on each phone record says it too
     ui.h("p", { class: "small", style: { margin: "0 0 8px" } }, TAP_WORDS),
     hiddenLine,
-    ui.h("div", { class: "only-wide" }, tableWrap, tailRow ? ui.h("p", { class: "bad small", style: { margin: "10px 0 0" } }, `${tailRow.first} to ${tailRow.last}: nothing left; about ${money(tailRow.short)} short every year.`) : null,
+    ui.h("div", { class: "only-wide" }, tableWrap, tailRow ? ui.h("p", { class: `small${bad}`, style: { margin: "10px 0 0" } }, `${tailRow.first} to ${tailRow.last}: ${shortWords(money(tailRow.short), { unknown: !!d.unknown, every: true })}.`) : null,
       rows.some((r) => r.moves) ? ui.h("p", { class: "muted small", style: { margin: "10px 0 0" } }, rows.filter((r) => r.moves).map((r) => `${r.year}: ${r.moves.map((m) => moveSaid(m, money)).join("; ")}.`).join(" ")) : null,
       changedRows.length ? ui.h("p", { class: "muted small", style: { margin: "10px 0 0" } }, `Your changes: ${changedRows.map((r) => marksSaid(marks[r.year], { money, people, real: state.real })).join("; ")}.`) : null),
     ui.h("p", { class: "muted small", style: { margin: "0 0 8px" } }, `Left: savings at year end. ${orderSaid(d.order, d.split)}`),

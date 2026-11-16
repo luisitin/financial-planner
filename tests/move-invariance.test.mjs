@@ -21,7 +21,7 @@ import { ARCHETYPES } from "../qa/households/lib/catalog.mjs";
 import * as phone from "../qa/fixtures/phone-households.mjs";
 import * as round8 from "../qa/fixtures/round8-households.mjs";
 import { project, copyInputs } from "../core/math/retirement.js";
-import { buildInputs, compute as projection, taxSettings } from "../modules/retirement/projection/compute.js";
+import { buildInputs, compute as projection, taxSettings, retirementUnknown } from "../modules/retirement/projection/compute.js";
 import { compute as cashFlow } from "../modules/retirement/cash-flow/compute.js";
 import { effects } from "../modules/retirement/happenings.js";
 
@@ -60,6 +60,10 @@ function withHappenings(plan) {
   p.retirement = { ...(p.retirement ?? {}), happenings: list };
   return p;
 }
+// Whole-app sweep x3 (2026-11-16): for a plan with nothing saved for retirement and nothing going in, the retirement pages add
+// `unknown`, the projection's own "We don't know yet" (retirementUnknown). Without that one field each output is what it was
+// before; the field must be the projection's answer. The words those pages now say are pinned by tests/sweep-x3.test.mjs.
+const sansUnknown = (v, u) => { if (!u || !v || typeof v !== "object" || !("unknown" in v)) return v; assert.deepEqual(v.unknown, u); const { unknown: _u, ...rest } = v; return rest; };
 /** Every figure the change could reach, for one plan, by what it is. */
 function figures(plan) {
   const p = () => structuredClone(plan);
@@ -80,11 +84,11 @@ function figures(plan) {
     brackets,
     copy: b?.inputs ? run(() => copyInputs(b.inputs)) : null,
     projection: run(() => projection(p(), { today: T })),
-    cashFlow: run(() => cashFlow(p(), { today: T })),
+    cashFlow: run(() => sansUnknown(cashFlow(p(), { today: T }), retirementUnknown(plan, { today: T }))),
     hapInputs: hb,
     hapEngine: hb?.inputs ? run(() => project(hb.inputs)) : null,
     hapProjection: run(() => projection(structuredClone(h), { today: T })),
-    hapCashFlow: run(() => cashFlow(structuredClone(h), { today: T })),
+    hapCashFlow: run(() => sansUnknown(cashFlow(structuredClone(h), { today: T }), retirementUnknown(h, { today: T }))),
     hapEffects: run(() => effects(structuredClone(h), (q, params) => buildInputs(q, { today: T, ...params }).inputs ?? null, { today: T })),
   };
 }

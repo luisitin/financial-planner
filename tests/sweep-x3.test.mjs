@@ -160,3 +160,38 @@ test("Long-term care: nothing saved -> the care costs stay, the verdict is the p
   assert.match(f.text, /If Ana needed care/);
   assert.doesNotMatch(f.text, /can't say/);
 });
+
+test("Year by year: nothing saved -> the lede says we can't say whether the money lasts, never 'The money runs out in 2067'; the years stay; the family's lede unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/retirement/cash-flow/view.js");
+  await saysUnknown("retirement/cash-flow", UNKNOWN_WHAT, { title: "Year by year" });
+  const r = await drawn("retirement/cash-flow", rd());
+  assert.match(r.text, /72 years, from 2026 to 2097\. Nothing is saved for retirement, so we can't say whether the money lasts yet\./);
+  assert.match(r.text, /2067 · age 65/, "the years stay, as they are worked out");
+  const f = await drawn("retirement/cash-flow", fam());
+  assert.match(f.text, /The money lasts to the end\./);
+  assert.doesNotMatch(f.text, /can't say/);
+});
+
+// a class on an element of the drawn page (the stand-in DOM keeps it as the attribute)
+const classed = (root, cls) => root.all().filter((e) => String(e.getAttribute?.("class") ?? "").split(/\s+/).includes(cls));
+test("Year by year: under 'we can't say yet' the years the money does not cover read in the plain colour, 'of spending not covered', never red 'short' (critic P2); a plan with savings that runs short keeps its red", async () => {
+  const { shortWords } = await import("../modules/retirement/cash-flow/view.js");
+  assert.equal(shortWords("$29,040"), "$29,040 short this year");
+  assert.equal(shortWords("$29,040", { unknown: true }), "$29,040 of spending not covered this year");
+  assert.equal(shortWords("$29,711", { every: true }), "nothing left; about $29,711 short every year");
+  assert.equal(shortWords("$29,711", { unknown: true, every: true }), "nothing left; about $29,711 of spending a year not covered");
+  for (const plan of [rd(), sam()]) {
+    const r = await drawn("retirement/cash-flow", plan);
+    assert.match(r.text, /\$[\d,]+ of spending not covered this year/);
+    assert.match(r.text, /nothing left; about \$[\d,]+ of spending a year not covered/);
+    assert.doesNotMatch(r.text, /short this year|short every year/);
+    assert.deepEqual(classed(r.root, "bad").map((e) => e.textContent), [], "nothing red");
+  }
+  // one dollar in the 401(k): the answer is known (the money runs out), and the short years keep their red words
+  const one = rd(); one.accounts.find((a) => a.type === "401k").balance = 1;
+  const k = await drawn("retirement/cash-flow", one);
+  assert.match(k.text, /The money runs out in 20\d\d\./);
+  assert.match(k.text, /short this year/);
+  assert.ok(classed(k.root, "bad").length > 0);
+});
+

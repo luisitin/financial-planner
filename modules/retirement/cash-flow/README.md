@@ -166,3 +166,14 @@ nothing; every sentence of the green line and the mark; "critic F1" to "critic P
 apply()'s skipped lines, the cap and the floor, one id and one line, the hidden-years line, Close and the styles. `tests/year-change-invariance.test.mjs`: with nothing changed, Year by
 year in both units, the projection, the answer and the page's hero and records over 44 invented plans are byte for byte what
 they were at dca545e.
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this page's lede
+said "The money runs out in 2067" on the same plan (Riley, 24, an empty Work 401(k)). `compute` now adds `unknown: {
+nothingSaved }` when the projection's own `savingsUnknown` holds on the very run this page shows (`nothingSaved` from
+retirement/projection), and the lede says, in place of "The money runs out in ...", the projection's sentence with this page's
+question ("whether the money lasts", `UNKNOWN_WHAT`), with one filled link, "Add what you own ›". The years stay below as they
+are worked out, and a year the money does not cover then reads in the page's plain colour as "$29,040 of spending not covered this
+year" (the run of empty years: "nothing left; about $29,711 of spending a year not covered"), never the red "$0 left" and "short"
+under a hero that says we can't say (`shortWords`; fix round, critic P2). A plan that has savings and runs short keeps its red. For every other plan the result is the same as before (absent field; the invariance test compares it with
+ce79d70 over the invented households).
