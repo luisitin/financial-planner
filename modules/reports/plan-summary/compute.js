@@ -8,7 +8,7 @@ import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
 import { compute as computeNext, monthWords } from "../../overview/next-best-action/compute.js";
 import { goalsBehind } from "../../overview/alerts/compute.js";
 import { compute as computeHealth } from "../../overview/health-score/compute.js";
-import { compute as computeProjection, savingsUnknown } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, savingsUnknown, nothingSaved } from "../../retirement/projection/compute.js";
 import { compute as computeMonteCarlo } from "../../retirement/monte-carlo/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
@@ -22,12 +22,34 @@ import { marksOf, sumMark, debtMarks, GUESS, PARTLY, ESTIMATE } from "../guess-m
 export const SUMMARY_PATHS = 1000;
 /** How far ahead the summary's milestones reach. */
 export const MILESTONE_YEARS = 10;
+/**
+ * Where the sheet's retirement answer is "not known yet" (Will the money last?'s own gate: savingsUnknown on the same run), the
+ * Plan health score's retirement step and row follow that answer, not the score's "Retirement on track" (z2, 2026-11-16:
+ * Riley's sheet said "Retirement: not known yet", then "Retirement on track. Once you start saving, add it and we can answer.").
+ * The step is the sheet's own, one action sentence per case (z2 fix round, critic M1 and P1: "Retirement: not known yet" read as
+ * a label, "add it" named nothing, and where the score waits for Social Security the step asked for Social Security under an
+ * opening that says nothing is saved): told us nothing is saved, or told us nothing about retirement savings.
+ */
+export const UNKNOWN_STEPS = {
+  nothingSaved: { title: "Start saving for retirement", detail: "Once you add what you have saved, we can say whether the money will last." },
+  untold: { title: "Add your retirement savings", detail: "Once they are on the Net worth page, we can say whether the money will last." },
+};
+/** The sheet's retirement step for the gate's two cases. */
+export const unknownStep = (nothingSavedToo) => UNKNOWN_STEPS[nothingSavedToo ? "nothingSaved" : "untold"];
+export const UNKNOWN_PART = "Retirement";
+/**
+ * The score's parts that wait for the same answer (its retirement part, and protection: "the stress tests need what you own
+ * first, like the retirement part"): under "not known yet" their row says so (`notKnown`), as the Plan health page does, not
+ * "0 out of 25". A part the score could not judge for another reason (Goals with no dated goal) keeps its points, as on every
+ * other sheet (critic M2, P4).
+ */
+export const NOT_KNOWN_PARTS = ["retirement", "protection"];
 
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, today, household: { name, people: [{ name, role, age }], filing, state },
- *   netWorth, cashflow (next-best-action's spare) | null, health: { score, band, gains } | null,
- *   retirement: { ready, verdict, retireYear, atRetirementReal, success, lastsTo, shortYear, shortAge, affordableMonthly, spendingMonthly, chance, medianEndReal, socialSecurityMonthly, hint } ,
+ *   netWorth, cashflow (next-best-action's spare) | null, health: { score, band, parts: [{ title, points, max, status, notKnown? (under "not known yet": a part waiting for the same answer) }] } | null,
+ *   retirement: { ready, unknown (Will the money last?'s "We don't know yet"), nothingSaved? (with unknown: told us nothing is saved), verdict, retireYear, atRetirementReal, success, lastsTo, shortYear, shortAge, affordableMonthly, spendingMonthly, chance, medianEndReal, socialSecurityMonthly, hint } ,
  *   protection: { passed, total, failing: [{ title, failAge, failYear }] } | null,
  *   goals: [...], debts: [...], milestones: [timeline events, next MILESTONE_YEARS], nextSteps: [{ title, detail }], assumptions,
  *   ours? (smart guesses C8: only while a figure printed rests on our guesses, or with params.estimates on one worked out
@@ -55,8 +77,9 @@ export function compute(plan, params = {}) {
   const payoffPlan = computePayoff(plan, { today }).chosen;
   const a = plan.assumptions ?? {};
 
+  const unknown = pr.ready && savingsUnknown(pr);
   const retirement = pr.ready ? {
-    ready: true, unknown: savingsUnknown(pr), verdict: pr.verdict, retireYear: pr.atRetirement?.year ?? null, atRetirementReal: pr.atRetirement?.totalReal ?? null,
+    ready: true, unknown, ...(unknown ? { nothingSaved: nothingSaved(plan) } : {}), verdict: pr.verdict, retireYear: pr.atRetirement?.year ?? null, atRetirementReal: pr.atRetirement?.totalReal ?? null,
     success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge,
     endReal: pr.atEnd.totalReal, affordableMonthly: pr.affordable / 12, spendingMonthly: pr.spendingYearly / 12,
     chance: mc?.ready ? mc.successRate : null, medianEndReal: mc?.ready ? mc.medianEndReal : null, paths: mc?.paths ?? null,
@@ -68,7 +91,13 @@ export function compute(plan, params = {}) {
 
   const nextSteps = [];
   if (nb.ready && nb.next) nextSteps.push({ title: nb.next.title, detail: nb.next.detail });
-  for (const g of health.ready ? health.gains : []) if (g.fix && nextSteps.length < 4 && !nextSteps.some((s) => s.detail === g.fix)) nextSteps.push({ title: g.title, detail: g.fix });
+  // (not known yet: the score's retirement step is the sheet's own, whatever the score waits for; every other step as the score words it)
+  const stepOf = (p) => (unknown && p.id === "retirement" ? unknownStep(retirement.nothingSaved) : { title: p.title, detail: p.fix });
+  for (const g of health.ready ? health.gains : []) {
+    if (!g.fix || nextSteps.length >= 4) continue;
+    const step = stepOf(g);
+    if (!nextSteps.some((s) => s.detail === step.detail)) nextSteps.push({ title: step.title, detail: step.detail });
+  }
 
   const ours = summaryMarks(plan, { nb, pr, gl, li, estimates: !!params.estimates });
   return {
@@ -77,7 +106,7 @@ export function compute(plan, params = {}) {
     household: { name: plan.meta?.name || "", people: ppl.people.map((p) => ({ name: p.name, role: p.role, age: p.age, retirementAge: p.role === "dependent" ? null : p.retirementAge })), filing: ppl.filingLabel, state: ppl.state },
     netWorth: { assets: nw.assets, liabilities: nw.liabilities, netWorth: nw.netWorth, cash: nw.cash, investable: nw.investable, byTaxBucket: nw.byTaxBucket, change: nw.change },
     cashflow: nb.ready ? nb.spare : null,
-    health: health.ready ? { score: health.score, band: health.band, parts: health.parts.map((p) => ({ title: p.title, points: p.points, max: p.max, status: p.status })) } : null,
+    health: health.ready ? { score: health.score, band: health.band, parts: health.parts.map((p) => ({ title: unknown && p.id === "retirement" ? UNKNOWN_PART : p.title, points: p.points, max: p.max, status: p.status, ...(unknown && p.status === "unknown" && NOT_KNOWN_PARTS.includes(p.id) ? { notKnown: true } : {}) })) } : null,
     retirement,
     protection: st?.ready ? { passed: st.passed, total: st.total, failing: st.scenarios.filter((s) => !s.success).map((s) => ({ title: s.title, failAge: s.failAge, failYear: s.failYear, roomMonthly: s.roomMonthly })) } : null,
     // a goal waiting its turn on Next best action reads "starts later", as on Goals and the Timeline (review 2026-11-02)

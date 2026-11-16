@@ -5,6 +5,7 @@
 import { reportFrame, figs, rtable, section, list, settleReport, marked, markedCell, guessFoot } from "../report-kit.js";
 import { isYou, nameIn } from "../../../core/words.js";
 import { STATE_NAMES } from "../../taxes/state/compute.js";
+import { unknownParts } from "../../retirement/projection/compute.js";
 
 // a person inside a sentence: the unnamed first adult ("Me" from Get started) is "you", the unnamed partner "your spouse",
 // a typed name as typed; someone else left without a name stays as they are (round 7, 2026-11-06)
@@ -46,7 +47,8 @@ export function render(page, ctx) {
       `This plan is for ${who}.`,
       r.ready && r.retireYear ? `${adults.length > 1 ? "The household's" : "The"} spending years start in ${r.retireYear}.` : null,
       `Today ${adults.length > 1 ? "you own" : "you own"} ${money(d.netWorth.assets)} and owe ${money(d.netWorth.liabilities)}: a net worth of ${money(d.netWorth.netWorth)}.`,
-      r.ready && r.unknown ? "Retirement: not known yet. You haven't entered retirement savings, so we can't say whether the money will last." : null,
+      // not known yet: Will the money last?'s own words for its two cases (told us nothing, or told us nothing is saved; z2)
+      r.ready && r.unknown ? `Retirement: not known yet. ${unknownParts({ nothingSaved: !!r.nothingSaved }, "whether the money will last").sentence}` : null,
       r.ready && !r.unknown ? (r.success ? `At the plan's own assumptions the money lasts to ${r.lastsTo}, leaving about ${big(r.endReal)} in today's dollars` : `At the plan's own assumptions the money runs out in ${r.shortYear}${r.shortAge ? `, at ${r.shortAge}` : ""}`) + (r.chance !== null ? `; in ${pct(r.chance)} of ${r.paths.toLocaleString("en-US")} pretend futures it lasts.` : ".") : null,
       d.health ? `Plan health: ${d.health.score} out of 100 (${d.health.band.toLowerCase()}).` : null,
     ].filter(Boolean).join(" ");
@@ -80,7 +82,7 @@ export function render(page, ctx) {
       figs(ui, [
         ["Spending years start", r.retireYear ? String(r.retireYear) : "now"],
         // nothing saved for retirement on file: said so, never a $0 that reads as a figure (critic F3)
-        r.unknown ? ["Retirement savings", "Not entered yet"] : r.atRetirementReal !== null ? [marked("Saved by then (today's dollars)", o.savedBy), big(r.atRetirementReal)] : null,
+        r.unknown ? ["Retirement savings", r.nothingSaved ? "Nothing saved yet" : "Not entered yet"] : r.atRetirementReal !== null ? [marked("Saved by then (today's dollars)", o.savedBy), big(r.atRetirementReal)] : null,
         r.unknown ? ["Does the money last?", "Not known yet"] : r.success ? ["The money lasts", `to ${r.lastsTo}`, "good"] : ["The money runs out", String(r.shortYear), "bad"],
         r.chance !== null && !r.unknown ? ["Chance it lasts (pretend futures)", pct(r.chance), r.chance >= 0.85 ? "good" : r.chance < 0.7 ? "bad" : null] : null,
         r.unknown ? null : ["You could spend each month if markets do as well as average", est(r.affordableMonthly)], [marked("Planned a month", o.planned), money(r.spendingMonthly)],
@@ -113,8 +115,10 @@ export function render(page, ctx) {
 
     if (d.nextSteps.length) sheet.append(section(ui, "Next steps", ui.h("ol", { class: "rp-list" }, d.nextSteps.map((s) => ui.h("li", {}, ui.h("b", {}, `${s.title}. `), s.detail)))));
 
+    // (retirement not known yet: the parts waiting for that answer, retirement and protection, read "not known yet", as the Plan
+    // health page says it, not "0 out of 25"; every other part keeps its points, as on every sheet; z2 and its fix round, M2)
     if (d.health) sheet.append(section(ui, `Plan health: ${d.health.score} out of 100`,
-      rtable(ui, [{ label: "Part", get: (p) => p.title }, { label: "Points", num: true, get: (p) => `${Number.isInteger(p.points) ? p.points : p.points.toFixed(1)} out of ${p.max}` }], d.health.parts)));
+      rtable(ui, [{ label: "Part", get: (p) => p.title }, { label: "Points", num: true, get: (p) => (p.notKnown ? "not known yet" : `${Number.isInteger(p.points) ? p.points : p.points.toFixed(1)} out of ${p.max}`) }], d.health.parts)));
 
     const as = d.assumptions;
     sheet.append(section(ui, "Assumptions",

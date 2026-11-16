@@ -98,3 +98,45 @@ A printed figure that rests on our guesses says so, so a sheet handed to an advi
   guesses" (list, name, column, value), while one is in use, so every other file keeps its columns (critic F4: a last column
   that came and went with the guesses broke a sheet built on them); the whole-plan JSON already carries the ledger (`guesses`).
   "If something happens to us" prints no money figures and is unchanged.
+
+## One answer for retirement on the whole sheet (z2, 2026-11-16)
+Every invented household was drawn as the shell draws it (the qa fixtures, the 14 base households, the phone-built ones, the
+round 8 households, the Get started personas, the demo). The sheet's own retirement answer already used Will the money last?'s
+gate (`savingsUnknown` on the same projection run; the page's extra params change no verdict, checked for every household).
+What contradicted it was on the same sheet, in the Plan health score's words: for Riley (the renter-debt fixture: 24, an empty
+Work 401(k), nothing going in) the lead said "Retirement: not known yet" and the Retirement section "Not known yet", then Next
+steps said "Retirement on track. Once you start saving, add it and we can answer." and the health table "Retirement on track 0 out
+of 25". The same on the second Riley fixture and for the personas Sam and Jordan, and on no other household.
+
+Only where the sheet's answer is "not known yet" (`retirement.unknown`, Will the money last?'s gate), so every other sheet reads
+exactly as before:
+- Next steps: the score's retirement step is the sheet's own (`UNKNOWN_STEPS`, `unknownStep`), an action in one sentence per case,
+  whatever the score itself waits for: told us nothing is saved, "Start saving for retirement. Once you add what you have saved,
+  we can say whether the money will last."; told us nothing, "Add your retirement savings. Once they are on the Net worth page,
+  we can say whether the money will last." (fix round, 2026-11-17: the step read "Retirement: not known yet. Once you start
+  saving, add it and we can answer.", a label with an "it" that named nothing, critic P1; and for a plan with no Social Security
+  entered it asked for Social Security under an opening that says nothing is saved, because the score checks Social Security
+  first, critic M1. Social Security is still on the score's own list, "The plan knows enough".)
+- Plan health table: that part's row is `UNKNOWN_PART`, "Retirement", and the parts that wait for the same answer
+  (`NOT_KNOWN_PARTS`: retirement, and protection, whose stress tests "need what you own first, like the retirement part") read
+  "not known yet" (the Plan health page's own words, `notKnown` on the part) instead of "0 out of 25". Every other part keeps its
+  points, as on every other sheet: Goals with no dated goal reads "0 out of 5" here as everywhere (fix round, critic M2 and P4:
+  it read "not known yet" only on these sheets, beside Riley's listed emergency fund goal).
+- The lead and the Retirement section say Will the money last?'s words for its two cases (retirement/projection `unknownParts`,
+  `nothingSaved`, the new `retirement.nothingSaved`): Riley "Retirement: not known yet. Nothing is saved for retirement, so we
+  can't say whether the money will last yet." with "Retirement savings: Nothing saved yet"; Sam "Retirement: not known yet. You
+  haven't told us about retirement savings, so we can't say whether the money will last yet." with "Not entered yet" (as before).
+
+Not changed (the score's own gate, and another track's): a household whose score is not judged for want of Social Security while
+Will the money last? answers (the 14 base households, the retired couple, Fi of round 8) still shows "Retirement on track 0 out of
+25" under an answer such as "The money lasts to 2054"; making the score answer without the missing Social Security belongs to
+the Plan health score and the lead's track on that answer (z1), and doing it here would move twenty sheets.
+
+Tests (`module.test.mjs`): compute gives the gate's two cases and words the step and titles the row only there (the family keeps
+the score's titles, with no new field); the step is the sheet's own where the score waits for Social Security (a 24-year-old with
+an empty 401(k), and with cash only); only retirement and protection carry `notKnown`, Goals keeps its points; Riley's and Sam's sheets drawn: no "Retirement on track" and no "0 out of 25" anywhere, the
+lead, the step, the rows and the savings figure word for word, no "runs out"; the family's sheet keeps "Retirement on track 25 out
+of 25". Invariance against e223a42 over every invented household (`z2-invariance.json`, 200 paths): byte for byte, and for the
+four gated households byte for byte once the score's retirement step and titles are put back and `retirement.nothingSaved` and
+`notKnown` are taken off.
+
