@@ -8,3 +8,9 @@
 The bills found in the bank lines come from the lines that are not left out of the totals on the Transactions page
 (ledger `counted(plan)`, as on Recurring). With none marked the lines read are the plan's own list
 (`tests/left-out.test.mjs`).
+
+## One filled button (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+With a salary that has no payday yet, the "To show your paydays" card's "Show my paydays" is the page's filled button; the empty
+"Your reminders" form, whose "Add it" was a second filled button on the same first view (the invented family, the retired
+couple, the renter), now waits behind an outlined "+ Add a reminder" (its Cancel folds it back). With nothing to ask, the empty
+form stays open as before. The first view of the family went from 7 boxes and 2 filled buttons to 2 and 1 (counts file lowered).

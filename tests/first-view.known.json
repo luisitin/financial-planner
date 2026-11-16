@@ -31,7 +31,7 @@
   "goals/goals": {"plan":{"figs":21}},
   "goals/house": {"plan":{"words":300,"figs":22,"boxes":5},"empty":{"words":220,"figs":12}},
   "goals/prioritizer": {"plan":{"figs":15}},
-  "household/calendar": {"plan":{"words":320,"boxes":7,"filled":2}},
+  "household/calendar": {"plan":{"words":310}},
   "household/people": {"empty":{"words":120,"boxes":7}},
   "insurance/disability": {"plan":{"words":450,"figs":30}},
   "insurance/health": {"plan":{"words":260,"boxes":8},"empty":{"words":260,"figs":5,"boxes":8}},

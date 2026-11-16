@@ -129,8 +129,10 @@ export function render(page, ctx) {
         pending = `Removed "${r.name}".`;
         store.update((q) => { removeReminder(q, r.id); });
       }, { class: "secondary small" })))))));
-  if (adding || !mine.length) { if (mine.length) rem.append(ui.h("h3", {}, "Add a reminder")); rem.append(reminderForm(null)); }
-  else if (!editing) rem.append(ui.row(ui.button("+ Add another reminder", () => { adding = true; rerender(); }, { class: "secondary" })));
+  // the empty add form stays open only while nothing above holds the page's filled button: with the paydays card asking, it folds
+  // behind an outlined "+ Add a reminder" (whole-app sweep x3, 2026-11-16: "Show my paydays" and "Add it" both filled)
+  if (adding || (!mine.length && !asking.length)) { if (mine.length) rem.append(ui.h("h3", {}, "Add a reminder")); rem.append(reminderForm(null)); }
+  else if (!editing) rem.append(ui.row(ui.button(mine.length ? "+ Add another reminder" : "+ Add a reminder", () => { adding = true; rerender(); }, { class: "secondary" })));
   root.append(rem);
 
   root.append(ui.h("details", { class: "card fold fold-card" },
@@ -156,7 +158,7 @@ export function render(page, ctx) {
       pending = r ? `Saved "${String(v.name).trim()}".` : `Added "${String(v.name).trim()}".`;
       editing = null; adding = false;
       store.update((q) => { saveReminder(q, { ...v, id: r?.id ?? ui.uid() }); });
-    }, { submitLabel: r ? "Save" : "Add it", onCancel: r || mine.length ? () => { editing = null; adding = false; rerender(); } : null });
+    }, { submitLabel: r ? "Save" : "Add it", onCancel: r || mine.length || asking.length ? () => { editing = null; adding = false; rerender(); } : null });
     return form;
   }
 }

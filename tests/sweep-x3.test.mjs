@@ -319,3 +319,13 @@ test("Chance the money lasts, If history repeated, How much to take out: with So
     assert.match(r.text, /Type what you'll spend ›/, `${key}: the way on is still there, outlined`);
   }
 });
+
+test("Money calendar: with the paydays card asking, its 'Show my paydays' is the one filled button; the empty reminder form waits behind '+ Add a reminder'", async () => {
+  const r = await drawn("household/calendar", fam());
+  assert.deepEqual(r.filled, ["Show my paydays"]);
+  assert.match(r.text, /\+ Add a reminder/);
+  assert.doesNotMatch(r.text, /Add it/);
+  // the empty plan has no payday to ask for: the form stays open, its "Add it" the one filled button, as before
+  const e = await drawn("household/calendar", migrate({}));
+  assert.deepEqual(e.filled, ["Add it"]);
+});
