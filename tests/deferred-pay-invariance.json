@@ -1,0 +1,373 @@
+{
+ "note": "digests of Equity compensation's and the retirement figures before deferred pay (commit 7d9ca39); tests/deferred-pay-invariance.test.mjs says how to write them again",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "8zdrrBg8aOpzYBGR69ZFUM",
+   "engine": "hFTUjFtHeVO2VZcp-Jo9Zy",
+   "brackets": "6KyKtBzlR_LX0ijtDkIB6W",
+   "projection": "xU7XB8Eg9sALNzd4yvebU3",
+   "cashFlow": "pK2UPJgGaVewXTeQyROpf7"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "UD6QpXuP5hZCIPeDhcuZOf",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "4g8YFP90pQ0T8Oy2EipMlE",
+   "cashFlow": "yMu25mpwMG2XZFzTVo-lnD"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "8zdrrBg8aOpzYBGR69ZFUM",
+   "engine": "hFTUjFtHeVO2VZcp-Jo9Zy",
+   "brackets": "6KyKtBzlR_LX0ijtDkIB6W",
+   "projection": "xU7XB8Eg9sALNzd4yvebU3",
+   "cashFlow": "pK2UPJgGaVewXTeQyROpf7"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "JGih3oAHPnYWElMiYw2-nk",
+   "engine": "wF1bFEPfr2laXmcBa5JAQr",
+   "brackets": "RPntg3qj4XZf5zLAYt5j7q",
+   "projection": "CzL-TOWRLOm_xF4KloDSFi",
+   "cashFlow": "357Q7pFk9cW9Z0XVirXKKt"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "wbAbtNfXhhidzPGL7v-G-g",
+   "engine": "JQnL_ZBzYyiMVyqCNlzYzk",
+   "brackets": "ShOzrD8C9buwJZb9DXZTPz",
+   "projection": "bWRpJJJw0lF7VJaHsWxADk",
+   "cashFlow": "4AMMsE4VZ1vrT4R7Hvkt8X"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "VBShrEyuS6Z_PYkkHgkIAf",
+   "engine": "MQQ19EZuqUtyO-IwLWwcHg",
+   "brackets": "ErKoBVYTLyNhlkfA3wXQbB",
+   "projection": "a3mMiwMHUMKL96etY6JbKG",
+   "cashFlow": "yEXmlw-_5C4z3cOAnobDgA"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "QsFt8JNa8cKkyXG1S9tWjN",
+   "engine": "qSgi1xwEiQINQOru9mYwBV",
+   "brackets": "9bV1sTMMxR_34MIh8GUy0z",
+   "projection": "2NXzhajaRPTPa2lT_wM8Hs",
+   "cashFlow": "Q6CHITj03rC7AORQXzYLgT"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "QsFt8JNa8cKkyXG1S9tWjN",
+   "engine": "qSgi1xwEiQINQOru9mYwBV",
+   "brackets": "9bV1sTMMxR_34MIh8GUy0z",
+   "projection": "2NXzhajaRPTPa2lT_wM8Hs",
+   "cashFlow": "Q6CHITj03rC7AORQXzYLgT"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "f1C1uxRcdOEdCR2qdRy8Cn",
+   "engine": "-YXFP98DtvTgVVJbL6wt6l",
+   "brackets": "zf07311Xx3viVSPBge6QA3",
+   "projection": "X9YTISX6zoIDCx6KQgZVKW",
+   "cashFlow": "Wr8C-IBlFacfCbUbC9b_83"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "c4katIePbj0vtPMI3TOatS",
+   "engine": "7DJaoEG5jN1JLClo8S7gMJ",
+   "brackets": "hT_LPDM4N4HjOQYCYxd6Eq",
+   "projection": "SpHaB6tpE1xM_UUgoc7wOD",
+   "cashFlow": "akk6mdH17KPIOQPCcR9oCc"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "UD6QpXuP5hZCIPeDhcuZOf",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "4g8YFP90pQ0T8Oy2EipMlE",
+   "cashFlow": "yMu25mpwMG2XZFzTVo-lnD"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "kp0CivIo37yg8GOsvBNMtq",
+   "engine": "U6rbBzh4kJFbZiveRXVJnL",
+   "brackets": "xbRDLGPwCHOoqdhIUYGx7N",
+   "projection": "sOxE1V6Rvy3iw49XBIUZnA",
+   "cashFlow": "KmzfAOoZa3LY5pr9MAIgLa"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "zrovnQdLs-UcqDuHVeuoZl",
+   "engine": "TGezAoK2vEFq1DYPXL_lMf",
+   "brackets": "GaPIzbkh-9phFs-NeIzfJE",
+   "projection": "z-JrWdzpE2p85x0hIMIpfd",
+   "cashFlow": "V7A36t9vyTql35XoYLKXxf"
+  },
+  "01-single-adult/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "8vguTCR-IfF-PrOeOLhqSX",
+   "engine": "eLRhK1RngR5nEA01vz9eFL",
+   "brackets": "GB0iKDKl_dU5AZ3bAvkda0",
+   "projection": "fktnOurdDzlToEJcr-JACG",
+   "cashFlow": "ZZdWJUYj1txkxr1ujHSnCW"
+  },
+  "02-couple-no-kids/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "QqN7pWWrvGNH6P628UObEp",
+   "engine": "7zbPsYGEMxVuivh7_4aFdv",
+   "brackets": "ZSyHgu-cUXRIlVhh8A8BT8",
+   "projection": "iUipSPIbAUgi5gu1ZObB-W",
+   "cashFlow": "pLf46Dg9hlhkiBRENvRZvx"
+  },
+  "03-single-parent/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "fkQmtnNZjm1syoVuW6ars0",
+   "engine": "gtglFNP9DfEolqiSNlQ6ji",
+   "brackets": "gzQDC2idNWDtnMfh8pCQL3",
+   "projection": "gSeuGyfABhMiPFf9bREMzD",
+   "cashFlow": "zBhVMmZHdMXE0x-BXpfNVM"
+  },
+  "04-two-parents/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "PVuXd3vIgSHtnDrQnYPZ1c",
+   "engine": "Ep8M4C5arTM3-3WLPIVo7w",
+   "brackets": "fZK_6ulScN58okLU3UNX5d",
+   "projection": "2pAYfNXVtoanylv52b6kV2",
+   "cashFlow": "W5GRPn7Z38At77-3dFZqxi"
+  },
+  "05-stay-at-home-parent/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "IAubBQQiT5nVa9OLdUhJCg",
+   "engine": "0jIUTgxgNkWQaR2_rJElKP",
+   "brackets": "dY9yseCvc8igTWFwMmdutD",
+   "projection": "FlMw8Jtrf9J-0Kf18TiXQh",
+   "cashFlow": "sSF6nckljaGDXuPwEWd3Bl"
+  },
+  "06-blended-family/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "cM2C9LPfgN6Jco2Dvsqn2p",
+   "engine": "WSLkBdgFnw2_xRdAHXM57t",
+   "brackets": "V5vHPm7MYBdrKKNJvfBAZK",
+   "projection": "pW8Bp_Kzf2movaVmX5MOBx",
+   "cashFlow": "dP1oh8_lRZQdBF_dihZALG"
+  },
+  "07-multigenerational/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "U26bIXa4tlfIR15zjr-e2r",
+   "engine": "TcKcCSzfjtXPFNTn8KNHrW",
+   "brackets": "tRRe9hH7MUfFwAIJq6hY5p",
+   "projection": "WN4zWib-l18TGv_cy8WKzK",
+   "cashFlow": "4dRxGPznqbjfhqKhA1A7tq"
+  },
+  "08-retired/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "E9rdeMqEKiRP7rGTxG3kz-",
+   "engine": "tg3Sd6uQFvMcYBceSrJxdN",
+   "brackets": "KyvIiT8wSQJrCtMvYRMWRd",
+   "projection": "_EPfwcHVc_RjXFRAe3rwTq",
+   "cashFlow": "c7bFlpkHVVC-UmMY199Tvz"
+  },
+  "09-near-retirement/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "zLAHdch1ar3Y8vQI5TWrCt",
+   "engine": "TkMujVOzkboUH6NuaAFgSo",
+   "brackets": "M0xmYmGklBeTSBGvx1ZcFd",
+   "projection": "j_bJyPHkf2Fi5N7pP87wBH",
+   "cashFlow": "q3Dr9zpLo_WwX-KkHtHeXl"
+  },
+  "10-student-and-starter/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "S6hS6sfjx145K2CiAnfO1w",
+   "engine": "yVOuRbMHRVLdGlLnXGRf8D",
+   "brackets": "hWgeGZoLsk7MfrZXNCc4Eq",
+   "projection": "K4et2D5GKCloFSMJGXQ0fb",
+   "cashFlow": "hPdXjP7nf2goczzdTrMnz1"
+  },
+  "11-self-employed/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "ahzK36Lp19cjk62veBXSqz",
+   "engine": "c-00jX9lfpY0Xm5-wvxvVA",
+   "brackets": "FCLIZaE6mDUtuaZYaTccDp",
+   "projection": "_6iZYVig4q5SqgBMqCFLGE",
+   "cashFlow": "YLMj7CfOMXDtrR6rx4gSr4"
+  },
+  "12-high-net-worth/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "ojtRAaBLqjsQiWvz_pdH40",
+   "engine": "7H-2GhSRe7cN2nvGBdwIsi",
+   "brackets": "IvrQU2zej2flgYi4YBSygJ",
+   "projection": "VXiAK-CUhqdHDRYhJTSDq6",
+   "cashFlow": "FKTuDHNKTzwEmtzZoT2cRu"
+  },
+  "13-in-crisis/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "G2l5VTbjK-0Pa4tZynxDDd",
+   "engine": "wlXMz3nlsS2B3pRMVbdf17",
+   "brackets": "QqN7AL7Noa3AkckIUFrhfq",
+   "projection": "d29szkJ9igj4wPtlYgxouF",
+   "cashFlow": "duxGQT3rwJeeOm-06ll1Sj"
+  },
+  "14-unusual-structures/base": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "ujy5PK5oqrQ-W2im8vg8G0",
+   "engine": "vd4YjM_zGvLs38rA23N9py",
+   "brackets": "b_jrVKysjPfxlxQa4Yyc2F",
+   "projection": "s-S8gx-s0D5p_npz-2ILK-",
+   "cashFlow": "kFujLwW1uoVEdX3FE4PQ6-"
+  },
+  "phone casey": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "ib7-UTF2aeP-qUN4TFyPwM",
+   "engine": "ZiiPGgiwuUojl0Syk8Awjs",
+   "brackets": "2Y-zd4u4vCHPGIwjMuL1qE",
+   "projection": "yRiujhdP59tZN8noCAAZOM",
+   "cashFlow": "aMnRIUGOLLZIQW9kKbe9Tb"
+  },
+  "phone danaLee": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "3cMp21K7IXhwmdqFJnsF-m",
+   "engine": "a_1OvF62qBaTQgoU8oYv4T",
+   "brackets": "EQvxQcZii_FzDpreB1AwYf",
+   "projection": "hH9Q9CmNV_6Zxu3XiHX11T",
+   "cashFlow": "rDhI23W4LrCFGsGN6hV-no"
+  },
+  "phone jamie": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "d6dHdMrQEg0XS_60TerItf",
+   "engine": "8Ysfm_y6_AazIzYkbdJiJe",
+   "brackets": "o4gYBOmFW46w4FGAsJ_X-G",
+   "projection": "hqg--sscVsyAzWjEgcBLN0",
+   "cashFlow": "UxiTgOCRFceUXK8G-WSouA"
+  },
+  "phone morgan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "KsKokoC5Y_HuTJnJArn2lW",
+   "engine": "q2umVoxGWuJsidOrtxTZ2I",
+   "brackets": "DJPBugBjVTthsqEB8WdOQ3",
+   "projection": "KF0x0brmvc_Kcg0BAQTQLU",
+   "cashFlow": "PaC7Nut1rETm9vjS0ziVMV"
+  },
+  "phone robin": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "a2q-iNPWqGyjFwceGurbzw",
+   "engine": "p3nTF2O8MdQhmEvGAselpB",
+   "brackets": "f-xKvX6xSh0Z-Za7NO_EKs",
+   "projection": "Y9yz0l1l2-NwDXl_25UPZ8",
+   "cashFlow": "TmhBEPwvR-soRp0ZVhbg3l"
+  },
+  "round8 earlyRetireePlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "9fnhu_6XvZ8jtnmVPQ3b2s",
+   "engine": "z9E8ldePELLb_XyYdmm_sd",
+   "brackets": "NNvAKWkWWLFq9H8HyBR68-",
+   "projection": "HRobfvCOPO3pZMnXLub-39",
+   "cashFlow": "5mVv3iDFcORX2XcP16zUR3"
+  },
+  "round8 equityPlan": {
+   "equity": "kp0h_wAWjt8rpFzKWZ8g74",
+   "inputs": "joYFXXCdTwFG0s3bpWQyoP",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "XZn26JSf4AWXKiyQ2GwQ9S",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 firstRmdPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "lXJKcbqF1JEZeaSoJXqJWv",
+   "engine": "-bTX8ykKyq3IaDEM_nrcMS",
+   "brackets": "1FiMG8cxBip1-CEdDqBd3s",
+   "projection": "FLqyHd6ROxvA_1_8JWOkpL",
+   "cashFlow": "xT_w6x4xVaOi69Co_bn8BU"
+  },
+  "round8 freelancerPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "eq4UG6FxfhYJ0QcTxCZd6x",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "tb7kRFJnnYCcaItziPf4SK",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 highFreelancerPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "Q4UsbQ1HTiHsnI3MFT2J6v",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "EAVfA9vINGMcjPFCBrYVBl",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 landlordBusinessPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "-M8R4ahCijVGc3g4Sivprn",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "upUdiMMtTAzNinM0wkEYTT",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 landlordPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "TU79gLKkuNhmc85fNZVhAq",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "EYnLibcOnfJrOhAv8KDCb_",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 parentLoanPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "VhNNHxVYk1VToFJTrolELC",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "hNeVLGagVKtFAtoqEyrPhd",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 stockAndBusinessPlan": {
+   "equity": "BEjcgh4I48QvBrHhFh68nX",
+   "inputs": "u9iZBZDnJnG2nms33LINrL",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "tMUYs4tdJl1H5fmjOg5hqH",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 studentLoanPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "_TYzRJ7Q8tDA5CUDv6i25I",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "jDrFcGAJY8vx4BnjIJetQ9",
+   "cashFlow": "EZzUPTdEjn4XvT0xPi62Pv"
+  },
+  "round8 widowPlan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "wb-IVjDTwhxob9b8m2PN0u",
+   "engine": "jPkjbdnLJIMFZqTgzIEXGo",
+   "brackets": "-9NjJhXU_ZsugJhOv_dxdp",
+   "projection": "3EDSBSvkZPu9tp5KpFOvM7",
+   "cashFlow": "sqQmh140K8FlEnxHNqx1kr"
+  },
+  "empty plan": {
+   "equity": "UNFLGi173_lcC9GN2NJMm6",
+   "inputs": "tIxIodn6RPASlxp53MdnIG",
+   "engine": "RBNvo1WzZ4oRRq0W9-hknp",
+   "brackets": "RBNvo1WzZ4oRRq0W9-hknp",
+   "projection": "4HFngKILSNyKfIGxtV5Gbd",
+   "cashFlow": "XlTqZOtW5y5LwW8hTXX9YX"
+  },
+  "family with units, options and purchase-plan shares": {
+   "equity": "IZKTllNDyz9DVxirxJqLus",
+   "inputs": "8zdrrBg8aOpzYBGR69ZFUM",
+   "engine": "hFTUjFtHeVO2VZcp-Jo9Zy",
+   "brackets": "6KyKtBzlR_LX0ijtDkIB6W",
+   "projection": "xU7XB8Eg9sALNzd4yvebU3",
+   "cashFlow": "pK2UPJgGaVewXTeQyROpf7"
+  },
+  "family with purchase-plan shares and no price": {
+   "equity": "UHSgViLIp7Sto0SJ4tLLlT",
+   "inputs": "8zdrrBg8aOpzYBGR69ZFUM",
+   "engine": "hFTUjFtHeVO2VZcp-Jo9Zy",
+   "brackets": "6KyKtBzlR_LX0ijtDkIB6W",
+   "projection": "xU7XB8Eg9sALNzd4yvebU3",
+   "cashFlow": "pK2UPJgGaVewXTeQyROpf7"
+  }
+ }
+}

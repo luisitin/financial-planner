@@ -1,17 +1,21 @@
 // modules/career/equity/view.js -- DOM only. Stock from work: the stake, units vesting this year and next with the tax
 // to set aside, each option grant (exercising now; for incentive options the amount that adds no alternative minimum
 // tax, shared across grants, and when a sale qualifies), purchase-plan shares sold now or later; then the grants (the
-// page's list: rows, or the add form while there are none) and one card of quiet rows, "The company" and "Purchase-plan
-// shares", drawn by core/ui/more.js (no hand-written <details>; opt spec 6.1, career/equity, class B).
-import { compute, DEFAULT_GRANT, ESPP_DISCOUNT, ISO_AFTER_LEAVING, ISO_LIMIT } from "./compute.js";
-import { nameIn } from "../../../core/words.js";
+// page's list: rows, or the add form while there are none) and one card of quiet rows, "The company", "Purchase-plan
+// shares" and "Pay held for later" (deferred pay plans: the years each pays out and the federal tax on each payout, with
+// Undo), drawn by core/ui/more.js (no hand-written <details>; opt spec 6.1, career/equity, class B; gap list next 60 #30).
+import { compute, DEFAULT_GRANT, ESPP_DISCOUNT, ISO_AFTER_LEAVING, ISO_LIMIT, deferredPay, deferredLines, deferredStatus, deferredSaid, deferredFrom, DEFERRED } from "./compute.js";
+import { adultsOf, holdsMoney, DEFERRED_MAX_YEARS } from "./deferred.js";
+import { nameIn, nameOf, verbFor } from "../../../core/words.js";
 import { taxAnswer } from "../../taxes/withholding/compute.js";
 import { parts, links } from "../../../core/ui/more.js";
 
-// the confirmation shown on the next render, and where: { text, at: "company" | "grants" | "espp" }. The section saved in
-// shows it, and a part saved in stays open (docs/OPTIONAL.md R17); no other part opens or shuts
+// the confirmation shown on the next render, and where: { text, at: "company" | "grants" | "espp" | "deferred", undo?, back? }.
+// The section saved in shows it (with Undo when it has one), and a part saved in stays open (docs/OPTIONAL.md R17); no
+// other part opens or shuts
 let pending = null;
 let editing = null;   // the grant or lot whose form is open
+let editingPlan = null;   // the deferred pay plan whose form is open
 
 const STYLE = `
 .eq-root .eq-lines { list-style: none; margin: 0; padding: 0; }
@@ -21,6 +25,7 @@ const STYLE = `
 .eq-root .eq-say { margin: 8px 0; }
 .eq-root .eq-past { color: var(--muted); }
 .eq-root .field[hidden] { display: none; }
+.eq-root .records li > form { margin-top: 12px; }
 `;
 
 export function render(page, ctx) {
@@ -35,7 +40,7 @@ export function render(page, ctx) {
   const root = ui.h("div", { class: "eq-root" }, ui.h("style", {}, STYLE));
   page.append(root);
   const said = pending; pending = null;
-  const noteAt = (at) => (said && said.at === at ? ui.notice("ok", said.text) : null);
+  const noteAt = (at) => (said && said.at === at ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (r) => { pending = { text: ui.undoneWords(r, said.back), at }; } } : {}) : null);
   const shortDate = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   const n0 = (x) => Math.round(x).toLocaleString("en-US");
   const list = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs.at(-1)}`);
@@ -233,12 +238,94 @@ export function render(page, ctx) {
   }
   drawLots();
 
+  // pay held for later: deferred pay plans from work, a list kept in its own quiet row (gap list, next 60, item 30)
+  const year = Number(today.slice(0, 4));
+  const planList = (Array.isArray(eq.deferred) ? eq.deferred : []).filter(holdsMoney);
+  const dd = d.deferred ?? null;
+  const people = adultsOf(plan);
+  const ownerFor = (entry) => people.find((x) => x.id === (entry?.personId || eq.personId)) ?? people.find((x) => x.role === "self") ?? people[0] ?? null;
+  // "from leaving work" names whose plan it is, with the year when known; with two adults it follows "Whose plan"
+  const atWords = (who) => `The year ${nameIn(who?.name)} ${verbFor(who?.name, "stops", "stop")} work${who?.stopYear ? ` (${who.stopYear})` : ""}`;
+  const deferredFields = (entry) => {
+    const at = atWords(ownerFor(entry));
+    // a last year saved before this year saves again as it is (the box's own floor would refuse it)
+    const kept = Number(entry?.untilYear);
+    const floor = entry?.untilYear !== null && entry?.untilYear !== undefined && Number.isInteger(kept) && kept < year ? kept : year;
+    const ys = Array.from({ length: 46 }, (_, i) => year + i);
+    if (Number.isFinite(Number(entry?.startYear)) && entry.startYear !== null && !ys.includes(Number(entry.startYear))) ys.unshift(Number(entry.startYear));
+    return [
+      { key: "name", label: "Name", type: "text", placeholder: "e.g. 2026 deferral" },
+      { key: "balance", label: "What is in it now", type: "money", min: 0, help: "On the plan's latest statement." },
+      { key: "yearly", label: "What you put in each year", type: "money", min: 0, help: "From next year on. Leave it empty if nothing more goes in." },
+      { key: "years", label: "Paid out over (years)", type: "number", min: 1, max: DEFERRED_MAX_YEARS, step: "1", help: "Empty or 1: all of it in one year. 5: five yearly parts." },
+      { key: "startYear", label: "Starts paying", type: "select", options: [{ value: "leave", label: at }, ...ys.map((y) => ({ value: String(y), label: String(y) }))] },
+      { key: "untilYear", label: "Last year you put pay in", type: "number", min: floor, max: year + 60, step: "1", help: "Empty: every year until it starts paying.", more: true },
+      { key: "growth", label: "Grows each year, after prices rise", type: "percent", min: -10, max: 15, help: "Empty: 0%, it only keeps up with prices.", more: true },
+      people.length > 1 ? { key: "personId", label: "Whose plan", type: "select", options: people.map((x) => ({ value: x.id, label: x.name || "Someone" })), more: true } : null,
+    ].filter(Boolean);
+  };
+  const planForm = (entry) => {
+    const values = entry ? { ...entry, startYear: entry.startYear === null || entry.startYear === undefined ? "leave" : String(entry.startYear), personId: entry.personId || ownerFor(entry)?.id || "" } : { startYear: "leave", personId: ownerFor(null)?.id ?? "" };
+    const form = ui.form(deferredFields(entry), values, (v) => {
+      const r = deferredFrom(v, { year, kept: entry?.untilYear ?? null });
+      if (r.error) return ui.fieldError(form.querySelector(`[name="${r.error}"]`), r.words);
+      const id = entry?.id ?? ui.uid();
+      const item = { id, ...r.entry };
+      const list = Array.isArray(eq.deferred) ? eq.deferred : [];
+      const nextList = entry ? list.map((x) => (x.id === id ? item : x)) : [...list, item];
+      // the green line names the new answer (R7): the plan's payouts and their tax, worked on the plan as saved
+      const pd = deferredPay({ ...plan, equity: { ...eq, deferred: nextList } }, { today })?.plans.find((x) => x.id === id);
+      editingPlan = null;
+      const next = { text: pd ? (entry ? deferredSaid.saved(pd, money) : deferredSaid.added(pd, money)) : entry ? "Saved." : "Added.", at: "deferred", back: entry ? deferredSaid.saveUndone(item.name) : deferredSaid.addUndone(item.name) };
+      pending = next;
+      next.undo = ui.undoable(store, (q) => { q.equity = q.equity ?? {}; const cur = Array.isArray(q.equity.deferred) ? q.equity.deferred : []; q.equity.deferred = entry ? cur.map((x) => (x.id === id ? item : x)) : [...cur, item]; });
+    }, { submitLabel: entry ? "Save the plan" : "Add the plan", onCancel: entry ? () => { editingPlan = null; drawPlans(); } : null });
+    const whose = form.querySelector('[name="personId"]'), leave = form.querySelector('[name="startYear"]')?.querySelector("option");
+    whose?.addEventListener("change", () => { if (leave) leave.textContent = atWords(people.find((x) => x.id === whose.value)); });
+    return outlined(form);
+  };
+  // asked first; one change Undo takes back
+  const removePlan = (entry) => {
+    if (!ui.confirm(deferredSaid.askRemove(entry.name))) return;
+    const next = { text: deferredSaid.removed(entry.name), at: "deferred", back: deferredSaid.removeUndone(entry.name) };
+    pending = next;
+    next.undo = ui.undoable(store, (q) => { if (!Array.isArray(q.equity?.deferred)) return; q.equity.deferred = q.equity.deferred.filter((x) => x.id !== entry.id); });
+  };
+  const planBody = ui.h("div", { style: { display: "grid", gap: "12px" } });
+  // the green line goes once a plan's form opens for editing: its Undo would take back the add or save of the plan being edited
+  let planNote = true;
+  function drawPlans() {
+    const h = ui.h;
+    const note = planNote ? noteAt("deferred") : null;
+    if (!planList.length) return planBody.replaceChildren(...[note, h("p", {}, DEFERRED.intro), planForm(null), h("p", { class: "muted small" }, DEFERRED.risk)].filter(Boolean));
+    const rows = (dd?.plans ?? []).map((pd) => {
+      const entry = planList.find((x) => x.id === pd.id) ?? pd;
+      return h("li", {},
+        h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, pd.name || DEFERRED.title), h("span", { class: "rec-value" }, money(pd.placed ? pd.total : Number(entry.balance) || 0))),
+        ...deferredLines(pd, money, year).map((t) => h("div", { class: "rec-sub" }, t)),
+        editingPlan === pd.id ? planForm(entry) : h("div", { class: "rec-foot" },
+          // not counted until its owner's birth date says when it pays: the way there
+          pd.placed ? null : h("a", { class: "btn secondary small", href: "#/household/people" }, `Add ${nameOf(pd.owner?.name)} birth date`),
+          ui.button("Edit", () => { editingPlan = pd.id; planNote = false; drawPlans(); }, { class: "secondary small", "aria-label": `Edit ${pd.name || "the plan"}` }),
+          ui.button("Remove", () => removePlan(entry), { class: "secondary small", "aria-label": `Remove ${pd.name || "the plan"}` })));
+    });
+    const box = h("div", {});
+    const add = ui.button("+ Add another plan", () => { add.remove(); box.append(planForm(null)); }, { class: "secondary" });
+    box.append(ui.row(add));
+    // what Will the money last? does with them, once a plan has a year to pay in
+    const placed = (dd?.plans ?? []).some((x) => x.placed);
+    planBody.replaceChildren(...[note, h("ul", { class: "records" }, rows), h("p", { class: "muted small" }, DEFERRED.how), h("p", { class: "muted small" }, DEFERRED.risk), placed ? h("p", { class: "muted small" }, DEFERRED.retirement) : null, box].filter(Boolean));
+  }
+  drawPlans();
+
   const partsCard = parts(ctx,
     { id: "company", kind: "own", title: "The company", says: priced ? `${d.symbol || "a share"} at ${price2(d.price)}` : "", missing: !priced,
       open: (d.ready && d.needsPrice) || said?.at === "company" || undefined, holds: coFields.map((f) => f.key), body: [noteAt("company"), coForm] },
     { id: "espp", kind: "own", title: "Purchase-plan shares", says: lots.length ? `${lots.length} purchase${lots.length === 1 ? "" : "s"}` : "none",
       open: said?.at === "espp" || undefined, holds: lotFields.map((f) => f.key),
-      body: [noteAt("espp"), ui.h("p", { class: "muted small" }, "Each purchase is on the plan's statement (Form 3922 after the year ends)."), lotBody] });
+      body: [noteAt("espp"), ui.h("p", { class: "muted small" }, "Each purchase is on the plan's statement (Form 3922 after the year ends)."), lotBody] },
+    { id: "deferred", kind: "own", title: DEFERRED.title, says: deferredStatus(dd), open: said?.at === "deferred" || undefined,
+      holds: ["balance", "yearly", "years", "startYear", "untilYear", "growth"], body: planBody });
   root.append(partsCard);
   // Edit on a purchase above: its row opens with the form, under the top bar (nothing else opens or shuts)
   function openPart(id) {

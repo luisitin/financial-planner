@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { compute, amt, amtRoom, stockPayTax, esppSale, saleTax, isoSplit, dayAfter, ISO_LIMIT, PAYROLL } from "./compute.js";
+import { compute, amt, amtRoom, stockPayTax, esppSale, saleTax, isoSplit, dayAfter, ISO_LIMIT, PAYROLL, payoutTax, deferredPay, deferredLines, deferredSummary, deferredStatus, deferredSaid, deferredFrom, DEFERRED } from "./compute.js";
+import { payouts, deferredPlans, deferredIncomes, adultsOf, DEFERRED_MAX_YEARS, DEFERRED_AHEAD, DEFERRED_MAX_MONEY } from "./deferred.js";
 import { AMT, amtFor } from "./data/amt.js";
 import { taxInputs } from "../../taxes/federal/compute.js";
 import { taxView } from "../../taxes/federal/known.js";
@@ -268,7 +269,7 @@ test("the page drawn: no fold by hand; the grant form first with three boxes and
   const a = await drawPage(familyPlan(TODAY));
   const root = a.draw();
   assert.equal(root.querySelectorAll("details").filter((x) => !x.dataset.part && !String(x.className).includes("form-more")).length, 0, "no fold by hand (R10)");
-  assert.deepEqual(partsOpen(root), { company: false, espp: false }, "nothing to price yet: the company row is shut");
+  assert.deepEqual(partsOpen(root), { company: false, espp: false, deferred: false }, "nothing to price yet: the company row is shut");
   const t = a.textOf(root);
   assert.match(t, /Add each grant from your stock plan's website below; the share price comes next\./);
   const grantForm = btnOf(root, "Add the grant").closest("form");
@@ -282,7 +283,7 @@ test("the page drawn: no fold by hand; the grant form first with three boxes and
   assert.deepEqual(shown(), ["kind", "shares", "granted"]);
   assert.deepEqual(filled(root).map((b) => b.textContent), ["Add the grant"], "one filled button: the company's Save is outlined while the grant form shows");
   // a row opened beside the grant form adds no second filled button (opening "Purchase-plan shares" showed two)
-  for (const id of ["company", "espp"]) partEl(root, id).setAttribute("open", "");
+  for (const id of ["company", "espp", "deferred"]) partEl(root, id).setAttribute("open", "");
   assert.deepEqual(filled(root).map((b) => b.textContent), ["Add the grant"], "every row open: still one filled button");
   assert.equal(a.textOf(partEl(root, "company").querySelector(".fold-status")).trim(), "not set yet");
   assert.equal(a.saved.length, 0, "drawing writes nothing");
@@ -320,16 +321,16 @@ test("a new grant saved with its vesting boxes blank gets the usual pattern; the
 test("S11 (R17): a save in a row keeps that row open with its green line; no other row opens or shuts; the next visit opens shut", async () => {
   const a = await drawPage(withEquity([RSU]));
   let root = a.draw();
-  assert.deepEqual(partsOpen(root), { company: false, espp: false });
+  assert.deepEqual(partsOpen(root), { company: false, espp: false, deferred: false });
   const f = boxOf(partEl(root, "company"), "price").closest("form");
   boxOf(f, "price").value = "55";
   f.dispatch("submit");
   assert.equal(a.saved.length, 1); assert.equal(a.plan().equity.price, 55); assert.equal(a.plan().equity.priceAsOf, TODAY);
   root = a.draw();
-  assert.deepEqual(partsOpen(root), { company: true, espp: false }, "the row just saved stays open, no other moves");
+  assert.deepEqual(partsOpen(root), { company: true, espp: false, deferred: false }, "the row just saved stays open, no other moves");
   assert.match(a.textOf(partEl(root, "company")), /Saved\./);
   root = a.draw();
-  assert.deepEqual(partsOpen(root), { company: false, espp: false }, "the next draw opens shut");
+  assert.deepEqual(partsOpen(root), { company: false, espp: false, deferred: false }, "the next draw opens shut");
   // purchase-plan shares: an empty list keeps its add form in its row; nothing is required at the box (a shut row holds no required box)
   const b = await drawPage(withEquity([RSU]));
   root = b.draw();
@@ -339,7 +340,7 @@ test("S11 (R17): a save in a row keeps that row open with its green line; no oth
   lf.dispatch("submit");
   assert.equal(b.saved.length, 1); assert.equal(b.plan().equity.espp.length, 1);
   root = b.draw();
-  assert.deepEqual(partsOpen(root), { company: false, espp: true });
+  assert.deepEqual(partsOpen(root), { company: false, espp: true, deferred: false });
   assert.match(b.textOf(partEl(root, "espp")), /Shares added\./);
   // a purchase missing a price is refused at Save, nothing written
   const c = await drawPage(withEquity([RSU]));
@@ -348,4 +349,335 @@ test("S11 (R17): a save in a row keeps that row open with its green line; no oth
   boxOf(cf, "shares").value = "10";
   cf.dispatch("submit");
   assert.equal(c.saved.length, 0);
+});
+
+// ---------------------------------------------------------------- pay held for later (deferred pay plans; README "Pay held for later")
+const T16 = "2026-11-16";
+// one person, single, $100,000 of pay a year, born 1980, stops work at 62 (2042); 2026's tables: 10% to 12,400, 12% to 50,400,
+// 22% to 105,700, 24% to 201,775; standard deduction 16,100 (Rev. Proc. 2025-32 section 4, as modules/taxes/federal/data has them)
+const solo = (deferred, person = {}) => {
+  const p = emptyPlan();
+  p.household.people = [{ id: "p1", name: "Me", role: "self", birthDate: "1980-05-01", retirementAge: 62, ...person }];
+  p.household.filingStatus = "single";
+  p.income = [{ id: "s", name: "Pay", type: "salary", amount: 100000, period: "annual", personId: "p1", taxable: true }];
+  p.equity = { deferred };
+  return p;
+};
+const PLAN = { id: "d1", name: "2026 deferral", balance: 100000, yearly: 10000, untilYear: 2029, years: 5, startYear: 2031 };
+const money0 = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+test("payouts: a lump in one year; equal parts over 5 years; what goes in from next year to the last year", () => {
+  const lump = payouts({ balance: 100000, years: 1, startYear: 2031 }, { year: 2026 });
+  assert.deepEqual(lump.rows, [{ year: 2031, amount: 100000 }]); assert.equal(lump.contributions, 0);
+  // 100,000 + 10,000 for 2027, 2028 and 2029 (2026's is in the balance) = 130,000, in 5 equal parts of 26,000, 2031 to 2035
+  const five = payouts(PLAN, { year: 2026 });
+  assert.equal(five.contributions, 3); near(five.value, 130000); near(five.part, 26000);
+  assert.deepEqual(five.rows.map((r) => r.year), [2031, 2032, 2033, 2034, 2035]);
+  // no last year: every year until it starts paying (2027 to 2030, four)
+  near(payouts({ ...PLAN, untilYear: null }, { year: 2026 }).value, 140000);
+  // a last year after it starts paying stops at the year before
+  near(payouts({ ...PLAN, untilYear: 2040 }, { year: 2026 }).value, 140000);
+  // the parts box: blank is one year; at most 30
+  assert.equal(payouts({ balance: 5000, startYear: 2030 }, { year: 2026 }).years, 1);
+  assert.equal(payouts({ balance: 5000, startYear: 2030, years: 99 }, { year: 2026 }).years, DEFERRED_MAX_YEARS);
+});
+
+test("payouts with growth after prices: the value when it starts and equal parts with the rest growing, by hand", () => {
+  const g = 0.03;
+  const d = payouts({ ...PLAN, growth: g }, { year: 2026 });
+  // V = 100,000 x 1.03^5 + 10,000 x (1.03^4 + 1.03^3 + 1.03^2) = 115,927.41 + 32,791.36
+  const V = 100000 * 1.03 ** 5 + 10000 * (1.03 ** 4 + 1.03 ** 3 + 1.03 ** 2);
+  near(d.value, V, 1e-6); near(V, 148718.77, 0.01);
+  // a = 1 + 1/1.03 + ... + 1/1.03^4 = 4.717098; P = V / a = 31,527.6
+  const a = [0, 1, 2, 3, 4].reduce((t, j) => t + 1.03 ** -j, 0);
+  near(d.part, V / a, 1e-6); near(d.part, 31527.6, 0.1);
+  // paid out to the last cent: the parts, taken back to the first year, add up to V
+  near(d.rows.reduce((t, r, j) => t + r.amount * 1.03 ** -j, 0), V, 1e-6);
+});
+
+test("at leaving work: from the owner's stop year (birth year + retirement age); before this year it counts from this year", () => {
+  const p = solo([{ ...PLAN, startYear: null }]);
+  assert.equal(adultsOf(p)[0].stopYear, 2042);
+  const [d] = deferredPlans(p, { year: 2026 });
+  assert.equal(d.atStop, true); assert.equal(d.startYear, 2042);
+  // money goes in to 2029 as typed
+  near(d.value, 130000);
+  assert.deepEqual(d.rows.map((r) => r.year), [2042, 2043, 2044, 2045, 2046]);
+  // the plan's own retirement age when the person has none
+  const q = solo([{ ...PLAN, startYear: null }], { retirementAge: undefined }); q.assumptions = { ...(q.assumptions ?? {}), retirementAge: 67 };
+  assert.equal(deferredPlans(q, { year: 2026 })[0].startYear, 2047);
+  // a stop year already past: counted from this year, and said
+  const late = deferredPlans(solo([{ ...PLAN, startYear: null, untilYear: null }], { birthDate: "1955-01-01" }), { year: 2026 })[0];
+  assert.equal(late.startYear, 2026); assert.equal(late.late, true); assert.equal(late.contributions, 0);
+  // no birth date: not placed, no rows, no income line
+  const none = solo([{ ...PLAN, startYear: null }], { birthDate: undefined });
+  const u = deferredPlans(none, { year: 2026 })[0];
+  assert.equal(u.placed, false); assert.deepEqual(u.rows, []);
+  assert.deepEqual(deferredIncomes(none, { year: 2026 }), []);
+});
+
+test("the tax on each year's payout, against a hand calculation at 2026's single brackets", () => {
+  const d = deferredPay(solo([PLAN]), { today: T16 });
+  // while working: taxable 100,000 - 16,100 = 83,900; with 26,000 more, 109,900: 22% x (105,700 - 83,900) + 24% x (109,900 - 105,700)
+  const hand = 0.22 * (105700 - 83900) + 0.24 * (109900 - 105700);
+  near(hand, 5804);
+  const [p] = d.plans;
+  assert.equal(p.case, "even");
+  for (const r of p.rows) near(r.tax, hand, 1e-6);
+  near(p.tax, 5 * hand, 1e-6); near(d.tax, 5 * hand, 1e-6); near(d.total, 130000);
+  // the same figure from the federal helper on the page's own return
+  const t = tv(solo([PLAN]));
+  near(payoutTax(26000, t.inputs, t.params), hand, 1e-6);
+  // a lump of 100,000 in 2031: 22% x 21,800 + 24% x (183,900 - 105,700)
+  const lump = deferredPay(solo([{ id: "l", balance: 100000, years: 1, startYear: 2031 }]), { today: T16 }).plans[0];
+  assert.equal(lump.case, "once"); near(lump.rows[0].tax, 0.22 * 21800 + 0.24 * (183900 - 105700), 1e-6); near(lump.rows[0].tax, 23564);
+  // paid from leaving work: the pay has stopped, so 26,000 alone: 10% x (26,000 - 16,100) = 990 a year
+  const left = deferredPay(solo([{ ...PLAN, startYear: null }]), { today: T16 }).plans[0];
+  for (const r of left.rows) near(r.tax, 990, 1e-6);
+  assert.deepEqual(deferredPay(solo([{ ...PLAN, startYear: null }]), { today: T16 }).years[0].stopped, ["p1"]);
+  assert.equal(payoutTax(0, t.inputs, t.params), 0);
+});
+
+test("two plans paying in one year share that year's tax by their payouts; a stop year inside the payouts makes runs", () => {
+  const two = deferredPay(solo([{ id: "a", name: "A", balance: 30000, years: 1, startYear: 2031 }, { id: "b", name: "B", balance: 10000, years: 1, startYear: 2031 }]), { today: T16 });
+  const all = 0.22 * (105700 - 83900) + 0.24 * (123900 - 105700);   // 40,000 on top: taxable 123,900
+  near(two.years[0].tax, all, 1e-6);
+  near(two.plans[0].rows[0].tax, all * 0.75, 1e-6); near(two.plans[1].rows[0].tax, all * 0.25, 1e-6);
+  // paying 2040 to 2044, work stopping in 2042: 2040 and 2041 on top of the pay, 2042 to 2044 alone
+  const runs = deferredPay(solo([{ id: "r", name: "Runs", balance: 100000, years: 5, startYear: 2040 }]), { today: T16 }).plans[0];
+  assert.equal(runs.case, "runs");
+  assert.deepEqual(runs.runs.map((r) => [r.from, r.to]), [[2040, 2041], [2042, 2044]]);
+  near(runs.runs[0].tax, 0.22 * 20000, 1e-6); near(runs.runs[1].tax, 0.1 * (20000 - 16100), 1e-6);
+  // a couple: the base keeps the share of the household's wages still earned that year
+  const fam = familyPlan(T16); fam.equity = { deferred: [{ id: "f", balance: 50000, years: 1, startYear: 2051 }] };   // Bo (born 1988, 62) stops in 2050
+  const fd = deferredPay(fam, { today: T16 });
+  const t = tv(fam);
+  const bo = 5200 * 12, ana = 3900 * 26;
+  assert.deepEqual(fd.years[0].stopped, ["p-bo"]);
+  near(fd.years[0].tax, payoutTax(50000, { ...t.inputs, wages: (t.inputs.wages * ana) / (ana + bo) }, t.params), 1e-6);
+});
+
+test("compute adds deferred only when the plan holds one; an empty entry is no plan; deferred-only plans are not ready for stock", () => {
+  assert.equal("deferred" in compute(familyPlan(T16), { today: T16 }), false);
+  const empty = familyPlan(T16); empty.equity = { deferred: [{ id: "x", name: "nothing", balance: 0 }] };
+  assert.equal("deferred" in compute(empty, { today: T16 }), false);
+  const d = compute(solo([PLAN]), { today: T16 });
+  assert.equal(d.ready, false); assert.equal(d.deferred.plans.length, 1);
+  const s = withEquity([RSU]); s.equity.deferred = [PLAN];
+  const ds = compute(s, { today: T16 });
+  assert.equal(ds.ready, true); assert.equal(ds.deferred.plans[0].case, "even");
+  const { deferred: _d, ...rest } = ds;
+  assert.equal(JSON.stringify(rest), JSON.stringify(compute(withEquity([RSU]), { today: T16 })), "the stock figures are the same with deferred pay");
+});
+
+test("one written sentence per case (R5), the status, the saves' green lines and Undo's words", () => {
+  const [even] = deferredPay(solo([PLAN]), { today: T16 }).plans;
+  assert.deepEqual(deferredLines(even, money0), ["$26,000 a year from 2031 to 2035, with about $5,804 of federal tax each year."]);
+  const [once] = deferredPay(solo([{ id: "l", name: "Lump", balance: 100000, years: 1, startYear: 2031 }]), { today: T16 }).plans;
+  assert.deepEqual(deferredLines(once, money0), ["All of it in 2031: about $100,000, with about $23,564 of federal tax."]);
+  const [runs] = deferredPay(solo([{ id: "r", name: "Runs", balance: 100000, years: 5, startYear: 2040 }]), { today: T16 }).plans;
+  assert.deepEqual(deferredLines(runs, money0), ["2040 to 2041: $20,000 a year, with about $4,400 of federal tax each year.", "2042 to 2044: $20,000 a year, with about $390 of federal tax each year."]);
+  assert.equal(deferredSummary(runs, money0), "It pays $100,000 from 2040 to 2044, with about $9,970 of federal tax in all.");   // 2 x 4,400 + 3 x 390
+  const [single] = deferredPay(solo([{ id: "o", balance: 5000, years: 1, startYear: 2031 }], {}), { today: T16 }).plans;
+  const noTax = { ...single, rows: [{ ...single.rows[0], tax: 0 }] };
+  assert.deepEqual(deferredLines(noTax, money0), ["All of it in 2031: about $5,000, with no federal tax."]);
+  const [un] = deferredPay(solo([{ ...PLAN, startYear: null }], { birthDate: undefined }), { today: T16 }).plans;
+  // not placed: said as not counted, with what it needs (person critic F4: it read as counted)
+  assert.deepEqual(deferredLines(un, money0), ["Not counted yet: it pays from the year you stop work, and that needs your birth date."]);
+  assert.equal(deferredLines({ ...un, owner: { name: "Bo" } }, money0)[0], "Not counted yet: it pays from the year Bo stops work, and that needs Bo's birth date.");
+  assert.equal(deferredSaid.added(un, money0), "Added. Not counted yet: it pays from the year you stop work, and that needs your birth date.");
+  const [late] = deferredPay(solo([{ ...PLAN, startYear: 2024, untilYear: null }]), { today: T16 }).plans;
+  assert.equal(deferredLines(late, money0, 2026).at(-1), "It would have started before 2026, so it is counted from 2026.");
+  // status
+  assert.equal(deferredStatus(null), "");
+  assert.equal(deferredStatus({ plans: [even] }), "2031 to 2035");
+  assert.equal(deferredStatus({ plans: [once] }), "in 2031");
+  assert.equal(deferredStatus({ plans: [even, once] }), "2 plans");
+  assert.equal(deferredStatus({ plans: [un] }), "");
+  // the green lines name the new answer (R7), Undo's words
+  assert.equal(deferredSaid.added(even, money0), "Added. $26,000 a year from 2031 to 2035, with about $5,804 of federal tax each year.");
+  assert.equal(deferredSaid.saved(once, money0), "Saved. All of it in 2031: about $100,000, with about $23,564 of federal tax.");
+  assert.equal(deferredSaid.removed("2026 deferral"), "Removed \"2026 deferral\".");
+  assert.equal(deferredSaid.removed(""), "Removed the plan.");
+  assert.equal(deferredSaid.addUndone("2026 deferral"), "\"2026 deferral\" is off the list again.");
+  assert.equal(deferredSaid.saveUndone(""), "The plan is back as it was.");
+  assert.equal(deferredSaid.removeUndone("2026 deferral"), "\"2026 deferral\" is back on the list.");
+  assert.equal(deferredSaid.askRemove("2026 deferral"), "Remove \"2026 deferral\"?");
+  assert.match(DEFERRED.risk, /if the company fails, you wait in line with everyone else it owes/);
+  assert.match(DEFERRED.how, /^In today's dollars\. Federal tax only/);
+});
+
+test("what the form saves, and what it refuses at its box", () => {
+  const ok = deferredFrom({ name: " 2026 deferral ", balance: 100000, yearly: null, untilYear: null, years: 5, startYear: "2031", growth: null }, { year: 2026 });
+  assert.deepEqual(ok.entry, { name: "2026 deferral", balance: 100000, yearly: 0, untilYear: null, years: 5, startYear: 2031, growth: null });
+  assert.equal(deferredFrom({ balance: 50000, startYear: "leave", years: null }, { year: 2026 }).entry.startYear, null, "from leaving work");
+  assert.equal(deferredFrom({ balance: 50000, startYear: "", years: null }, { year: 2026 }).entry.years, 1, "blank: one year");
+  assert.equal(deferredFrom({ yearly: 12000, personId: "p-bo" }, { year: 2026 }).entry.personId, "p-bo");
+  assert.deepEqual(deferredFrom({ balance: null, yearly: 0 }, { year: 2026 }), { error: "balance", words: "Type what is in it now, or what you put in each year." });
+  assert.deepEqual(deferredFrom({ balance: 1000, untilYear: 2025 }, { year: 2026 }), { error: "untilYear", words: "Type 2026 or later, or leave it empty." });
+  // a plan saved with 2026 as its last year saves again in 2027 as it is (money critic F4); another past year is still refused
+  assert.equal(deferredFrom({ balance: 1000, untilYear: 2026 }, { year: 2027, kept: 2026 }).entry.untilYear, 2026);
+  assert.equal(deferredFrom({ balance: 1000, untilYear: 2025 }, { year: 2027, kept: 2026 }).error, "untilYear");
+  assert.equal(deferredFrom({ balance: 1000, years: 31 }, { year: 2026 }).error, "years");
+  assert.equal(deferredFrom({ balance: 1000, growth: 0.2 }, { year: 2026 }).error, "growth");
+});
+
+test("stored data the form cannot make: a first year far ahead is held to 100 years from now, money to $1 trillion; quick and finite", () => {
+  // a start year of 2,000,000,000 looped two billion contribution years (ten seconds a draw; money critic F2)
+  const t0 = Date.now();
+  const far = payouts({ balance: 1, yearly: 5, startYear: 2e9 }, { year: 2026 });
+  assert.ok(Date.now() - t0 < 200, `${Date.now() - t0} ms`);
+  assert.equal(far.startYear, 2026 + DEFERRED_AHEAD); assert.equal(far.contributions, DEFERRED_AHEAD - 1); near(far.value, 1 + 5 * (DEFERRED_AHEAD - 1));
+  assert.equal(payouts({ balance: 1000, startYear: null }, { year: 2026, stopYear: 1e9 }).startYear, 2126, "a birth year far ahead too");
+  // $1e308 at 15% for 64 years was Infinity: the rows read null and the tax was not a number
+  const big = solo([{ id: "b", balance: 1e308, yearly: 1e308, years: 30, growth: 0.15, startYear: 2090 }]);
+  const d = deferredPay(big, { today: T16 });
+  assert.ok(d.plans[0].rows.every((r) => Number.isFinite(r.amount) && Number.isFinite(r.tax)) && Number.isFinite(d.tax));
+  near(payouts({ balance: 1e308, years: 1, startYear: 2026 }, { year: 2026 }).value, DEFERRED_MAX_MONEY);
+  assert.ok(deferredIncomes(big, { year: 2026 }).every((x) => Number.isFinite(x.yearly)));
+});
+
+test("the plan's form: whose plan names the year it starts from leaving work; an old plan saves again as it is", async () => {
+  // two adults: the choice names the owner and the year, and follows "Whose plan" (person critic F3: "its owner")
+  const a = await drawPage(familyPlan(T16), { today: T16 });
+  let root = a.draw();
+  let f = btnOf(partEl(root, "deferred"), "Add the plan").closest("form");
+  const leave = () => a.textOf(boxOf(f, "startYear").querySelector("option"));
+  const ana = adultsOf(familyPlan(T16)).find((x) => x.id === "p-ana"), bo = adultsOf(familyPlan(T16)).find((x) => x.id === "p-bo");
+  assert.equal(leave(), `The year Ana stops work (${ana.stopYear})`);
+  boxOf(f, "personId").value = "p-bo"; boxOf(f, "personId").dispatch("change");
+  assert.equal(leave(), `The year Bo stops work (${bo.stopYear})`);
+  // a plan saved in 2026 with 2026 as its last year, edited in 2027 without touching that box: saved, not refused
+  const old = solo([{ id: "o", name: "Old", balance: 50000, yearly: 5000, untilYear: 2026, years: 1, startYear: 2031 }]);
+  const b = await drawPage(old, { today: "2027-02-01" });
+  root = b.draw();
+  btnOf(partEl(root, "deferred"), "Edit").click();
+  f = btnOf(partEl(root, "deferred"), "Save the plan").closest("form");
+  assert.equal(boxOf(f, "untilYear").getAttribute("min"), "2026", "the box's floor lets the saved year stand");
+  boxOf(f, "balance").value = "52000";
+  f.dispatch("submit");
+  assert.equal(b.saved.length, 1);
+  assert.deepEqual([b.plan().equity.deferred[0].balance, b.plan().equity.deferred[0].untilYear], [52000, 2026]);
+});
+
+test("the plan's row: Edit takes the green line away; a plan with no year says it is not counted, with the way to People", async () => {
+  // Edit after an add: the "Added." line and its Undo go (person critic F2: Undo would take back the plan being edited)
+  const a = await drawPage(solo([]), { today: T16 });
+  let root = a.draw();
+  let f = btnOf(partEl(root, "deferred"), "Add the plan").closest("form");
+  boxOf(f, "balance").value = "40000"; boxOf(f, "startYear").value = "2031";
+  f.dispatch("submit");
+  root = a.draw();
+  let el = partEl(root, "deferred");
+  assert.match(a.textOf(el), /Added\./); assert.ok(btnOf(el, "Undo"));
+  // no name typed: called by the row's own title (person critic F6: "Deferred pay plan")
+  assert.match(a.textOf(el.querySelector(".rec-title")), /^Pay held for later$/);
+  btnOf(el, "Edit").click();
+  el = partEl(root, "deferred");
+  assert.ok(!/Added\./.test(a.textOf(el)) && !btnOf(el, "Undo"), "no green line while editing");
+  assert.ok(btnOf(el, "Save the plan"));
+  // no birth date and paid from leaving work: not counted, a way to People, and no line about Will the money last?
+  const u = await drawPage(solo([{ id: "u", balance: 50000, startYear: null }], { birthDate: undefined }), { today: T16 });
+  el = partEl(u.draw(), "deferred");
+  const t = u.textOf(el);
+  assert.match(t, /Not counted yet: it pays from the year you stop work, and that needs your birth date\./);
+  const link = el.querySelectorAll("a").find((x) => x.getAttribute("href") === "#/household/people");
+  assert.equal(u.textOf(link), "Add your birth date");
+  assert.ok(String(link.className).includes("secondary"), "outlined");
+  assert.ok(!t.includes(DEFERRED.retirement));
+  // placed: no link, and the line is there
+  const p = await drawPage(solo([PLAN]), { today: T16 });
+  el = partEl(p.draw(), "deferred");
+  assert.ok(p.textOf(el).includes(DEFERRED.retirement));
+  assert.equal(el.querySelectorAll("a").filter((x) => x.getAttribute("href") === "#/household/people").length, 0);
+});
+
+test("Will the money last?'s lines: one a plan, in today's dollars raised with prices, taxed like pre-tax money; none without a plan", () => {
+  assert.deepEqual(deferredIncomes(familyPlan(T16), { year: 2026 }), []);
+  const [line] = deferredIncomes(solo([PLAN]), { year: 2026 });
+  assert.deepEqual(line, { name: "Pay held for later: 2026 deferral", yearly: 26000, personId: "p1", startAge: 0, fromYear: 2031, untilYear: 2035, cola: true, taxable: true, pretax: true, notInMonth: true, type: "other", deferred: "d1" });
+});
+
+test("the row drawn: one quiet row, shut, no status while empty; open it shows what it is for, the form and the risk line", async () => {
+  const a = await drawPage(solo([]), { today: T16 });
+  const root = a.draw();
+  const el = partEl(root, "deferred");
+  assert.equal(a.textOf(el.querySelector(".fold-title")).trim(), "Pay held for later");
+  assert.equal(el.querySelector(".fold-status"), null);
+  assert.deepEqual(partsOpen(root), { company: false, espp: false, deferred: false });
+  const t = a.textOf(el);
+  assert.ok(t.includes(DEFERRED.intro) && t.includes(DEFERRED.risk));
+  const f = btnOf(el, "Add the plan").closest("form");
+  const inMore = (b) => { for (let x = b.parentNode; x; x = x.parentNode) if (x.tagName === "DETAILS" && String(x.className).includes("form-more")) return true; return false; };
+  const first = f.all().filter((b) => (b.tagName === "INPUT" || b.tagName === "SELECT") && !inMore(b)).map((b) => b.getAttribute("name"));
+  assert.deepEqual(first, ["name", "balance", "yearly", "years", "startYear"], "five boxes first; the last year, growth and whose plan under More details (optional)");
+  assert.equal(f.querySelectorAll("input").filter((x) => x.hasAttribute("required")).length, 0, "no required box in a shut row");
+  assert.equal(a.textOf(boxOf(f, "startYear").querySelector("option")), "The year you stop work (2042)");
+  assert.equal(a.saved.length, 0);
+});
+
+test("S11 (R17) add, Undo, edit and remove: the row stays open with its green line naming the answer; nothing else moves", async () => {
+  const a = await drawPage(solo([]), { today: T16 });
+  let root = a.draw();
+  let f = btnOf(partEl(root, "deferred"), "Add the plan").closest("form");
+  boxOf(f, "name").value = "2026 deferral"; boxOf(f, "balance").value = "100000"; boxOf(f, "yearly").value = "10000"; boxOf(f, "untilYear").value = "2029";
+  boxOf(f, "years").value = "5"; boxOf(f, "startYear").value = "2031";
+  f.dispatch("submit");
+  assert.equal(a.saved.length, 1);
+  const saved = a.plan().equity.deferred;
+  assert.deepEqual(saved, [{ id: "new-1", name: "2026 deferral", balance: 100000, yearly: 10000, untilYear: 2029, years: 5, startYear: 2031, growth: null }]);
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { company: false, espp: false, deferred: true }, "the row just saved stays open, no other moves");
+  let el = partEl(root, "deferred"), t = a.textOf(el);
+  assert.match(t, /Added\. \$26,000 a year from 2031 to 2035, with about \$5,804 of federal tax each year\./);
+  assert.equal(a.textOf(el.querySelector(".fold-status")).trim(), "2031 to 2035");
+  assert.match(t, /2026 deferral\s*\$130,000/);
+  for (const line of [DEFERRED.how, DEFERRED.risk, DEFERRED.retirement]) assert.ok(t.includes(line), line);
+  assert.ok(btnOf(el, "+ Add another plan"), "with a plan the form folds behind its outlined button (R20)");
+  // Undo takes the add back, and says so on the next draw
+  btnOf(el, "Undo").click();
+  assert.deepEqual(a.plan().equity.deferred, []);
+  root = a.draw();
+  assert.match(a.textOf(partEl(root, "deferred")), /"2026 deferral" is off the list again\./);
+  // add it again, then edit: paid over 10 years
+  f = btnOf(partEl(root, "deferred"), "Add the plan").closest("form");
+  boxOf(f, "name").value = "2026 deferral"; boxOf(f, "balance").value = "100000"; boxOf(f, "years").value = "1"; boxOf(f, "startYear").value = "leave";
+  f.dispatch("submit");
+  assert.equal(a.plan().equity.deferred[0].startYear, null, "from leaving work");
+  root = a.draw();
+  // paid once work has stopped, alone: taxable 100,000 - 16,100 = 83,900: 10% x 12,400 + 12% x 38,000 + 22% x 33,500 = 13,170
+  assert.match(a.textOf(partEl(root, "deferred")), /Added\. All of it in 2042: about \$100,000, with about \$13,170 of federal tax\./);
+  btnOf(partEl(root, "deferred"), "Edit").click();
+  f = btnOf(partEl(root, "deferred"), "Save the plan").closest("form");
+  assert.equal(boxOf(f, "balance").value, "100,000");
+  boxOf(f, "years").value = "10";
+  f.dispatch("submit");
+  assert.equal(a.plan().equity.deferred[0].years, 10);
+  root = a.draw();
+  assert.match(a.textOf(partEl(root, "deferred")), /Saved\. \$10,000 a year from 2042 to 2051, with no federal tax\./);
+  // remove: asked first, then removed with Undo, which puts it back
+  btnOf(partEl(root, "deferred"), "Remove").click();
+  assert.deepEqual(a.asked.at(-1), "Remove \"2026 deferral\"?");
+  assert.deepEqual(a.plan().equity.deferred, []);
+  root = a.draw();
+  assert.match(a.textOf(partEl(root, "deferred")), /Removed "2026 deferral"\./);
+  btnOf(partEl(root, "deferred"), "Undo").click();
+  assert.equal(a.plan().equity.deferred.length, 1);
+  root = a.draw();
+  assert.match(a.textOf(partEl(root, "deferred")), /"2026 deferral" is back on the list\./);
+  // No keeps it
+  const no = await drawPage(solo([PLAN]), { today: T16, answer: false });
+  btnOf(partEl(no.draw(), "deferred"), "Remove").click();
+  assert.equal(no.saved.length, 0);
+});
+
+test("the form refuses at its box: nothing in it and nothing going in; a last year before this one", async () => {
+  const a = await drawPage(solo([]), { today: T16 });
+  const root = a.draw();
+  const f = btnOf(partEl(root, "deferred"), "Add the plan").closest("form");
+  f.dispatch("submit");
+  assert.equal(a.saved.length, 0, "nothing typed: nothing saved");
+  boxOf(f, "balance").value = "5000"; boxOf(f, "untilYear").value = "2025";
+  f.dispatch("submit");
+  assert.equal(a.saved.length, 0, "a last year before this one is refused");
 });

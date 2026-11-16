@@ -17,7 +17,8 @@
 
 ## Outputs
 `compute(plan, { today })` -> `{ ready, needsPrice, year, symbol, price, priceAsOf, person, personWages, stake, grants, rsuYears, options, isoRoom, isoOver, espp, esppSkipped, amtNow, stateRate, notes }`
-(shapes in the `compute` comment).
+(shapes in the `compute` comment), plus `deferred` (`deferredPay`: the deferred pay plans' payouts and their tax) only when
+`equity.deferred` holds a plan, so with none the output is the same, key for key.
 
 ## Formulas
 - **Vesting** is the Employer stock page's `vestSchedule`: the cliff's share at `cliffMonths`, then every `every`
@@ -152,3 +153,94 @@ The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` b
   missing a date or a price is refused at Save with the same words as before.
 - Counts (`node qa/first-view-node.mjs career/equity`): before 175 words, 12 boxes, 2 filled buttons with a plan (172, 11, 2
   on the empty plan); after 145 words, 4 boxes, 1 filled button, 2 rows on both. Test: "S11 (R17)" and "the page drawn".
+
+## Pay held for later (deferred pay plans; gap list, next 60, item 30; 2026-11-16)
+A deferred pay plan from work (a nonqualified deferred compensation plan): pay the employer keeps back now and pays out
+later, taxed as pay when it is paid. One quiet row of the parts card, **"Pay held for later"** (kind `own`; a named own part
+on a page with several). Its status: the years of one plan ("2031 to 2035", "in 2031"), or "2 plans"; nothing while empty.
+
+**What it holds.** Empty: what it is for, the form, the risk line. With plans: each plan a record (its name, or "Pay held
+for later" when none was typed; all it pays out in today's dollars, one sentence per case, Edit and Remove; a plan with no
+year to pay in also has an outlined "Add your birth date" to People), then how the tax is worked out, the risk, and, once a
+plan has a year, what Will the money last? does with the payouts; "+ Add another plan" opens the form. A save keeps the row
+open with a green line naming the new answer and an Undo; Remove asks first and has Undo. Edit takes the green line away
+(its Undo would take back the add or save of the plan being edited). While the grant form shows (no grants yet) or the
+company's price is missing, the plan form's button is outlined: the page's one filled button is that other one.
+
+**Inputs** (`equity.deferred`, optional; docs/DATA_MODEL.md): `[{ id, name, personId, balance, yearly, untilYear, years,
+startYear, growth }]`. The form asks first for Name, What is in it now, What you put in each year, Paid out over (years) and
+Starts paying ("The year you stop work (2042)", with two adults "The year Ana stops work (2050)" for the plan's owner,
+changing with "Whose plan"; or a year from this year to 45 years on); under "More details (optional)": Last year you put
+pay in, Grows each year after prices rise, Whose plan (two adults). No box is required at the box (a shut row holds no
+required box); Save refuses with words at the box: nothing in it and nothing going in ("Type what is in it now, or what you
+put in each year."), a last year before this one ("Type 2026 or later, or leave it empty.") unless it is the year saved
+before (a plan saved in 2026 with 2026 as its last year saves again in 2027 as it is: the box's floor is that year too),
+parts outside 1 to 30, growth outside -10% to 15%.
+
+**Formulas** (`deferred.js` `payouts`, `compute.js` `deferredPay`, `payoutTax`). Y0 = this year; S = the start year (the
+plan's, or its owner's stop year = birth year + retirement age, theirs or the plan's or 65, as Will the money last? reads
+them), never before Y0 (moved to Y0 and said: "It would have started before 2026, so it is counted from 2026."); N = the
+parts (1 to 30, blank = 1); g = growth a year after prices (blank = 0); B = what is in it; C = what goes in a year; U = the
+last year it goes in (blank = S - 1).
+- Stored data the form cannot make (an import, a hand edit): S at most Y0 + 100, and B and C at most $1 trillion each (the
+  form's money boxes stop under a billion), so every figure stays finite and the work stays short: a stored start year of
+  2,000,000,000 looped two billion contribution years (ten seconds a draw), and $1e308 grew to Infinity.
+- Years put in: k = max(0, min(U, S - 1) - Y0), 0 when nothing goes in. From next year: this year's is taken as in B.
+- Value when it starts: V = B (1 + g)^(S - Y0) + sum over y = Y0+1 .. Y0+k of C (1 + g)^(S - y).
+- Each yearly part: P = V / a, a = sum over j = 0 .. N-1 of (1 + g)^(-j) (N when g = 0): equal parts, what is left growing,
+  paid out to the last cent (the parts taken back to S add up to V).
+- The base for year y: this year's return as the Federal estimate has it, without this year's vesting units (`taxView(...,
+  { without: "stock" })`, the page's own base), its wages times the share of the household's pay (salary and bonus lines)
+  of adults still at work in y (an adult's pay ends in their stop year).
+- The tax in year y: T_y = F(base_y with every payout of y added to ordinary income) - F(base_y), F = the federal income tax
+  (`federalTax` total less the 0.9% Medicare tax), at this year's tables (2026: Rev. Proc. 2025-32 section 4, as
+  modules/taxes/federal/data has them). Each plan's share: T_y x its payout / all payouts of y.
+- Hand cases (tests): single, $100,000 of pay, born 1980, stops at 62 (2042). B 100,000, C 10,000 to 2029, start 2031, N 5:
+  k 3, V 130,000, P 26,000 for 2031 to 2035; tax each year 22% x (105,700 - 83,900) + 24% x (109,900 - 105,700) = 5,804.
+  A lump of 100,000 in 2031: 23,564. From leaving work (2042), pay gone: 26,000 alone, 10% x (26,000 - 16,100) = 990 a year;
+  100,000 at once alone: 13,170. Growth 3%: V = 148,718.77, P = 31,527.60.
+
+**Words, one sentence per case** (`deferredLines`, `deferredSummary`, `deferredSaid`): "All of it in 2031: about $100,000,
+with about $23,564 of federal tax." / "$26,000 a year from 2031 to 2035, with about $5,804 of federal tax each year." / runs
+when the tax differs by year: "2040 to 2041: $20,000 a year, with about $4,400 of federal tax each year." and "2042 to 2044:
+..." / with no year to pay in (from leaving work, no birth date): "Not counted yet: it pays from the year you stop work, and
+that needs your birth date." (Bo's: "... the year Bo stops work, and that needs Bo's birth date.") / a zero: "with no
+federal tax".
+Saves: "Added. ..." / "Saved. ..." (for runs: "It pays $100,000 from 2040 to 2044, with about $9,970 of federal tax in
+all."), "Removed "2026 deferral"."; Undo: ""2026 deferral" is off the list again." / "... is back as it was." / "... is
+back on the list."
+- How: "In today's dollars. Federal tax only, at this year's tables, on top of your household's other income now (less the
+  pay of anyone who has stopped work by then). Social Security and Medicare tax was taken when the pay went in."
+- Risk: "Until it is paid, this money is the company's: if the company fails, you wait in line with everyone else it owes."
+
+**Sources** (read 2026-11-16):
+- IRS Publication 5528 (Rev. 3-2024), Nonqualified Deferred Compensation Audit Technique Guide,
+  https://www.irs.gov/pub/irs-pdf/p5528.pdf: I.B.1, an unfunded plan is the employer's "mere promise to pay", its assets
+  stay the employer's general assets, "subject to the claims of the employer's creditors if the employer becomes insolvent"
+  (the risk line); II.C, deferred amounts are taken into account for Social Security and Medicare at the later of when the
+  work is done and when there is no substantial risk of forfeiting them, once (the "special timing rule": no payroll tax on
+  the payout); III.B.4 (section 409A), payment only at a specified time or fixed schedule, separation from service, and a
+  few other events, chosen before the year the pay is earned (the two ways a plan starts here).
+- IRS Publication 15-A (2026), https://www.irs.gov/publications/p15a, "Nonqualified Deferred Compensation Plans": income
+  tax withholding on amounts includible in income; Social Security, Medicare and FUTA when the services are performed or
+  the risk of forfeiture ends, whichever is later.
+- IRS Publication 525 (for 2025 returns), https://www.irs.gov/pub/irs-pdf/p525.pdf, "Nonqualified deferred compensation
+  plans": the year's deferrals are shown in box 12 of Form W-2 with code Y, and "This amount isn't included in your income".
+- Could not be read here: the regulations themselves (eCFR refuses automated reads), so the guide's summary of Treas. Reg.
+  31.3121(v)(2)-1 is what the payroll line rests on.
+
+**Builder's choices** (never asked; said here):
+- Growth defaults to 0% after prices: the payouts keep up with prices and no more, so nothing is overstated; a person who
+  knows the plan's funds types a rate.
+- Equal parts are level payments with what is left growing at the same rate (with no growth, the balance over N); plans
+  that pay "the balance over the payments left" pay the same with no growth.
+- Federal tax only. State tax on payouts depends on where the person lives when paid (and a state may not tax payments
+  over 10 years or more from such a plan), so it is left out and the line says "Federal tax only".
+- The base is today's return, with the pay of anyone stopped by then taken out; Social Security and pensions that start
+  later are not added, so a payout in retirement may be taxed a little low. The deferral itself is not taken off this
+  year's wages here (Income may hold pay before it); the Federal estimate owns that.
+- A plan typed here and also as an account on Net worth would be counted twice by Will the money last? once it counts these
+  payouts; the plan's balance belongs here only.
+- The row is shut on every visit except right after a save in it; it is not open for a plan with deferred pay only.
+
+**Will the money last?** does not count these payouts yet (the row says so).
