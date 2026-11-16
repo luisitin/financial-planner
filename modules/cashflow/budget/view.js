@@ -5,14 +5,14 @@
 // row, "Set my own numbers", holds how you budget (Envelopes unless changed), what overspending does, moving money between
 // envelopes and, with every dollar given a job, holding money for next month (never more than is left). An envelope that
 // is over stays under the headline whichever way leads. Left alone, the page is what it was.
-import { compute, useExpenses, safeToSpend, envelopeWords, wayOf, setWay, jobOf, threeOf, moveProblem, moneyNote, dropOrphanMoves, byPaycheck } from "./compute.js";
+import { compute, useExpenses, safeToSpend, envelopeWords, wayOf, setWay, jobOf, threeOf, moveProblem, moneyNote, dropOrphanMoves, byPaycheck, historyOf, startOverPreview, startOverWords, startOver, keptWords } from "./compute.js";
 import { categoriesOf } from "../../transactions/categories/compute.js";
 import { bringWords, monthsWords, shortDate, monthLabel } from "../../transactions/ledger/compute.js";
-import { parts, rest, choice, links } from "../../../core/ui/more.js";
+import { part, parts, rest, choice, links } from "../../../core/ui/more.js";
 
 const state = { month: "", route: null };   // route: the arrival the address's ?month= was last taken from (the Monthly review's link)
 
-let pending = null;   // { text, before (the answer the page said before the save), part? (the part it was saved in: it stays open, R17) }: the confirmation kept across the shell re-render
+let pending = null;   // { text, before (the answer the page said before the save), part? (the part it was saved in: it stays open, R17), undo? (Start the budget over: its Undo) }: the confirmation kept across the shell re-render
 
 const WAY_LABELS = { envelopes: "Envelopes", zero: "Every dollar a job", three: "Three numbers" };
 const WAY_WORDS = {
@@ -134,8 +134,10 @@ export function render(root, ctx) {
   // the confirmation goes at the top, where the eye is after a tap; it names the new answer when the save changed it (R7)
   if (pending) {
     const said = pending; pending = null;
-    const n = ui.notice("ok", said.before && answer && answer !== said.before ? `${said.text} ${answer}` : said.text);
-    root.append(n); setTimeout(() => n.remove(), 5000);
+    // starting over carries its Undo (ui.undoable) and stays until the next draw; any other confirmation goes after 5 seconds
+    const n = ui.notice("ok", said.before && answer && answer !== said.before ? `${said.text} ${answer}` : said.text,
+      said.undo ? { undo: said.undo, undone: (r) => { pending = { text: ui.undoneWords(r, "Undone: your budget is back as it was.") }; } } : {});
+    root.append(n); if (!said.undo) setTimeout(() => n.remove(), 5000);
   }
   // the month: only once there is something to look back on
   if (d.hasBudget || d.hasData) {
@@ -173,10 +175,21 @@ export function render(root, ctx) {
   const formCard = ui.card(null);
   const formHost = h("div");
   let showForm = d.envelopes.length === 0 && !d.fromExpenses.length;   // with Expenses to start from, typing by hand folds away
+  // Start the budget over (gap list, next 60, item 40): this month's envelopes only, beside "+ Add another envelope", and only
+  // when it would change something (critic P5: right after "Use these as my budget" it would keep a copy and change nothing)
+  const overPv = d.envelopes.length > 0 && d.month === today.slice(0, 7) && !d.kept ? startOverPreview(plan, d, { today, mode: "kept" }) : null;
+  const canOver = !!overPv?.changes;
+  // a month that reads with a budget kept when it was started over: its envelopes are a record, changed nowhere here (critic M2)
+  const keptSaid = keptWords(d);
   const drawForm = (prefill) => {
     formHost.innerHTML = "";
+    if (keptSaid) return;
     if (prefill) showForm = true;
-    if (!showForm && !editing) { formHost.append(ui.button(d.envelopes.length ? "+ Add another envelope" : "+ Add an envelope by hand", () => { showForm = true; drawForm(); }, { class: "secondary" })); return; }
+    if (!showForm && !editing) {
+      const add = ui.button(d.envelopes.length ? "+ Add another envelope" : "+ Add an envelope by hand", () => { showForm = true; drawForm(); }, { class: "secondary" });
+      formHost.append(canOver ? ui.row(add, ui.button("Start the budget over", () => drawOver(overPv.keptChanges ? "kept" : "spent"), { class: "secondary" })) : add);
+      return;
+    }
     const values = editing ? { ...editing } : { rollover: false, ...(prefill ?? {}) };
     formHost.append(h("div", {},
       h("h2", {}, editing ? `Edit ${editing.label}` : "Add an envelope"),
@@ -193,6 +206,34 @@ export function render(root, ctx) {
       editing ? h("p", { style: { marginTop: "12px" } }, ui.button(`Remove the ${editing.label} envelope`, () => { const id = editing.id; editing = null; store.update((p) => { p.budgets = (p.budgets ?? []).filter((b) => b.id !== id); pending = { text: `Envelope removed.${movesUndone(dropOrphanMoves(p))}`, before: answer }; }); }, { class: "danger" })) : null,
     ));
   };
+  // in the add button's place, one thing at a time (so its "Start over" is the one filled button): what starting over does,
+  // the amounts kept or last month's spending (two chips, never saved), and Start over or Cancel
+  const drawOver = (mode, picked = false) => {
+    formHost.innerHTML = "";
+    // a confirmation still showing at the foot of the screen (the shell's copy of the last save's) would sit over this
+    // panel's buttons (critic P6): it goes as the panel opens; the page's own line at the top stays
+    try { if (typeof document !== "undefined") document.querySelector?.(".save-echo")?.remove(); } catch { /* no document */ }
+    const pv = startOverPreview(plan, d, { today, mode }), w = startOverWords(pv, { currency: cur });
+    // the two chips only when both change something; keeping the amounts when only that changes nothing is no choice
+    const offer = pv.canSpent && pv.keptChanges && pv.spentChanges > 0;
+    const title = h("h2", { tabindex: "-1" }, "Start the budget over");
+    formHost.append(h("div", { dataset: { startOver: "" } },
+      title,
+      h("p", {}, [w.intro, w.fresh, w.spentNow, w.moves, w.later].filter(Boolean).join(" ")),
+      offer ? choice(ctx, { id: "startFrom", label: "The amounts", presets: [{ value: "kept", label: w.kept }, { value: "spent", label: w.spent }], value: pv.mode, onPick: (v) => drawOver(v, true) })
+        : !pv.canSpent ? h("p", { class: "muted small" }, w.noSpent)
+        : pv.mode === "spent" ? h("p", {}, w.onlySpent) : null,
+      pv.mode === "spent" ? h("ul", { class: "records" }, pv.lines.map((x) => { const l = w.line(x); return h("li", {},
+        h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, `${x.icon} ${x.label}`), h("span", { class: "rec-value" }, l.value)), h("div", { class: "rec-sub" }, l.sub)); })) : null,
+      h("p", { class: "muted small" }, w.total),
+      ui.row(ui.button("Start over", () => {
+        let undo = null;
+        undo = ui.undoable(store, (dr) => { if (startOver(dr, { today, mode: pv.mode, id: ui.uid() })) pending = { text: w.done, before: answer, undo: () => undo?.() }; });
+      }), ui.button("Cancel", () => { drawForm(); formHost.querySelector?.("button:last-child")?.focus?.({ preventScroll: true }); }, { class: "secondary" }))));
+    // the tapped control is drawn again: the focus goes to the panel's title, or to the chip just picked (never lost to the page)
+    const target = picked ? formHost.querySelector?.('[data-choice="startFrom"] .chip.on') : title;
+    try { target?.focus?.({ preventScroll: true }); } catch { /* not focusable here */ }
+  };
   drawForm();
 
   // ---------------------------------------------------------------- the envelopes: those over first, six, then "N more envelopes"
@@ -200,7 +241,7 @@ export function render(root, ctx) {
   if (d.envelopes.length) {
     const over = d.envelopes.filter((e) => e.left < -0.005).sort((a, b) => a.left - b.left);
     const items = [...over, ...d.envelopes.filter((e) => !over.includes(e))];
-    const envRow = (e) => h("li", { role: "button", tabindex: "0", style: { cursor: "pointer" },
+    const envRow = (e) => h("li", keptSaid ? {} : { role: "button", tabindex: "0", style: { cursor: "pointer" },
       onClick: () => { editing = plan.budgets.find((b) => b.id === e.id); editing = { ...editing, label: e.label }; showForm = true; drawForm(); formHost.scrollIntoView?.({ behavior: "smooth", block: "start" }); },
       onKeydown: (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); ev.currentTarget.click(); } } },
       h("span", { class: "ic" }, e.icon),
@@ -209,7 +250,7 @@ export function render(root, ctx) {
         d.hasData ? h("div", { class: "progress", style: { margin: "6px 0 2px" } }, h("span", { style: { width: `${Math.round(e.share * 100)}%`, background: e.pace === "over" ? "var(--bad)" : e.pace === "ahead" ? "var(--warn)" : "var(--ok)" } })) : null,
         h("div", { class: "d" }, d.hasData ? `${money(e.spent)} of ${money(e.available)}${moneyNote(e, money)}${e.rollover ? " · rolls over" : ""}` : `a month${e.rollover ? " · rolls over" : ""}`)),
       // "Edit" under the amount, as on Income and Expenses (CF-8: these rows looked like the ones on Bills that cannot be tapped)
-      h("span", { class: "st", style: { textAlign: "right" } }, h("div", { style: { fontWeight: "600", color: e.left < 0 ? "var(--bad)" : "inherit" } }, d.hasData ? `${e.left < 0 ? "-" : ""}${money(Math.abs(e.left))} left` : money(e.amount)), h("div", { class: "muted small" }, "Edit ›")));
+      h("span", { class: "st", style: { textAlign: "right" } }, h("div", { style: { fontWeight: "600", color: e.left < 0 ? "var(--bad)" : "inherit" } }, d.hasData ? `${e.left < 0 ? "-" : ""}${money(Math.abs(e.left))} left` : money(e.amount)), keptSaid ? null : h("div", { class: "muted small" }, "Edit ›")));
     root.append(ui.card("Envelopes",
       // with Safe to spend as the headline, which envelopes are over leads their card; no total "left" beside the headline's
       // (it counts the envelopes for bills, which Safe to spend leaves out: critic 1)
@@ -217,7 +258,8 @@ export function render(root, ctx) {
       staleBelow ? staleLine() : null,
       // an envelope over or spending fast is never behind "N more envelopes" (R19)
       ...rest(ctx, { id: "envelopes", items, row: envRow, noun: "envelopes", one: "envelope", list: "page-list", keep: (e) => d.hasData && (e.pace === "over" || e.pace === "ahead") }),
-      h("p", { class: "muted small" }, d.hasData ? `Day ${d.dayOfMonth} of ${d.daysInMonth}. "Spending fast" means more than the share of the month that has passed. Tap an envelope to change it.` : "Tap an envelope to change its amount."),
+      h("p", { class: "muted small" }, keptSaid ? (d.hasData ? `Day ${d.dayOfMonth} of ${d.daysInMonth}. ${keptSaid}` : keptSaid)
+        : d.hasData ? `Day ${d.dayOfMonth} of ${d.daysInMonth}. "Spending fast" means more than the share of the month that has passed. Tap an envelope to change it.` : "Tap an envelope to change its amount."),
       out, formHost,
     ));
   }
@@ -225,7 +267,7 @@ export function render(root, ctx) {
     ...rest(ctx, { id: "unbudgeted", items: d.unbudgeted, noun: "kinds of spending", one: "kind of spending", list: "page-list", row: (u) => h("li", {},
       // the amount under the name, so a 320 px row keeps the name on one or two lines beside its button
       h("span", { class: "ic" }, u.icon), h("span", { class: "body" }, h("div", { class: "t" }, u.label), h("div", { class: "d" }, h("strong", {}, money(u.spent)), " so far")),
-      u.category ? h("span", { class: "st" }, ui.button("Add envelope", () => { editing = null; drawForm({ category: u.category, amount: Math.round(u.spent) }); formHost.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary small" })) : null) })));
+      u.category && !keptSaid ? h("span", { class: "st" }, ui.button("Add envelope", () => { editing = null; drawForm({ category: u.category, amount: Math.round(u.spent) }); formHost.scrollIntoView?.({ behavior: "smooth", block: "start" }); }, { class: "secondary small" })) : null) })));
   const useIt = (sg) => { pending = { text: `Envelope added for ${sg.label}.`, before: answer }; store.update((p) => { p.budgets = p.budgets ?? []; if (!p.budgets.some((b) => b.category === sg.category)) p.budgets.push({ id: ui.uid(), category: sg.category, amount: sg.average, period: "monthly", rollover: false }); }); };
   const suggestionRow = (sg) => h("li", {},
     h("span", { class: "ic" }, sg.icon),
@@ -238,7 +280,7 @@ export function render(root, ctx) {
       return h("p", { class: "small", style: { margin: "0 0 8px" } }, all ? `${c.name}'s purchases aren't in these amounts: about ${money(c.average)} a month went to it, but its own file isn't in, so what it bought isn't sorted into kinds yet. ${bringWords(c.name)}`
         : `${c.name}'s purchases in ${when} aren't in these amounts: ${money(c.total ?? c.average * c.months)} went to it then, ${c.before && c.first ? `before its file starts on ${shortDate(c.first)}` : `but its ${when} file isn't in`}, so what it bought then isn't sorted into kinds yet. ${bringWords(c.name)}`); }),
     ui.row(...d.suggestCards.slice(0, 2).map((c) => h("a", { class: "btn secondary", href: `#/transactions/import?accountId=${encodeURIComponent(c.cardId)}` }, bringWords(c.name).replace(/\.$/, ""))))) : null;
-  if (d.suggestions.length) root.append(ui.card("Suggested from your last months", introOnce(),
+  if (d.suggestions.length && !keptSaid) root.append(ui.card("Suggested from your last months", introOnce(),
     s.drawn && reason ? h("p", { class: "muted small" }, reason) : null, cardNote,
     ...rest(ctx, { id: "suggestions", items: d.suggestions, row: suggestionRow, noun: "suggestions", one: "suggestion", list: "page-list" })));
   // nothing budgeted and no whole bank month: the amounts already typed on Expenses, in one tap (round 4, 2026-11-02)
@@ -281,9 +323,12 @@ export function render(root, ctx) {
   let pay = { drawn: false };
   // (a plan the part cannot read leaves the row out, never the page: critic M3)
   if (d.hasBudget) { try { pay = byPaycheck(plan, { today, month: d.month, budget: d, currency: cur }); } catch { pay = { drawn: false }; } }
+  // the budgets kept each time it was started over, newest first, each one openable to read
+  const kept = historyOf(plan, { currency: cur });
   const optional = parts(ctx,
     pay.drawn && { id: "paycheck", kind: "more", title: "By paycheck", says: pay.says, missing: pay.kind === "missing", open: savedInPay || undefined,
       body: () => payBody(ctx, pay, { answer: () => answer, say: (text) => { pending = { text, before: answer, part: "paycheck" }; } }) },
+    kept.length > 0 && { id: "earlier", kind: "more", title: "Earlier budgets", says: `${kept.length} kept`, body: () => earlierBody(ctx, kept, money) },
     (d.hasBudget || plan.budgetPlan) && { id: "way", kind: "own", says: WAY_LABELS[way.method], set: optionsSet, open: savedInWay, holds: ["budgetWay", "carryOver", "hold"],
       body: () => wayBody(ctx, { d, way, job, money, answer: () => answer, say: (text) => { pending = { text, before: answer, part: "way" }; } }) },
     s.drawn && { id: "how", kind: "how", says: s.mode === "plan" ? "from your plan" : "from envelopes", body: () => howBody(ctx, s, money) });
@@ -394,6 +439,17 @@ function payBody(ctx, pay, { say }) {
     h("div", { class: "rec-sub" }, x.words.sub)))));
   for (const note of w.notes) out.push(h("p", { class: "muted small" }, note));
   return out;
+}
+
+/** "Earlier budgets": each budget kept when the budget was started over, one row each that opens to its envelopes. */
+function earlierBody(ctx, kept, money) {
+  const h = ctx.ui.h;
+  return [h("p", { class: "muted small" }, "Each is your budget as it was when you started over. Reading one changes nothing."),
+    ...kept.map((e) => part(ctx, { id: `earlier-${e.id}`, kind: "item", title: e.title, says: money(e.total), body: () => [
+      h("ul", { class: "page-list" }, e.lines.map((b) => h("li", {}, h("span", { class: "ic" }, b.icon),
+        h("span", { class: "body" }, h("div", { class: "t" }, b.label), b.rollover ? h("div", { class: "d" }, "rolls over") : null),
+        h("span", { class: "st amount" }, `${money(b.amount)} a month`)))),
+      h("p", { class: "muted small" }, e.said)] }))];
 }
 
 /** "How this is worked out": the month's sum, each figure linked to the page it comes from, then the span. */

@@ -54,7 +54,9 @@ const daysIn = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 
  *   cover: { from, to } | null (the days the bank files cover),
  *   stale (the files stop more than COVER_SLACK days before today in this month, so "spent so far" is missing the latest days),
  *   fromExpenses: [{ category, label, icon, amount }] (no envelopes and no whole bank month: Expenses' monthly amount per kind
- *   of spending, debt payments included), fromExpensesTotal
+ *   of spending, debt payments included), fromExpensesTotal,
+ *   kept?: { month (the month the budget was started over in), on (the day) } (only for a month before a start over: its
+ *   envelopes are the budget kept then, keptFor)
  * }
  */
 export function compute(plan, params = {}) {
@@ -71,7 +73,13 @@ export function compute(plan, params = {}) {
   const prevTx = spendingOf(plan, prevYm);
   const prev = byCat(prevTx);
   const prevCount = new Map(); for (const t of prevTx) prevCount.set(t.category || "", (prevCount.get(t.category || "") ?? 0) + 1);
-  const budgets = (plan.budgets ?? []).filter((b) => b.category);
+  // a month before the budget was started over reads with the budget kept then (its envelopes and amounts, gap list, next 60,
+  // item 40, critic M2: starting over never rewrites a past month); with no budgetHistory there is none and nothing differs
+  const keptAt = keptFor(plan, month);
+  const budgets = keptAt ? keptAt.lines : (plan.budgets ?? []).filter((b) => b.category);
+  // a month the budget was started over in is fresh: nothing rolls over into it, no overspending carries in (gap list, next 60,
+  // item 40); with no budgetHistory there is no such month and nothing below differs
+  const fresh = freshMonths(plan), freshNow = fresh.has(month), freshPrev = fresh.has(prevYm);
   // Budget your way (gap #37): only when the plan holds a budgetPlan; without one nothing below differs
   const bp = isSection(plan.budgetPlan) ? wayOf(plan) : null;
   const moves = bp ? movesIn(bp, month, budgets) : [], movesPrev = bp ? movesIn(bp, prevYm, budgets) : [];
@@ -83,12 +91,12 @@ export function compute(plan, params = {}) {
     const amount = Number(b.amount) || 0;
     // last month's money: the amount, plus or minus what was moved that month (one month back, as the rollover looks)
     const prevMoney = amount + (netPrev.get(b.category) ?? 0);
-    const carried = b.rollover ? Math.max(0, prevMoney - (prev.get(b.category) ?? 0)) : 0;   // last month's unspent, never a debt
+    const carried = b.rollover && !freshNow ? Math.max(0, prevMoney - (prev.get(b.category) ?? 0)) : 0;   // last month's unspent, never a debt
     const moved = net.get(b.category) ?? 0;
     // last month's overspending, when asked: past everything the envelope had last month, so money that rolled into last
     // month counts (450 a month, 420 spent in July, 470 in August: August had 480, nothing is owed in September)
-    const carriedPrev = prev2 && b.rollover ? Math.max(0, amount + (netPrev2.get(b.category) ?? 0) - (prev2.get(b.category) ?? 0)) : 0;
-    const owed = bp?.carryOver ? Math.max(0, (prev.get(b.category) ?? 0) - prevMoney - carriedPrev) : 0;
+    const carriedPrev = prev2 && b.rollover && !freshPrev ? Math.max(0, amount + (netPrev2.get(b.category) ?? 0) - (prev2.get(b.category) ?? 0)) : 0;
+    const owed = bp?.carryOver && !freshNow ? Math.max(0, (prev.get(b.category) ?? 0) - prevMoney - carriedPrev) : 0;
     const available = amount + carried + moved - owed;
     const sp = spent.get(b.category) ?? 0;
     const left = available - sp;
@@ -144,6 +152,8 @@ export function compute(plan, params = {}) {
   totals.left = totals.available - totals.spent;
   const out = { month, label: `${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`, dayOfMonth, daysInMonth, daysLeft, envelopes, totals, unbudgeted, suggestions, hasBudget: envelopes.length > 0, hasData: (plan.transactions ?? []).length > 0, suggestFrom, suggestSkipped, suggestCards, unsure: unsureNow ? `${unsureWords(plan, unsureNow, month)}.` : null, cover: cov, stale,
     fromExpenses, fromExpensesTotal: fromExpenses.reduce((t, x) => t + x.amount, 0) };
+  // (only when the month reads with a kept budget: with no budgetHistory the result has the same keys as before)
+  if (keptAt) out.kept = { month: keptAt.month, on: keptAt.on };
   if (bp) {
     const label = (c) => categoryLabel(plan, c);
     out.way = { method: bp.method, carryOver: bp.carryOver, moves: moves.map((m) => ({ ...m, fromLabel: label(m.from), toLabel: label(m.to) })),
@@ -798,4 +808,148 @@ export function byPaycheck(plan0, params = {}) {
   for (const p of pays) if (isDay(p.inc.endDate) && p.inc.endDate >= start && p.inc.endDate <= end) notes.push(`${p.label} ends on ${Month} ${Number(p.inc.endDate.slice(8, 10))}: no paycheck from it is counted after that.`);
   return { ...base, kind: "dated", paychecks, extra, bills, flex, perDay, totals, says: `${n} paycheck${n === 1 ? "" : "s"}`,
     words: { head, extra: extraWords, more, caveat, notes, ask: null, link: null, pick: null } };
+}
+
+// ---------------------------------------------------------------- Start the budget over, keep the history (item 40; 2026-11-15)
+/** Earlier budgets kept; the oldest goes first past this many (two years of starting over every month). */
+export const HISTORY_KEEP = 24;
+/** The kept budgets that read as one (a hand-edited file can hold anything): an object with an id, a month, a day and lines. */
+const realMonth = (x) => isYm(x) && Number(x.slice(5, 7)) >= 1 && Number(x.slice(5, 7)) <= 12;
+const realDay = (x) => isDay(x) && realMonth(x.slice(0, 7)) && plusDays(x, 0) === x;
+const historyEntries = (plan) => (Array.isArray(plan?.budgetHistory) ? plan.budgetHistory : []).filter((x) => isSection(x) && x.id && realMonth(x.month) && realDay(x.on) && Array.isArray(x.lines));
+/** The months a budget was started over in: fresh, so nothing rolls over into them and no overspending carries in. */
+export function freshMonths(plan) {
+  return new Set(historyEntries(plan).map((x) => x.month));
+}
+/**
+ * keptFor(plan, ym) -> { id, month, on, lines } | null: the kept budget a month reads with (critic M2: starting over keeps the
+ * history, so a past month never reads with amounts set after it). Each entry says "from `month` on, a fresh budget; before
+ * it, the budget was `lines`". Read in the order they were kept: the last entry that started at or before `ym` made `ym`
+ * read with the budget of its day; the first entry after that one which starts after `ym` kept that budget for `ym`. So
+ * one start over keeps every month before it on its lines; two in a row keep each month on the budget it had. None (no
+ * budgetHistory, or `ym` is the fresh month or after the last one): null, and the month reads with `budgets` as always.
+ * An entry with no line that reads as an envelope keeps nothing.
+ */
+export function keptFor(plan, ym) {
+  const xs = historyEntries(plan);
+  if (!xs.length || !isYm(ym)) return null;
+  let k = -1;
+  xs.forEach((x, i) => { if (x.month <= ym) k = i; });
+  const x = xs.find((y, i) => i > k && y.month > ym);
+  if (!x) return null;
+  const lines = x.lines.filter((b) => isSection(b) && b.category);
+  return lines.length ? { id: String(x.id), month: x.month, on: x.on, lines } : null;
+}
+/**
+ * keptWords(d) -> null | "August reads with your budget as it was before you started over on September 15, so its envelopes
+ * can't be changed here." (d = compute() for a month that reads with a kept budget; the year is said when it differs).
+ */
+export function keptWords(d) {
+  if (!d?.kept || !isYm(d.month) || !isDay(d.kept.on)) return null;
+  const on = d.kept.on, M = MONTH_NAMES[Number(d.month.slice(5, 7)) - 1];
+  const day = `${MONTH_NAMES[Number(on.slice(5, 7)) - 1]} ${Number(on.slice(8, 10))}${on.slice(0, 4) !== d.month.slice(0, 4) ? `, ${on.slice(0, 4)}` : ""}`;
+  return `${M} reads with your budget as it was before you started over on ${day}, so its envelopes can't be changed here.`;
+}
+/**
+ * historyOf(plan, { currency }) -> [{ id, month, on, lines: [{ category, label, icon, amount, rollover }], total, n, title ("Budget
+ * kept Nov 15, 2026"), said ("7 envelopes, $4,200 a month, kept when you started over on November 15, 2026.") }], newest first:
+ * each budget kept when the budget was started over, as it was (`budgetHistory`, docs/DATA_MODEL.md). Read with defaults: an
+ * entry that does not read as one is left out; a line with no kind of spending is left out.
+ */
+export function historyOf(plan, { currency = plan?.meta?.currency ?? "USD" } = {}) {
+  const money = (n) => fmtMoney(n, currency);
+  const all = historyEntries(plan).map((x, i) => {
+    const lines = x.lines.filter((b) => isSection(b) && b.category).map((b) => ({ category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), amount: Number(b.amount) || 0, rollover: !!b.rollover }));
+    return { id: String(x.id), month: x.month, on: x.on, lines, total: lines.reduce((t, b) => t + b.amount, 0), n: lines.length, i };
+  });
+  // the title says the day it was kept (critic P5: "Until ..." read as a budget that ended then); a second one kept the same
+  // day is "(2)"
+  for (const x of all) {
+    const same = all.filter((y) => y.on === x.on), k = same.indexOf(x) + 1;
+    x.title = `Budget kept ${shortDay(x.on)}, ${x.on.slice(0, 4)}${same.length > 1 && k > 1 ? ` (${k})` : ""}`;
+    x.said = `${x.n} envelope${x.n === 1 ? "" : "s"}, ${money(x.total)} a month, kept when you started over on ${MONTH_NAMES[Number(x.on.slice(5, 7)) - 1]} ${Number(x.on.slice(8, 10))}, ${x.on.slice(0, 4)}.`;
+  }
+  return all.sort((a, b) => b.on.localeCompare(a.on) || b.i - a.i).map(({ i, ...x }) => x);
+}
+/**
+ * startOverPreview(plan, d, { today, mode: "kept" | "spent" }) -> { month, last, day, canSpent, mode, lines: [{ id, category,
+ * label, icon, from, to, spent, kept, dup }], from, to, n, rollover, carryOver, moves, carried, owed, spentNow, keptChanges,
+ * spentChanges, changes }
+ * What starting over would do this month (d = compute() for this month, or null). "spent": each envelope's amount becomes
+ * what was spent in that kind last month, to the dollar; an envelope with nothing spent keeps its amount (`kept`), and so
+ * does a second envelope of the same kind (`dup`: the spending goes to the first one only, critic M4). Offered only when last
+ * month is whole in the bank files (the rule the suggestions use: d.suggestFrom holds it), else the amounts stay.
+ * What it changes, so the page offers it only when it changes something (critic P5): `carried` (what rolled into this month,
+ * dropped), `owed` (last month's overspending taken from this month, given back), `moves` (this month's moves, taken out)
+ * make `keptChanges`; `spentChanges` = the envelopes whose amount "spent" would change; `changes` = either.
+ */
+export function startOverPreview(plan, d, { today, mode = "kept" } = {}) {
+  const ym = today.slice(0, 7), last = addMonths(`${ym}-01`, -1).slice(0, 7);
+  const dd = d?.month === ym ? d : compute(plan, { today, month: ym });
+  const canSpent = (dd.suggestFrom ?? []).includes(last);
+  const use = mode === "spent" && canSpent ? "spent" : "kept";
+  const spent = canSpent ? byCat(spendingOf(plan, last)) : new Map();
+  const first = new Set();
+  const all = (plan.budgets ?? []).filter((b) => b && b.category).map((b) => {
+    const from = Number(b.amount) || 0, sp = spent.get(b.category) ?? 0, dup = first.has(b.category);
+    first.add(b.category);
+    const same = !canSpent || dup || sp < 0.5;
+    return { id: b.id, category: b.category, label: categoryLabel(plan, b.category), icon: categoryIcon(plan, b.category), from, spentTo: same ? from : Math.round(sp), spent: sp, same, dup };
+  });
+  const lines = all.map(({ spentTo, same, ...x }) => ({ ...x, to: use === "spent" ? spentTo : x.from, kept: use !== "spent" || same }));
+  const way = wayOf(plan);
+  const moves = way.moves.filter((m) => m.month === ym).length;
+  const carried = cents(dd.envelopes.reduce((t, e) => t + (Number(e.carried) || 0), 0)), owed = cents(dd.envelopes.reduce((t, e) => t + (Number(e.owed) || 0), 0));
+  const keptChanges = carried >= 0.5 || owed >= 0.5 || moves > 0;
+  const spentChanges = all.filter((x) => Math.abs(x.spentTo - x.from) >= 0.5).length;
+  return { month: ym, last, day: Number(today.slice(8, 10)), canSpent, mode: use, lines, from: lines.reduce((t, x) => t + x.from, 0), to: lines.reduce((t, x) => t + x.to, 0), n: lines.length,
+    rollover: lines.length > 0 && (plan.budgets ?? []).some((b) => b && b.category && b.rollover), carryOver: way.carryOver, moves,
+    carried, owed, spentNow: cents(dd.totals.spent), keptChanges, spentChanges, changes: keptChanges || spentChanges > 0 };
+}
+/**
+ * startOverWords(pv, { currency }) -> { intro, fresh, spentNow, moves, later, noSpent, onlySpent, total, done, kept, spent,
+ * line(x) -> { value, sub } }: the words of starting over, one written sentence per case (docs/OPTIONAL.md R5). `fresh` says
+ * what this month loses or gets back, with the amounts (critic M1); `later` says how to keep this month as it is.
+ */
+export function startOverWords(pv, { currency = "USD" } = {}) {
+  const money = (n) => fmtMoney(n, currency);
+  const Month = MONTH_NAMES[Number(pv.month.slice(5, 7)) - 1], Prev = MONTH_NAMES[Number(pv.last.slice(5, 7)) - 1];
+  const Next = MONTH_NAMES[Number(addMonths(`${pv.month}-01`, 1).slice(5, 7)) - 1];
+  const carried = Number(pv.carried) >= 0.5, owed = Number(pv.owed) >= 0.5;
+  return {
+    intro: `Your budget as it is now is kept under Earlier budgets, and a fresh one starts for ${Month} with the same envelopes.`,
+    fresh: carried && owed ? `The ${money(pv.carried)} that rolled into ${Month} from ${Prev} is dropped, and ${Prev}'s overspending (${money(pv.owed)}) no longer comes out of ${Month}.`
+      : carried ? `The ${money(pv.carried)} that rolled into ${Month} from ${Prev} is dropped.`
+      : owed ? `${Prev}'s overspending (${money(pv.owed)}) no longer comes out of ${Month}.` : null,
+    spentNow: pv.mode === "spent" && Number(pv.spentNow) >= 0.5 ? `The ${money(pv.spentNow)} already spent in ${Month} counts against the new amounts.` : null,
+    moves: pv.moves === 1 ? "The money moved between envelopes this month goes back." : pv.moves > 1 ? `The ${pv.moves} moves of money between envelopes this month go back.` : null,
+    later: (carried || owed || pv.moves > 0) && Number(pv.day) > 1 ? `To keep ${Month} as it is, start over on ${Next} 1 instead.` : null,
+    noSpent: pv.canSpent ? null : `Your spending for all of ${Prev} isn't known yet, so your amounts stay the same.`,
+    onlySpent: `Your amounts become what you spent in ${Prev}.`,
+    total: `${pv.n} envelope${pv.n === 1 ? "" : "s"}, ${money(pv.to)} a month${Math.abs(pv.to - pv.from) >= 0.5 ? ` (was ${money(pv.from)})` : ""}.`,
+    done: `Started over: a fresh budget for ${Month}, ${money(pv.to)} a month. Your old one is kept under Earlier budgets.`,
+    kept: "Keep the amounts", spent: `What I spent in ${Prev}`,
+    line: (x) => ({ value: money(x.to), sub: x.dup ? `kept: ${Prev}'s spending is on the first ${x.label} envelope` : x.kept ? `nothing spent in ${Prev}: kept` : Math.abs(x.to - x.from) < 0.5 ? "the same as before" : `was ${money(x.from)}` }),
+  };
+}
+/**
+ * startOver(draft, { today, mode, id }) -> the entry kept, or null (no envelope, no day). Inside ctx.store.update (the page
+ * passes it through ui.undoable, so Undo puts the plan back exactly): the budget as it is now goes into `budgetHistory` as
+ * { id, month (this month: the fresh budget's first), on (today), lines (a copy of `budgets`), moves? (this month's moves
+ * between envelopes, taken out with it) }, at most HISTORY_KEEP kept (the oldest goes first); with "spent", each envelope's
+ * amount becomes last month's spending in its kind (startOverPreview). The envelopes keep their ids, kinds and rollover.
+ * The months before this one go on reading with the copy (keptFor).
+ */
+export function startOver(draft, { today, mode = "kept", id } = {}) {
+  if (!isDay(today) || !(draft.budgets ?? []).some((b) => b && b.category)) return null;
+  const ym = today.slice(0, 7);
+  const pv = startOverPreview(draft, null, { today, mode });
+  const moves = isSection(draft.budgetPlan) && Array.isArray(draft.budgetPlan.moves) ? draft.budgetPlan.moves.filter((m) => m?.month === ym) : [];
+  const entry = { id, month: ym, on: today, lines: structuredClone(draft.budgets) };
+  if (moves.length) entry.moves = structuredClone(moves);
+  draft.budgetHistory = [...(Array.isArray(draft.budgetHistory) ? draft.budgetHistory : []), entry].slice(-HISTORY_KEEP);
+  // (the preview's lines are these envelopes in this order, so a second envelope of one kind, even with the same id, keeps its own)
+  if (pv.mode === "spent") draft.budgets.filter((b) => b && b.category).forEach((b, i) => { const x = pv.lines[i]; if (x && !x.kept) b.amount = x.to; });
+  if (moves.length) { draft.budgetPlan = { ...draft.budgetPlan, moves: draft.budgetPlan.moves.filter((m) => m?.month !== ym) }; setWay(draft, {}); }
+  return entry;
 }

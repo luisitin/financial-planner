@@ -396,7 +396,7 @@ A household with no pay from a job and other money in (retired: a pension, Socia
   money in, not tied to a day; a household with no job pay gets no row.
 - With two people, every paycheck is one household's: a paycheck pays what falls due until the next paycheck of anyone,
   so a small paycheck the day before a big one is short (said, with "keep that much back from the one before").
-- The paycheck view reads the month's envelopes at their monthly amounts.
+- The paycheck view reads the month's envelopes at their monthly amounts (a month before a start over: the kept budget's).
   It saves only the answer to "How often are you paid?".
 - A pay that ends in the month gives no paycheck after its end; its last paycheck pays for the days to the next paycheck of
   anyone, or to the month's end when none follows (critic M5: arguably right, since nothing else pays; now said in a note).
@@ -410,3 +410,89 @@ people with a shared payday and the notes; the share case; every missing case; t
 split never on the first view, R16, S11, the link, a short paycheck in red and no notice in the shut part); the critics' fixes
 (P1 the span and the caveat, P2, P3, P4 the chips saving one field and the part staying open, P7, M3 a null income, M5 a pay
 that ends and a bonus).
+
+## Start the budget over, keep the history (gap list, next 60, item 40, 2026-11-15)
+**What a person sees.** With envelopes and this month shown, the Envelopes card's foot has two outlined buttons: "+ Add
+another envelope" and "Start the budget over", the second only when starting over would change something (critic P5: right
+after "Use these as my budget" it kept an identical copy and changed nothing): money rolled into this month, last month's
+overspending taken from it, a move between envelopes this month, or an amount last month's spending would change. Nothing
+else is new on the first view. A tap on "Start the budget over" puts, in the add button's place (one thing at a time, so its
+"Start over" is the one filled button on the screen; a confirmation still at the foot of the screen goes as it opens, critic
+P6):
+
+- "Your budget as it is now is kept under Earlier budgets, and a fresh one starts for November with the same envelopes."
+  then, only when it is so, what this month loses or gets back, with the amounts (critic M1): "The $160 that rolled into
+  November from October is dropped." / "October's overspending ($80) no longer comes out of November." / both in one
+  sentence; with new amounts, "The $106 already spent in November counts against the new amounts."; "The money moved between
+  envelopes this month goes back." / "The 3 moves of money between envelopes this month go back."; and after the 1st, when
+  anything is dropped, "To keep November as it is, start over on December 1 instead."
+- two chips, "Keep the amounts" (on) and "What I spent in October", only when both change something. When last month is not
+  whole in the bank files: "Your spending for all of October isn't known yet, so your amounts stay the same." When keeping the
+  amounts would change nothing, the panel opens on last month's amounts with "Your amounts become what you spent in October."
+  and no chips. The chips are never saved; last month's amounts show each envelope's new amount ("Groceries $1,187, was
+  $900"; "Fun and hobbies $200, nothing spent in October: kept"; a second envelope of one kind: "kept: October's spending is
+  on the first Groceries envelope", critic M4).
+- "4 envelopes, $1,681 a month (was $1,710)." and the buttons "Start over" (filled) and "Cancel" (outlined).
+
+"Start over" saves once (through `ui.undoable`): the green line at the top says "Started over: a fresh budget for November,
+$1,681 a month. Your old one is kept under Earlier budgets." (and the new answer when the headline changed, R7) and carries
+"Undo", which puts the plan back exactly as it was ("Undone: your budget is back as it was."). The notice stays until the
+next draw (the other confirmations go after five seconds). Once a budget was kept, the parts card gains one quiet row,
+"Earlier budgets" with "1 kept": inside, "Each is your budget as it was when you started over. Reading one changes nothing."
+and one row per kept budget, newest first, "Budget kept Nov 2, 2026" (critic P5: "Until ..." read as a budget that ended
+then) with its total "$1,710", which opens to its envelopes ("Groceries · rolls over · $900 a month") and "4 envelopes,
+$1,710 a month, kept when you started over on November 2, 2026." No part opens or shuts on the save (S11). Another month
+picked in the Month box shows no button: a fresh budget starts this month.
+
+A month before the start over, picked in the Month box, reads with the kept budget, exactly as it read before (critic M2):
+its envelopes, amounts, rollover and carry. Its rows are not offered for change (no "Edit ›", no add button, no "Add
+envelope" or suggestions, which would change today's budget, not that month's), and the card's foot says "August reads with
+your budget as it was before you started over on September 15, so its envelopes can't be changed here."
+
+### Data and formulas (ours; no outside figure)
+- `budgetHistory` (optional, docs/DATA_MODEL.md): `[{ id, month, on, lines, moves? }]`. `startOver(draft, { today, mode, id })`
+  pushes `{ id, month: this month, on: today, lines: a copy of budgets, moves: this month's moves between envelopes }`, keeps at
+  most 24 (the oldest first out), takes this month's moves out of `budgetPlan` (`setWay` drops a section left empty) and,
+  with "spent", sets each amount. The envelopes keep their ids, kinds and rollover.
+- **What I spent last month** (`startOverPreview`) = last month's spending in that kind (the page's own `spendingOf`: transfers
+  left out, split purchases one line per part), to the dollar; an envelope with less than $0.50 spent keeps its amount. Offered
+  only when last month is whole in the bank files: the same rule the suggestions use (it is in `suggestFrom`: whole at both
+  ends, no hole in any account's files).
+- **The months before** (`keptFor`): each entry says "from `month` on, a fresh budget; before it, the budget was `lines`".
+  In the order they were kept, the last entry that started at or before a month made that month read with the budget of its
+  day; the first entry after it that starts after the month kept that budget for it. One start over keeps every month before
+  it on its lines; two in a row keep each month on the budget it had (kept in July, again in September: June reads July's
+  copy, July and August September's, September on today's). `compute()` reads that month's envelopes from the lines and says
+  `kept: { month, on }`; with no budgetHistory there is no such month and the result has the same keys as before.
+- **What I spent last month, a kind with two envelopes**: the first takes the spending; a second keeps its amount (critic M4;
+  `compute()` counts the kind's spending against each, so giving it to both would count it twice).
+- **The fresh month**: in `compute()`, a month a budget was started over in (`freshMonths`) has nothing rolled over into it
+  (`carried = 0`) and no overspending carried in (`owed = 0`); the month after rolls over and carries as before, from the fresh
+  month only (what rolled into the fresh month is 0). Without `budgetHistory` there is no fresh month and every figure is what
+  it was (the invariance test).
+- `historyOf(plan)` reads each kept budget with defaults (no id, not a real month or day, or no list of lines: left out; a line
+  with no kind left out), newest first, its total = the sum of its lines' amounts; two kept the same day read "(2)".
+
+### Choices where the brief was silent (noted for the owner)
+- A fresh budget is for this month, the month it is started in: the kept copy is labelled by the day it was kept ("Budget kept
+  Nov 2, 2026"), since it may have been in use for months before.
+- A month before a start over reads with the kept budget (critic M2: "keep the history" has to mean the past months keep
+  their figures). An amount edited by hand, with no start over, still changes how every month reads, as before. Spending
+  earlier in the fresh month counts against the fresh budget (the month is the unit), and the panel says so with the amount.
+- Late in a month, starting over drops what rolled into it (critic M1: on the 30th the fresh month is the one almost over).
+  The panel says how much and that starting over on the 1st keeps this month as it is; a choice of "from next month" was
+  left out (one more pair of chips, and this month's envelopes could then not be changed for the rest of it).
+- Undo is the kit's (`ui.undoable`): it works while the page is open; there is no "put this budget back" in Earlier budgets.
+- A typed envelope with nothing spent last month keeps its amount rather than going to $0 (a yearly bill's envelope would
+  otherwise read $0), and the preview says so on its line.
+
+**Tests** (`module.test.mjs`, "start over"): the copy (lines equal the old budgets, not the same list), nothing to keep,
+24 kept; last month's amounts by hand (groceries 380, dining 140 + 55.40 = 195, fun kept at 80) and a last month that is not
+whole; this month's moves taken out, other months' kept, an emptied budgetPlan gone; the fresh month (August's 70 does not
+roll into September, dining's 40 over does not carry in, October rolls 235 as before, August unchanged); the history read
+(newest first, "(2)", broken entries left out); every sentence; the page (the two outlined buttons, the panel and its one
+filled button, the chips saving nothing, Cancel, Start over saving once, the green line with Undo, Earlier budgets shut with
+its row, S11, Undo putting the plan back exactly, no button on a past month); the invariance over every household and
+fixture plan with no, an empty and a broken `budgetHistory`, and with one for another month; the critics' fixes (M1 the
+amounts and "start over on December 1 instead", M2 past months by hand after one and two start overs, on the page too, M4 a
+kind with two envelopes, P5 no button when nothing changes and the plain words, P6 the bottom note removed).

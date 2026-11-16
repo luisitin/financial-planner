@@ -508,6 +508,7 @@ function page(plan0, { today = "2026-06-01", query = {}, spare = SPARE } = {}) {
   const draw = () => { s.root = new FakeElement("main"); renderBudget(s.root, ctx()); };
   draw();
   s.plan = () => plan;
+  s.draw = draw;   // the shell's redraw a moment after a store.update (an Undo's words are set after its update)
   return s;
 }
 const everything = (el) => [el, ...el.all()];
@@ -1494,4 +1495,300 @@ test("by paycheck invariance: it reads only, over every invented household and f
   // the invented households: most have pay with no payday yet (the share), a year's pay with no paychecks a year (missing),
   // and the retired ones have no row
   assert.ok(kinds.get("share") >= 10 && kinds.get("missing") >= 1 && kinds.get("no paycheck") >= 1, JSON.stringify([...kinds]));
+});
+
+// ---------------------------------------------------------------- Start the budget over, keep the history (item 40; 2026-11-15)
+const { startOver, startOverPreview, startOverWords, historyOf, freshMonths, keptFor, keptWords, HISTORY_KEEP } = await import("./compute.js");
+const SEP = "2026-09-15";
+
+test("start over: the budget as it is now is kept as a dated copy, and a fresh one starts from it (amounts kept)", () => {
+  const p = plan(); const was = structuredClone(p.budgets);
+  const e = startOver(p, { today: SEP, mode: "kept", id: "h1" });
+  assert.deepEqual(e, { id: "h1", month: "2026-09", on: SEP, lines: was });
+  assert.deepEqual(p.budgetHistory, [e]);
+  assert.deepEqual(p.budgets, was, "the same envelopes, ids, kinds, amounts and rollover");
+  assert.notEqual(p.budgetHistory[0].lines, p.budgets, "a copy, not the same list");
+  // nothing to keep: no envelope, or no day
+  const q = emptyPlan();
+  assert.equal(startOver(q, { today: SEP, id: "h" }), null); assert.equal("budgetHistory" in q, false);
+  assert.equal(startOver(plan(), { today: "", id: "h" }), null);
+  // at most 24 kept, the oldest first out
+  const r = plan(); r.budgetHistory = Array.from({ length: HISTORY_KEEP }, (_, i) => ({ id: `o${i}`, month: "2025-01", on: "2025-01-02", lines: [] }));
+  startOver(r, { today: SEP, id: "new" });
+  assert.equal(r.budgetHistory.length, 24); assert.equal(r.budgetHistory[0].id, "o1"); assert.equal(r.budgetHistory.at(-1).id, "new");
+});
+
+test("start over: amounts set to what was spent last month (to the dollar), an envelope with nothing spent kept, only when last month is whole", () => {
+  const p = plan(); p.budgets.push({ id: "b3", category: "fun", amount: 80, period: "monthly", rollover: false });
+  p.transactions.push(tx("11", "2026-08-20", -55.4, "dining"));
+  const pv = startOverPreview(p, null, { today: SEP, mode: "spent" });
+  assert.deepEqual([pv.month, pv.last, pv.canSpent, pv.mode], ["2026-09", "2026-08", true, "spent"]);
+  assert.deepEqual(pv.lines.map((x) => [x.category, x.from, x.to, x.kept]), [["groceries", 450, 380, false], ["dining", 100, 195, false], ["fun", 80, 80, true]]);
+  assert.deepEqual([pv.from, pv.to, pv.n], [630, 655, 3]);
+  startOver(p, { today: SEP, mode: "spent", id: "h1" });
+  assert.deepEqual(p.budgets.map((b) => [b.id, b.amount, b.rollover]), [["b1", 380, true], ["b2", 195, false], ["b3", 80, false]]);
+  assert.deepEqual(p.budgetHistory[0].lines.map((b) => b.amount), [450, 100, 80], "the copy holds the amounts as they were");
+  // last month not whole in the bank files (the lines start on August 10): the amounts stay
+  const q = plan(); q.transactions = q.transactions.filter((t) => t.date >= "2026-08-10");
+  const pq = startOverPreview(q, null, { today: SEP, mode: "spent" });
+  assert.deepEqual([pq.canSpent, pq.mode, pq.lines.every((x) => x.kept && x.to === x.from)], [false, "kept", true]);
+  startOver(q, { today: SEP, mode: "spent", id: "h" });
+  assert.deepEqual(q.budgets.map((b) => b.amount), [450, 100]);
+});
+
+test("start over: this month's moves between envelopes go with the old budget; other months' stay", () => {
+  const p = plan();
+  p.budgetPlan = { carryOver: true, moves: [{ id: "m1", month: "2026-09", from: "groceries", to: "dining", amount: 30 }, { id: "m0", month: "2026-08", from: "groceries", to: "dining", amount: 20 }] };
+  assert.equal(startOverPreview(p, null, { today: SEP }).moves, 1);
+  const e = startOver(p, { today: SEP, id: "h1" });
+  assert.deepEqual(e.moves, [{ id: "m1", month: "2026-09", from: "groceries", to: "dining", amount: 30 }]);
+  assert.deepEqual(p.budgetPlan, { carryOver: true, moves: [{ id: "m0", month: "2026-08", from: "groceries", to: "dining", amount: 20 }] });
+  const q = plan(); q.budgetPlan = { moves: [{ id: "m1", month: "2026-09", from: "groceries", to: "dining", amount: 30 }] };
+  startOver(q, { today: SEP, id: "h1" });
+  assert.equal("budgetPlan" in q, false, "a budgetPlan with nothing left in it goes, as setWay leaves it");
+});
+
+test("start over: the month it starts in is fresh (nothing rolls over in, no overspending carries in); the month after reads as before", () => {
+  const p = plan(); p.budgetPlan = { carryOver: true };
+  const env = (q, month, c = "groceries") => compute(q, { today: SEP, month }).envelopes.find((e) => e.category === c);
+  // before: August's 70 unspent rolls into September; dining went 40 over in August (140 of 100), which comes out of September
+  assert.deepEqual([env(p, "2026-09").carried, env(p, "2026-09").available, env(p, "2026-09", "dining").owed], [70, 520, 40]);
+  const octBefore = env(p, "2026-10");
+  startOver(p, { today: SEP, id: "h1" });
+  assert.deepEqual([...freshMonths(p)], ["2026-09"]);
+  assert.deepEqual([env(p, "2026-09").carried, env(p, "2026-09").available, env(p, "2026-09", "dining").owed, env(p, "2026-09", "dining").available], [0, 450, 0, 100]);
+  // October: September's own unspent rolls on as before (450 - 215 = 235), and nothing rolled into September
+  assert.deepEqual([env(p, "2026-10").carried, octBefore.carried], [235, 235]);
+  assert.equal(env(p, "2026-10", "dining").owed, 0, "dining spent 60 of its 100 in September");
+  // August, before it, reads as it did
+  const ref = plan(); ref.budgetPlan = { carryOver: true };
+  assert.deepEqual(env(p, "2026-08"), env(ref, "2026-08"));
+});
+
+test("start over: the earlier budgets, newest first, each with its day and total; an entry that does not read as one is left out", () => {
+  const p = plan();
+  p.budgetHistory = [
+    { id: "a", month: "2026-07", on: "2026-07-03", lines: [{ id: "x", category: "groceries", amount: 500, rollover: true }, { id: "y", category: "dining", amount: "120" }, { id: "z" }] },
+    { id: "b", month: "2026-09", on: "2026-09-15", lines: [{ id: "x", category: "groceries", amount: 450 }] },
+    { id: "c", month: "2026-09", on: "2026-09-15", lines: [{ id: "x", category: "groceries", amount: 380 }] },
+    null, "x", { id: "d", month: "2026-13", on: "2026-09-15", lines: [] }, { id: "e", month: "2026-09", on: "2026-09-15" }, { month: "2026-09", on: "2026-09-15", lines: [] },
+  ];
+  const h = historyOf(p);
+  // titled by the day it was kept (critic P5: "Until ..." read as a budget that ended that day)
+  assert.deepEqual(h.map((x) => [x.id, x.title, x.total, x.n]), [["c", "Budget kept Sep 15, 2026 (2)", 380, 1], ["b", "Budget kept Sep 15, 2026", 450, 1], ["a", "Budget kept Jul 3, 2026", 620, 2]]);
+  assert.equal(h[2].said, "2 envelopes, $620 a month, kept when you started over on July 3, 2026.");
+  assert.equal(h[0].said, "1 envelope, $380 a month, kept when you started over on September 15, 2026.");
+  assert.deepEqual(h[2].lines.map((b) => [b.label, b.amount, b.rollover]), [["Groceries", 500, true], ["Eating out", 120, false]]);
+  assert.deepEqual([...freshMonths(p)].sort(), ["2026-07", "2026-09"]);
+  assert.deepEqual(historyOf(emptyPlan()), []);
+  assert.deepEqual(historyOf({ ...emptyPlan(), budgetHistory: { a: 1 } }), []);
+});
+
+test("start over: what it says, one written sentence per case", () => {
+  const W = (x) => startOverWords({ month: "2026-11", last: "2026-10", day: 15, canSpent: true, mode: "kept", rollover: false, carryOver: false, moves: 0, carried: 0, owed: 0, spentNow: 0, n: 7, from: 4200, to: 4200, ...x });
+  const w = W();
+  assert.equal(w.intro, "Your budget as it is now is kept under Earlier budgets, and a fresh one starts for November with the same envelopes.");
+  assert.deepEqual([w.fresh, w.spentNow, w.moves, w.later, w.noSpent], [null, null, null, null, null]);
+  // what this month loses or gets back, with the amounts, and how to keep it as it is (critic M1)
+  assert.equal(W({ carried: 160 }).fresh, "The $160 that rolled into November from October is dropped.");
+  assert.equal(W({ owed: 80 }).fresh, "October's overspending ($80) no longer comes out of November.");
+  assert.equal(W({ carried: 160, owed: 80 }).fresh, "The $160 that rolled into November from October is dropped, and October's overspending ($80) no longer comes out of November.");
+  assert.equal(W({ carried: 160 }).later, "To keep November as it is, start over on December 1 instead.");
+  assert.equal(W({ moves: 1 }).later, "To keep November as it is, start over on December 1 instead.");
+  assert.equal(W({ carried: 160, day: 1 }).later, null, "on the 1st the month has only begun");
+  assert.equal(W({ month: "2026-12", last: "2026-11", carried: 5 }).later, "To keep December as it is, start over on January 1 instead.");
+  assert.equal(W({ mode: "spent", spentNow: 106 }).spentNow, "The $106 already spent in November counts against the new amounts.");
+  assert.equal(W({ mode: "kept", spentNow: 106 }).spentNow, null, "kept amounts: this month reads as before");
+  assert.equal(W({ moves: 1 }).moves, "The money moved between envelopes this month goes back.");
+  assert.equal(W({ moves: 3 }).moves, "The 3 moves of money between envelopes this month go back.");
+  // critic P5: plain words when last month is not whole in the bank files; and when only the amounts would change
+  assert.equal(W({ canSpent: false }).noSpent, "Your spending for all of October isn't known yet, so your amounts stay the same.");
+  assert.equal(w.onlySpent, "Your amounts become what you spent in October.");
+  assert.equal(w.total, "7 envelopes, $4,200 a month.");
+  assert.equal(W({ n: 1, to: 4210 }).total, "1 envelope, $4,210 a month (was $4,200).");
+  assert.equal(W({ to: 4210 }).done, "Started over: a fresh budget for November, $4,210 a month. Your old one is kept under Earlier budgets.");
+  assert.deepEqual([w.kept, w.spent], ["Keep the amounts", "What I spent in October"]);
+  assert.deepEqual(w.line({ from: 600, to: 612, kept: false }), { value: "$612", sub: "was $600" });
+  assert.deepEqual(w.line({ from: 100, to: 100, kept: true }), { value: "$100", sub: "nothing spent in October: kept" });
+  assert.deepEqual(w.line({ from: 100, to: 100, kept: false }), { value: "$100", sub: "the same as before" });
+  // a second envelope of one kind keeps its amount: the spending goes to the first (critic M4)
+  assert.deepEqual(w.line({ from: 60, to: 60, kept: true, dup: true, label: "Groceries" }), { value: "$60", sub: "kept: October's spending is on the first Groceries envelope" });
+  // January: last month is December of the year before
+  assert.equal(startOverWords({ ...W(), month: "2027-01", last: "2026-12", canSpent: true, n: 1, from: 1, to: 1 }).spent, "What I spent in December");
+});
+
+test("start over on the page: an outlined button beside + Add another envelope; confirm with two chips; the green line carries Undo; Undo puts the plan back", () => {
+  const p = plan();
+  const s = page(p, { today: SEP, query: { month: "2026-09" } });
+  const card = () => everything(s.root).find((e) => e.tagName === "SECTION" && e.querySelector("H2")?.textContent === "Envelopes");
+  const btn = (text, root = card()) => root.all().find((e) => e.tagName === "BUTTON" && e.textContent === text);
+  assert.deepEqual([btn("+ Add another envelope").className, btn("Start the budget over").className], ["secondary", "secondary"]);
+  assert.equal(partNamed(s.root, "earlier"), null, "no earlier budget yet: no row");
+  // the panel: what it does, two chips (amounts kept is on), the one filled button
+  btn("Start the budget over").click();
+  assert.equal(s.saved.length, 0, "opening it saves nothing");
+  assert.equal(btn("+ Add another envelope"), undefined, "one thing at a time in the card");
+  assert.match(words(card()), /Start the budget over Your budget as it is now is kept under Earlier budgets, and a fresh one starts for September with the same envelopes\. The \$70 that rolled into September from August is dropped\. To keep September as it is, start over on October 1 instead\. Keep the amounts What I spent in August 2 envelopes, \$550 a month\. Start over Cancel/);
+  assert.deepEqual(chipsIn(card(), "startFrom").map((b) => [b.textContent, b.className]), [["Keep the amounts", "chip on"], ["What I spent in August", "chip"]]);
+  assert.deepEqual(filled(s.root).map((b) => b.textContent), ["Start over"]);
+  // the second chip shows last month's amounts, saving nothing
+  chipsIn(card(), "startFrom")[1].click();
+  assert.equal(s.saved.length, 0);
+  assert.match(words(card()), /dropped\. The \$275 already spent in September counts against the new amounts\. To keep September as it is, start over on October 1 instead\. .*🛒 Groceries \$380 was \$450 .* Eating out \$140 was \$100 2 envelopes, \$520 a month \(was \$550\)\./);
+  // Cancel: back to the two buttons, nothing saved
+  btn("Cancel").click();
+  assert.ok(btn("Start the budget over")); assert.equal(s.saved.length, 0);
+  // start over with last month's amounts: one save; the green line names it and carries Undo; Earlier budgets, shut
+  btn("Start the budget over").click(); chipsIn(card(), "startFrom")[1].click(); btn("Start over").click();
+  assert.equal(s.saved.length, 1);
+  assert.deepEqual(s.plan().budgets.map((b) => b.amount), [380, 140]);
+  assert.deepEqual(s.plan().budgetHistory.map((e) => [e.month, e.on, e.lines.map((b) => b.amount)]), [["2026-09", SEP, [450, 100]]]);
+  const ok = everything(s.root).find((e) => e.className === "notice ok");
+  assert.match(ok.textContent, /^Started over: a fresh budget for September, \$520 a month\. Your old one is kept under Earlier budgets\./);
+  const undoBtn = ok.all().find((e) => e.tagName === "BUTTON");
+  assert.equal(undoBtn.textContent, "Undo");
+  const earlier = partNamed(s.root, "earlier");
+  assert.deepEqual([earlier.querySelector(".fold-title").textContent, earlier.querySelector(".fold-status").textContent, isOpen(earlier)], ["Earlier budgets", "1 kept", false]);
+  // S11: no part opened or shut by the save
+  assert.ok(partsOf(s.root).every((x) => !isOpen(x)));
+  // each kept budget is a row of its own that opens to read
+  const item = partsOf(earlier).find((x) => x.dataset.kind === "item");
+  assert.deepEqual([item.querySelector(".fold-title").textContent, item.querySelector(".fold-status").textContent], ["Budget kept Sep 15, 2026", "$550"]);
+  assert.match(words(item), /Groceries rolls over \$450 a month .*Eating out \$100 a month 2 envelopes, \$550 a month, kept when you started over on September 15, 2026\./);
+  // Undo: the plan is back exactly as it was, and the next draw says so
+  undoBtn.click();
+  assert.equal(s.saved.length, 2);
+  assert.deepEqual(s.plan(), migrateFor(structuredClone(p)));
+  s.draw();
+  assert.equal(okLine(s.root), "Undone: your budget is back as it was.");
+  assert.equal(partNamed(s.root, "earlier"), null);
+  // another month shown in the Month box: no button (a fresh budget starts this month)
+  const past = page(plan(), { today: SEP, query: { month: "2026-08" } });
+  assert.equal(everything(past.root).find((e) => e.tagName === "BUTTON" && e.textContent === "Start the budget over"), undefined);
+});
+
+test("start over, critic M2: the months before keep reading with the budget kept, never with the new amounts", () => {
+  const p = plan(); p.budgetPlan = { carryOver: true };
+  const ref = structuredClone(p);
+  const month = (q, ym) => compute(q, { today: SEP, month: ym });
+  startOver(p, { today: SEP, mode: "spent", id: "h1" });
+  assert.deepEqual(p.budgets.map((b) => b.amount), [380, 140], "the amounts are last month's spending");
+  // August and July read exactly as before (with the amounts set today, August's groceries would read 380 of 380 and July's
+  // 420 would be 40 over, carried into August)
+  for (const ym of ["2026-08", "2026-07"]) {
+    const { kept, ...rest } = month(p, ym);
+    assert.deepEqual(rest, month(ref, ym), ym);
+    assert.deepEqual(kept, { month: "2026-09", on: SEP });
+  }
+  // September, the fresh month, reads with the new amounts; nothing kept
+  assert.deepEqual(month(p, "2026-09").envelopes.map((e) => [e.category, e.amount, e.carried]), [["groceries", 380, 0], ["dining", 140, 0]]);
+  assert.equal("kept" in month(p, "2026-09"), false);
+  assert.equal("kept" in month(ref, "2026-08"), false, "no budgetHistory: no key");
+  // two in a row: each month reads with the budget it had (kept in July, then again in September)
+  const q = plan(); q.budgets[0].amount = 300;
+  startOver(q, { today: "2026-07-05", id: "a" });
+  q.budgets[0].amount = 500;
+  startOver(q, { today: SEP, id: "b" });
+  q.budgets[0].amount = 700;
+  const g = (ym) => month(q, ym).envelopes.find((e) => e.category === "groceries").amount;
+  assert.deepEqual([g("2026-06"), g("2026-07"), g("2026-08"), g("2026-09"), g("2026-10")], [300, 500, 500, 700, 700]);
+  assert.deepEqual([keptFor(q, "2026-06").id, keptFor(q, "2026-08").id, keptFor(q, "2026-09"), keptFor(q, "2026-12")], ["a", "b", null, null]);
+  // an entry with no envelope in it keeps nothing
+  assert.equal(keptFor({ budgetHistory: [{ id: "x", month: "2026-09", on: SEP, lines: [null, { amount: 5 }] }] }, "2026-08"), null);
+  // the words for a kept month, the year said when it differs
+  assert.equal(keptWords(month(p, "2026-08")), "August reads with your budget as it was before you started over on September 15, so its envelopes can't be changed here.");
+  assert.equal(keptWords({ month: "2026-12", kept: { month: "2027-01", on: "2027-01-03" } }), "December reads with your budget as it was before you started over on January 3, 2027, so its envelopes can't be changed here.");
+  assert.equal(keptWords(month(p, "2026-09")), null);
+});
+
+test("start over, critic M2 on the page: a month before it reads with the kept budget, and its envelopes are not offered for change", () => {
+  const p = plan(); startOver(p, { today: SEP, mode: "spent", id: "h1" });
+  const s = page(p, { today: SEP, query: { month: "2026-08" } });
+  const card = everything(s.root).find((e) => e.tagName === "SECTION" && e.querySelector("H2")?.textContent === "Envelopes");
+  // August's own amounts (450 and 100), as before starting over; with today's (380 and 140) groceries would read "of $380"
+  const ref = page(plan(), { today: SEP, query: { month: "2026-08" } });
+  const refCard = everything(ref.root).find((e) => e.tagName === "SECTION" && e.querySelector("H2")?.textContent === "Envelopes");
+  assert.match(words(card), /Eating out over \$140 of \$100 -\$40 left 🛒 Groceries on track \$380 of \$480 \(\$30 rolled over\) · rolls over \$100 left/);
+  assert.equal(words(card).split(" Day ")[0], words(refCard).split(" Day ")[0].replace(/ Edit ›/g, ""));
+  assert.match(words(card), /August reads with your budget as it was before you started over on September 15, so its envelopes can't be changed here\./);
+  assert.doesNotMatch(words(card), /Edit ›|Tap an envelope|Add another envelope|Start the budget over/);
+  assert.equal(card.all().filter((e) => e.getAttribute?.("role") === "button").length, 0);
+  assert.equal(everything(s.root).filter((e) => e.tagName === "BUTTON" && e.textContent === "Add envelope").length, 0);
+  // this month: the envelopes are offered for change as before
+  const now = page(p, { today: SEP, query: { month: "2026-09" } });
+  assert.match(words(everything(now.root).find((e) => e.tagName === "SECTION" && e.querySelector("H2")?.textContent === "Envelopes")), /Edit ›.*Tap an envelope to change it\./);
+});
+
+test("start over, critic M4: a second envelope of one kind keeps its amount; last month's spending goes to the first only", () => {
+  const p = plan(); p.budgets.push({ id: "b9", category: "groceries", amount: 60, period: "monthly", rollover: false });
+  const pv = startOverPreview(p, null, { today: SEP, mode: "spent" });
+  assert.deepEqual(pv.lines.map((x) => [x.id, x.from, x.to, x.kept, x.dup]), [["b1", 450, 380, false, false], ["b2", 100, 140, false, false], ["b9", 60, 60, true, true]]);
+  assert.equal(pv.to, 580, "380 + 140 + 60: August's 380 of groceries is counted once");
+  startOver(p, { today: SEP, mode: "spent", id: "h1" });
+  assert.deepEqual(p.budgets.map((b) => [b.id, b.amount]), [["b1", 380], ["b2", 140], ["b9", 60]]);
+  // two envelopes with the same id (a hand-edited file): each keeps its own amount
+  const q = plan(); q.budgets.push({ id: "b1", category: "groceries", amount: 60, period: "monthly", rollover: false });
+  startOver(q, { today: SEP, mode: "spent", id: "h1" });
+  assert.deepEqual(q.budgets.map((b) => b.amount), [380, 140, 60]);
+});
+
+test("start over, critics M1, P5 and P6 on the page: offered only when it changes something; the amounts said; the old bottom note goes", () => {
+  // nothing rolls over, nothing carries, no moves, and last month is not whole in the bank files: starting over would only
+  // keep a copy, so no button (as right after "Use these as my budget")
+  const q = plan(); q.budgets[0].rollover = false; q.transactions = q.transactions.filter((t) => t.date >= "2026-08-10");
+  assert.equal(startOverPreview(q, null, { today: SEP }).changes, false);
+  const btnIn = (s, text) => everything(s.root).find((e) => e.tagName === "BUTTON" && e.textContent === text);
+  const sq = page(q, { today: SEP, query: { month: "2026-09" } });
+  assert.equal(btnIn(sq, "Start the budget over"), undefined);
+  assert.ok(btnIn(sq, "+ Add another envelope"));
+  // only the amounts would change (last month whole, nothing rolls over): the panel opens on last month's amounts, no chips
+  const r = plan(); r.budgets[0].rollover = false;
+  const pv = startOverPreview(r, null, { today: SEP });
+  assert.deepEqual([pv.keptChanges, pv.spentChanges, pv.changes], [false, 2, true]);
+  const sr = page(r, { today: SEP, query: { month: "2026-09" } });
+  btnIn(sr, "Start the budget over").click();
+  assert.equal(chipsIn(sr.root, "startFrom").length, 0);
+  assert.match(words(sr.root), /a fresh one starts for September with the same envelopes\. The \$275 already spent in September counts against the new amounts\. Your amounts become what you spent in August\. .*Groceries \$380 was \$450/);
+  btnIn(sr, "Start over").click();
+  assert.deepEqual(sr.plan().budgets.map((b) => b.amount), [380, 140]);
+  // right after, nothing would change again: no button
+  assert.equal(btnIn(sr, "Start the budget over"), undefined);
+  // the rollover dropped, said with its amount, and last month not whole: plain words, no chips
+  const t = plan(); t.transactions = t.transactions.filter((x) => x.date >= "2026-08-10");
+  const st = page(t, { today: SEP, query: { month: "2026-09" } });
+  // a confirmation still at the foot of the screen goes when the panel opens (critic P6)
+  let gone = 0;
+  const doc = globalThis.document, own = Object.prototype.hasOwnProperty.call(doc, "querySelector"), was = doc.querySelector;
+  doc.querySelector = (sel) => (sel === ".save-echo" ? { remove: () => { gone++; } } : was?.call(doc, sel) ?? null);
+  try { btnIn(st, "Start the budget over").click(); } finally { if (own) doc.querySelector = was; else delete doc.querySelector; }
+  assert.equal(gone, 1);
+  assert.match(words(st.root), /The \$\d+ that rolled into September from August is dropped\. To keep September as it is, start over on October 1 instead\. Your spending for all of August isn't known yet, so your amounts stay the same\./);
+  assert.equal(chipsIn(st.root, "startFrom").length, 0);
+});
+
+test("start over invariance: with no budgetHistory (and with an empty or broken one) every figure is what it was, over every household and fixture plan", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { cardGapPlan } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const T = "2026-11-13";
+  const plans = [["family", familyPlan(T)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["empty", emptyPlan()], ["cardGap", cardGapPlan("2026-11-02")], ...ARCHETYPES.map((a) => [a.id, a.build()])];
+  for (const [name, p0] of plans) for (const give of [false, true]) for (const today of [T, "2026-11-02"]) {
+    const p = migrateFor(structuredClone(p0));
+    assert.equal("budgetHistory" in p, false, `${name}: no invented household has one, and migrate adds none`);
+    if (give) { p.budgets = [{ id: "x1", category: "groceries", amount: 600, period: "monthly", rollover: true }, { id: "x2", category: "dining", amount: 150, period: "monthly", rollover: false }]; p.budgetPlan = { carryOver: true }; }
+    const out = (q) => JSON.stringify([compute(q, { today }), safeToSpend(q, { today, spare: SPARE }), threeOf(q, { today }), byPaycheck(q, { today }), (() => { const d = compute(q, { today }); return d.hasBudget ? [jobOf(d, { spare: SPARE, plan: q, today }), d.hasData ? wordsOfEnvelopes(d, { today }) : null] : null; })()]);
+    const before = out(p);
+    for (const h of [[], null, {}, "x", [null, { id: "a" }, { id: "b", month: "2026-11", on: "2026-11-40", lines: [] }]]) {
+      const q = structuredClone(p); q.budgetHistory = h;
+      assert.equal(out(q), before, `${name} ${today} ${JSON.stringify(h)}`);
+    }
+    // a budget kept in another month changes nothing in this one
+    const r = structuredClone(p); r.budgetHistory = [{ id: "a", month: "2026-05", on: "2026-05-02", lines: [] }];
+    assert.equal(out(r), before, `${name}: a fresh May leaves November as it was`);
+    // the preview reads only
+    const s0 = JSON.stringify(p); startOverPreview(p, null, { today, mode: "spent" }); historyOf(p);
+    assert.equal(JSON.stringify(p), s0, name);
+  }
 });
