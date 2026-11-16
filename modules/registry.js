@@ -64,6 +64,7 @@ export default [
   { group: "household", id: "calendar", load: () => import("./household/calendar/module.js") },
   { group: "household", id: "contacts", load: () => import("./household/contacts/module.js") },
   { group: "household", id: "documents", load: () => import("./household/documents/module.js") },
+  { group: "household", id: "kids-money", load: () => import("./household/kids-money/module.js") },
   { group: "household", id: "life-events", load: () => import("./household/life-events/module.js") },
   { group: "household", id: "people", load: () => import("./household/people/module.js") },
   { group: "insurance", id: "cash-value", load: () => import("./insurance/cash-value/module.js") },
