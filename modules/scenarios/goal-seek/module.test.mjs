@@ -1548,7 +1548,9 @@ test("y2 (c) invariance: Goal seek's and Legacy's output for every household are
     const d = safe(() => compute(structuredClone(plan), { today: TY2 }));
     const g = structuredClone(plan); g.estate = { ...(g.estate ?? {}), legacy: { ...(g.estate?.legacy ?? {}), bequests: [{ id: "b1", to: "A cause", kind: "charity", amount: 100000 }] } };
     const l = safe(() => legacy(g, { today: TY2 }));
-    now[name] = { full: await y2Digest(d), stripped: await y2Digest(withoutClaimWords(d)), legacy: await y2Digest(withoutClaimWords(l)), noSavings: !!d?.noSavings };
+    // (z2, 2026-11-16: Legacy goals adds the projection's own `unknown` for a gated plan; compared without it, estate/legacy's z2 test checks it)
+    const lSans = l && typeof l === "object" && "unknown" in l ? (({ unknown: _u, ...rest }) => rest)(l) : l;
+    now[name] = { full: await y2Digest(d), stripped: await y2Digest(withoutClaimWords(d)), legacy: await y2Digest(withoutClaimWords(lSans)), noSavings: !!d?.noSavings };
   }
   if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
   const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;

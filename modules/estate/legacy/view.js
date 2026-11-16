@@ -2,7 +2,7 @@
 // for it, whether the plan does, and what each lever would have to be if not. Runs on the PC when connected.
 // One quiet row, "Who gets what" (gap list, next 60, item 15), opens to a picture of who would receive what today: by the
 // account forms, the other owner and the will's wishes, with what no one is named for as its own bar. Nothing there is saved.
-import { KINDS, listedLevers, roomWords, whoGetsWhat, WHO_TITLE, UNNAMED, NOT_ADVICE, GAP_LINKS, ledeWords, detailWords, unnamedWords, gapWords, keptWords, debtWords, ruleWords, goalsWords } from "./compute.js";
+import { KINDS, listedLevers, roomWords, verdictWords, whoGetsWhat, WHO_TITLE, UNNAMED, NOT_ADVICE, GAP_LINKS, ledeWords, detailWords, unnamedWords, gapWords, keptWords, debtWords, ruleWords, goalsWords } from "./compute.js";
 import { needsWords } from "../../../core/words.js";
 import { part, parts } from "../../../core/ui/more.js";
 
@@ -141,13 +141,15 @@ export function render(page, ctx) {
         ui.stat("The plan should keep", money(d.target), d.includeHome && d.home ? `in savings, after ${money(d.home)} from the home` : "in savings, in today's dollars"),
       )));
       if (d.ready) {
-        const verdict = d.meets ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: enough.` : d.success ? `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: ${money(d.gap)} short.` : "As it stands the money runs out before the end of the plan, before any legacy.";
-        host.append(ui.card("Does the plan leave it?", ui.h("p", { class: `lg-verdict ${d.meets ? "ok" : "bad"}` }, verdict),
+        const verdict = verdictWords(d, money);
+        host.append(ui.card("Does the plan leave it?", ui.h("p", { class: verdict.tone ? `lg-verdict ${verdict.tone}` : "lg-verdict" }, verdict.text),
           // simple first (owner, 2026-11-12 and 2026-11-13; fix round 2): the first three changes, in Goal seek's order (what is worth
           // money and what gets there on its own first), the rest one quiet tap away
-          ...(d.levers && !d.meets ? leverList(ctx, listedLevers(d.levers)) : []),
+          // (nothing saved for retirement on file: Will the money last? and Goal seek can't say either, so no changes are listed and
+          // the way on is what you own, as on those pages; z2, 2026-11-16)
+          ...(d.levers && !d.meets && !verdict.unknown ? leverList(ctx, listedLevers(d.levers)) : []),
           d.levers && d.meets && d.levers.find((l) => l.id === "spending" && l.status === "room") ? ui.h("p", { class: "lg-d" }, roomWords(d.levers.find((l) => l.id === "spending").sentence)) : null,
-          ui.row(ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
+          ui.row(verdict.unknown ? ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Add what you own ›") : ui.h("a", { class: "btn secondary", href: "#/scenarios/goal-seek" }, "Goal seek"))));
       } else host.append(ui.card(null, ui.h("p", { class: "muted" }, needsWords("To check it against your plan, it needs", d.missing))));
       const list = ui.h("ul", { class: "lg-list" }, d.bequests.map((b) => ui.h("li", { role: "button", tabindex: "0", onClick: () => { editing = (plan.estate.legacy.bequests ?? []).find((y) => y.id === b.id); drawForm(true); formHost.scrollIntoView({ behavior: "smooth", block: "start" }); }, onKeydown: (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); } } },
         ui.h("div", { class: "lg-body" }, ui.h("div", { class: "lg-t" }, b.to || "Someone"), ui.h("div", { class: "lg-d" }, [b.kindLabel, b.notes].filter(Boolean).join(" · "))),

@@ -224,7 +224,7 @@ test("who gets what: an account with no beneficiary goes by the wishes, or to no
 
 test("who gets what: a plan with no estate data says what to add first", () => {
   const d = whoGetsWhat(phone.robin(), { today: WT });
-  assert.equal(d.any, false); assert.equal(d.status, "nobody named yet", "says what is not set (it read \"not set yet\", critic P2)");
+  assert.equal(d.any, false); assert.equal(d.status, "no names on accounts", "says what is not set (it read \"not set yet\", critic P2; then \"nobody named yet\", z2 critic P2)");
   assert.equal(d.gap.id, "nothing");
   assert.equal(gapWords(d.gap), "No account or policy names anyone yet: Beneficiary audit shows who is named on each.");
   assert.equal(W.GAP_LINKS.nothing, "#/estate/beneficiaries");
@@ -432,7 +432,7 @@ const draw = async (plan, query = {}) => (await import("../../../qa/fixtures/fak
 const partOf = (root, id) => root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === id) ?? null;
 const states = (root) => Object.fromEntries(root.all().filter((e) => e.tagName === "DETAILS").map((e) => [e.dataset?.part ?? (e.classList.contains("form-more") ? "form" : "by hand"), e.hasAttribute("open")]));
 
-test("the page: \"Who gets what\" is one shut row just above More on this; its line says how many names, or nobody named yet", async () => {
+test("the page: \"Who gets what\" is one shut row just above More on this; its line says how many names, or no names on accounts", async () => {
   const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
   const r = await draw(fam((q) => { q.estate.beneficiaries = [form("a-401", [{ name: "Bo", personId: "p-bo", share: 1 }])]; }));
   const who = partOf(r.root, "who");
@@ -448,9 +448,9 @@ test("the page: \"Who gets what\" is one shut row just above More on this; its l
   assert.equal(body.split("not legal advice").length, 2, "said once");
   assert.equal(textOf(r.root).split("not legal advice").length, 2, "said once on the page");
   assert.equal(who.querySelectorAll("li").length, 1, "one bar: Bo");
-  // nothing set: "nobody named yet", and the first thing to add
+  // nothing set: "no names on accounts", and the first thing to add
   const bare = await draw(fam());
-  assert.equal(textOf(partOf(bare.root, "who").querySelector("summary")).replace(/\s+/g, " ").trim(), "Who gets what nobody named yet ›");
+  assert.equal(textOf(partOf(bare.root, "who").querySelector("summary")).replace(/\s+/g, " ").trim(), "Who gets what no names on accounts ›");
   assert.match(textOf(partOf(bare.root, "who")), /Nobody named yet\s*\$86,000\s*17% · by the will or the state's rules: Ana's 401\(k\)/);
   assert.ok(partOf(bare.root, "who").all().some((e) => e.tagName === "A" && e.getAttribute("href") === "#/estate/beneficiaries"));
   // the hero's line, one per case: with the row to point to, and without (the empty plan: no row at all)
@@ -598,10 +598,14 @@ test("invariance: every compute() this touches gives the output of 7d9ca39 over 
   plans.push({ name: "retired couple with wishes", plan: (() => { const p = retiredCouplePlan(); p.estate = { ...(p.estate ?? {}), worksheet: { executor: "", executorBackup: "", guardianBackup: "", poaMoney: "", poaHealth: "", notes: "", childrenAge: null, specific: [], rest: [{ name: "Lee", share: 0.5 }, { name: "A food bank", share: 0.5 }], updatedAt: "2026-11-01" } }; return p; })() });
   const computes = {};
   for (const k of PAGES) computes[k] = (await import(pathToFileURL(path.join(ROOT, "modules", k, "compute.js")).href)).compute;
+  // z2 (2026-11-16): Legacy goals adds `unknown` for a plan with nothing saved for retirement (the projection's own gate): compared
+  // without it here, and it must be the projection's answer (the z2 invariance test below checks it for every household)
+  const { retirementUnknown } = await import("../../retirement/projection/compute.js");
+  const sansUnknown = (k, d, plan) => { if (k !== "estate/legacy" || !d || !("unknown" in d)) return d; assert.deepEqual(d.unknown, retirementUnknown(structuredClone(plan), { today: INV_TODAY })); const { unknown: _u, ...rest } = d; return rest; };
   const now = { today: INV_TODAY, compute: {} };
   for (const { name, plan } of plans) {
     now.compute[name] = {};
-    for (const k of PAGES) now.compute[name][k] = digest(computes[k](structuredClone(plan), { today: INV_TODAY }));
+    for (const k of PAGES) now.compute[name][k] = digest(sansUnknown(k, computes[k](structuredClone(plan), { today: INV_TODAY }), plan));
     // and the picture reads only: the plan it is given is the same after
     const copy = structuredClone(plan);
     for (const dies of ["", "both", ...((plan.household?.people ?? []).map((x) => x.id))]) whoGetsWhat(copy, { today: INV_TODAY, dies });
@@ -612,4 +616,135 @@ test("invariance: every compute() this touches gives the output of 7d9ca39 over 
   const was = JSON.parse(fs.readFileSync(file, "utf8"));
   assert.equal(Object.keys(now.compute).length, 36);
   assert.deepEqual(now, was);
+});
+
+// ---------------------------------------------------------------- z2 (b): not known yet, by the projection's gate (2026-11-16)
+// Riley (qa/fixtures renter-debt: 24, an empty Work 401(k), nothing going in) with a $100,000 gift read "As it stands the money runs
+// out before the end of the plan, before any legacy." while Will the money last? and Goal seek say they can't say yet.
+const { verdictWords, UNKNOWN_WHAT } = W;
+const giftOf = (p, amount = 100000) => { p.estate = { ...(p.estate ?? {}), legacy: { bequests: [{ id: "g", to: "A food bank", kind: "charity", amount }] } }; return p; };
+const riley = async () => giftOf((await import("../../../qa/fixtures/renter-debt-plan.mjs")).renterDebtPlan());
+const samPersona = async () => { const P = await import("../../../qa/fixtures/setup-personas.mjs"); return giftOf(P.finishSetup("sam", P.sam(WT), WT)); };
+
+test("z2 (b): the gate is the projection's own: Riley and Sam not known yet, the family and the retired couple as before", async () => {
+  const { retirementUnknown } = await import("../../retirement/projection/compute.js");
+  const r = compute(await riley(), { today: WT });
+  assert.deepEqual(r.unknown, { nothingSaved: true }); assert.deepEqual(r.unknown, retirementUnknown(await riley(), { today: WT }));
+  assert.equal(r.ready, true); assert.equal(r.target, 100000);
+  const s = compute(await samPersona(), { today: WT });
+  assert.deepEqual(s.unknown, { nothingSaved: false }, "Sam told us nothing about savings");
+  for (const p of [giftOf(fam()), giftOf(retiredCouplePlan(WT)), fam(), emptyPlan()]) assert.ok(!("unknown" in compute(p, { today: WT })));
+  // one dollar in the 401(k) is an answer again: the old verdict
+  const one = await riley(); one.accounts.find((a) => a.type === "401k").balance = 1;
+  const o = compute(one, { today: WT });
+  assert.ok(!("unknown" in o)); assert.equal(o.success, false);
+});
+
+test("z2 (b): Does the plan leave it?, one written sentence per case", async () => {
+  const m = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+  assert.equal(UNKNOWN_WHAT, "whether the plan leaves it");
+  assert.deepEqual(verdictWords(compute(await riley(), { today: WT }), m), { text: "Nothing is saved for retirement, so we can't say whether the plan leaves it yet. Once you start saving, add it and we can answer.", tone: "", unknown: true });
+  assert.deepEqual(verdictWords(compute(await samPersona(), { today: WT }), m), { text: "You haven't told us about retirement savings, so we can't say whether the plan leaves it yet. Add what you own and we can answer.", tone: "", unknown: true });
+  assert.deepEqual(verdictWords({ meets: true, endReal: 871400, endYear: 2085 }, m), { text: "Your plan leaves about $871,000 in 2085: enough.", tone: "ok", unknown: false });
+  assert.deepEqual(verdictWords({ meets: false, success: true, endReal: 871400, endYear: 2085, gap: 1128600 }, m), { text: "Your plan leaves about $871,000 in 2085: $1,128,600 short.", tone: "bad", unknown: false });
+  assert.deepEqual(verdictWords({ meets: false, success: false }, m), { text: "As it stands the money runs out before the end of the plan, before any legacy.", tone: "bad", unknown: false });
+});
+
+test("z2 (b): the page for Riley and Sam says the shared sentence, lists no changes and points to what you own; with $1 saved, as before", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const L = await import("../../../qa/first-view-lib.mjs");
+  const cases = [[await riley(), /Nothing is saved for retirement, so we can't say whether the plan leaves it yet\. Once you start saving, add it and we can answer\./],
+    [await samPersona(), /You haven't told us about retirement savings, so we can't say whether the plan leaves it yet\. Add what you own and we can answer\./]];
+  for (const [plan, sentence] of cases) {
+    const r = await draw(plan);
+    const t = textOf(r.root).replace(/\s+/g, " ");
+    assert.match(t, sentence);
+    assert.doesNotMatch(t, /runs out|money does not last/i, "never that the money runs out");
+    assert.equal(r.root.querySelectorAll(".lg-levers").length, 0, "no list of changes");
+    assert.equal(partOf(r.root, "changes"), null, "and no fold of more changes");
+    const card = r.root.all().find((e) => e.tagName === "SECTION" && /Does the plan leave it\?/.test(textOf(e)));
+    const verdict = card.querySelector(".lg-verdict");
+    assert.equal(verdict.className, "lg-verdict", "not in amber: it is not bad news, it is not known");
+    const links = card.all().filter((e) => e.tagName === "A");
+    assert.deepEqual(links.map((a) => [textOf(a).trim(), a.getAttribute("href"), a.className]), [["Add what you own ›", "#/balance/net-worth", "btn secondary"]]);
+    assert.equal(r.root.all().filter((e) => L.isFilled(e) && !L.unseen(e)).length, 0, "no filled button");
+  }
+  const one = await riley(); one.accounts.find((a) => a.type === "401k").balance = 1;
+  const t1 = textOf((await draw(one)).root).replace(/\s+/g, " ");
+  assert.match(t1, /As it stands the money runs out before the end of the plan, before any legacy\./);
+  assert.match(t1, /Goal seek/);
+});
+
+// ---------------------------------------------------------------- z2 invariance (2026-11-16)
+// "Does the plan leave it?" asks the projection's own gate (retirement/projection retirementUnknown): for a plan with nothing saved
+// for retirement and nothing going in, compute adds `unknown`, as the twelve retirement pages do. Over every qa/fixtures/*-plan.mjs
+// plan, the 14 households' base plans, the phone-built ones, the round 8 households, the four personas (finished and mid-setup),
+// the demo and the empty plan, each with no gift and with a $100,000 gift to a cause, compute without that one field gives byte for
+// byte what it gave at e223a42 (z2-invariance.json, written by this test on that code), and the field is there exactly where the
+// projection answers it, equal to its answer.
+// To write the digests down again (only on the code before a deliberate change): PRINT=1 node --test modules/estate/legacy/module.test.mjs
+test("z2 invariance: Legacy goals is e223a42's for every household, with `unknown` only where the projection's gate says so", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const crypto = await import("node:crypto");
+  const { pathToFileURL, fileURLToPath } = await import("node:url");
+  const { retirementUnknown } = await import("../../retirement/projection/compute.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const T = "2026-11-16";
+  const dig = (x) => crypto.createHash("sha256").update(JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+  const plans = [];
+  const imp = (p) => import(pathToFileURL(path.join(ROOT, p)).href);
+  const dir = path.join(ROOT, "qa", "fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `fixture ${f}:${name}`, plan: fn(T) });
+  }
+  const { ARCHETYPES } = await imp("qa/households/lib/catalog.mjs");
+  for (const a of ARCHETYPES) plans.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(await imp("qa/fixtures/phone-households.mjs"))) if (typeof fn === "function") plans.push({ name: `phone ${name}`, plan: fn() });
+  for (const [name, fn] of Object.entries(await imp("qa/fixtures/round8-households.mjs"))) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `round8 ${name}`, plan: fn() });
+  const P = await imp("qa/fixtures/setup-personas.mjs");
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) { plans.push({ name: `persona ${n}`, plan: P.finishSetup(n, P[n](T), T) }); plans.push({ name: `persona ${n} mid`, plan: P[n](T) }); }
+  plans.push({ name: "demo", plan: (await imp("qa/fixtures/demo-household.mjs")).demoHousehold(T) });
+  plans.push({ name: "empty plan", plan: emptyPlan() });
+  const run = (f) => { try { return f(); } catch (e) { return { threw: e.message }; } };
+  const gift = (p) => { const q = structuredClone(p); q.estate = { ...(q.estate ?? {}), legacy: { ...(q.estate?.legacy ?? {}), bequests: [{ id: "z2", to: "A food bank", kind: "charity", amount: 100000 }] } }; return q; };
+  const now = {}, gated = [];
+  for (const { name, plan } of plans) {
+    const p = migrate(structuredClone(plan));
+    const u = run(() => retirementUnknown(structuredClone(p), { today: T }));
+    now[name] = {};
+    for (const [k, q] of [["none", p], ["gift", gift(p)]]) {
+      const d = run(() => compute(structuredClone(q), { today: T }));
+      if (d && "unknown" in d) { assert.ok(u, `${name}: unknown only where the projection says so`); assert.deepEqual(d.unknown, u, `${name}: the projection's own answer`); }
+      else if (d?.ready && !process.env.PRINT) assert.equal(u, null, `${name} (${k}): the projection says unknown, the page does not`);
+      const { unknown: _u, ...rest } = d ?? {};
+      now[name][k] = dig(d && "unknown" in d ? rest : d);
+    }
+    if (u) gated.push(name);
+  }
+  const file = new URL("./z2-invariance.json", import.meta.url);
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "Legacy goals at e223a42 (z2), with no gift and with a $100,000 gift; PRINT=1 writes them again: only on that code", today: T, plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(now).length >= 50, `${Object.keys(now).length} households`);
+  assert.deepEqual(now, was);
+  assert.deepEqual(gated, ["fixture renter-debt-plan.mjs:renterDebtPlan", "fixture renter-debt-plan.mjs:renterPayingExtraPlan", "persona sam", "persona jordan"]);
+});
+
+// ---------------------------------------------------------------- z2 fix round (2026-11-17), critic P2
+// Riley with a $100,000 gift to "A food bank" and no account form: "To whom" listed "A food bank $100,000" just above "Who gets
+// what  nobody named yet", which read as a contradiction. The row's line is about the accounts' forms, and now says so.
+test("z2 fix (P2): beside a named gift, the Who gets what row says the accounts name no one, never nobody named", async () => {
+  const { textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  assert.equal(NO_NAMES, "no names on accounts");
+  assert.ok(NO_NAMES.length <= 20, "a part's line is at most 20 characters");
+  const r = await draw(await riley());
+  const t = textOf(r.root).replace(/\s+/g, " ");
+  assert.match(t, /A food bank A charity or cause \$100,000/);
+  const who = partOf(r.root, "who");
+  assert.ok(who, "the row is there: Riley has something to pass on");
+  const row = textOf(who.querySelector("summary")).replace(/\s+/g, " ").trim();
+  assert.equal(row, "Who gets what no names on accounts ›");
+  assert.doesNotMatch(row, /nobody/i);
 });

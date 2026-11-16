@@ -9,7 +9,9 @@
 `estate.worksheet.rest` and `estate.documents` (the will rows). No new field.
 
 ## Outputs
-`compute(plan, { today })` -> `{ bequests[], total, people, charity, home, includeHome, target, ready, missing, endReal, success, meets, gap, endYear, levers }`. `legacyTarget(plan)` -> `{ total, home, target }` is shared: it is the goal Goal seek starts from, and the charity total is a deduction on Estate tax.
+`compute(plan, { today })` -> `{ bequests[], total, people, charity, home, includeHome, target, ready, missing, endReal, success, meets, gap, endYear, levers, unknown? }`
+(`unknown: { nothingSaved }` only for a plan with nothing saved for retirement and nothing going in: retirement/projection's
+`retirementUnknown`; `verdictWords(d, money)` -> `{ text, tone, unknown }` says "Does the plan leave it?" for every case). `legacyTarget(plan)` -> `{ total, home, target }` is shared: it is the goal Goal seek starts from, and the charity total is a deduction on Estate tax.
 `whoGetsWhat(plan, { today, dies })` (light, pure; only the view calls it, `compute()` is unchanged) ->
 `{ ready, couple, cases: [{ id, label }], dies, dead, total, rows: [{ key, name, amount, share, joint, named, will, others? }],
 unnamed: { amount, share, things } | null, kept: { names, amount } | null, debts, any, wishes, signed, gap: { id, amount, ... }, status }`;
@@ -19,6 +21,9 @@ its sentences: `ledeWords`, `detailWords`, `unnamedWords`, `gapWords` (+ `GAP_LI
 ## Formulas
 - Total = the sum of the bequests (today's dollars). Home = the property accounts' value when `includeHome` (the home passes as it is, so the savings need not hold it). Target = max(0, total - home).
 - The plan leaves `endReal` = the projection's end balance in today's dollars; meets when the plan lasts and endReal >= target; gap = target - endReal.
+- Not known yet: nothing invested (taxable, pre-tax and tax-free balances 0; cash alone is not retirement savings), nothing
+  going in, retirement still ahead, and the projection's own answer not "on track" (retirement/projection `retirementUnknown`,
+  `savingsUnknown`): the page says the projection's shared words with "whether the plan leaves it" instead of a verdict.
 - Levers: `scenarios/goal-seek` compute with `legacy` = target (the most to spend, the latest retirement, the saving, the return, the lump sum, the claiming age that still leave it).
 
 ## Edge cases
@@ -65,8 +70,8 @@ lists no return and does list the claiming age.
 
 ## Who gets what, as one picture (gap list, next 60, item 15; 2026-11-16)
 Legacy goals said what the person *wants* to leave; nothing said who would get what *today*. One quiet row now does,
-just above "More on this": "Who gets what", its line the number of names in the picture ("2 names") or "nobody named
-yet" when no one receives anything by a name in the case drawn (nothing written, or every name given 0% or gone). No row while the plan holds nothing to pass on (the empty plan's first view is as
+just above "More on this": "Who gets what", its line the number of names in the picture ("2 names") or "no names on
+accounts" (was "nobody named yet", which read as a contradiction under a listed gift: z2 fix round) when no one receives anything by a name in the case drawn (nothing written, or every name given 0% or gone). No row while the plan holds nothing to pass on (the empty plan's first view is as
 it was). The hero's small line, when the row is there, points to it ("A planning goal, not a will: Who gets what, below,
 shows what passes today.") in place of the longer one, so the first view has fewer words than before (family: 109, was
 110; empty plan: 88, was 89).
@@ -174,3 +179,31 @@ The fix round 2 test reads the new markup. Title "Who gets what" pinned in `qa/f
   well as average,"). `roomWords` reads it as one sentence: "While still leaving it, if markets do as well as average, you
   could spend up to about $8,080 a month ...", and the older "Up to ..." as before. Test "Does the plan leave it?: the room
   to spend reads as one sentence".
+
+## Not known yet, by the projection's gate (z2, 2026-11-16)
+Riley (the invented renter in `qa/fixtures/renter-debt-plan.mjs`: 24, an empty Work 401(k), nothing going in) with a $100,000
+gift to a cause read "As it stands the money runs out before the end of the plan, before any legacy." and six Goal seek changes,
+while Will the money last? says "We don't know yet" and Goal seek "we can't say what it would take yet". `compute` now asks
+`retirementUnknown` (the gate every retirement page asks) and adds `unknown` only when it answers; `verdictWords` says, for
+Riley, "Nothing is saved for retirement, so we can't say whether the plan leaves it yet. Once you start saving, add it and we
+can answer." and, for someone who told us nothing about savings (the Get started persona Sam), "You haven't told us about
+retirement savings, so we can't say whether the plan leaves it yet. Add what you own and we can answer." (`unknownWords`,
+`UNKNOWN_WHAT`). In that case the line is in the plain colour (not amber: nothing is known to be wrong), no changes are listed
+(Goal seek cannot say either) and the card's one outlined link is "Add what you own ›" (Net worth) in place of Goal seek.
+Builder's choices: the Goal seek changes are still worked out in compute (only `unknown` is added, so every other figure is
+byte for byte as before), and only the view leaves them out; the link stays outlined, as Goal seek's was (the page has no
+filled button with a list).
+Tests: the gate is the projection's (Riley, Sam; the family, the retired couple and the empty plan have no `unknown`; $1 in
+Riley's 401(k) gives the old verdict back); the five sentences of `verdictWords` word for word; the page drawn for Riley and
+Sam (the sentence, no "runs out", no changes, the one link, no filled button) and for Riley with $1 (as before). Invariance
+against e223a42 over every invented household, with no gift and with a $100,000 gift (`z2-invariance.json`): byte for byte
+without `unknown`, which appears exactly for the four households the projection calls unknown (Riley's two fixtures, Sam and
+Jordan) and equals its answer. The older 7d9ca39 invariance above and Goal seek's y2 invariance (which digests this page)
+compare without the one field.
+Fix round (2026-11-17, two critics): Riley's "To whom" listed "A food bank $100,000" just above "Who gets what  nobody named
+yet", which read as a contradiction (the row is about the accounts' forms and the will, not this list): the row's line is now
+"no names on accounts" (`NO_NAMES`, 20 characters, the most a part's line may have), test "z2 fix (P2)". Not changed: the
+card's link stays "Add what you own ›" beside "Once you start saving, add it and we can answer." (critic P3 asked for "Add my
+savings ›"): it is the one label every page gated by the same rule uses for the same link (Will the money last?, Goal seek,
+the twelve retirement pages, the Retirement report), and Net worth is where savings are added, so a second label for the same
+step on one page would make it read two ways.

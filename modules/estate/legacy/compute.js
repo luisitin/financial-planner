@@ -3,7 +3,7 @@
 // the amount the plan aims to still have at its end. Does the plan leave it, and if not, what would:
 // each lever solved by Goal seek with that amount as the goal.
 import { project } from "../../../core/math/retirement.js";
-import { buildInputs } from "../../retirement/projection/compute.js";
+import { buildInputs, retirementUnknown, unknownWords } from "../../retirement/projection/compute.js";
 import { compute as computeGoalSeek, firstLevers } from "../../scenarios/goal-seek/compute.js";
 import { countedBalance, isLiability } from "../../balance/net-worth/compute.js";
 import { compute as computeBeneficiaries, ESTATE } from "../beneficiaries/compute.js";
@@ -28,10 +28,14 @@ export function legacyTarget(plan) {
   return { total, home, target: Math.max(0, total - home) };
 }
 
+/** What "Does the plan leave it?" asks, as the projection's shared words put it ("... so we can't say whether the plan leaves it yet"). */
+export const UNKNOWN_WHAT = "whether the plan leaves it";
+
 /**
  * compute(plan, { today }) -> {
  *   bequests: [{ id, to, kind, kindLabel, amount, share (of the total) }], total, people, charity, home, includeHome, target,
- *   ready, missing, endReal (what the plan leaves in investments, today's dollars), meets, gap, levers (Goal seek's, for the target) | null
+ *   ready, missing, endReal (what the plan leaves in investments, today's dollars), meets, gap, levers (Goal seek's, for the target) | null,
+ *   unknown? ({ nothingSaved }: only for a plan with nothing saved for retirement and nothing going in, the projection's own gate)
  * }
  */
 export function compute(plan, params = {}) {
@@ -47,7 +51,23 @@ export function compute(plan, params = {}) {
   const endReal = Math.max(0, r.endBalanceReal);
   const meets = r.success && endReal >= t.target - 0.5;
   const gs = t.target > 0 ? computeGoalSeek(plan, { today, legacy: t.target }) : null;
-  return { ...out, ready: true, missing: [], endReal, success: r.success, meets, gap: Math.max(0, t.target - endReal), endYear: b.inputs.endYear, levers: gs?.ready ? gs.levers : null };
+  // nothing saved for retirement and nothing going in: Will the money last? says "We don't know yet", so this page cannot say the
+  // money runs out before any legacy either; it asks the same gate (retirement/projection retirementUnknown) and says its words
+  // (z2, 2026-11-16: Riley, 24, with an empty 401(k) and a $100,000 gift read "the money runs out before the end of the plan")
+  let unknown = null;
+  try { unknown = retirementUnknown(plan, { today }); } catch { unknown = null; }
+  return { ...out, ready: true, missing: [], endReal, success: r.success, meets, gap: Math.max(0, t.target - endReal), endYear: b.inputs.endYear, levers: gs?.ready ? gs.levers : null, ...(unknown ? { unknown } : {}) };
+}
+
+/**
+ * verdictWords(d, money) -> { text, tone ("ok" | "bad" | ""), unknown }: "Does the plan leave it?", one written sentence per case:
+ * not known yet (the projection's shared words, no tone), enough, short by an amount, or the money runs out first.
+ */
+export function verdictWords(d, money = dollars) {
+  if (d?.unknown) return { text: unknownWords(d.unknown, UNKNOWN_WHAT), tone: "", unknown: true };
+  if (d?.meets) return { text: `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: enough.`, tone: "ok", unknown: false };
+  if (d?.success) return { text: `Your plan leaves about ${money(Math.round(d.endReal / 1000) * 1000)} in ${d.endYear}: ${money(d.gap)} short.`, tone: "bad", unknown: false };
+  return { text: "As it stands the money runs out before the end of the plan, before any legacy.", tone: "bad", unknown: false };
 }
 
 // ---------------------------------------------------------------- who gets what, as one picture (gap list, next 60, item 15)
@@ -61,8 +81,10 @@ export function compute(plan, params = {}) {
  * the line under its bar, `unnamedWords`: a three-line title at 320 px pushed the amount aside). */
 export const WHO_TITLE = "Who gets what";
 export const UNNAMED = "Nobody named yet";
-/** The row's line when nobody is named in the case drawn (was "not set yet", which did not say what; three words, as before). */
-export const NO_NAMES = "nobody named yet";
+/** The row's line when nobody is named in the case drawn (was "not set yet", which did not say what; then "nobody named yet", which
+ * read as a contradiction under the gifts this page lists, "To whom": z2 fix round, critic P2). Like "2 names", what the accounts'
+ * forms and the will's wishes name; at most 20 characters, as every part's line (qa/first-view-lib.mjs S3). */
+export const NO_NAMES = "no names on accounts";
 /** Rows of people drawn before the rest fold into one "N others" row. */
 export const MAX_ROWS = 6;
 /** Said once on the page, under the picture. */

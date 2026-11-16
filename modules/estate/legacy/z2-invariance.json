@@ -1,0 +1,218 @@
+{
+ "note": "Legacy goals at e223a42 (z2), with no gift and with a $100,000 gift; PRINT=1 writes them again: only on that code",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "none": "ipo_7NJsErFEa_VU1BoEoA",
+   "gift": "SpDhgZHtWCEMfcjdkj3tDJ"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "none": "CC-AMrgE83Krv8ETk1pG-M",
+   "gift": "NyAXS6G5M5lcIWty-Kkbwv"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "none": "ipo_7NJsErFEa_VU1BoEoA",
+   "gift": "SpDhgZHtWCEMfcjdkj3tDJ"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "none": "ePVHLqbo7UyvXUOsVEuYGt",
+   "gift": "bb-Vt7lLfX9Mx9aYP6p4XA"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "none": "LWGK1enOdTmRKFG8yafd_w",
+   "gift": "BLX4fjOEwvS-Mugrvaull5"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "none": "CwhthwbDYU9vh23mqZoYFx",
+   "gift": "HhwriZbtx8ZKL7vajWHxk5"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "none": "LIcTDE4urOoQzGoOoI8yjO",
+   "gift": "W_CYBXTbrt99Q8A0Kwv_uq"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "none": "LIcTDE4urOoQzGoOoI8yjO",
+   "gift": "W_CYBXTbrt99Q8A0Kwv_uq"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "none": "9RV52rmI0i1aSk657JAq_F",
+   "gift": "_sLVdqlPU0bbdDiG4pJclx"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "none": "0_cjq2iVHxbiRymkSbE5Xa",
+   "gift": "npPC9_eiO--46n0TlrAwql"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "none": "CC-AMrgE83Krv8ETk1pG-M",
+   "gift": "NyAXS6G5M5lcIWty-Kkbwv"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "none": "cjCMmhUOhx3S4gtc1rRCTP",
+   "gift": "AVUwk1o06uycD1KRNEAeHP"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "none": "1fLev6nKie1ESzVPygJTh7",
+   "gift": "mcKmMeeKAy7E9QP0IY9h9Q"
+  },
+  "01-single-adult/base": {
+   "none": "4IrE8I6snhpcDZ0qFXHQuO",
+   "gift": "eCCzAqic9_iS7qTinKbew3"
+  },
+  "02-couple-no-kids/base": {
+   "none": "KxHQR7dUrJj5sf6MGJkVHM",
+   "gift": "qW2Ry2Iwwb7PszyVrTe-aI"
+  },
+  "03-single-parent/base": {
+   "none": "n3vZHAuru-wvuFBdhC6OhD",
+   "gift": "XeDMFMlqoCoUT4FqIKpPcl"
+  },
+  "04-two-parents/base": {
+   "none": "und6XG94unJl7qHsvJigXB",
+   "gift": "hm22Ftb6S13J-oNJzS16rT"
+  },
+  "05-stay-at-home-parent/base": {
+   "none": "PbyJgO0ifno-diDY2ziL98",
+   "gift": "6cQMhg4IqWU1xP36BNrBXO"
+  },
+  "06-blended-family/base": {
+   "none": "vZKgO7VWzjm-QGFDOG1AD6",
+   "gift": "5dwypKqLR_t1i1EelLV_IO"
+  },
+  "07-multigenerational/base": {
+   "none": "fjHRm2x3LYKIqud64A4c9V",
+   "gift": "Um1rjLMo1AKpRXJquXO-y9"
+  },
+  "08-retired/base": {
+   "none": "9RV52rmI0i1aSk657JAq_F",
+   "gift": "kqfNlfJ3rdOaWcQgJDNpTo"
+  },
+  "09-near-retirement/base": {
+   "none": "i6l6kdtAlg-zaY7AMi86la",
+   "gift": "rBPXub3D_2hPr5mZoEshpv"
+  },
+  "10-student-and-starter/base": {
+   "none": "LIcTDE4urOoQzGoOoI8yjO",
+   "gift": "QKPRTUnCcqJWvLIrO3iHgE"
+  },
+  "11-self-employed/base": {
+   "none": "und6XG94unJl7qHsvJigXB",
+   "gift": "NX15tXT9qIKUtw6Fy-QFeu"
+  },
+  "12-high-net-worth/base": {
+   "none": "INAwQYwgDTEzxnP-erGkfe",
+   "gift": "DHDl5xKyQBhqAyE8PeWmEw"
+  },
+  "13-in-crisis/base": {
+   "none": "qtthEFR9O-ARxNP02PhySb",
+   "gift": "Iwym2YXwce6xIbOFpr0bBg"
+  },
+  "14-unusual-structures/base": {
+   "none": "eASFFceNEkQEY6ccHK7uYn",
+   "gift": "BpmbJqeg0yzMwtw6q_l0Ff"
+  },
+  "phone casey": {
+   "none": "fjHRm2x3LYKIqud64A4c9V",
+   "gift": "sdt4m06XO7NxscNm4qzy3P"
+  },
+  "phone danaLee": {
+   "none": "XWkTHN07wqElI8R0CMCSrb",
+   "gift": "2S6LaKeHtoyFm9B1DLZ5PC"
+  },
+  "phone jamie": {
+   "none": "5BwqHtmrROmjYSPx1pc-Mt",
+   "gift": "hMRBprrVmGHnKR44x6x5w0"
+  },
+  "phone morgan": {
+   "none": "3nlYhEuGZZURSJxwzTze39",
+   "gift": "g6UvgabC5nLJpXmm6ia7K1"
+  },
+  "phone robin": {
+   "none": "WNDpCuIgrUJlUKy3fxFLF8",
+   "gift": "eilGofN_FRmaxGRBCt4MHb"
+  },
+  "round8 earlyRetireePlan": {
+   "none": "N3vqUEDNcnAAw3EkSMzZIq",
+   "gift": "8Wh87L7aTYu6xvwfBtepBE"
+  },
+  "round8 equityPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 firstRmdPlan": {
+   "none": "fuS7JNe_J5HOkxLIgyBWju",
+   "gift": "39XSOF-Acuqll0KJnmkLbs"
+  },
+  "round8 freelancerPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 highFreelancerPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 landlordBusinessPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 landlordPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 parentLoanPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 stockAndBusinessPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 studentLoanPlan": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "round8 widowPlan": {
+   "none": "n87EbFWCQtzuwSrjQ-DWh_",
+   "gift": "cxFBPMSXoeasQhKtln1PvS"
+  },
+  "persona sam": {
+   "none": "LIcTDE4urOoQzGoOoI8yjO",
+   "gift": "pDhLMs4QHCDhvQwzB696rP"
+  },
+  "persona sam mid": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "persona jordan": {
+   "none": "n3vZHAuru-wvuFBdhC6OhD",
+   "gift": "9-Bmbvx721uJ4blcG8E9UH"
+  },
+  "persona jordan mid": {
+   "none": "kmfiYk8lfj2-lk18tnjroY",
+   "gift": "ZX4GTrXDJ3U9kCTFsEFRlI"
+  },
+  "persona patLee": {
+   "none": "-rfWRdW3aQ3i3tAkJZot83",
+   "gift": "sUsU2j-D30-kps9jc2HDL0"
+  },
+  "persona patLee mid": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "persona ruth": {
+   "none": "_redBK7nGpX4p0rD6fhGHC",
+   "gift": "_C0jgyYQqHAf8OOQurnQd4"
+  },
+  "persona ruth mid": {
+   "none": "Y2RJnpeqz48fbSyV1nOMHX",
+   "gift": "LE611Ir-71w90pz1ckVmpm"
+  },
+  "demo": {
+   "none": "ipo_7NJsErFEa_VU1BoEoA",
+   "gift": "SpDhgZHtWCEMfcjdkj3tDJ"
+  },
+  "empty plan": {
+   "none": "DMB44nvvKYQ9U2Z61Fi3bQ",
+   "gift": "OH-zeB-C5LFp_CkZDDTwOX"
+  }
+ }
+}
