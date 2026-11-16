@@ -294,10 +294,19 @@ export function deferredPay(plan, { today, ti = null } = {}) {
   for (const x of inc.active) if (["salary", "bonus"].includes(x.type) && x.period !== "once" && x.taxable !== false) { const id = x.personId || selfId; payBy.set(id, (payBy.get(id) ?? 0) + x.yearly); }
   const payAll = [...payBy.values()].reduce((s, v) => s + v, 0);
   const wages = Number(t.inputs.wages) || 0;
+  // the children: the child tax credit counts a child only while under 17 at the end of the year, the care credit only while a
+  // child is under 13 (IRC 24(c)(1), 21(b)(1)(A), as the Federal estimate applies them): a child grown by the payout year adds
+  // neither (a $40,000 payout in 2055 read "no federal tax" for a family whose child is 6 today)
+  const kidYears = (plan.household?.people ?? []).filter((x) => x?.role === "dependent").map((x) => (x.birthDate ? Number(String(x.birthDate).slice(0, 4)) : null));
+  const under = (y, age) => kidYears.filter((b) => b === null || !Number.isFinite(b) || y - b < age).length;
   const baseOf = (y) => {
     let left = 0; const stopped = [];
     for (const [id, v] of payBy) { const p = adults.find((a) => a.id === id); if (p && p.stopYear !== null && p.stopYear <= y) stopped.push(id); else left += v; }
-    return { inputs: stopped.length && payAll > 0 ? { ...t.inputs, wages: (wages * left) / payAll } : t.inputs, stopped };
+    let inputs = stopped.length && payAll > 0 ? { ...t.inputs, wages: (wages * left) / payAll } : t.inputs;
+    const kids = Number(inputs.dependentsUnder17) || 0;
+    if (kids > 0 && under(y, 17) < kids) inputs = { ...inputs, dependentsUnder17: Math.max(0, under(y, 17)) };
+    if (inputs.care && under(y, 13) === 0) inputs = { ...inputs, care: undefined };
+    return { inputs, stopped };
   };
   const byYear = new Map();
   for (const d of list) for (const r of d.rows) byYear.set(r.year, (byYear.get(r.year) ?? 0) + r.amount);

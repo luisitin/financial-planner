@@ -191,7 +191,10 @@ last year it goes in (blank = S - 1).
   paid out to the last cent (the parts taken back to S add up to V).
 - The base for year y: this year's return as the Federal estimate has it, without this year's vesting units (`taxView(...,
   { without: "stock" })`, the page's own base), its wages times the share of the household's pay (salary and bonus lines)
-  of adults still at work in y (an adult's pay ends in their stop year).
+  of adults still at work in y (an adult's pay ends in their stop year); a child counts for the child tax credit only while
+  under 17 at the end of y, and child care for the care credit only while a child is under 13 in y (IRC 24(c)(1),
+  21(b)(1)(A), the ages the Federal estimate applies), so a payout in 2055 for a family whose child is 6 today is not wiped
+  out by today's child credit.
 - The tax in year y: T_y = F(base_y with every payout of y added to ordinary income) - F(base_y), F = the federal income tax
   (`federalTax` total less the 0.9% Medicare tax), at this year's tables (2026: Rev. Proc. 2025-32 section 4, as
   modules/taxes/federal/data has them). Each plan's share: T_y x its payout / all payouts of y.
@@ -236,8 +239,11 @@ back on the list."
   that pay "the balance over the payments left" pay the same with no growth.
 - Federal tax only. State tax on payouts depends on where the person lives when paid (and a state may not tax payments
   over 10 years or more from such a plan), so it is left out and the line says "Federal tax only".
-- The base is today's return, with the pay of anyone stopped by then taken out; Social Security and pensions that start
-  later are not added, so a payout in retirement may be taxed a little low. The deferral itself is not taken off this
+- The base is today's return, with the pay of anyone stopped by then taken out and children counted by their age that
+  year; Social Security and pensions that start later are not added (a payout in retirement may be taxed a little low),
+  a business's profit and other income stay as today even after their owner stops work, the age-65 deduction is counted
+  as today (this year's tables would give the 2025-2028 senior deduction to years it no longer exists), and a grown child
+  is not counted as another dependent. The deferral itself is not taken off this
   year's wages here (Income may hold pay before it); the Federal estimate owns that.
 - A plan typed here and also as an account on Net worth is counted twice by Will the money last?; the plan's balance
   belongs here only.

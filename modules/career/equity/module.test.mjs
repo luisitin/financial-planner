@@ -454,7 +454,18 @@ test("two plans paying in one year share that year's tax by their payouts; a sto
   const t = tv(fam);
   const bo = 5200 * 12, ana = 3900 * 26;
   assert.deepEqual(fd.years[0].stopped, ["p-bo"]);
-  near(fd.years[0].tax, payoutTax(50000, { ...t.inputs, wages: (t.inputs.wages * ana) / (ana + bo) }, t.params), 1e-6);
+  // Cy (born 2020) is 31 in 2051: no child tax credit, no care credit in that year's base
+  near(fd.years[0].tax, payoutTax(50000, { ...t.inputs, wages: (t.inputs.wages * ana) / (ana + bo), dependentsUnder17: 0, care: undefined }, t.params), 1e-6);
+  assert.ok(t.inputs.dependentsUnder17 >= 1, "today Cy counts");
+  // both stopped by 2055 and Cy grown: no pay and no child credit in the base (it read "no federal tax" with today's credit in it)
+  const both = familyPlan(T16); both.equity = { deferred: [{ id: "b", balance: 40000, years: 1, startYear: 2055 }] };
+  const bt = deferredPay(both, { today: T16 }).plans[0].rows[0].tax;
+  near(bt, payoutTax(40000, { ...t.inputs, wages: 0, dependentsUnder17: 0, care: undefined }, t.params), 1e-6);
+  assert.ok(bt > 500 && payoutTax(40000, { ...t.inputs, wages: 0 }, t.params) < 1, "today's child credit would have wiped it out");
+  // a payout while the child is still under 17 keeps the credit
+  const young = familyPlan(T16); young.equity = { deferred: [{ id: "y", balance: 40000, years: 1, startYear: 2030 }] };
+  const yt = tv(young);
+  near(deferredPay(young, { today: T16 }).plans[0].rows[0].tax, payoutTax(40000, yt.inputs, yt.params), 1e-6);
 });
 
 test("compute adds deferred only when the plan holds one; an empty entry is no plan; deferred-only plans are not ready for stock", () => {
@@ -465,7 +476,9 @@ test("compute adds deferred only when the plan holds one; an empty entry is no p
   assert.equal(d.ready, false); assert.equal(d.deferred.plans.length, 1);
   const s = withEquity([RSU]); s.equity.deferred = [PLAN];
   const ds = compute(s, { today: T16 });
-  assert.equal(ds.ready, true); assert.equal(ds.deferred.plans[0].case, "even");
+  // Cy turns 13 in 2033: from then the child care credit is gone from the base, so the tax steps up: two runs
+  assert.equal(ds.ready, true); assert.equal(ds.deferred.plans[0].case, "runs");
+  assert.deepEqual(ds.deferred.plans[0].runs.map((r) => [r.from, r.to]), [[2031, 2032], [2033, 2035]]);
   const { deferred: _d, ...rest } = ds;
   assert.equal(JSON.stringify(rest), JSON.stringify(compute(withEquity([RSU]), { today: T16 })), "the stock figures are the same with deferred pay");
 });
