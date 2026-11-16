@@ -490,3 +490,45 @@ test("the answer on screen: paragraphs, lists numbered from their first number, 
   const html = answerBlocks({ h }, "<b>not html</b>");
   assert.deepEqual(html.map((n) => [n.tag, n.kids]), [["p", ["<b>not html</b>"]]]);   // text, never HTML
 });
+
+// ---- how the helper talks to you (gap list next 60, item 58; X8), and a comment on a transaction (X9) ------------------------
+const { EXPLAIN_SYSTEM } = await import("./compute.js");
+const { TONE_RULES, TONE_KEEP } = await import("../assistant/compute.js");
+const { createHash } = await import("node:crypto");
+
+test("tone: Plain (or nothing chosen) sends the two messages exactly as before tones; Gentle and Blunt add one sentence at the end of the rules", () => {
+  // the rules as they were at 67dfd25, word for word (change this only on purpose, with the README)
+  assert.equal(createHash("sha256").update(EXPLAIN_SYSTEM).digest("hex").slice(0, 12), "25be69f27101");
+  const s = page(plan(), "balance/net-worth");
+  const args = { title: "Net worth", purpose: "What you own minus what you owe.", lines: s.lines, question: "Is this good?", terms: s.terms };
+  const plain = buildMessages(args);
+  assert.equal(plain[0].content, EXPLAIN_SYSTEM);
+  for (const t of [undefined, null, "plain", "loud"]) assert.deepEqual(buildMessages({ ...args, tone: t }), plain, String(t));
+  assert.deepEqual(buildMessages({ ...args, tone: "gentle" }), [{ role: "system", content: `${EXPLAIN_SYSTEM} ${TONE_RULES.gentle} ${TONE_KEEP}` }, plain[1]]);
+  assert.deepEqual(buildMessages({ ...args, tone: "blunt" }), [{ role: "system", content: `${EXPLAIN_SYSTEM} ${TONE_RULES.blunt} ${TONE_KEEP}` }, plain[1]], "the page's numbers and the question are the same");
+});
+
+test("tone invariance: for every page offered, Plain gives the same messages as no tone, and the page's numbers are the same in every tone", () => {
+  const p = plan();
+  for (const { key, title, purpose } of PAGES) {
+    const s = page(p, key);
+    const args = { title, purpose, lines: s.lines, terms: s.terms };
+    const none = JSON.stringify(buildMessages(args));
+    assert.equal(JSON.stringify(buildMessages({ ...args, tone: "plain" })), none, key);
+    for (const t of ["gentle", "blunt"]) assert.equal(buildMessages({ ...args, tone: t })[1].content, buildMessages(args)[1].content, `${key} ${t}`);
+  }
+});
+
+test("a comment on a transaction (who wrote it, the day, its words) never reaches the AI, on any page offered; every page reads as without it", () => {
+  const p = poisoned();
+  const who = p.household.people[1].id;
+  const withIt = structuredClone(p);
+  for (const t of withIt.transactions.slice(0, 3)) t.comment = { text: "NOTEX what was this? Zelda knows", by: who, on: "2026-10-04" };
+  assert.ok(SKIP.has("comment"));
+  for (const { key, title, purpose } of PAGES) {
+    const a = page(withIt, key), b = page(p, key);
+    const text = [...a.lines, ...buildMessages({ title, purpose, lines: a.lines, terms: a.terms }).map((m) => m.content)].join("\n");
+    assert.ok(!MARKERS.test(text), `${key}: ${text.split("\n").find((l) => MARKERS.test(l))}`);
+    assert.deepEqual(a.lines, b.lines, `${key}: the lines are the same as with no comment`);
+  }
+});

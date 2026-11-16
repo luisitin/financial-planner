@@ -45,6 +45,33 @@ export function pagesContext(modules) {
   return list.length ? `PAGES (the only page names you may use):\n${list.map((m) => `- ${m.title}: ${m.purpose ?? ""}`).join("\n")}` : "";
 }
 
+// ---- how the helper talks to you (gap list next 60, item 58; X8) --------------------------------------------------------------
+// A choice of this device (./tone.js keeps it; Settings > "How the helper talks to you"): Gentle, Plain or Blunt. It changes
+// only the words the model is told to use. Plain is today's message, byte for byte (no line is added); the plan's summary,
+// the page's lines, the CHANGE line's rules and every sentence the app writes itself are the same in every tone, so no
+// figure, nothing counted and no money rule can move with it (AGENTS.md rule 5: the model explains, the app works it out).
+export const TONES = Object.freeze(["gentle", "plain", "blunt"]);
+export const DEFAULT_TONE = "plain";
+/** One of TONES; anything else (nothing chosen, an old or broken value) is Plain. */
+export const toneOf = (t) => (t === "gentle" || t === "blunt" ? t : DEFAULT_TONE);
+/** What the model is told for each tone but Plain, which adds nothing (its words are SYSTEM_PROMPT's "concise and plain"). */
+export const TONE_RULES = Object.freeze({
+  gentle: "Word your answer gently: warm and encouraging, noticing what is going well, and putting a problem kindly, as a next step rather than a fault.",
+  blunt: "Word your answer bluntly: short, direct sentences with no reassurance, cushioning or praise; call a problem a problem and say plainly what to do about it. Stay polite and never mock.",
+});
+/** After either rule: the tone is the wording only. */
+export const TONE_KEEP = "The tone changes only your wording: every other instruction here still applies, and every number, date and warning stays exactly as given.";
+/** The words a prompt adds for a tone: "" for Plain (and for anything that is not a tone), else the rule and TONE_KEEP. */
+export const toneWords = (t) => (toneOf(t) === DEFAULT_TONE ? "" : `${TONE_RULES[toneOf(t)]} ${TONE_KEEP}`);
+/** The line Ask the plan's system message gets right after SYSTEM_PROMPT: "" for Plain, else "\nTone: ...". */
+export const toneLine = (t) => (toneWords(t) ? `\nTone: ${toneWords(t)}` : "");
+/**
+ * systemFor({ summary, changes, pages, tone }) -> the one system message Ask the plan sends: SYSTEM_PROMPT (and the tone's
+ * line), the CHANGES part (changesContext), the PAGES list (pagesContext) and PLAN CONTEXT (compute's summary). With Plain it
+ * is exactly the message the page sent before tones existed (module test, every household).
+ */
+export const systemFor = ({ summary = "", changes = "", pages = "", tone = DEFAULT_TONE } = {}) => `${SYSTEM_PROMPT}${toneLine(tone)}\n\n${changes}\n\n${pages}\n\nPLAN CONTEXT:\n${summary}`;
+
 // ---- a change the helper proposes (gap design #39) --------------------------------------------------------------------------
 /** The highest retirement spending a month the plan tries: the ceiling of the box on Will the money last? (projection view SPEND_MONTHLY_CEILING). */
 export const SPEND_MAX = 100000;

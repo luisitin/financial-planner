@@ -161,3 +161,39 @@ learns to tell the part helpers from the device store, the card can move back in
 The card adds 24 words to the first view (Settings 189 to 213 with a plan, 175 to 199 on the empty plan): the counts file
 allows 220 with a plan and 200 on the empty plan (was 180 and no plan entry), a rise on purpose, said in docs/DESIGN_LOG.md
 2026-11-13. A line under each tick would cost about 26 words more; the green line after a tick says it instead.
+
+## How the helper talks to you (2026-11-16, gap list next 60, item 58; X8)
+**What the person sees.** Nothing new while no page that talks is offered: the row is drawn only while Ask the plan or
+Explain a page is (build view, or the AI helper answering; the page switched on), because the household's view never shows
+the helper's words without the helper (design log 2026-11-06). So Settings' first view counted in Node is as it was. With
+the helper: one more shut row after "Screen", **"How the helper talks to you"**, drawn by `talk.js` like Settings' other
+folded cards (an `h2` in the summary; `looks.js` says why not `part()`; its chips are `core/ui/more.js` `choice()`). It
+says nothing while the helper talks plainly, and "talks gently" or "talks bluntly" otherwise (lower case like Screen's
+"larger text"; a bare "blunt" did not say what it described once the row was shut).
+
+Open, word for word: "For the helper that answers your questions and explains pages. Only the words change: the figures
+still come from your plan." (It names what the two pages do, Ask the plan and Explain a page, not their names, which a
+person does not meet in Settings.)
+Three chips, Gentle, Plain (on for a new device) and Blunt; a tap acts at once and says in green, under the chips: "Done.
+The helper now talks to you gently." / "Done. The helper talks to you plainly again." / "Done. The helper now talks to you
+bluntly." Then "For example, when eating out went over the budget:" and one line per tone on the same invented finding
+($460 spent against $400 planned):
+- Gentle: "Eating out came to $460 this month, a little over the $400 you planned. A quieter week or two would bring it back."
+- Plain: "Eating out came to $460 this month, $60 over the $400 you planned."
+- Blunt: "You spent $60 more on eating out than you planned. Cut back for the rest of the month."
+
+and "On this phone only; your plan stays the same." The figures are round invented ones, labelled as an example; no current
+figure is used. What each tone tells the model, and why Plain changes nothing: `modules/ai/assistant/README.md`.
+
+**On this device, not in the plan** (builder's choice; why: the assistant's README): `localStorage planner.tone`
+(`planner.tone.sandbox` in the sandbox) through `modules/ai/assistant/tone.js`; Plain is stored as nothing; "Erase the
+copy on this device" removes it with the other choices of this phone. Nothing here calls `store.update`.
+
+Tests (`module.test.mjs`): no row without a page that talks (no helper; both pages switched off), a row with one or in the
+build view, after Screen and before Pages; shut, no status on Plain, three chips with Plain on, no box, the words in order;
+each chip stores, says its green line under the chips, keeps the row open and never writes the plan; Plain removes the
+key; the next draw is shut; read back from storage; Erase forgets it; a broken or foreign stored value reads as Plain.
+
+Brief against the code: the gap brief asked for no hand-written `<details>`; on Settings the new row is drawn like the
+page's other folded cards, as `looks.js` does, because a `part()` there would make the first-view check refuse the page's
+own folds (the page topics, Advanced) that the owner reviewed.

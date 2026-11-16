@@ -4,7 +4,8 @@
 // propose); Apply (outlined) makes it in one store.update, then a green line with Undo; No thanks closes the card and writes
 // nothing. A reply that names no change looks exactly as it did before. A change the app cannot try, or cannot check yet, is
 // said in one quiet line with its next step and no buttons.
-import { SYSTEM_PROMPT, pagesContext, changesContext, readReply, propose, applyProposal, answerFor, doneWords, TRUST_WORDS, UNDONE_WORDS, PAGES, WHERE, LATER_WORDS } from "./compute.js";
+import { systemFor, pagesContext, changesContext, readReply, propose, applyProposal, answerFor, doneWords, TRUST_WORDS, UNDONE_WORDS, PAGES, WHERE, LATER_WORDS } from "./compute.js";
+import { tone } from "./tone.js";
 import { aiHealth, healthWords } from "../health.js";
 import { part } from "../../../core/ui/more.js";
 
@@ -161,7 +162,8 @@ export function render(root, ctx) {
     let r;
     try {
       const c = s.ctx;   // the newest drawing's: its summary is of the plan as it is now (after an Apply, too)
-      r = await c.ai.chat([{ role: "system", content: `${SYSTEM_PROMPT}\n\n${changesContext(c.store.get())}\n\n${pagesContext(c.modules)}\n\nPLAN CONTEXT:\n${c.derived.summary}` }, ...s.history]);
+      // the tone this device chose (Settings > How the helper talks to you): only the words the model is told; Plain adds nothing
+      r = await c.ai.chat([{ role: "system", content: systemFor({ summary: c.derived.summary, changes: changesContext(c.store.get()), pages: pagesContext(c.modules), tone: tone.chosen }) }, ...s.history]);
     } catch (e) {
       s.history.pop();
       s.busy = false;

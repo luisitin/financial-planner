@@ -135,6 +135,40 @@ says what it does now.
 - Sources: no current figure (tax limit, price, rule) is introduced here; every range is read from the page that owns it,
   with that page's own sources.
 
+## How the helper talks to you (gap list next 60, item 58; X8; 2026-11-16)
+**What the person sees.** Nothing new here: the page, the chat and every reply's card look as before. In Settings, one shut
+row "How the helper talks to you" (drawn only while this page or Explain a page is offered) has three chips: Gentle, Plain
+(on for every device, today's words) and Blunt, each with one example on the same finding (eating out at $460 against $400
+planned; invented round figures, labelled "For example"). The next question asked here is worded that way.
+
+**What changes, and what never does.** Only the words the model is told to use (`compute.js`):
+- `systemFor({ summary, changes, pages, tone })` builds the one system message the page sends:
+  `SYSTEM_PROMPT` + `toneLine(tone)` + "\n\n" + the CHANGES part + "\n\n" + the PAGES list + "\n\nPLAN CONTEXT:\n" + the summary.
+- `toneLine("plain") === ""`, so Plain is the message the page sent before tones, byte for byte (test, every household).
+- Gentle adds "\nTone: Word your answer gently: warm and encouraging, noticing what is going well, and putting a problem
+  kindly, as a next step rather than a fault." Blunt adds "\nTone: Word your answer bluntly: short, direct sentences with
+  no reassurance, cushioning or praise; call a problem a problem and say plainly what to do about it. Stay polite and never
+  mock." Both end with `TONE_KEEP`: "The tone changes only your wording: every other instruction here still applies, and
+  every number, date and warning stays exactly as given."
+- The plan's summary, the CHANGES rules, the pages, the CHANGE line the app reads, what a change does (worked out by the app,
+  `propose`), Apply, Undo and every sentence the app writes are the same in every tone (test: the card reads the same in all
+  three). The model still only explains; every number stays the app's (AGENTS.md rule 5).
+- No formula and no current figure: the tone's words hold no digit (test).
+
+**Where it is kept: this device, not the plan** (builder's choice). It is how the helper talks to whoever holds this phone,
+like text size and light or dark (design log 2026-11-13), and the AI's own settings are kept per device already; two
+partners on two phones can each choose; and it is not about the money, so it has no place in the plan file, the PC's copy or
+a downloaded copy. `tone.js` keeps it.
+
+**Not in the plan.** `localStorage["planner.tone"]` (`planner.tone.sandbox` with `?sandbox` in the address): `{ fmt: 1,
+tone: "gentle" | "blunt" }`; Plain is nothing stored. Anything else read there (another format, a broken value) is Plain. A
+private window keeps it in memory for the visit. Settings' "Erase the copy on this device" removes it. It holds no figure and
+no name; it reaches the computer only as the tone's sentence inside the question.
+
+**Other prompts.** Explain a page uses the same sentence (its README). The plan critic (a list of gaps, as JSON), the glossary
+(a definition), the paper and statement readers, Categorize and the categorizer (JSON) are not conversations and keep their
+words; the Settings row names the two pages it changes.
+
 ## Simple first (opt spec C19 for this page)
 The first view is unchanged: the hero, four suggestions, the question box and the one filled Send. One tap away, drawn by
 `core/ui/more.js` (no hand-written `<details>`): after the first question the suggestions fold behind "Suggestions" (kind
@@ -165,6 +199,10 @@ undone); unreadable stored data draws no card; money in on top of a line already
 on exists with that title; S11
 (after Apply only that card changes); every sentence case; invariance over every fixture plan, the 14 households, the
 phone-built plans and the empty plan (trying every change never touches the plan; the summary and the answer are the same).
+The tone (item 58): three tones, anything else is Plain; the exact words per tone, no digit in them; Plain, nothing, null or
+an unknown tone give the system message of 67dfd25's template byte for byte over every household; Gentle and Blunt add only
+their line; on the page the device's tone is what is sent and the change card reads the same in every tone; the memory copy
+when the device has no storage (the storage itself: Settings' tests).
 
 ## Ideas / not yet
 - Tool calling: let the model call a module's compute() and quote the result (structured output).

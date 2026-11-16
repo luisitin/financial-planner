@@ -93,6 +93,12 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
   `text`: the base text at 17 or 19 px instead of 15 (`<html data-text>`). `theme`: light or dark whatever the phone asks
   (`<html data-theme>`). index.html reads the last two before the first paint. Absent: the app looks as it always did. No figure, no
   name; never sent to the computer, never in a downloaded copy. Settings' "Erase the copy on this device" removes it.
+* `localStorage["planner.tone"]` (`planner.tone.sandbox` in the sandbox) -- how the helper talks to whoever holds this
+  device (modules/ai/assistant/tone.js; Settings > "How the helper talks to you"; gap list next 60, item 58, added
+  2026-11-16): `{ fmt: 1, tone: "gentle" | "blunt" }`; absent, or anything else: Plain, the helper's words as they always were.
+  It changes only the words Ask the plan and Explain a page tell the model to use, never a figure. No figure, no name; it
+  reaches the computer only as one sentence of the question; never in a downloaded copy. "Erase the copy on this device"
+  removes it.
 * `sessionStorage["planner.typing"]`, `["planner.place"]`, `["planner.trail"]` (each `.sandbox` in the sandbox) -- this
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
   history entry, and the way each entry was reached. A kept box in no form may carry `took: 1` (optional; absent reads as

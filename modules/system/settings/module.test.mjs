@@ -306,3 +306,96 @@ test("Screen: Text size and Light or dark are three chips each, the first one on
   k.looks.forgetLook();
   assert.deepEqual(k.core.look.chosen, { hide: false, text: "usual", theme: "phone" }, "Erase the copy on this device");
 });
+
+// ---- How the helper talks to you (gap list next 60, item 58; X8; talk.js, ai/assistant/tone.js) -----------------------------
+async function talkKit({ build = false, ai = false, off = [] } = {}) {
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const talk = await import("./talk.js");
+  const { tone } = await import("../../ai/assistant/tone.js");
+  const { offered } = await import("../../../core/view.js");
+  disk.clear(); tone._reset();
+  const modules = new Map();
+  for (const k of ["ai/assistant", "ai/explain", "system/settings"]) modules.set(k, (await import(`../../${k}/module.js`)).default);
+  const host = new FakeElement("main");
+  const writes = [];
+  const ctx = { ui, modules, module: { group: "system", id: "settings" }, route: { group: "system", id: "settings", query: {} },
+    view: { build }, live: { pc: ai, ai }, shown: (m) => offered(m, { build, pc: ai, ai }),
+    features: { enabled: (m) => !off.includes(`${m.group}/${m.id}`) },
+    store: { update: () => writes.push("update"), get: () => ({}) }, redraw: () => { host.replaceChildren(...[talk.talkCard(ctx)].filter(Boolean)); } };
+  ctx.redraw();
+  const row = () => host.all().find((e) => e.tagName === "DETAILS") ?? null;
+  const chips = () => host.all().find((e) => e.dataset?.choice === "talk-tone")?.all().filter((e) => e.tagName === "BUTTON") ?? [];
+  const tap = (name) => chips().find((b) => b.textContent === name).click();
+  return { host, ctx, talk, tone, writes, row, chips, tap, text: () => textOf(host).replace(/\s+/g, " ").trim(), summary: () => textOf(row().querySelector("summary")).replace(/\s+/g, " ").trim() };
+}
+
+test("How the helper talks to you: no row while no page that talks is offered (no helper, the household's view), so Settings' first view is as it was", async () => {
+  assert.equal((await talkKit()).row(), null, "no helper answering, the household's view: nothing");
+  assert.equal((await talkKit({ ai: true, off: ["ai/assistant", "ai/explain"] })).row(), null, "both pages switched off on this device: nothing");
+  assert.ok((await talkKit({ ai: true, off: ["ai/assistant"] })).row(), "Explain a page alone still talks");
+  assert.ok((await talkKit({ build: true })).row(), "the build view shows every page, and the row");
+  const fs = await import("node:fs");
+  const view = fs.readFileSync(new URL("./view.js", import.meta.url), "utf8");
+  assert.ok(view.indexOf("lookCard(ctx)") < view.indexOf("talkCard(ctx)") && view.indexOf("talkCard(ctx)") < view.indexOf('ui.card("Pages"'), "after Screen, before Pages: Settings' order kept");
+});
+
+test("How the helper talks to you: one shut row, Plain on and nothing said while Plain; three chips, one example each on the same finding", async () => {
+  const k = await talkKit({ ai: true });
+  assert.equal(k.row().getAttribute("class"), "card fold fold-card", "a folded card, like Settings' other folded cards");
+  assert.equal(k.row().dataset.part, undefined, "not a part (looks.js says why)");
+  assert.equal(k.row().hasAttribute("open"), false, "shut");
+  assert.equal(k.row().querySelector("h2").textContent, "How the helper talks to you");
+  assert.equal(k.row().querySelector(".fold-status"), null, "Plain: nothing said");
+  assert.deepEqual(k.chips().map((b) => [b.textContent, b.getAttribute("aria-pressed")]), [["Gentle", "false"], ["Plain", "true"], ["Blunt", "false"]]);
+  assert.ok(k.chips().every((b) => /\bchip\b/.test(b.getAttribute("class"))), "chips: the page's one filled button stays Plan basics' Save");
+  assert.equal(k.host.all().filter((e) => ["INPUT", "SELECT", "TEXTAREA"].includes(e.tagName)).length, 0, "no box");
+  assert.equal(k.text(), "How the helper talks to you › For the helper that answers your questions and explains pages. Only the words change: the figures still come from your plan. Gentle Plain Blunt"
+    + " For example, when eating out went over the budget: Gentle: “Eating out came to $460 this month, a little over the $400 you planned. A quieter week or two would bring it back.”"
+    + " Plain: “Eating out came to $460 this month, $60 over the $400 you planned.”"
+    + " Blunt: “You spent $60 more on eating out than you planned. Cut back for the rest of the month.”"
+    + " On this phone only; your plan stays the same.");
+  // the same finding in each: $460 spent, $400 planned, $60 over
+  const ex = k.talk.TALK_WORDS.examples;
+  assert.match(ex.gentle, /\$460.*\$400/); assert.match(ex.plain, /\$460.*\$60.*\$400/); assert.match(ex.blunt, /\$60/);
+  assert.equal(disk.size, 0, "nothing stored on a new phone");
+  assert.equal(k.talk.saysOf("plain"), ""); assert.equal(k.talk.saysOf("gentle"), "talks gently"); assert.equal(k.talk.saysOf("blunt"), "talks bluntly"); assert.equal(k.talk.saysOf("loud"), "");
+});
+
+test("How the helper talks to you: a chip acts at once on this phone, says so in green under the chips, keeps the row open, never writes the plan; Plain removes the key", async () => {
+  const k = await talkKit({ ai: true });
+  const said = { Gentle: "Done. The helper now talks to you gently.", Blunt: "Done. The helper now talks to you bluntly.", Plain: "Done. The helper talks to you plainly again." };
+  for (const [name, value] of [["Gentle", "gentle"], ["Blunt", "blunt"], ["Plain", "plain"]]) {
+    k.tap(name);
+    assert.equal(k.tone.chosen, value);
+    assert.match(k.text(), new RegExp(`Gentle Plain Blunt ${said[name].replace(/\./g, "\\.")} For example`), `${name}: under the chips`);
+    assert.equal(k.host.all().filter((e) => /\bnotice\b/.test(e.getAttribute?.("class") ?? "")).length, 1, "one green line");
+    assert.equal(k.row().hasAttribute("open"), true, "the row stays open on the draw after the tap");
+    assert.equal(k.chips().find((b) => b.getAttribute("aria-pressed") === "true").textContent, name);
+    if (value === "plain") assert.equal(disk.has("planner.tone"), false, "Plain: nothing stored");
+    else { assert.deepEqual(JSON.parse(disk.get("planner.tone")), { fmt: 1, tone: value }); assert.match(k.summary(), new RegExp(`^How the helper talks to you talks ${value === "gentle" ? "gently" : "bluntly"} ›$`), "shut, it says what it describes"); }
+  }
+  k.tap("Plain");   // the chip already on does nothing
+  assert.equal(disk.size, 0);
+  assert.deepEqual(k.writes, [], "the plan was never written");
+  // the next draw (a page change, a reload): shut, nothing said; the device still remembers
+  k.tap("Blunt"); k.ctx.redraw();
+  assert.equal(k.row().hasAttribute("open"), false); assert.equal(k.host.querySelector(".notice.ok"), null);
+  k.tone._reset(); assert.equal(k.tone.chosen, "blunt", "read back from this phone's storage");
+  k.talk.forgetTalk();
+  assert.equal(disk.has("planner.tone"), false); assert.equal(k.tone.chosen, "plain", "Erase the copy on this device: Plain again");
+  const fs = await import("node:fs");
+  assert.match(fs.readFileSync(new URL("./view.js", import.meta.url), "utf8"), /forgetTalk\(\);[^\n]*\n\s*forgetLook\(\);[^\n]*\n\s*forgetShown\(\);/, "Erase forgets the tone with the rest of this phone's choices");
+});
+
+test("How the helper talks to you: what this phone stores is read with care (another format or a broken value is Plain)", async () => {
+  const k = await talkKit({ ai: true });
+  for (const raw of ["{", "null", "[]", '"blunt"', '{"tone":"blunt"}', '{"fmt":2,"tone":"blunt"}', '{"fmt":1,"tone":"shout"}']) {
+    disk.set("planner.tone", raw); k.tone._reset();
+    assert.equal(k.tone.chosen, "plain", raw);
+  }
+  disk.set("planner.tone", '{"fmt":1,"tone":"gentle"}'); k.tone._reset();
+  assert.equal(k.tone.chosen, "gentle");
+  const { TONE_KEY } = await import("../../ai/assistant/tone.js");
+  assert.equal(TONE_KEY, "planner.tone", "planner.tone.sandbox in the sandbox (?sandbox in the address)");
+});

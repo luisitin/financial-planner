@@ -524,3 +524,86 @@ test("S11: #39 after Apply only the applied card changes: the other cards stay o
   assert.match(s.textOf(s.cards()[0]), /With this change, the money/, "its effect is worked out again against the plan as it is now");
   assert.deepEqual(shut(), [["suggestions", false]], "no part opened or shut");
 });
+
+// ---- how the helper talks to you (gap list next 60, item 58; X8): only the words the model is told ------------------------
+const { TONES, DEFAULT_TONE, toneOf, TONE_RULES, TONE_KEEP, toneWords, toneLine, systemFor, pagesContext } = await import("./compute.js");
+const { tone } = await import("./tone.js");
+/** Every invented household and fixture plan (qa/households, qa/fixtures *-plan.mjs, the phone households, the empty plan). */
+async function everyPlan() {
+  const ROOT = fileURLToPath(new URL("../../..", import.meta.url));
+  const all = [];
+  const dir = path.join(ROOT, "qa", "fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) all.push([`fixture ${f}:${name}`, migrate(fn(T))]);
+  }
+  for (const a of ARCHETYPES) all.push([a.id, migrate(a.build())]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") all.push([`phone ${name}`, migrate(fn())]);
+  all.push(["empty plan", emptyPlan()]);
+  return all;
+}
+const PAGES_SEEN = new Map([["a/b", { title: "Will the money last?", purpose: "Whether savings last", status: "usable" }], ["c/d", { title: "Budget", purpose: "This month", status: "usable" }]]);
+
+test("tone: three tones, Plain the default; anything that is not Gentle or Blunt is Plain", () => {
+  assert.deepEqual(TONES, ["gentle", "plain", "blunt"]);
+  assert.equal(DEFAULT_TONE, "plain");
+  for (const x of [undefined, null, "", "plain", "PLAIN", "loud", 42, {}, ["blunt"]]) assert.equal(toneOf(x), "plain", String(x));
+  assert.equal(toneOf("gentle"), "gentle"); assert.equal(toneOf("blunt"), "blunt");
+});
+
+test("tone: the exact words the model is told, one sentence a tone and the same last sentence; Plain adds nothing", () => {
+  assert.equal(TONE_RULES.gentle, "Word your answer gently: warm and encouraging, noticing what is going well, and putting a problem kindly, as a next step rather than a fault.");
+  assert.equal(TONE_RULES.blunt, "Word your answer bluntly: short, direct sentences with no reassurance, cushioning or praise; call a problem a problem and say plainly what to do about it. Stay polite and never mock.");
+  assert.equal(TONE_KEEP, "The tone changes only your wording: every other instruction here still applies, and every number, date and warning stays exactly as given.");
+  assert.equal(toneWords("plain"), ""); assert.equal(toneLine("plain"), ""); assert.equal(toneLine(undefined), ""); assert.equal(toneLine("loud"), "");
+  assert.equal(toneLine("gentle"), `\nTone: ${TONE_RULES.gentle} ${TONE_KEEP}`);
+  assert.equal(toneLine("blunt"), `\nTone: ${TONE_RULES.blunt} ${TONE_KEEP}`);
+  // no figure in the tone's words: nothing a model could take for one of the plan's
+  for (const t of TONES) assert.doesNotMatch(toneWords(t), /\d/);
+});
+
+test("tone invariance: Plain (or nothing chosen) sends Ask the plan's message exactly as before tones, for every household", async () => {
+  const all = await everyPlan();
+  assert.ok(all.length >= 20);
+  for (const [name, plan] of all) {
+    const summary = compute(plan).summary, changes = changesContext(plan), pages = pagesContext(PAGES_SEEN);
+    // the message the page built before (67dfd25, view.js send): the same template, word for word
+    const before = `${SYSTEM_PROMPT}\n\n${changes}\n\n${pages}\n\nPLAN CONTEXT:\n${summary}`;
+    for (const t of [undefined, null, "plain", "loud"]) assert.equal(systemFor({ summary, changes, pages, tone: t }), before, `${name} ${t}`);
+    assert.equal(systemFor({ summary, changes, pages }), before, name);
+    // Gentle and Blunt: one line more, right after the rules; the CHANGES part, the pages and the plan's summary are the same
+    for (const t of ["gentle", "blunt"]) {
+      const s = systemFor({ summary, changes, pages, tone: t });
+      assert.equal(s, `${SYSTEM_PROMPT}${toneLine(t)}\n\n${changes}\n\n${pages}\n\nPLAN CONTEXT:\n${summary}`, `${name} ${t}`);
+      assert.equal(s.replace(toneLine(t), ""), before, `${name} ${t}: nothing else moves`);
+      assert.ok(s.endsWith(`PLAN CONTEXT:\n${summary}`), `${name} ${t}: the plan's figures as they were`);
+    }
+  }
+});
+
+test("tone on the page: Ask the plan sends the device's tone (Plain: today's message); the change card is the same in every tone", async () => {
+  const sent = {};
+  for (const t of TONES) {
+    tone._reset(); tone.set(t);
+    const s = await page(family(), { reply: SAY });
+    await s.ask("What if we spend $6,000 a month?");
+    sent[t] = { sys: s.sent[0][0].content, card: s.textOf(s.cards()[0]) };
+  }
+  tone._reset(); tone.set("plain");
+  const p = family();
+  assert.equal(sent.plain.sys, systemFor({ summary: compute(p).summary, changes: changesContext(p), pages: pagesContext(new Map()) }));
+  assert.equal(sent.plain.sys, `${SYSTEM_PROMPT}\n\n${changesContext(p)}\n\n${pagesContext(new Map())}\n\nPLAN CONTEXT:\n${compute(p).summary}`);
+  assert.equal(sent.gentle.sys, sent.plain.sys.replace(SYSTEM_PROMPT, `${SYSTEM_PROMPT}${toneLine("gentle")}`));
+  assert.equal(sent.blunt.sys, sent.plain.sys.replace(SYSTEM_PROMPT, `${SYSTEM_PROMPT}${toneLine("blunt")}`));
+  // what the change does is the app's own, worked out from the plan: the same words whatever the tone
+  assert.equal(sent.gentle.card, sent.plain.card); assert.equal(sent.blunt.card, sent.plain.card);
+  assert.match(sent.plain.card, /Change: spend \$6,000 a month in retirement instead of \$7,000, in today's dollars\./);
+});
+
+test("tone: kept in memory when the device has no storage; Plain is stored as nothing", () => {
+  tone._reset();
+  assert.equal(tone.chosen, "plain", "a new device: Plain");
+  assert.equal(tone.set("blunt"), "blunt"); assert.equal(tone.chosen, "blunt");
+  assert.equal(tone.set("shouty"), "plain", "not a tone: Plain");
+  tone.set("gentle"); tone.forget(); assert.equal(tone.chosen, "plain");
+});

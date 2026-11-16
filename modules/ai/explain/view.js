@@ -6,6 +6,7 @@
 // answer waits in module state and shows on the next render; a render that is no longer on screen never redraws.
 import { compute, explainable, sheetFor, buildMessages, readAnswer } from "./compute.js";
 import { nameIn } from "../../../core/words.js";
+import { tone } from "../assistant/tone.js";
 
 // who a stand-in is, in the sentence: the unnamed first adult ("Me" from Get started) is "you", the unnamed partner "your
 // spouse", a typed name as typed (round 7, 2026-11-06)
@@ -137,7 +138,8 @@ export function render(page, ctx) {
       const s = getSheet();
       if (!s.ok) { pending = { kind: s.why === "error" ? "page" : "empty" }; return; }
       try {
-        const r = await ai.chat(buildMessages({ title: asked.title, purpose: asked.purpose, lines: s.lines, question: q, terms: s.terms }), CHAT_OPTIONS);
+        // the tone this device chose (Settings > How the helper talks to you): one sentence more for Gentle or Blunt, none for Plain
+        const r = await ai.chat(buildMessages({ title: asked.title, purpose: asked.purpose, lines: s.lines, question: q, terms: s.terms, tone: tone.chosen }), CHAT_OPTIONS);
         const text = readAnswer(r?.content, s.names);
         if (!text) { pending = { kind: "blank" }; return; }
         result = { key: asked.key, at, text, model: r?.model ?? "", question: q };

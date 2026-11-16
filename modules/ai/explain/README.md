@@ -159,6 +159,19 @@ moved (or `null`, or `true`), `dayless(text)`, `sheetFor(plan, run, { today })` 
   reason folded under "Show details" for whoever set up the AI); an empty answer (tap Explain again; the model may
   be too small for the page).
 
+## How the helper talks to you (gap list next 60, item 58; X8; 2026-11-16)
+`buildMessages({ ..., tone })` reads the device's choice (Settings > "How the helper talks to you"; `ai/assistant/tone.js`,
+`localStorage planner.tone`, never in the plan). Plain (or nothing chosen) sends the two messages exactly as before:
+`EXPLAIN_SYSTEM` is the system text of 67dfd25 word for word (the test pins its hash). Gentle and Blunt add one sentence at
+its end, the same one Ask the plan uses (`ai/assistant/compute.js` `toneWords`: the tone's rule and "The tone changes only
+your wording: every other instruction here still applies, and every number, date and warning stays exactly as given."). The
+page's lines, the question and the names are the same in every tone (test, every page offered). The fold "What the AI will
+read" already says the app's rules go too; the tone's sentence is one of them.
+
+A comment on a transaction (Ledger, item 58's other half) is free text with a person's id and a day: `comment` and
+`comments` are in `SKIP`, so no page ever sends one (test: every page offered reads exactly as without it, and its words
+never appear).
+
 ## Edge cases
 - Empty plan: "Nothing to explain yet" with a button to add the people.
 - AI turned off (on the PC itself or on this device), no model downloaded, not answering, a problem while answering

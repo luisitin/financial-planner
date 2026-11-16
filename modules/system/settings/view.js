@@ -1,10 +1,12 @@
-// modules/system/settings/view.js -- plan basics, how much to show, how this phone looks, page toggles, your data, then the
+// modules/system/settings/view.js -- plan basics, how much to show, how this phone looks, how the helper talks (only while it
+// is offered), page toggles, your data, then the
 // technical parts (PC connection, AI assistant) folded at the bottom. Order, folding and
 // wording per docs/DESIGN_LOG.md 2026-09-15 (Settings round 6); "How much to show" second, after
 // Plan basics (docs/DESIGN_LOG.md 2026-11-13, docs/OPTIONAL.md "The two switches").
 import { conn } from "../../../core/api.js";
 import { howMuchCard, forgetShown } from "./show.js";
 import { lookCard, forgetLook } from "./looks.js";
+import { talkCard, forgetTalk } from "./talk.js";
 import { planShapeProblem } from "./compute.js";
 import { emptyPlan } from "../../../core/schema/migrate.js";
 import { aiHealth, healthWord, healthWords } from "../../ai/health.js";
@@ -70,6 +72,10 @@ export function render(root, ctx) {
   // ---- how this phone looks: third, one shut row; on this phone only (looks.js, core/look.js)
   root.append(lookCard(ctx));
 
+  // ---- how the helper talks to you: one shut row, only while Ask the plan or Explain a page is offered (talk.js)
+  const talk = talkCard(ctx);
+  if (talk) root.append(talk);
+
   // ---- pages: one fold per topic; a pill only when a page was switched by you or the PC
   const folds = [];
   for (const g of GROUPS) {
@@ -109,6 +115,7 @@ export function render(root, ctx) {
           : "Erase your plan from this device? This is the only copy and it cannot be undone. Download a copy first if you may want it back.";
         if (!ui.confirm(ask)) return;
         try { sessionStorage.setItem("planner.erased", onPc ? "pc" : store.sandbox() ? "sandbox" : "only"); } catch { }
+        forgetTalk();    // how the helper talks goes too: plainly again
         forgetLook();    // how this phone looks goes too: amounts show again
         forgetShown();   // how much this phone shows goes too: both ticks and the rows kept open (the sandbox's own in the sandbox)
         store.eraseDevice(); location.reload();

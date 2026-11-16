@@ -9,6 +9,7 @@ import { looksSecret } from "../../estate/digital/compute.js";
 import { ESTATE } from "../../estate/beneficiaries/compute.js";
 import { defaultCategories } from "../../transactions/categories/compute.js";
 import { ageOn } from "../../../core/math/dates.js";
+import { toneWords } from "../assistant/compute.js";
 
 export { anonymise, restore };
 
@@ -17,13 +18,13 @@ export const NOT_OFFERED = new Set(["household/contacts", "household/documents",
 const NOT_GROUPS = new Set(["system", "ai"]);
 /**
  * Keys never sent: ids and links (no meaning to the AI; any key ending in "Id" or "Ids" too), free text and contact
- * details (could say anything about anyone), the bank's own text and what a rule looks for in it, the names of banks,
+ * details (could say anything about anyone; a transaction's note and the household's comment on it, ledger `comment`), the bank's own text and what a rule looks for in it, the names of banks,
  * insurers and firms, file names, where a receipt is kept, birth dates (the age is sent) and tax tables.
  */
 export const SKIP = new Set([
   "id", "ids", "key", "keys", "accountId", "accountIds", "personId", "policyId", "goalId", "policyIds", "importId", "transferId", "rawPayee", "contains",
   "go", "href", "url", "sourceUrl", "icon", "color", "class", "css", "dataset", "error", "seeds",
-  "note", "notes", "phone", "email", "address", "last4", "where", "who", "copy",
+  "note", "notes", "comment", "comments", "phone", "email", "address", "last4", "where", "who", "copy",
   "institution", "insurer", "firm", "contact", "fileName", "proof", "birthDate", "params",
 ]);
 const ID_KEY = /^(id|ids)$|Ids?$/;
@@ -510,15 +511,21 @@ export function sheetFor(plan, run, { today } = {}) {
 /** The pages that can be explained: built (usable or partly built), with a compute, not system or AI pages, not NOT_OFFERED. pages: [{ key, group, title, purpose, status, hasCompute }] */
 export const explainable = (pages) => (pages ?? []).filter((m) => m && m.hasCompute && (m.status === "usable" || m.status === "stub") && !NOT_GROUPS.has(m.group) && !NOT_OFFERED.has(m.key));
 
+/** What the AI is told about every page (Plain: the whole system message, as it was before tones). */
+export const EXPLAIN_SYSTEM = "You explain one page of a household's money app to someone who is not a finance person. Use only the numbers given and never invent any; do not work out new totals, rates or projections, and say so if a question needs one. Money amounts are in dollars; fractions such as 0.05 are rates (5%). People are called Adult 1, Adult 2, Child 1 and so on; accounts by their kind and a number (credit card 1, 401(k) 2); payees, people outside the household and other names by stand-ins such as Payee 1, Person 1 or home 1. Use those names exactly as written, number included. A date given as a year and a month only (2055-05) has its day left out on purpose. Write in plain words, short sentences, no jargon left unexplained, no product recommendations, at most 200 words. Start with what the page shows, then what the main numbers mean for this household, then one or two things worth noticing.";
+
 /**
  * The messages for the AI: the page's title and purpose, its numbers, and the person's own question (names in it
  * hidden, cut to MAX_QUESTION characters) or the default: what the page shows, what the main numbers mean, what is
- * worth noticing. -> [{ role, content }]
+ * worth noticing. `tone`: how this device asked the helper to talk (ai/assistant toneWords): Gentle and Blunt add their one
+ * sentence at the end of the system message; Plain (or nothing) adds nothing, so the messages are exactly as before.
+ * -> [{ role, content }]
  */
-export function buildMessages({ title, purpose, lines, question = "", terms = [] }) {
+export function buildMessages({ title, purpose, lines, question = "", terms = [], tone = "plain" }) {
   const q = cut(hide(String(question ?? "").replace(/\s+/g, " ").trim(), terms), MAX_QUESTION);
+  const how = toneWords(tone);
   return [
-    { role: "system", content: "You explain one page of a household's money app to someone who is not a finance person. Use only the numbers given and never invent any; do not work out new totals, rates or projections, and say so if a question needs one. Money amounts are in dollars; fractions such as 0.05 are rates (5%). People are called Adult 1, Adult 2, Child 1 and so on; accounts by their kind and a number (credit card 1, 401(k) 2); payees, people outside the household and other names by stand-ins such as Payee 1, Person 1 or home 1. Use those names exactly as written, number included. A date given as a year and a month only (2055-05) has its day left out on purpose. Write in plain words, short sentences, no jargon left unexplained, no product recommendations, at most 200 words. Start with what the page shows, then what the main numbers mean for this household, then one or two things worth noticing." },
+    { role: "system", content: how ? `${EXPLAIN_SYSTEM} ${how}` : EXPLAIN_SYSTEM },
     { role: "user", content: `PAGE: ${title}${purpose ? ` (${purpose})` : ""}\nNUMBERS ON THE PAGE:\n${(lines ?? []).map((l) => `- ${l}`).join("\n")}\n\nQUESTION: ${q || "What does this page tell me about my money?"}` },
   ];
 }
