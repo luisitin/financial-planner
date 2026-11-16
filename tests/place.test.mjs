@@ -593,3 +593,267 @@ test("coming back: a part is the same part after a save changed a heading inside
   p = draw([SOLD]); applyFolds(dom.root, entry);
   assert.equal(p.sales.open, true, "a reload: open, '1 in 2026' beside it");
 });
+
+// ---------------------------------------------------------------- typing the page took itself is never "changed since" (2026-11-16)
+// "Some of what you typed was not put back: those figures were changed since." is for typing let go because the saved figure
+// under it moved while the person was away. Never for a figure the page took itself (Goal seek's own box: 50000, 0,
+// 300000, "Use age 61"), nor for one a save took and the page drew its own way.
+const LET_GO = "Some of what you typed was not put back: those figures were changed since.";
+test("the same figure written two ways is the same figure; a code or words are compared as written", () => {
+  assert.equal(place.sameFigure("50,000", "50000"), true, "the box's own commas, put in as it is left");
+  assert.equal(place.sameFigure("$50,000", "50000"), true);
+  assert.equal(place.sameFigure("50k", "50,000"), true, "the kit reads 50k as 50,000");
+  assert.equal(place.sameFigure("1,234.5", "1234.50"), true);
+  assert.equal(place.sameFigure("50,000", "50,001"), false);
+  assert.equal(place.sameFigure("02139", "2139"), false, "a leading zero: a code, not an amount");
+  assert.equal(place.sameFigure("Weekend tutoring", "weekend tutoring"), false, "words as written");
+  assert.equal(place.sameFigure("", "0"), false, "an empty box is not a zero");
+  assert.equal(place.sameFigure("", ""), true);
+  assert.equal(boxVerdict("600,000", "50000", "50,000"), "same", "the page put the typing back in its own writing");
+  assert.equal(boxVerdict("3,900", "9999", "3,900"), "fill");
+  assert.equal(boxVerdict("3,900", "9999", "3900"), "fill", "drawn as before, in other writing: put back");
+  assert.equal(boxVerdict("380,000", "391,000", "395,000"), "changed", "the saved figure moved meanwhile");
+});
+test("the same figure: only an amount as a money box writes it (commas between groups of three); other text as written", () => {
+  // a comma or a space is a thousands mark only between groups of three digits: "1,5" (a decimal comma), "12 34", a phone
+  // number "555 1234" are not amounts, so they are compared as written (wave 1's rule): "1,5" typed and 15 drawn is a change
+  for (const [a, b] of [["1,5", "15"], ["1,23", "123"], ["12 34", "1234"], ["555 1234", "5551234"], ["10", "1 0"], ["2025", "20 25"],
+    ["5000", "5,00,0"], ["1,0000", "10000"], ["1234,567", "1234567"], ["1 000 000", "1000000"], ["1.5", "1,5"]]) {
+    assert.equal(place.sameFigure(a, b), false, `${JSON.stringify(a)} is not ${JSON.stringify(b)}`);
+  }
+  for (const [a, b] of [["1,000", "1000"], ["50,000", "50000"], ["$50,000", "50000"], ["50k", "50,000"], ["5m", "5,000,000"],
+    ["1,234.5", "1234.50"], ["1,234,567", "1234567"], ["-$50", "-50"], ["$ 1,200", "1200"], ["0.5", ".5"], [" 300000 ", "300,000"]]) {
+    assert.equal(place.sameFigure(a, b), true, `${JSON.stringify(a)} is ${JSON.stringify(b)}`);
+  }
+  assert.equal(boxVerdict("1", "1,5", "15"), "changed", "a decimal comma typed, 15 drawn: not put back, and said (as before)");
+  assert.equal(boxVerdict("15", "1,5", "15"), "fill", "drawn as before the typing: put back (as before)");
+});
+
+/** Goal seek's "N more ages" as the page draws it: the chips, "Type my own" (choice()'s one box, the kit's money box, which
+ * commits on change to the page's own choice and draws the chips again without it), the answer and its "Use age 61". */
+function goalSeek({ target = null, typed = false } = {}) {
+  const st = { target, box: null, label: null };
+  const amount = (n) => n.toLocaleString("en-US");
+  const host = uiH("div", {}), answer = uiH("div", {});
+  const use = uiH("button", { type: "button" }, "Use age 61");
+  const openBox = () => {
+    const input = uiH("input", { type: "text", name: "savingsTarget", "aria-label": "Your own figure, in today's dollars" });
+    input.value = st.target === null ? "600,000" : amount(st.target);
+    input.addEventListener("change", () => {
+      const n = Number(String(input.value).replace(/[$,\s]/g, ""));
+      if (!(n >= 1)) return;                        // the kit refuses 0 ("Use $1 or more."): the box stays
+      st.target = Math.min(n, 1000000);              // the page's own choice; a page may answer with its own figure
+      const was = st.label; st.label = null; st.box = null; was.remove();
+      place._test.watch([removed(was)]);
+    });
+    st.box = input;
+    st.label = uiH("label", { class: "field" }, uiH("span", { class: "field-label" }, "Your own figure, in today's dollars"), input);
+    host.append(st.label);
+    place._test.watch([added(st.label)]);
+    return input;
+  };
+  const p = draw([{ id: "ages", kind: "more", n: 16, noun: "ages", open: true, body: () => [uiH("p", {}, "When will your savings reach a figure?"), host, answer] }]);
+  answer.append(use);
+  if (typed) openBox();
+  return { p, st, openBox, use };
+}
+const tap = (el) => { for (const f of dom.on.pointerdown ?? []) f({ type: "pointerdown", isTrusted: true, target: el }); for (const f of dom.on.click ?? []) f({ type: "click", isTrusted: true, target: el, preventDefault() { } }); };
+/** What the shell does when a store.update changed the plan: saved(), then the redraw (before, a draw, then afterSave's own
+ * first steps: the sections, the typing, the kept lines). */
+function savedAndRedrawn(redraw) {
+  place.saved(true);
+  const snap = place.before();
+  const out = redraw();
+  applyFolds(dom.root, snap.folds); place.refill(dom.root); place.tell(dom.root, { quiet: true });
+  return out;
+}
+const said = () => echoes.filter((t) => /was not put back/.test(t));
+
+test("typing the page took: Goal seek's own figures 50000, then 0, then 300000, then 'Use age 61' say nothing was lost", async () => {
+  roomy("#/scenarios/goal-seek");
+  place.visit({ v: "u1-b", n: 1 }, "#/scenarios/goal-seek");
+  echoes.length = 0;
+  const g = goalSeek();
+  typeInto(g.openBox(), "50000"); await later();
+  typeInto(g.openBox(), "0"); await later();          // "Type my own" again: the box shows "50,000", the page's own writing
+  typeInto(g.st.box, "300000"); await later();         // the kit refused 0; the same box
+  assert.equal(g.st.target, 300000);
+  tap(g.use);
+  savedAndRedrawn(() => goalSeek({ target: 300000 }));   // "Saved: Pat's retirement age is now 61 ..." (the page's own line)
+  await later();
+  assert.deepEqual(said(), [], "no 'not put back' line, at any moment");
+  const again = goalSeek({ target: 300000, typed: true });   // "Type my own" after the save: the page's $300,000
+  await later(); place.tell(dom.root);
+  assert.equal(again.st.box.value, "300,000");
+  assert.deepEqual(said(), []);
+  place.forgetAll();
+});
+test("typing the page took: a clean 300000 then 'Use age 61' says nothing either (as before)", async () => {
+  roomy("#/scenarios/goal-seek");
+  place.visit({ v: "u1-b", n: 1 }, "#/scenarios/goal-seek");
+  echoes.length = 0;
+  const g = goalSeek();
+  typeInto(g.openBox(), "300000"); await later();
+  tap(g.use);
+  savedAndRedrawn(() => goalSeek({ target: 300000 }));
+  await later();
+  assert.deepEqual(said(), []);
+  place.forgetAll();
+});
+test("typing the page took and answered with its own figure (5,000,000 typed, its most, 1,000,000, drawn): let go quietly", async () => {
+  roomy("#/scenarios/goal-seek");
+  place.visit({ v: "u1-b", n: 1 }, "#/scenarios/goal-seek");
+  echoes.length = 0;
+  const g = goalSeek();
+  typeInto(g.openBox(), "5,000,000"); await later();
+  assert.equal(g.st.target, 1000000);
+  const box = g.openBox(); await later(); place.tell(dom.root);
+  assert.equal(box.value, "1,000,000", "the page's figure stands");
+  assert.deepEqual(said(), []);
+  assert.equal(place.hasTyping(), false, "the draft is gone: the page has its answer");
+  place.forgetAll();
+});
+
+/** A card with one box in no form and its own button ("Use this"), as a calculator's what-if row draws it. */
+function homeCard(value) {
+  for (const c of [...dom.root.childNodes]) c.parentNode = null;
+  dom.root.childNodes = [];
+  const input = uiH("input", { type: "text", name: "homeValue", "aria-label": "What your home is worth" });
+  input.value = value;
+  const use = uiH("button", { type: "button" }, "Use this");
+  dom.root.append(uiH("section", { class: "card" }, uiH("h2", {}, "Your home"), uiH("label", { class: "field" }, uiH("span", { class: "field-label" }, "What your home is worth"), input), use));
+  return { input, use };
+}
+test("typing a save took: the box drawn again in the page's own rounding says nothing; drawn as before the typing, put back as before", async () => {
+  roomy("#/property/home");
+  place.visit({ v: "u1-c", n: 1 }, "#/property/home");
+  echoes.length = 0;
+  let h = homeCard("380,000");
+  typeInto(h.input, "391234.567");
+  tap(h.use);
+  h = savedAndRedrawn(() => homeCard("391,234.57"));   // saved, rounded to cents by the page
+  await later();
+  assert.deepEqual(said(), [], "the save took it: no 'not put back' line");
+  place.forgetAll();
+  // the same, where the save did not use the box (the page draws what it showed before the typing): put back, as before
+  place.visit({ v: "u1-c", n: 1 }, "#/property/home");
+  h = homeCard("380,000");
+  typeInto(h.input, "391,000");
+  tap(h.use);
+  h = savedAndRedrawn(() => homeCard("380,000"));
+  assert.equal(h.input.value, "391,000", "put back, with 'Not saved yet'");
+  assert.deepEqual(said(), []);
+  place.forgetAll();
+});
+/** The same card with a second box the button does not save ("What you still owe on it"); `owed: null` draws the card
+ * without it (the page shows it again later). */
+function homeCard2(value, owed) {
+  const h = homeCard(value);
+  if (owed === null) return h;
+  const box = uiH("input", { type: "text", name: "owed", "aria-label": "What you still owe on it" });
+  box.value = owed;
+  dom.root.querySelector("section").append(uiH("label", { class: "field" }, uiH("span", { class: "field-label" }, "What you still owe on it"), box));
+  return { ...h, owed: box };
+}
+test("typing a save took is only a box whose figure the save wrote: another box in its card it did not use is still said when its figure moves", async () => {
+  roomy("#/property/home");
+  // (1) the save's redraw leaves the other box out; the person goes on, leaves, and its saved figure moves meanwhile
+  place.visit({ v: "u1-f", n: 1 }, "#/property/home");
+  echoes.length = 0;
+  let h = homeCard2("380,000", "200,000");
+  typeInto(h.input, "391,000");
+  typeInto(h.owed, "210,000");
+  tap(h.use);                                          // "Use this" saves the home's worth only
+  h = savedAndRedrawn(() => homeCard2("391,000", null));
+  await later();
+  assert.deepEqual(said(), []);
+  tap(dom.root.querySelector("h2"));                   // the person goes on (a tap: another act)
+  place.remember();
+  place.visit({ v: "u1-f", n: 2 }, "#/overview/dashboard");
+  homeCard("1");
+  place.visit({ v: "u1-f", n: 1 }, "#/property/home");
+  h = homeCard2("391,000", "195,000");                 // back: what is owed was changed elsewhere meanwhile
+  place.refill(dom.root); place.tell(dom.root);
+  assert.equal(h.owed.value, "195,000", "the plan wins");
+  assert.deepEqual(said(), [LET_GO], "the typing in the box the save did not use was let go: said, as before");
+  place.forgetAll();
+  // (2) the save's redraw draws the other box as before: its typing is put back and is not the save's either
+  place.visit({ v: "u1-g", n: 1 }, "#/property/home");
+  echoes.length = 0;
+  h = homeCard2("380,000", "200,000");
+  typeInto(h.input, "391,000");
+  typeInto(h.owed, "210,000");
+  tap(h.use);
+  h = savedAndRedrawn(() => homeCard2("391,000", "200,000"));
+  assert.equal(h.owed.value, "210,000", "put back, with 'Not saved yet'");
+  assert.equal(h.input.value, "391,000");
+  h = homeCard2("391,000", "195,000");                 // drawn again with a figure saved elsewhere
+  place.refill(dom.root); place.tell(dom.root);
+  assert.equal(h.owed.value, "195,000");
+  assert.deepEqual(said(), [LET_GO]);
+  place.forgetAll();
+  // (3) one tap whose page updates the plan twice: the box the first update covered is the save's on the redraw
+  place.visit({ v: "u1-h", n: 1 }, "#/property/home");
+  echoes.length = 0;
+  h = homeCard("380,000");
+  typeInto(h.input, "391234.567");
+  tap(h.use);
+  place.saved(true);                                   // the page's first store.update
+  h = savedAndRedrawn(() => homeCard("391,234.57"));   // its second, then the redraw in the page's rounding
+  await later();
+  assert.deepEqual(said(), [], "the save took it: no 'not put back' line");
+  place.forgetAll();
+});
+test("typing let go because the saved figure moved while the person was away is said once, on its page, when it happens", async () => {
+  roomy("#/property/home");
+  place.visit({ v: "u1-d", n: 1 }, "#/property/home");
+  echoes.length = 0;
+  let h = homeCard("380,000");
+  typeInto(h.input, "391,000");
+  place.remember();                                   // left by the menu: the typing is written down
+  place.visit({ v: "u1-d", n: 2 }, "#/overview/dashboard");
+  homeCard("1");                                      // another page
+  // back: the page works its answer out and draws the box a moment later, with the figure saved elsewhere meanwhile
+  place.visit({ v: "u1-d", n: 1 }, "#/property/home");
+  for (const c of [...dom.root.childNodes]) c.parentNode = null;
+  dom.root.childNodes = [];
+  place.refill(dom.root); place.tell(dom.root);        // the arrival: the box is not drawn yet
+  assert.deepEqual(said(), []);
+  h = homeCard("395,000");
+  place._test.watch([added(dom.root.querySelector("section"))]);
+  await later();
+  assert.deepEqual(said(), [LET_GO], "said once, when it is found, on its own page");
+  place.visit({ v: "u1-d", n: 3 }, "#/overview/dashboard");
+  homeCard("1"); place.refill(dom.root); place.tell(dom.root);
+  assert.deepEqual(said(), [LET_GO], "never again, never on another page");
+  place.forgetAll();
+});
+test("typing the page took: a chip picked since, then 'Type my own' again, says nothing; a reload that lost the page's choice puts the typing back, as before", async () => {
+  roomy("#/scenarios/goal-seek");
+  place.visit({ v: "u1-e", n: 1 }, "#/scenarios/goal-seek");
+  echoes.length = 0;
+  let g = goalSeek();
+  typeInto(g.openBox(), "50000"); await later();
+  let box = g.openBox(); await later();
+  assert.equal(box.value, "50,000", "the page's own writing of the figure: left as drawn");
+  const shut = uiH("button", { type: "button" }, "Type my own");
+  dom.root.querySelector("details").append(shut);
+  tap(shut); const was = g.st.label; was.remove(); g.st.label = null; place._test.watch([removed(was)]); await later();   // the chooser shut by a tap
+  g.st.target = 1000000;                              // the "$1,000,000" chip
+  box = g.openBox(); await later(); place.tell(dom.root);
+  assert.equal(box.value, "1,000,000");
+  assert.deepEqual(said(), [], "the chip is the page's answer: nothing 'not put back'");
+  // a reload: the page forgot its choice and draws what it drew before the typing; the typing goes back in, as before
+  place.forgetAll();
+  place.visit({ v: "u1-e", n: 1 }, "#/scenarios/goal-seek");
+  g = goalSeek();
+  typeInto(g.openBox(), "50000"); await later();
+  place.remember();
+  place.visit({ v: "u1-e", n: 1 }, "#/scenarios/goal-seek");
+  g = goalSeek();                                     // target null again: the box draws "600,000"
+  box = g.openBox(); await later();
+  assert.equal(box.value, "50000", "put back, with 'Not saved yet' and 'Undo my typing' beside it");
+  assert.ok(box.parentNode.querySelector(".place-cue"));
+  assert.deepEqual(said(), []);
+  place.forgetAll();
+});

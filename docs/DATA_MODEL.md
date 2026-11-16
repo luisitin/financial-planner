@@ -95,7 +95,8 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
   name; never sent to the computer, never in a downloaded copy. Settings' "Erase the copy on this device" removes it.
 * `sessionStorage["planner.typing"]`, `["planner.place"]`, `["planner.trail"]` (each `.sandbox` in the sandbox) -- this
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
-  history entry, and the way each entry was reached.
+  history entry, and the way each entry was reached. A kept box in no form may carry `took: 1` (optional; absent reads as
+  0): the page took that figure itself, so another figure drawn there later is the page's answer, not "changed since".
 * `sessionStorage["planner.legacy.whose"]` (`.sandbox` in the sandbox) -- this tab only (estate/legacy): the case "Who gets
   what" pictures for a couple, an adult's id or "both", so a reload keeps the chip picked. Never a name or a figure, never
   in the plan; a case the plan no longer has draws the first.

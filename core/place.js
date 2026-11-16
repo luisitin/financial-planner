@@ -6,6 +6,7 @@
 // one scroll wrapper (the page's own scrolling wins; calm under reduced motion). Only core/app.js imports it. Never read a
 // method or property off a form element (a box named `contains` or `target` shadows it): use the helpers below.
 import { parse, hashOf, router } from "./router.js";
+import { readAmount } from "./format.js";
 
 // ---------------------------------------------------------------- pure rules (tests/place.test.mjs)
 export const DAY = 24 * 3600 * 1000;
@@ -26,10 +27,25 @@ export function pageKeyOf(hash) {
 }
 /** Typing is never kept on these pages (Settings holds connection keys and device choices). */
 export const neverKept = (key) => /^#\/system\//.test(key);
+/** An amount as a money box writes it: a sign and a currency sign, then digits, with commas only between groups of three
+ * ("1,234,567"), a point and decimals, k or m. Not "1,5" (a decimal comma), "12 34" or "555 1234" (readAmount drops every
+ * comma and space, so those would read as 15, 1234 and 5551234). */
+const AMOUNT_SHAPE = /^\s*[-+]?\s*(?:us\$|ca\$|a\$|[$€£¥])?\s*[-+]?(?:\d{1,3}(?:,\d{3})+(?:\.\d*)?|\d+(?:\.\d*)?|\.\d+)\s*[km]?\s*$/i;
+/** The same text, or the same amount written two ways ("50,000" and "50000", "$50,000", "50k": the kit's own reading of a
+ * money box, core/format.js readAmount), so a box the page writes its own way ("50000" becomes "50,000" as it is left)
+ * is not taken for another figure. A leading 0 before a digit is a code ("02139"), and text that is not written as an
+ * amount (AMOUNT_SHAPE) is words: both compared as written. */
+export function sameFigure(a, b) {
+  const x = String(a ?? ""), y = String(b ?? "");
+  if (x === y) return true;
+  if (!AMOUNT_SHAPE.test(x) || !AMOUNT_SHAPE.test(y) || /^\s*[$€£]?0\d/.test(x) || /^\s*[$€£]?0\d/.test(y)) return false;
+  const m = readAmount(x), n = readAmount(y);
+  return m !== null && n !== null && Math.abs(m - n) < 1e-9;
+}
 /** One box drawn again: d = what it showed before the person typed, v = what they typed, now = what the page drew this
- * time. "same": the page put the typing back itself (Get started, People); "fill": put it back; "changed": the saved
- * figure moved meanwhile, so the typing is let go (the plan wins). */
-export const boxVerdict = (d, v, now) => (now === v ? "same" : now === d ? "fill" : "changed");
+ * time. "same": the page put the typing back itself (Get started, People), in its own writing or not; "fill": put it
+ * back; "changed": the saved figure moved meanwhile, so the typing is let go (the plan wins). */
+export const boxVerdict = (d, v, now) => (sameFigure(now, v) ? "same" : sameFigure(now, d) ? "fill" : "changed");
 /** The same, for a box that may be the one the person is typing in on the page now shown (`typingHere`): that box is
  * theirs, never written into and never let go (a page redrawing a live line mid-typing must not undo a correction). */
 export const refillVerdict = (typingHere, d, v, now) => (typingHere ? "same" : boxVerdict(d, v, now));
@@ -308,7 +324,7 @@ function onInput(e) {
   if (sentForm && has(sentForm, c)) sentForm = null;   // typing again after a Save that kept the form
   $1(up(c, "label"), ":scope > .place-cue")?.remove();
   clearTimeout(noteTimer);
-  if (e.type === "change") { lastAct = { kind: "change", el: c, form: null, at: now(), ev: e }; remember(); return; }
+  if (e.type === "change") { lastAct = { kind: "change", el: c, form: null, at: now(), ev: e, mark: actMark }; remember(); return; }
   noteTimer = setTimeout(remember, 300);
 }
 let noteTimer = null;
@@ -368,6 +384,15 @@ export function forget(f) {
   for (const key of keys) if (typing[key]) { delete typing[key].forms[`${m.fk}#${m.i}`]; tidy(key); }
   saveTyping();
 }
+/** A box in no form whose figure the page took (its own change drew it away; or a save by its card's button wrote it, seen
+ * on that save's redraw: `covered`): its kept typing stays (a reload that lost the page's choice puts it back), but when
+ * the box is drawn again with another figure, that figure is the page's answer and the typing goes quietly, never
+ * "changed since". */
+function took(c) {
+  const r = typing[where.get(c) ?? shownKey], k = keyOf(c);
+  for (const x of r?.loose ?? []) if (x.loc.k === k) x.took = 1;
+  saveTyping();
+}
 /** The plan changed (`changed`: something besides its stamp). What the last act saved is no longer "typed and not saved":
  * the form submitted; or the button's own form; or, for a button in no form, its own card or section, never wider. A box
  * that saves itself when it changes counts only when the plan changed inside its own change event. */
@@ -379,10 +404,19 @@ export function saved(changed) {
   const scope = a.form ?? up(a.el, "form") ?? up(a.el, ".card, section, details, fieldset");
   if (!scope) return;
   if (isForm(scope)) { forget(scope); return; }
-  for (const c of [...dirty]) if (has(scope, c)) dirty.delete(c);
+  const ks = [];
+  for (const c of [...dirty]) if (has(scope, c)) { if (!c.form && (where.get(c) ?? shownKey) === shownKey) ks.push(keyOf(c)); dirty.delete(c); }
+  if (ks.length) {   // a second update in the same act adds to the first (its boxes are no longer dirty)
+    if (!covered || covered.mark !== actMark || covered.key !== shownKey) covered = { key: shownKey, ks: new Set(), mark: actMark };
+    for (const k of ks) covered.ks.add(k);
+  }
   for (const f of $$(scope, "form")) forget(f);
   remember();
 }
+/** Boxes in no form in the card a save by a button there covered. Which of them the save wrote is seen on its redraw
+ * (refill, before any other tap or key): drawn with the typing, or with another figure (the page's rounding), the save
+ * took it; drawn as before the typing, the save did not use that box, and its typing is put back as any other. */
+let covered = null;   // { key, ks: Set of box keys, mark }
 // ---------------------------------------------------------------- cues: "Not saved yet"
 function undoBtn(run) { const b = document.createElement("button"); b.type = "button"; b.className = "place-undo"; b.dataset.place = "undo"; b.textContent = "Undo my typing"; b.addEventListener("click", run); return b; }
 function cueBox(c, undo) {
@@ -440,8 +474,19 @@ export function refill(root = pageRoot()) {
     if (filled.length) { hint(f); const b = submitOf(f), far = b && filled.find((c) => Math.abs(rectOf(c).top - rectOf(b).top) > 320); if (far) cueBox(far, false); }   // by the button; once more by the first far box
     $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)?.remove();
   }
-  rec.loose = rec.loose.filter((x) => { const c = locate(root, x.loc); if (!c || !isControl(c) || c.form || seenForms.has(c)) return true; seenForms.add(c); const v = fill(c, x); if (v === "fill") cueBox(c, true); if (v === "changed") { letGo++; return false; } return true; });
-  if (changed || !Object.keys(rec.forms).length) { tidy(shownKey); saveTyping(); }
+  const cover = covered && covered.key === shownKey && covered.mark === actMark ? covered.ks : null;
+  let marked = false;
+  rec.loose = rec.loose.filter((x) => {
+    const c = locate(root, x.loc); if (!c || !isControl(c) || c.form || seenForms.has(c)) return true; seenForms.add(c);
+    // a box the save just covered, on its redraw: drawn as before the typing, the save did not use it (put back below);
+    // else the save wrote its figure, and the page took it
+    if (cover?.delete(x.loc.k) && !dirty.has(c) && boxVerdict(x.d, x.v, valOf(c)) !== "fill") { x.took = 1; marked = true; }
+    // typing the page took: drawn with that figure, the page holds it (the box is left as drawn, the record kept for a
+    // reload); drawn with another, that is the page's answer and the typing goes quietly; drawn as before, put back below
+    if (x.took && !dirty.has(c)) { const t = boxVerdict(x.d, x.v, valOf(c)); if (t === "same") return true; if (t === "changed") { changed = true; return false; } }
+    const v = fill(c, x); if (v === "fill") cueBox(c, true); if (v === "changed") { letGo++; return false; } return true;
+  });
+  if (changed || marked || !Object.keys(rec.forms).length) { tidy(shownKey); saveTyping(); }
   return n;
 }
 /** Back, Forward or a reload onto a page left with a typed form open: that form opens again the way the person opened it
@@ -475,9 +520,14 @@ function reopen(root) {
  * "Undo my typing". Said at the bottom too only when that line cannot be read once the screen is still (`say`), or at
  * once (`now`: a stray tap took the form away). Typing let go because its saved figures changed is said once. */
 const told = new Set();
+/** Typing let go because its saved figures changed: said once, on its page, when it is found. */
+function sayLetGo() {
+  if (letGo) hooks.echo?.(`Some of what you typed${letGoTitle ? ` in “${letGoTitle}”` : ""} was not put back: those figures were changed since.`, null);
+  letGo = 0; letGoTitle = "";
+}
 export function tell(root = pageRoot(), { now: atOnce = false, quiet = false } = {}) {
   if (!root) return;
-  if (letGo) { hooks.echo?.(`Some of what you typed${letGoTitle ? ` in “${letGoTitle}”` : ""} was not put back: those figures were changed since.`, null); letGo = 0; letGoTitle = ""; }
+  sayLetGo();
   const rec = typing[shownKey]; if (!rec) return;
   const here = formsOn(root), fks = here.map(fkOf), titles = here.map(formTitle);
   let gone = "";
@@ -657,7 +707,7 @@ let curN = null;
 /** A new visit to a page: the shell calls it before the draw. `entry` is the router's ({ v, n }). */
 export function visit(entry, key) {
   if (entry?.v && entry.v !== visitId) loadRecords(entry.v);
-  curN = entry?.n ?? null; shownKey = key; told.clear(); holding?.("replaced"); sentForm = null;
+  curN = entry?.n ?? null; shownKey = key; told.clear(); holding?.("replaced"); sentForm = null; letGo = 0; letGoTitle = ""; covered = null;
   for (const c of [...dirty]) if (!c.isConnected) dirty.delete(c);
 }
 /** The shell is about to clear the page: the box with the cursor lets go of it quietly, so the change it fires as it goes
@@ -675,7 +725,7 @@ export function afterArrive(root, rec) {
   applyFolds(root, rec.folds); refill(root); reopen(root); tell(root);   // the kept line is part of the page the place is held on
   const chain = [...(rec.tap ?? []), ...(rec.top ?? [])];
   const want = () => { for (const t of chain) { const el = locate(root, t.loc); if (el && drawn(el)) return Math.max(0, Math.round(scrollY + rectOf(el).top - t.top)); } return rec.y; };
-  hold(root, want, { onGrow: () => { applyFolds(root, rec.folds); refill(root); } });
+  hold(root, want, { onGrow: () => { applyFolds(root, rec.folds); refill(root); sayLetGo(); } });
   const t = rec.tap?.[0] ? locate(root, rec.tap[0].loc) : null;
   if (t && is(t, "a[href], button, summary") && drawn(t)) { const r = rectOf(t); if (r.top >= topbarH() && r.bottom <= innerHeight) { try { t.focus({ preventScroll: true }); } catch { } } }
 }
@@ -716,7 +766,7 @@ export function afterSave(root, snap, { scroll = true } = {}) {
   const late = working(root);
   let pick = find();
   const want = () => { if (!pick?.el.isConnected && late) pick = find(); return pick?.el.isConnected ? Math.max(0, Math.round(scrollY + rectOf(pick.el).top - pick.at)) : scrollY; };
-  hold(root, want, { pageWins: true, onGrow: late ? () => { applyFolds(root, snap.folds); refill(root); } : null });
+  hold(root, want, { pageWins: true, onGrow: late ? () => { applyFolds(root, snap.folds); refill(root); sayLetGo(); } : null });
   return out;
 }
 /** The tapped thing's rectangle now (for placing the bottom note), or null. */
@@ -791,13 +841,16 @@ function watchPage(recs, shell = !!drawing.size) {
   const own = (c) => { const f = c.form, b = lastTap && now() - lastTap.at < 1500 ? up(lastTap.el, "button, [role=button], input[type=submit]") : null; return !!f && ((b && has(f, b)) || f === sentForm || (lastAct?.kind === "submit" && lastAct.form === f && now() - lastAct.at < 1500)); };
   const stray = gone.filter((c) => !own(c));
   for (const c of gone) if (own(c)) dirty.delete(c);
+  // a box in no form the page took away in answer to its own change (no tap or key since): the page took the figure
+  const a = lastAct;
+  for (const c of stray) if (!c.form && a?.kind === "change" && a.el === c && a.mark === actMark && now() - a.at < 1500) took(c);
   if (gone.length > stray.length) { const fs = new Set(gone.filter(own).map((c) => c.form)); for (const f of fs) forget(f); }
   if (stray.length) remember();
   if (folds && curN !== null) applyFolds(pageRoot(), records[curN]?.folds ?? []);
   if (!forms && !stray.length && !hasTyping()) return;
   clearTimeout(fillTimer);
   const strayHere = stray.some((c) => (where.get(c) ?? shownKey) === shownKey);
-  const go = () => { if (drawing.size) return; refill(); if (strayHere) tell(pageRoot(), { now: true }); };
+  const go = () => { if (drawing.size) return; refill(); if (strayHere) tell(pageRoot(), { now: true }); else sayLetGo(); };
   if (strayHere) go(); else fillTimer = setTimeout(go, 0);
 }
 
