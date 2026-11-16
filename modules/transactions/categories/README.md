@@ -115,8 +115,12 @@ untrue). It is offered once something is filed under a category (a bank line, a 
 category of the person's own); on an empty plan combining would only hide one, so the page stays as short as it was.
 Inside: "Everything filed under the first one moves to the second: its transactions, sorting rules, budget and bills. Undo
 puts it all back.", two picks ("Move everything from", "Into"; every spending and income category on the list, never the
-transfer kind; once the first is picked, "Into" lists only the others of its kind, and a pick there of the other kind goes
-back to "Pick one..."), and under them, right above the button, as the picks change and before any save, the count or the
+transfer kind, under two headings, "Spending" then "Income", each with only its own kind (`<optgroup>`; a phone's picker
+shows the headings; recheck leftover y2 (a), 2026-11-16: the first picker listed all 28 of the family's mixed); once the first
+is picked, "Into" lists only the others of its kind, with no heading over a list of one kind, and a pick there of the other
+kind goes back to "Pick one..."; a category whose stored kind is neither, which the page cannot make but malformed data can hold,
+is listed under a third heading, "Other kinds", last, rather than dropped, and not "Other", a built-in income category's name; once
+picked, "Into" offers nothing, as before, since no other category is of its kind: fix round, critic F1), and under them, right above the button, as the picks change and before any save, the count or the
 reason it can't be done (nothing while a pick is missing). "Combine them" (the part's own Save) asks first and saves once,
 with the green line and Undo in the part, which stays open (R17); after Undo the part says so. While a category's form is
 open above, "Combine them" is outlined, so the screen has one filled button (the form's).
@@ -196,4 +200,6 @@ its sentence, with Budget's available off by exactly what was carried (M2); ever
 its kind either refused for its job or leaving Dividends and Subscriptions exactly as they were (M3); "Into" follows the
 first pick (P1); "Combine them" outlined while a form is open (P6); and, found on a phone while checking those, view.js
 calls no array method on a `querySelectorAll` answer (a NodeList in a browser; the fake DOM gives an array, so the page
-tests could not see "This page could not open").
+tests could not see "This page could not open"). Recheck leftover y2 (a): both pickers grouped by kind until a pick, "Into" one
+kind after it, a pick still saving as before; a category of an unknown kind under "Other kinds" in both, every category listed once (F1); and the page's words outside the part and the pickers' categories are those of
+398a01e for every household (`y2-invariance.json`, written with `PRINT_Y2=1` on that code).

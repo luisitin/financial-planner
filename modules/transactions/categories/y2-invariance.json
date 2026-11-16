@@ -1,0 +1,137 @@
+{
+ "note": "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "page": "0OOkIv_j9qQXlLUTmtV3lT",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "page": "CDpAKGEt6A6felAqKl-Uhe",
+   "picks": "dt_I-moWU9f6zQ7pDnwFaE"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "page": "crAOKZGjbcLJm38JEHWNFW",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "page": "49jXrn_CuEda6843LNMd8r",
+   "picks": "9nkaB5BOPgLrHTYZA9IqY1"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "page": "lhFPJ9YcWvwniCywemeHwu",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "page": "CaxdOBQJnUg4zTh7Ahpl0H",
+   "picks": "2cl1FbjUixu7UkUC2bZn1U"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "page": "W8q1sYOJH1NiVN2ztkOMq1",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "page": "nyXRTv-8Gpi9Rmwkdi5VPI",
+   "picks": "Ie0WsxRTyATeYyoiLXORqy"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "page": "NtzvugQAD08F_sdinFskgP",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "page": "csVDMqnA6yQQ0aEe5z9Ccy",
+   "picks": "wg-8IoEaNbE_cpJg1qyf6v"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "page": "Kx3nLiOVvPAF3Xpda87635",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "page": "lJye3nc00yJ9JCyAfO5cC1",
+   "picks": "RyHst364XRwsDKMP1BXUbU"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "page": "BapJwU9KhcVBXkxCHCCnNp",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "01-single-adult/base": {
+   "page": "BHTemLoD6wEk8YGD6WPxLu",
+   "picks": "dQ3NkQdY3olcYs7-ANsMOC"
+  },
+  "02-couple-no-kids/base": {
+   "page": "-URE2obJWO4KNjNliNi2c7",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "03-single-parent/base": {
+   "page": "KX_dbHCBHDrZ_Z46UWBky4",
+   "picks": "FGX_hWYy_H3SH27EairnO8"
+  },
+  "04-two-parents/base": {
+   "page": "PGFfaPEkUjzhwx8GeukKRM",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "05-stay-at-home-parent/base": {
+   "page": "W1fVnX1u1-E7vAKH0YtLX4",
+   "picks": "x5ZMr-G8OVjRC3MX8RqakY"
+  },
+  "06-blended-family/base": {
+   "page": "aUctGb26PLHt45fcl1Qpg2",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "07-multigenerational/base": {
+   "page": "gdWii978ygqMOkA4ETHXbf",
+   "picks": "OgR6tHds5ySQIoX1cfFbZ-"
+  },
+  "08-retired/base": {
+   "page": "NyC6dOq6tc-uRQtoyY5XXs",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "09-near-retirement/base": {
+   "page": "LVSzntNNFOyO19oR7HzKnz",
+   "picks": "4wXXrNU1jTgBmiN0v1usSM"
+  },
+  "10-student-and-starter/base": {
+   "page": "GB_XL-v-IhSeTh4heXezlY",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "11-self-employed/base": {
+   "page": "NAl-x-eX6ETy-kz3PJvL16",
+   "picks": "zARZkkmVFtFdtrgnsfHCIc"
+  },
+  "12-high-net-worth/base": {
+   "page": "ZJVJTd3_DaoRcm358A3Iau",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "13-in-crisis/base": {
+   "page": "49Qt2mLnGDKaYsxzT8f1Xh",
+   "picks": "pCaqG9BwtoRVCB6uhPakO9"
+  },
+  "14-unusual-structures/base": {
+   "page": "n01sg1JEAhkX43Wwfn-d-Z",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "phone casey": {
+   "page": "-FmrbpQ38cdqP2YykLbRbj",
+   "picks": "2P1pIcbP9hVDjKpJRXsHMV"
+  },
+  "phone danaLee": {
+   "page": "lAeFk8UH5WMiMhUBQgjPrl",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "phone jamie": {
+   "page": "MbQpsA8pm3D7MtCmx1iMgv",
+   "picks": "4zjRS6u8zK47ugTS2JtV3Y"
+  },
+  "phone morgan": {
+   "page": "r6vgXPbwdpxoyi4QWwxuxR",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  },
+  "phone robin": {
+   "page": "gEAlGmVnEEEz9R87Y2NWqU",
+   "picks": "vCGoZr6zb7588q8_x-MomF"
+  },
+  "empty plan": {
+   "page": "Rwp1h7TRdKWedPamfeARpj",
+   "picks": "4Zm_TfN6q5MvSjQbqKujbv"
+  }
+ }
+}

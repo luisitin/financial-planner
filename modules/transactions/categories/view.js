@@ -184,6 +184,17 @@ function mergePart(ctx, d, said) {
   const all = d.categories.filter((c) => !c.hidden && c.kind !== "transfer"), kindOf = new Map(all.map((c) => [c.id, c.kind]));
   const optionsOf = (list) => [{ value: "", label: "Pick one..." }, ...list.map((c) => ({ value: c.id, label: `${c.icon} ${c.label}` }))];
   const options = optionsOf(all);
+  // what a picker holds: "Pick one...", then, while it lists both kinds, a heading for each ("Spending", "Income": KINDS) over its
+  // own categories (the first picker listed all of them mixed; recheck leftover y2 (a), 2026-11-16); a list of one kind, bare. A
+  // stored kind that is neither (malformed data; the page cannot make one) goes under "Other kinds", last, never dropped (fix round,
+  // F1; not "Other", the name of a built-in income category in the list above it)
+  const drawn = (list) => {
+    const opt = (o) => ui.h("option", { value: o.value }, o.label);
+    const groups = Object.keys(KINDS).map((k) => [KINDS[k], list.filter((c) => c.kind === k)])
+      .concat([["Other kinds", list.filter((c) => !Object.hasOwn(KINDS, c.kind))]]).filter(([, cs]) => cs.length);
+    if (groups.length < 2) return optionsOf(list).map(opt);
+    return [opt(optionsOf([])[0]), ...groups.map(([label, cs]) => ui.h("optgroup", { label }, optionsOf(cs).slice(1).map(opt)))];
+  };
   // the count (or why not), right above "Combine them" so it is read before the tap; nothing while a pick is missing
   const line = ui.h("p", { class: "small", "aria-live": "polite", hidden: true });
   let f = null;
@@ -207,10 +218,11 @@ function mergePart(ctx, d, said) {
   // once the first is picked, "Into" lists only the others of its kind (spending or income; critic P1); a pick there that no
   // longer fits goes back to "Pick one..."
   const fromBox = f.querySelector('[name="from"]'), toBox = f.querySelector('[name="to"]');
+  for (const box of [fromBox, toBox]) box?.replaceChildren(...drawn(all));
   if (fromBox && toBox) fromBox.addEventListener("change", () => {
-    const k = kindOf.get(fromBox.value), keep = toBox.value, opts = optionsOf(k ? all.filter((c) => c.kind === k && c.id !== fromBox.value) : all);
-    toBox.replaceChildren(...opts.map((o) => ui.h("option", { value: o.value }, o.label)));
-    toBox.value = opts.some((o) => o.value === keep) ? keep : "";
+    const k = kindOf.get(fromBox.value), keep = toBox.value, list = k ? all.filter((c) => c.kind === k && c.id !== fromBox.value) : all;
+    toBox.replaceChildren(...drawn(list));
+    toBox.value = list.some((c) => c.id === keep) ? keep : "";
   });
   for (const box of f.querySelectorAll("select")) box.addEventListener("change", say);
   const actions = f.querySelector(".form-actions");

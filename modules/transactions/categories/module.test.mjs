@@ -889,3 +889,88 @@ test("gap next-60 #16 S11 combine on the page: the count as the picks change, a 
   // the empty plan has nothing filed: no part
   assert.equal((await catPage(emptyPlan())).root.querySelectorAll("details").some((d) => d.dataset?.part === "merge"), false);
 });
+
+// ---------------------------------------------------------------- leftovers of the rechecks (y2, 2026-11-16)
+// (a) "Combine two categories": the first picker listed every category with spending and income mixed (28 for the family);
+// it is grouped by kind now, the way "Into" is filtered by the first pick's kind.
+/** A picker as the page draws it: "Pick one...", then each group's heading with its categories' ids, or a bare id. */
+const pickerShape = (box) => box.children.map((c) => (c.tagName === "OPTGROUP" ? [c.getAttribute("label"), c.children.map((o) => o.getAttribute("value"))] : c.getAttribute("value")));
+test("y2 (a) Combine two categories: the first picker shows Spending, then Income, each with its own kind; Into the same until a pick", async () => {
+  const p = coffeePlan();
+  // a category of the person's own added after the income ones: it goes with the spending ones
+  p.categories.push({ id: "tea", label: "Tea", icon: "🍵", kind: "expense" }, { id: "tips", label: "Tips", icon: "💵", kind: "income" });
+  const d = compute(p), of = (k) => d.categories.filter((c) => !c.hidden && c.kind === k).map((c) => c.id);
+  assert.ok(of("expense").includes("tea") && of("income").includes("tips"));
+  const r = await catPage(p);
+  const part = r.root.querySelectorAll("details").find((x) => x.dataset?.part === "merge"), f = part.querySelector("form");
+  const from = f.querySelector('[name="from"]'), into = f.querySelector('[name="to"]');
+  const both = ["", ["Spending", of("expense")], ["Income", of("income")]];
+  assert.deepEqual(pickerShape(from), both, "Pick one..., then the spending ones, then the income ones");
+  assert.deepEqual(pickerShape(into), both, "Into lists both, grouped the same, until the first is picked");
+  assert.ok(!of("expense").concat(of("income")).includes("transfer"), "never the transfer kind");
+  assert.equal(r.textOf(from.querySelectorAll("option")[0]), "Pick one...");
+  // a pick: Into lists only its kind (critic P1, as before), with no heading over a list of one kind
+  from.value = "tea"; from.dispatch("change");
+  assert.deepEqual(pickerShape(into), ["", ...of("expense").filter((id) => id !== "tea")]);
+  from.value = "tips"; from.dispatch("change");
+  assert.deepEqual(pickerShape(into), ["", ...of("income").filter((id) => id !== "tips")]);
+  // back to "Pick one...": both, grouped again
+  from.value = ""; from.dispatch("change");
+  assert.deepEqual(pickerShape(into), both);
+  // the first picker never changes as the picks do
+  assert.deepEqual(pickerShape(from), both);
+  // a pick still saves as before (the grouping is only how the list is shown)
+  from.value = "tea"; from.dispatch("change"); into.value = "coffee"; into.dispatch("change");
+  await withConfirm(true, async () => { f.dispatch("submit"); });
+  assert.equal(r.saved.length, 1);
+  assert.equal(r.saved[0].categories.some((c) => c.id === "tea"), false, "Tea moved into Coffee");
+});
+
+// (a) invariance: with nothing new typed, every household's Categories page reads as at 398a01e outside the Combine part, and
+// the Combine pickers list the same categories (only grouped). Written with PRINT_Y2=1 on 398a01e's code.
+test("y2 (a) invariance: the page's words outside Combine two categories, and the pickers' categories, are those of 398a01e", async () => {
+  const fs = await import("node:fs"), nodeCrypto = await import("node:crypto");
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js"), fmt = await import("../../../core/format.js");
+  const { render } = await import("./view.js");
+  const file = new URL("./y2-invariance.json", import.meta.url);
+  const digest = (x) => nodeCrypto.createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x)).digest("base64url").slice(0, 22);
+  const now = {};
+  for (const { name, plan } of await invariancePlans()) {
+    const root = new FakeElement("main");
+    render(root, { ui, fmt: { ...fmt, today: () => T16 }, plan, route: { rest: [] }, store: { get: () => plan, update: () => {} } });
+    const merge = root.all().find((e) => e.tagName === "DETAILS" && e.dataset?.part === "merge");
+    const picks = merge ? merge.all().filter((e) => e.tagName === "SELECT").map((s) => s.all().filter((o) => o.tagName === "OPTION").map((o) => `${o.getAttribute("value")}=${textOf(o)}`).sort()) : null;
+    merge?.remove();
+    now[name] = { page: digest(textOf(root)), picks: digest(picks) };
+  }
+  if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(was).length >= 30, `${Object.keys(was).length} households`);
+  assert.deepEqual(Object.keys(now), Object.keys(was));
+  for (const name of Object.keys(was)) assert.deepEqual(now[name], was[name], name);
+});
+// (a) fix round (critic F1): a category whose stored kind is neither spending nor income (malformed data; the page cannot make one)
+// was listed in neither picker once both kinds had their heading. It is listed under "Other kinds", after them, and can still be
+// picked ("Other kinds", not "Other": that is a built-in income category's name).
+test("y2 (a) fix F1: a category of an unknown kind is listed under Other kinds in both pickers, never dropped", async () => {
+  const p = coffeePlan();
+  p.categories.push({ id: "odd", label: "Odd", icon: "❔", kind: "bogus" });
+  const d = compute(p), of = (k) => d.categories.filter((c) => !c.hidden && c.kind === k).map((c) => c.id);
+  assert.deepEqual(of("bogus"), ["odd"], "compute keeps the stored kind as it is");
+  const r = await catPage(p);
+  const part = r.root.querySelectorAll("details").find((x) => x.dataset?.part === "merge"), f = part.querySelector("form");
+  const from = f.querySelector('[name="from"]'), into = f.querySelector('[name="to"]');
+  const both = ["", ["Spending", of("expense")], ["Income", of("income")], ["Other kinds", ["odd"]]];
+  assert.deepEqual(pickerShape(from), both, "Spending, Income, then Other kinds");
+  assert.deepEqual(pickerShape(into), both);
+  // every category the flat list had is in a picker once
+  const listed = from.all().filter((e) => e.tagName === "OPTION").map((o) => o.getAttribute("value")).filter(Boolean);
+  assert.deepEqual([...listed].sort(), d.categories.filter((c) => !c.hidden && c.kind !== "transfer").map((c) => c.id).sort());
+  // picked: Into lists only its kind (none other here), bare
+  from.value = "odd"; from.dispatch("change");
+  assert.deepEqual(pickerShape(into), [""]);
+  // a spending pick: Into lists spending only, as before (the odd one is of no kind it can join)
+  from.value = "coffee"; from.dispatch("change");
+  assert.deepEqual(pickerShape(into), ["", ...of("expense").filter((id) => id !== "coffee")]);
+});
