@@ -4,8 +4,9 @@
 //   minimumTaxStep  known.js's last step: puts `amt` on the return when the minimum tax applies (or a spread is typed), so
 //                   the year's tax, every tax page that reads it and the next dollar's cost count it; otherwise it hands
 //                   back the very same inputs, and every figure is what it was.
-//   summary         what the page shows inside "How this is worked out": the case, the figures, what pushes it.
-//   sentence, pushSentence, rowsOf, howSays   the words, one written sentence per case (docs/OPTIONAL.md R5).
+//   summary         what the page shows inside "N more numbers": the case, the figures, what pushes it.
+//   MT_LEAD, sentence, pushSentence, rowsOf, returnRows, howSays, heroLine, optionsLine   the words, one written sentence
+//                   per case (docs/OPTIONAL.md R5); on screen it is "a second tax check (the alternative minimum tax)".
 // README "The other way the tax is worked out (minimum tax)".
 import { federalTax, minimumTaxOn } from "../../../core/math/tax.js";
 import { itemizedTotal } from "./compute.js";
@@ -129,63 +130,78 @@ export function summary(plan, k) {
   return { ...m, case: kase, year: k.year, returns: null };
 }
 
-/** The sentence under the heading, one written per case. */
+/** What the second check is, in one sentence: the lead under the heading (critic t1 F2: nothing said what it is). */
+export const MT_LEAD = "The IRS works your tax out a second way that allows fewer deductions, and you pay whichever is more.";
+/** The heading of the section inside "N more numbers". */
+export const MT_HEADING = "A second tax check (the alternative minimum tax)";
+
+/** The sentence after the lead, one written per case. */
 export function sentence(s, money = fmtInt) {
   if (!s) return "";
-  if (s.case === "under") return `The minimum tax does not apply: the income it counts, ${money(Math.max(0, s.amti))}, is under the ${money(s.exemption)} it leaves untaxed.`;
-  if (s.case === "even") return `The minimum tax does not apply: worked out this other way, the tax would be ${money(s.tentative)}, the same as worked out the usual way.`;
-  if (s.case === "below") return `The minimum tax does not apply: worked out this other way, the tax would be ${money(s.tentative)}, less than the ${money(s.regular)} worked out the usual way.`;
-  if (s.case === "applies") return `The minimum tax adds ${money(s.amt)} to your tax: worked out this other way, the tax is ${money(s.tentative)}, more than the ${money(s.regular)} worked out the usual way.`;
-  if (s.case === "separate-none") return "The minimum tax does not apply to either return: worked out this other way, each return's tax is no more than the usual way.";
-  if (s.case === "separate-one") return `The minimum tax adds ${money(s.amt)} to your tax: worked out this other way, ${s.name ? W.nameOf(s.name) : "one"} return's tax is ${money(s.tentative)}, more than the ${money(s.regular)} worked out the usual way.`;
-  if (s.case === "separate-both") return `The minimum tax adds ${money(s.amt)} to your tax: worked out this other way, each return's tax is more than the usual way.`;
+  if (s.case === "under") return `It adds nothing for you: this check counts ${money(Math.max(0, s.amti))} of your income, under the ${money(s.exemption)} it leaves untaxed.`;
+  if (s.case === "even") return `It adds nothing for you: worked out this second way, the tax would be ${money(s.tentative)}, the same as the usual way.`;
+  if (s.case === "below") return `It adds nothing for you: worked out this second way, the tax would be ${money(s.tentative)}, less than the ${money(s.regular)} worked out the usual way.`;
+  if (s.case === "applies") return `It adds ${money(s.amt)} to your tax: worked out this second way, the tax is ${money(s.tentative)}, more than the ${money(s.regular)} worked out the usual way.`;
+  if (s.case === "separate-none") return "It adds nothing to either return: worked out this second way, each return's tax is no more than the usual way.";
+  if (s.case === "separate-one") return `It adds ${money(s.amt)} to your tax: worked out this second way, ${s.name ? W.nameOf(s.name) : "one"} return's tax is ${money(s.tentative)}, more than the ${money(s.regular)} worked out the usual way.`;
+  if (s.case === "separate-both") return `It adds ${money(s.amt)} to your tax: worked out this second way, each return's tax is more than the usual way.`;
   return "";
 }
 
 /** What pushes it, one written sentence per kind; "" when it does not apply or no one figure makes most of it. */
 export function pushSentence(s, money = fmtInt) {
   if (!s || !(s.amt >= 0.5)) return "";
-  if (s.push === "options") return `It comes mostly from the ${money(s.preference)} spread on the incentive stock options you exercised, which only this tax counts.`;
-  if (s.push === "salt") return `It comes mostly from the ${money(s.addBack)} of state and local taxes you deduct, which this tax does not allow.`;
-  if (s.push === "income") return `It comes mostly from income over ${money(s.phaseOutStart)}, which takes away ${money(s.exemptionFull - s.exemption)} of the ${money(s.exemptionFull)} this tax leaves untaxed.`;
-  if (s.push === "standard") return `It comes mostly from the ${money(s.addBack)} standard deduction, which this tax does not allow.`;
-  if (s.push === "senior") return `It comes mostly from the ${money(s.senior)} deduction for people 65 and over, which this tax does not allow.`;
+  if (s.push === "options") return `It comes mostly from the ${money(s.preference)} gain on the incentive stock options you exercised, which only this check counts.`;
+  if (s.push === "salt") return `It comes mostly from the ${money(s.addBack)} of state and local taxes you deduct, which this check does not allow.`;
+  if (s.push === "income") return `It comes mostly from income over ${money(s.phaseOutStart)}, which takes away ${money(s.exemptionFull - s.exemption)} of the ${money(s.exemptionFull)} this check leaves untaxed.`;
+  if (s.push === "standard") return `It comes mostly from the ${money(s.addBack)} standard deduction, which this check does not allow.`;
+  if (s.push === "senior") return `It comes mostly from the ${money(s.senior)} deduction for people 65 and over, which this check does not allow.`;
   return "";
 }
 
 const WHO = { single: "a single person", head_of_household: "a single person", married_joint: "a married couple filing together", qualifying_surviving: "a married couple filing together", married_separate: "a married person filing separately" };
 
-/** The figures as rows [{ label, amount, sub }] for one return's figures `s` (not for "under": the sentence says it all). */
+/**
+ * The working as rows [{ label, amount, sub }] for one return's figures `s`, only when the check adds to the tax (critic t1
+ * F1: a household it adds nothing for reads the sentence alone, which already holds both figures). The taxable income is
+ * in the sub of "Income this check counts", not a row of its own (it is the tile just above).
+ */
 export function rowsOf(s, money = fmtInt) {
-  if (!s || s.case === "under") return [];
+  if (!s || !(s.amt >= 0.5)) return [];
   const cents = `${Math.round(s.phaseOutRate * 100)} cents`;
+  const added = [s.addBack >= 0.5, s.senior >= 0.5, s.preference >= 0.5].filter(Boolean).length;
   return [
-    s.line1b >= 0 ? { label: "Taxable income", amount: s.line1b, sub: "worked out the usual way" } : { label: "Deductions over income", amount: s.line1b, sub: "the usual way leaves nothing to tax" },
-    s.addBack >= 0.5 ? { label: s.addBackKind === "standard" ? "Standard deduction added back" : "State and local taxes added back", amount: s.addBack, sub: "this tax does not allow it" } : null,
-    s.senior >= 0.5 ? { label: "Deduction for 65 and over added back", amount: s.senior, sub: "this tax does not allow it" } : null,
-    s.preference >= 0.5 ? { label: "Incentive stock options", amount: s.preference, sub: "the spread on the options you exercised, which only this tax counts" } : null,
-    { label: "Income this tax counts", amount: s.amti, sub: "" },
-    { label: "Left untaxed", amount: -s.exemption, sub: s.exemption < s.exemptionFull - 0.5 ? `${money(s.exemptionFull)} for ${WHO[s.status] ?? WHO.single}, less ${cents} for each dollar over ${money(s.phaseOutStart)}` : `${money(s.exemptionFull)} for ${WHO[s.status] ?? WHO.single}` },
-    { label: "Tax worked out this other way", amount: s.tentative, sub: `26% up to ${money(s.line28)} of what is left, 28% above${s.qualified >= 0.5 ? "; dividends and long-term gains at their usual rates" : ""}` },
-    { label: "Tax worked out the usual way", amount: s.regular, sub: "the income tax above, before credits" },
-    { label: "Minimum tax", amount: s.amt, sub: s.amt >= 0.5 ? "the first less the second: added to your tax" : "none: the usual way is no less" },
+    s.addBack >= 0.5 ? { label: "Deductions this check does not allow", amount: s.addBack, sub: s.addBackKind === "standard" ? "the standard deduction" : "the state and local taxes you deduct" } : null,
+    s.senior >= 0.5 ? { label: "Deduction for 65 and over", amount: s.senior, sub: "not allowed in this check either" } : null,
+    s.preference >= 0.5 ? { label: "Gain on the options", amount: s.preference, sub: "incentive stock options you exercised and kept: only this check counts it" } : null,
+    { label: "Income this check counts", amount: s.amti, sub: `${s.line1b >= 0 ? `your taxable income, ${money(s.line1b)}` : `your deductions over income, ${money(s.line1b)}`}${added ? `, with the ${added === 1 ? "figure" : "figures"} above added` : ""}` },
+    { label: "Not taxed in this check", amount: -s.exemption, sub: s.exemption < s.exemptionFull - 0.5 ? `${money(s.exemptionFull)} for ${WHO[s.status] ?? WHO.single}, less ${cents} for each dollar over ${money(s.phaseOutStart)}` : `${money(s.exemptionFull)} for ${WHO[s.status] ?? WHO.single}` },
+    { label: "Tax worked out this second way", amount: s.tentative, sub: `26% up to ${money(s.line28)} of what is left, 28% above${s.qualified >= 0.5 ? "; dividends and long-term gains at their usual rates" : ""}` },
+    { label: "Tax worked out the usual way", amount: s.regular, sub: "your income tax, before credits" },
+    { label: "Added to your tax", amount: s.amt, sub: "the first less the second" },
   ].filter(Boolean);
 }
 
-/** Filing separately, one row per return: [{ label, amount (its minimum tax), sub }]. */
+/** Filing separately, one row per return when the check adds to either: [{ label, amount (what it adds), sub }]. */
 export function returnRows(s, money = fmtInt) {
-  return (s?.returns ?? []).map((x) => ({ label: `${x.name ? W.NameOf(x.name) : "Spouse's"} minimum tax`, amount: x.amt,
-    sub: `income this tax counts ${money(Math.max(0, x.amti))}; worked out this other way ${money(x.tentative)}, the usual way ${money(x.regular)}` }));
+  if (!s || !(s.amt >= 0.5)) return [];
+  return (s.returns ?? []).map((x) => ({ label: `${x.name ? W.NameOf(x.name) : "Spouse's"} return`, amount: x.amt,
+    sub: `${x.amt >= 0.5 ? "added to its tax" : "adds nothing"}: this check counts ${money(Math.max(0, x.amti))} of its income; worked out this second way ${money(x.tentative)}, the usual way ${money(x.regular)}` }));
 }
 
-/** The status of "How this is worked out" when the minimum tax applies ("minimum tax $16,840"); null otherwise (the steps as before). */
+/** The status of "N more numbers" when the check adds to the tax ("second check $16,840"); null otherwise (as before). */
 export function howSays(s, money = fmtInt) {
   if (!s || !(s.amt >= 0.5)) return null;
-  const said = `minimum tax ${money(s.amt)}`;
-  return said.length <= 20 ? said : "with a minimum tax";
+  const said = `second check ${money(s.amt)}`;
+  return said.length <= 20 ? said : "second tax check";
+}
+
+/** The one line in the answer when the check adds to the tax (critic t1 F3: the headline jumped with no reason in sight); "" otherwise. */
+export function heroLine(s, money = fmtInt) {
+  return s && s.amt >= 0.5 ? `Your tax includes ${money(s.amt)} from a second tax check (the alternative minimum tax).` : "";
 }
 
 /** The line about the box, for a plan with incentive options on Equity compensation and no spread typed for `year`; "" otherwise. */
 export function optionsLine(plan, year) {
-  return hasIsoGrants(plan) && !isoSpreadOf(plan, year) ? "Exercised incentive stock options this year and kept the shares? Type the spread under Figures the plan cannot see. Equity compensation shows how much you can exercise before this tax starts." : "";
+  return hasIsoGrants(plan) && !isoSpreadOf(plan, year) ? `Exercised incentive stock options in ${year} and kept the shares? The gain on them counts in this check. Equity compensation shows how much you can exercise before it adds tax.` : "";
 }

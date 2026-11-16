@@ -102,6 +102,6 @@ test("Your plan: a money that only just lasts reads as one phrase inside In shor
 
 test("l007: what the federal estimate counts and what it leaves out are two sentences", async () => {
   const t = await text("taxes/federal");
-  assert.match(t, /It counts the child tax credit and the child care credit\. It leaves out the alternative minimum tax, the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax\./);
+  assert.match(t, /It counts the child tax credit, the alternative minimum tax and the child care credit\. It leaves out the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax\./);
   assert.ok(!t.includes("; it leaves out"));
 });

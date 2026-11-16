@@ -2,8 +2,9 @@
 // (what happens in April, or what is overdue now), one sentence with the year's tax and what is already being paid toward
 // it, and the page's one action. Then five quiet rows: "N more numbers" (the rates and the taxable income), the three
 // forms ("Figures the plan cannot see", with what the plan already knows under its boxes; "Itemized deductions"; "Year and
-// people") and "How this is worked out" (the walk, what the estimate leaves out, where the tables come from); then "More
-// on this". Empty boxes (smart guesses C11): "Federal tax withheld so far" shows in gray what an empty box already counts
+// people") and "How this is worked out" (the walk, what the estimate leaves out, where the tables come from); then "More on
+// this". The alternative minimum tax ("a second tax check") sits in "N more numbers"; when it adds to the tax the answer says
+// so in one line. Empty boxes (smart guesses C11): "Federal tax withheld so far" shows in gray what an empty box already counts
 // (the paychecks so far); the itemized boxes name the plan's own figures in their help, and when itemizing those would pay,
 // the first view says how much (blanks.js).
 import { compute, ratePct } from "./compute.js";
@@ -14,6 +15,7 @@ import { compute as computeEstimated } from "../estimated/compute.js";
 import { FILING_STATUSES } from "../../../core/math/tax.js";
 import { isYou, nameIn, nameOf, NameOf, verbFor } from "../../../core/words.js";
 import { parts, links } from "../../../core/ui/more.js";
+import { summary as minimumTaxSummary, sentence as mtSentence, pushSentence, rowsOf as mtRows, returnRows as mtReturnRows, howSays, heroLine, optionsLine, isoSpreadOf, MT_LEAD, MT_HEADING } from "./minimum-tax.js";
 
 // what the last save was, kept for the redraw the shell makes after it: { part (the part saved in, or null), said, head
 // (the headline then), total (the tax then) }. The saved part stays open with its green line (R17); the line names the
@@ -136,14 +138,21 @@ export function render(root, ctx) {
   // the care credit itself covers all the income tax only when it is held to it; otherwise (Lee: 2,100 of care credit on 2,148
   // of tax) it is the credits together, the child tax credit's refundable part already at its most (Review 2026-11-06, verifier)
   const careCoversAll = r.credits.careCredit >= r.incomeTax - 0.5;
+  // the minimum tax (the second tax check) in force: the next dollar costs its rate (26% or 28%, more while its exemption shrinks), not the bracket's
+  const mtRate = (Number(r.minimumTax?.amt) || 0) >= 0.5 && k.nextDollar > r.bracketRate + 0.005;
   const why = k.careSets === "covers"
     ? (cents === 0 ? (careCoversAll ? "the child care credit is more than the tax, so it covers the tax on more pay too" : "with the child care credit, your credits are more than the tax, so they cover the tax on more pay too") : `less than the ${fmt.pct(r.bracketRate, 0)} rate: the child care credit covers part of the tax on more pay`)
     : k.careSets === "falls" || k.careFalls ? `the ${fmt.pct(r.bracketRate, 0)} rate, and the child care credit getting smaller`
     // more than the bracket: each dollar also pulls Social Security (or gains at the 0% rate) into tax, as the tile says
+    : mtRate ? `the second tax check's rate, not the ${fmt.pct(r.bracketRate, 0)} bracket`
     : k.nextDollar > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} rate: ${r.income.socialSecurity > 0 ? "each dollar also makes more of your Social Security taxed" : "each dollar pulls other income into tax"}`
     : `the ${fmt.pct(r.bracketRate, 0)} rate${Number.isFinite(r.roomInBracket) ? `, ${money(r.roomInBracket)} of room left before it goes up` : ""}`;
   // credits worth more than the tax: the tax is below zero and the rest comes back (the walk's last line says the same)
   const negative = total < -0.5;
+  // the alternative minimum tax (gap list, next 60, item 29): what "N more numbers" shows of it, and, when it adds to the tax,
+  // one line in the answer that says where the jump comes from (critic t1 F3)
+  const mt = hasIncome ? minimumTaxSummary(plan, k) : null;
+  const mtLine = heroLine(mt, money);
   // the page's one action: the paychecks (Withholding check) or, with no pay, Estimated payments; filled when there is a
   // bill to fix, outlined when it is about right; nothing to plan with no pay and no bill (opt spec 6.1: no "See the
   // estimated payments" when nothing is owed)
@@ -153,6 +162,7 @@ export function render(root, ctx) {
   root.append(ui.h("section", { class: "card accent hero" },
     ui.h("h1", {}, head),
     ui.h("p", { class: "lede" }, answer.lede),
+    mtLine ? ui.h("p", { dataset: { mt: "" }, style: { margin: "0" } }, mtLine) : null,
     // nothing earned on file: one box and one filled button instead of four $0 tiles (stress test A8, T3)
     hasIncome ? null : quickPay(ctx, remember),
     action ? ui.row(action) : null,
@@ -197,13 +207,17 @@ export function render(root, ctx) {
     noPay && full.se ? ui.stat("On the next dollar", fmt.pct(full.se.nextDollar, 0), `of business profit: the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions`)
       : ui.stat("On the next dollar", fmt.pct(k.nextDollar, 0), k.careSets === "covers" ? (cents === 0 && !careCoversAll ? "the credits cover it" : "the child care credit covers it")
         : k.careSets === "falls" || k.careFalls ? `the ${fmt.pct(r.bracketRate, 0)} rate, and a smaller child care credit`
+        : mtRate ? `the second tax check's rate, not the ${fmt.pct(r.bracketRate, 0)} bracket`
         : k.nextDollar > r.bracketRate + 0.005 ? `more than the ${fmt.pct(r.bracketRate, 0)} rate: benefits or gains get pulled along` : `the ${fmt.pct(r.bracketRate, 0)} rate`),
     ui.stat("Taxable income", money(r.taxableIncome), `after ${money(r.deduction.amount + (Number(r.deduction.qbi) || 0))} of deductions${Number(r.deduction.qbi) >= 0.5 ? ", the business one included" : ""}`),
     full.se ? ui.stat("Self-employment tax", money(full.se.tax), "Social Security and Medicare on the business, in the tax above") : null,
   ].filter(Boolean) : [];
-  const numbers = hasIncome && tiles.length ? { id: "numbers", kind: "more", n: tiles.length, noun: "numbers", one: "number", body: () => [ui.row(...tiles),
-    ui.h("p", { class: "muted small", style: { margin: "0" } }, `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${full.se ? ` It includes ${money(full.se.tax)} of self-employment tax on the business.` : ""}`)] } : null;
-  const figures = figuresPart(ctx, { owes, hasIncome, open: just?.part === "figures", green: saved("figures"), remember, known: hasIncome ? knownBody(ctx, { d, k, statusLabel, money }) : null });
+  // the alternative minimum tax, after the rates: the page's five parts are full (R12); the row's status names it only when it
+  // adds to the tax, so every other household's first view is as it was
+  const numbers = hasIncome && tiles.length ? { id: "numbers", kind: "more", n: tiles.length, noun: "numbers", one: "number", says: howSays(mt, money) ?? "", body: () => [ui.row(...tiles),
+    ui.h("p", { class: "muted small", style: { margin: "0" } }, `${statusLabel}, ${money(r.income.gross)} of income. ${negative ? "The credits are more than the tax, so the rest comes back with the refund" : `That is ${ratePct(full.rate)} of it overall`}; ${noPay && full.se ? `the next dollar the business makes costs ${Math.round(full.se.nextDollar * 100)} cents (the ${fmt.pct(r.bracketRate, 0)} rate and self-employment tax, less its deductions)` : `the next dollar ${r.separate ? earnsWords(r) : "you earn"} costs ${cents} cents (${why})`}.${full.se ? ` It includes ${money(full.se.tax)} of self-employment tax on the business.` : ""}`),
+    ...(mt ? minimumTaxBody(ctx, mt, money, { year: d.year, toBox: () => toIsoBox(root, ui) }) : [])] } : null;
+  const figures = figuresPart(ctx, { year: d.year, owes, hasIncome, open: just?.part === "figures", green: saved("figures"), remember, known: hasIncome ? knownBody(ctx, { d, k, statusLabel, money }) : null });
   const itemized = deductionsPart(ctx, d, r, { open: just?.part === "itemized", green: saved("itemized"), remember, own });
   const year = yearPart(ctx, d, { open: just?.part === "year", green: saved("year"), remember });
   const how = { id: "how", kind: "how", says: hasIncome ? `${full.steps.length} steps` : "sources", body: () => howBody(ctx, { d, full, rets: r.separate, hasIncome, money }) };
@@ -246,6 +260,45 @@ function quickPay(ctx, remember) {
  * out, and where the tables come from. (What the plan already knows sits under the boxes that replace it, in "Figures the
  * plan cannot see": with it here the part was 1,644 px open for the family, over R15's 1,300.)
  */
+/** Rows of { label, amount, sub } as records (the walk's, the minimum tax's); `bold` names the row whose figure is the total. */
+function records(ui, money, rows, bold = null) {
+  return ui.h("ul", { class: "records" }, rows.map((s) => ui.h("li", {},
+    ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === bold ? { fontWeight: 700 } : null }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
+    s.sub ? ui.h("div", { class: "rec-sub" }, s.sub) : null)));
+}
+
+/**
+ * "A second tax check (the alternative minimum tax)", in "N more numbers" (gap list, next 60, item 29): what the check is in
+ * one sentence, then the sentence for the case and what pushes it; the working as rows only when it adds to the tax (critic
+ * t1 F1: a household it adds nothing for reads the two sentences alone); with incentive options on Equity compensation and
+ * no gain typed for the year, the line about the box and an outlined button that opens it (critic t1 F4: it was three folds
+ * deep and the line was no link). Its rarer parts left out and its sources are builder details: the README (How keeps its
+ * height to the pixel; its sources line already names the revenue procedures the check's figures are in).
+ * In this part, not in "How this is worked out": the page's five parts are full (R12) and the working is already near its
+ * 1,300 px when open (R15).
+ */
+function minimumTaxBody(ctx, mt, money, { year, toBox }) {
+  const { ui, plan } = ctx;
+  const rows = mt.returns ? mtReturnRows(mt, money) : mtRows(mt, money);
+  const line = optionsLine(plan, year);
+  return [ui.h("h3", {}, MT_HEADING),
+    ui.h("p", { style: { margin: "0" } }, [MT_LEAD, mtSentence(mt, money), pushSentence(mt, money)].filter(Boolean).join(" ")),
+    rows.length ? records(ui, money, rows, "Added to your tax") : null,
+    line ? ui.h("p", { class: "muted small", style: { margin: "0" } }, line) : null,
+    line ? ui.row(ui.button("Type the gain on them", toBox, { class: "secondary", dataset: { iso: "" } })) : null,
+    line ? ui.h("a", { class: "small", href: "#/career/equity", style: { display: "inline-flex", alignItems: "center", minHeight: "44px", justifySelf: "start" } }, "See Equity compensation ›") : null];
+}
+
+/** "Type the gain on them": opens "Figures the plan cannot see" and its "More details (optional)", brings the box under the
+ * top bar and puts the cursor in it. Opening changes nothing in the plan; a part a script opens is never remembered. */
+function toIsoBox(root, ui) {
+  const box = root?.querySelector?.('[data-part="figures"] [name="isoSpread"]');
+  if (!box) return;
+  for (let d = box.closest?.("details:not([open])"); d; d = d.parentNode?.closest?.("details:not([open])")) d.open = true;
+  ui.reveal?.(box.closest?.(".field") ?? box.closest?.("label") ?? box, { block: "start" });
+  try { box.focus?.({ preventScroll: true }); } catch { box.focus?.(); }
+}
+
 function howBody(ctx, { d, full, rets, hasIncome, money }) {
   const { ui, fmt } = ctx;
   const out = [];
@@ -266,13 +319,10 @@ function howBody(ctx, { d, full, rets, hasIncome, money }) {
           ui.h("div", { class: "rec-sub" }, `${money(gross)} of income, ${money(taxable)} taxed after ${money(ded.amount + (ded.qbi || 0) + half)} of deductions${ded.used === "itemized" ? " (itemized)" : ""}${[ded.qbi >= 0.5 ? `the 20% business deduction (${money(ded.qbi)})` : null, half >= 0.5 ? `half the self-employment tax (${money(half)})` : null].filter(Boolean).map((t, i) => `${i ? " and " : ", including "}${t}`).join("")}; the ${fmt.pct(bracket, 0)} bracket${se >= 0.5 ? `; with the business on this return: ${money(o.incomeTax)} of income tax and ${money(se)} of self-employment tax` : ""}`)); })));
   }
   if (hasIncome) {
-    out.push(ui.h("h3", {}, "From income to tax"),
-      ui.h("ul", { class: "records" }, full.steps.map((s) => ui.h("li", {},
-        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, s.label), ui.h("span", { class: "rec-value", style: s.label === "Federal tax" ? { fontWeight: 700 } : null }, s.amount < -0.005 ? `−${money(-s.amount)}` : money(Math.abs(s.amount) < 0.005 ? 0 : s.amount))),
-        s.sub ? ui.h("div", { class: "rec-sub" }, s.sub) : null))));
+    out.push(ui.h("h3", {}, "From income to tax"), records(ui, money, full.steps, "Federal tax"));
   }
   out.push(ui.h("h3", {}, "What this leaves out"),
-    ui.h("p", { class: "muted small" }, `An estimate laid out like Form 1040, not tax advice. It counts the child tax credit and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}. It leaves out the alternative minimum tax, ${full.se ? "" : "the business deduction, "}the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax.`),
+    ui.h("p", { class: "muted small" }, `An estimate laid out like Form 1040, not tax advice. It counts the child tax credit, the alternative minimum tax and ${d.filingStatus === "married_separate" ? "no child care credit (a separate return gets none, unless you lived apart from your spouse for the last six months of the year)" : "the child care credit"}. It leaves out ${full.se ? "" : "the business deduction, "}the earned income and education credits, the credit for caring for an adult who cannot look after themselves, and state tax.`),
     ui.h("h3", {}, "Where the tables come from"),
     ui.h("p", { class: "muted small" }, "Brackets and deductions: the IRS's yearly tables (Revenue Procedures 2023-34 for 2024, 2024-40 for 2025 and 2025-32 for 2026) with the 2025 tax law's changes. The Social Security pay limit comes from the Social Security Administration. Later years grow with inflation from the last table; the limits the law fixes in dollars stay put."));
   return out;
@@ -297,9 +347,9 @@ function knownBody(ctx, { d, k, statusLabel, money }) {
 }
 
 /** "Figures the plan cannot see": the box the tax guide asks for first ("Federal tax withheld so far") with its Save in
- * sight, the other eight under "More details (optional)" (R13; the guide step opens this part by its title); then the green
+ * sight, the other nine under "More details (optional)" (R13; the guide step opens this part by its title); then the green
  * line of its save, then what the plan already knows (the figures a box left blank uses). */
-function figuresPart(ctx, { owes, hasIncome, open, green, remember, known }) {
+function figuresPart(ctx, { year, owes, hasIncome, open, green, remember, known }) {
   const { ui, store, plan, fmt } = ctx;
   const ty = plan.taxes?.thisYear ?? {};
   // the gray figure in the empty "withheld so far" box: what the paychecks took out by today, which an empty box already counts
@@ -320,12 +370,20 @@ function figuresPart(ctx, { owes, hasIncome, open, green, remember, known }) {
     { key: "taxExemptInterest", label: "Tax-exempt interest", type: "money", min: 0, more: true, help: "municipal bonds; counts toward Social Security taxation only" },
     { key: "socialSecurity", label: "Social Security benefits this year", type: "money", min: 0, more: true, help: "leave blank to use the Income page" },
     { key: "adjustments", label: "Other adjustments", type: "money", min: 0, more: true, help: "educator expenses and the like; student loan interest is worked out from Debts (a figure here replaces it), IRA and HSA contributions from their pages" },
+    // the spread on incentive stock options exercised this year and kept (Form 6251 line 2i): only the minimum tax counts it,
+    // and only for the year it is typed for (critic t1 M2); "the gain on them" on screen, with an example (critic t1 F4)
+    { key: "isoSpread", label: "Incentive stock options exercised this year", type: "money", min: 0, more: true, help: `the gain on them, for shares you still hold at year end: what they were worth the day you bought them less the price you paid (20,000 shares bought at $2 when worth $12: $200,000). Only the second tax check counts it, and only for ${year}` },
     { key: "paid", label: "Other payments", type: "money", min: 0, more: true, help: "quarterly payments are on the Estimated payments page" },
   ];
-  const values = { wages: ty.wages ?? null, iraWithdrawals: ty.iraWithdrawals ?? null, otherOrdinary: ty.otherOrdinary || null, qualifiedIncome: ty.qualifiedIncome || null, taxExemptInterest: ty.taxExemptInterest || null, socialSecurity: ty.socialSecurity ?? null, adjustments: ty.adjustments || null, withheld: ty.withheldTyped === true ? (ty.withheld ?? 0) : ty.withheld || null, paid: ty.paid || null };
+  const values = { wages: ty.wages ?? null, iraWithdrawals: ty.iraWithdrawals ?? null, otherOrdinary: ty.otherOrdinary || null, qualifiedIncome: ty.qualifiedIncome || null, taxExemptInterest: ty.taxExemptInterest || null, socialSecurity: ty.socialSecurity ?? null, adjustments: ty.adjustments || null, withheld: ty.withheldTyped === true ? (ty.withheld ?? 0) : ty.withheld || null, paid: ty.paid || null, isoSpread: isoSpreadOf(plan, year) || null };
   const form = ui.form(FIELDS, values, (v) => {
     remember("figures", "Figures saved.");
-    store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: v.wages ?? null, iraWithdrawals: v.iraWithdrawals ?? null, otherOrdinary: v.otherOrdinary ?? 0, qualifiedIncome: v.qualifiedIncome ?? 0, taxExemptInterest: v.taxExemptInterest ?? 0, socialSecurity: v.socialSecurity ?? null, adjustments: v.adjustments ?? 0, withheld: v.withheld ?? 0, withheldTyped: v.withheld !== null && v.withheld !== undefined, paid: v.paid ?? 0 }; });
+    store.update((p) => { p.taxes.thisYear = { ...(p.taxes.thisYear ?? {}), wages: v.wages ?? null, iraWithdrawals: v.iraWithdrawals ?? null, otherOrdinary: v.otherOrdinary ?? 0, qualifiedIncome: v.qualifiedIncome ?? 0, taxExemptInterest: v.taxExemptInterest ?? 0, socialSecurity: v.socialSecurity ?? null, adjustments: v.adjustments ?? 0, withheld: v.withheld ?? 0, withheldTyped: v.withheld !== null && v.withheld !== undefined, paid: v.paid ?? 0 };
+      // written with its year only when there is one, and taken off when the box is left blank: a plan without it reads as
+      // before. A gain kept for another year (the year set back to last year's return) stays until that year's box is cleared
+      const t = p.taxes.thisYear;
+      if (Number(v.isoSpread) > 0) { t.isoSpread = Number(v.isoSpread); t.isoSpreadYear = year; }
+      else if (!(Number(t.isoSpreadYear) > 0) || Number(t.isoSpreadYear) === year) { delete t.isoSpread; delete t.isoSpreadYear; } });
   }, { submitLabel: "Save figures" });
   refusedEnds(form, green);
   // a withdrawal typed as 0 is typed (none this year: it replaces the plan's)

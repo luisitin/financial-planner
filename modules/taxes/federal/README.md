@@ -601,11 +601,41 @@ $100, never folded, and its link).
 
 ## The other way the tax is worked out (minimum tax) (2026-11-16, gap list, next 60, item 29; map D8)
 
-**What the person gets.** The year's tax counts the alternative minimum tax for everyone, not only on Equity compensation's
-what-if of exercising options: the year's tax (and so the April answer, Withholding check, Estimated payments, Quick
-answers, Needs attention and the tax report) includes it when it applies, and the walk gains a row "Alternative minimum
-tax" after "Income tax" (Form 1040 line 17). The spread on incentive stock options exercised this year is read from
-`taxes.thisYear.isoSpread`.
+**What the person gets.** The year's tax now counts the alternative minimum tax for everyone, not only on Equity
+compensation's what-if of exercising options. On screen it is "a second tax check (the alternative minimum tax)". The
+year's tax (and so the April answer, Withholding check, Estimated payments, Quick answers, Needs attention and the tax
+report) includes it when it applies; then the answer card says so in one line under its sentence ("Your tax includes
+$61,106 from a second tax check (the alternative minimum tax).", critic t1 F3: the headline jumped tenfold with the reason
+two folds down) and the row "N more numbers" says it in its status ("second check $16,840", or "second tax check" past 20
+characters). For everyone it adds nothing for, the first view is as it was. Inside "N more numbers", after the rates: the
+heading "A second tax check (the alternative minimum tax)", one sentence on what it is ("The IRS works your tax out a
+second way that allows fewer deductions, and you pay whichever is more."), one written sentence for the case ("It adds
+nothing for you: this check counts $60,000 of your income, under the $90,100 it leaves untaxed."; "... worked out this
+second way, the tax would be $31,148, less than the $37,900 worked out the usual way."; "It adds $16,840 to your tax: ..."),
+one more for the figure that pushes it most (the gain on the options, the state and local taxes, income over the line where
+the exemption shrinks, the standard deduction, the deduction for 65 and over), and the working as rows only when it adds
+to the tax (critic t1 F1: nine rows of $0 working for every household; the taxable income is in the words of "Income this
+check counts", not a row repeating the tile above). The words are plain (F2): "Deductions this check does not allow",
+"Gain on the options", "Income this check counts", "Not taxed in this check", "Tax worked out this second way", "Added to
+your tax"; "the gain on them", never "spread". With incentive options on Equity compensation and no gain typed for the
+year: "Exercised incentive stock options in 2026 and kept the shares? The gain on them counts in this check. Equity
+compensation shows how much you can exercise before it adds tax." with an outlined "Type the gain on them" (it opens
+"Figures the plan cannot see" and its "More details (optional)", brings the box under the top bar and puts the cursor in
+it; opening changes nothing in the plan; critic t1 F4: the box was three folds deep and the pointer was no link) and "See
+Equity compensation ›". The walk in "How this is worked out" gains a row "Alternative minimum tax" after "Income tax" when
+it applies (Form 1040 line 17: "a second tax check: the tax worked out that way, $41,574, less the $24,734 above"). One new
+box, under "More details (optional)" in "Figures the plan cannot see": "Incentive stock options exercised this year"
+(`taxes.thisYear.isoSpread`, saved with `isoSpreadYear`), its help with an example: "the gain on them, for shares you still
+hold at year end: what they were worth the day you bought them less the price you paid (20,000 shares bought at $2 when
+worth $12: $200,000). Only the second tax check counts it, and only for 2026". A blank Save takes off that year's figure; one
+typed for another year stays (it counts for nothing in this one).
+
+**Where it sits, and why there.** The page already has five parts with income (R12 allows no sixth), and "How this is
+worked out" opens at 1,273 px for the family (R15: at most 1,300), so the section is in "N more numbers" (678 px open for
+the family with it, 1,171 px for the equity couple with a $250,000 gain, at 390); How keeps its height to the pixel
+(measured at 390 px for five households, before and after: 1,273 / 1,186 / 1,052 / 860 / 994). So what the check leaves out
+and its sources are here only (they were a paragraph under the section; How has no room for them, and its sources line
+already names the revenue procedures the check's figures are in).
 
 **Formulas** (`core/math/tax.js` `minimumTaxOn`, `minimumTax`; the step `minimum-tax.js` `minimumTaxStep`, known.js's last):
 - AMT income (Form 6251 line 4) = AGI - the deductions taken - the 20% business deduction (line 1b, may be below zero)
@@ -666,13 +696,14 @@ tax" after "Income tax" (Form 1040 line 17). The spread on incentive stock optio
 - The 2024 table is the Federal estimate's own (`data/amt.js`, beside Equity compensation's 2025 and 2026, which it re-uses).
 - The step puts `amt` on the return only when the minimum tax is 50 cents or more or a spread is typed, so a plan that owes
   none keeps the very same inputs object, and the next dollar's cost, every tax page and every figure are as before. With it
-  on, the next dollar costs the minimum tax's rate (26%, 28%, or 39% / 42% while the exemption shrinks).
+  on, the next dollar costs the minimum tax's rate (26%, 28%, or 39% / 42% while the exemption shrinks), and the tile and
+  the sentence under the rates say so ("the second tax check's rate, not the 24% bracket").
 - Under the 2026 caps the state and local taxes alone (at most $40,400) cannot bring the minimum tax for a single person or
   a couple on pay alone (the 22% and 24% brackets stay above 26% of what is left after the exemption); it comes with an
   exercise, a big long-term gain that takes the exemption away, or a separate return. The "couple with large state taxes"
   test shows this.
 
-**Left out**: interest on some local government bonds (private-activity bonds), depreciation and
+**Left out** (here only, see above): interest on some local government bonds (private-activity bonds), depreciation and
 other business items, net operating losses, the foreign tax credit, the credit for minimum tax paid in earlier years (Form
 8801), a child under the kiddie tax's exemption limit.
 
@@ -683,7 +714,10 @@ separate-return add-back (the instructions' own $660,200 example); a couple with
 property tax itemized (31,148 against 37,900: none, every row); $150,000 and a $100,000 spread ($16,840, the walk's row, the
 next dollar at 26%, Withholding check's year tax $41,574); two children and an exercise (line 18 and the child tax credit);
 the 65-and-over add-back; separate returns (Bo's $16,954); every sentence and push sentence; Equity compensation's `amt()`
-equal to the shared one and its room less a typed spread. `tests/minimum-tax-invariance.test.mjs`: over every invented plan, none owes it, `known()` and every
+equal to the shared one and its room less a typed spread; a spread counted only for its year (2026-12-31 against 2027-01-02,
+the year set back, Equity compensation's 2027 units); a null grant; the page (the answer's line, the row's status, the
+section with no rows when it adds nothing, the walk, the box with its example and year, its save and its removal, a figure
+for another year kept; the button that opens the box). `tests/minimum-tax-invariance.test.mjs`: over every invented plan, none owes it, `known()` and every
 compute that reaches the step (66 modules) are byte for byte the code before (`MINIMUM_TAX.on = false`). At build time, against
 a worktree at 7d9ca39: every module's compute on the 33 base plans and 37 tax pages on 1,419 household variants, none
 different (system/audit and system/backups stamp the time and differ between any two runs).
