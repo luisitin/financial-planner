@@ -60,10 +60,12 @@ const PRINT_IN_PLACE = `
 }`;
 
 /** The page's wrapper: scoped styles, a print button row, and the sheet the report is drawn into. */
-export function reportFrame(ui, { title, onPrint }) {
+export function reportFrame(ui, { title, onPrint, actions = [] }) {
   const sheet = ui.h("article", { class: "rp-sheet", "aria-label": title });
+  // `actions`: outlined links beside the print button, outside the sheet so they never print (the Retirement report's "Add what
+  // you own ›" when it can't say yet; whole-app sweep x3 fix round, critic P1)
   const wrap = ui.h("div", { class: "rp-root" }, ui.h("style", {}, REPORT_CSS + PRINT_IN_PLACE),
-    ui.h("div", { class: "row", style: { marginBottom: "12px" } }, ui.button("Print or save as PDF", () => (onPrint ? onPrint(sheet) : printSheet(title, sheet)))),
+    ui.h("div", { class: "row", style: { marginBottom: "12px" } }, ui.button("Print or save as PDF", () => (onPrint ? onPrint(sheet) : printSheet(title, sheet))), ...actions.filter(Boolean)),
     sheet);
   return { wrap, sheet };
 }
@@ -112,9 +114,11 @@ export const guessFoot = (ui) => ui.h("p", { class: "rp-sub", "data-guess-foot":
 
 /** Small builders for report content. */
 export const figs = (ui, items) => ui.h("div", { class: "rp-figs" }, items.filter(Boolean).map(([label, value, tone]) => ui.h("div", { class: `rp-fig${tone ? ` ${tone}` : ""}` }, ui.h("b", {}, value), ui.h("span", {}, label))));
-/** A wide table that becomes records on a phone: the first column is the record's title, the last its value, the rest a line under. The print copy always uses the table. */
+/** A wide table that becomes records on a phone: the first column is the record's title, the last its value, the rest a line under. The print copy always uses the table.
+ * The last column's `narrow(row)`, when given, is the record's value on a phone (a value that says what it is: "$1,000 left"). */
 export const wideTable = (ui, cols, rows) => {
-  const mid = cols.slice(1, -1), last = cols[cols.length - 1];
+  const mid = cols.slice(1, -1), last = { ...cols[cols.length - 1] };
+  if (last.narrow) last.get = last.narrow;
   const text = (v) => (v instanceof Node ? v.textContent : String(v ?? ""));
   return ui.h("div", {}, ui.h("div", { class: "only-wide" }, rtable(ui, cols, rows)),
     ui.h("ul", { class: "rp-recs only-narrow" }, rows.map((r) => ui.h("li", {}, ui.h("div", { class: "rp-rh" }, ui.h("span", {}, cols[0].get(r)), ui.h("span", {}, last.get(r))), ui.h("div", { class: "rp-rs" }, mid.map((c) => `${c.label ? `${c.label} ` : ""}${text(c.get(r))}`).filter((t) => t.trim() && !t.endsWith(" -")).join(" · "))))));

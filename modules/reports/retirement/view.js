@@ -4,6 +4,10 @@
 import { reportFrame, figs, rtable, wideTable, section, list, settleReport, marked, markedCell, guessFoot } from "../report-kit.js";
 import { bandChart } from "../../retirement/charts.js";
 import { nameIn, NameOf, needItem } from "../../../core/words.js";
+import { unknownWords } from "../../retirement/projection/compute.js";
+
+/** The report's question inside the "we can't say yet" sentence (projection unknownWords; whole-app sweep x3). */
+export const UNKNOWN_WHAT = "whether the money lasts";
 
 const lc = (s) => String(s).charAt(0).toLowerCase() + String(s).slice(1);   // "Taxable, then pre-tax, then Roth" -> "taxable, then pre-tax, then Roth"
 
@@ -24,27 +28,33 @@ export function render(page, ctx) {
         ui.h("ul", {}, (d?.missing ?? []).map((m) => ui.h("li", {}, needItem(m)))), ui.row(ui.h("a", { class: "btn", href: "#/retirement/projection" }, "Will the money last?"))));
       return;
     }
-    const { wrap, sheet } = reportFrame(ui, { title: "Retirement report" });
+    // nothing saved for retirement and nothing going in: the way on beside the print button, outlined (print stays the one filled
+    // button), outside the sheet so it never prints (fix round, critic P1: "no way to add savings")
+    const { wrap, sheet } = reportFrame(ui, { title: "Retirement report", actions: d.unknown ? [ui.h("a", { class: "btn secondary", href: "#/balance/net-worth" }, "Add what you own ›")] : [] });
     host.append(wrap);
     const p = d.plan;
     const o = d.ours ?? {};
     sheet.append(ui.h("h1", {}, "Retirement report"), ui.h("p", { class: "rp-sub" }, `${plan.meta?.name ? `${plan.meta.name} · ` : ""}prepared ${longDate(d.today)} · today's dollars unless said otherwise`),
       ui.h("p", { class: "rp-lead" }, [
         p.retireYear ? `Retirement, when you live on your savings, starts in ${p.retireYear}, at ${money(p.spendingMonthly)} a month.` : `The plan spends ${money(p.spendingMonthly)} a month.`,
-        p.success ? `At expected returns the money lasts to ${p.lastsTo} and leaves about ${big(p.endReal)}.` : `At expected returns the money runs out in ${p.shortYear}${p.shortAge ? `, at ${p.shortAge}` : ""}.`,
-        d.chance ? `In ${fmt.pct(d.chance.rate, 0)} of ${d.chance.paths.toLocaleString("en-US")} pretend futures the money lasts${d.history ? `; replayed through history since ${d.history.from} it lasts in ${fmt.pct(d.history.rate, 0)} of ${d.history.windows} starting years` : ""}.` : "",
+        // nothing saved for retirement and nothing going in: the projection's own "we can't say yet", and no chance or history
+        // figure after it (whole-app sweep x3, 2026-11-16: "the money runs out in 2067 ... In 0% of 1,000 pretend futures")
+        d.unknown ? unknownWords(d.unknown, UNKNOWN_WHAT) : p.success ? `At expected returns the money lasts to ${p.lastsTo} and leaves about ${big(p.endReal)}.` : `At expected returns the money runs out in ${p.shortYear}${p.shortAge ? `, at ${p.shortAge}` : ""}.`,
+        d.chance && !d.unknown ? `In ${fmt.pct(d.chance.rate, 0)} of ${d.chance.paths.toLocaleString("en-US")} pretend futures the money lasts${d.history ? `; replayed through history since ${d.history.from} it lasts in ${fmt.pct(d.history.rate, 0)} of ${d.history.windows} starting years` : ""}.` : "",
         p.coverage !== null ? `Guaranteed income (Social Security and pensions) covers ${fmt.pct(p.coverage, 0)} of spending in the first retirement year.` : "",
       ].filter(Boolean).join(" ")));
-    if (d.chance) {
+    if (d.chance && !d.unknown) {
       const years = d.chance.bands.map((b) => b.year);
       sheet.append(section(ui, "The range of outcomes",
         bandChart({ years, low: d.chance.bands.map((b) => Math.max(0, b.p10)), high: d.chance.bands.map((b) => b.p90), mid: d.chance.bands.map((b) => Math.max(0, b.p50)), marks: p.retireYear ? [{ year: p.retireYear, label: "retire" }] : [], height: 200, label: "Savings by year: the middle 80% of pretend futures and the middle one" }),
         ui.h("p", { class: "rp-sub" }, "The band holds the middle 80% of the pretend futures; the line is the middle one. Today's dollars.")));
     }
     sheet.append(section(ui, "The plan at expected returns",
-      figs(ui, [p.retireYear ? ["Spending years start", String(p.retireYear)] : null, p.atRetirementReal !== null ? [marked("Saved by then", o.savedBy), big(p.atRetirementReal)] : null, p.success ? ["The money lasts", `to ${p.lastsTo}`, "good"] : ["The money runs out", String(p.shortYear), "bad"], ["Left at the end", big(p.endReal)], ["Can carry a month if markets do as well as average", money(p.affordableMonthly)], [marked("Planned a month", o.spending), money(p.spendingMonthly)]]),
+      // under "we can't say yet" the answer's own figures (what is left at the end, what the plan can carry) are left out with it
+      // (fix round, critic P1: "Left at the end $0" and "Can carry $0" beside "Not known yet")
+      figs(ui, [p.retireYear ? ["Spending years start", String(p.retireYear)] : null, p.atRetirementReal !== null ? [marked("Saved by then", o.savedBy), big(p.atRetirementReal)] : null, d.unknown ? ["Whether the money lasts", "Not known yet"] : p.success ? ["The money lasts", `to ${p.lastsTo}`, "good"] : ["The money runs out", String(p.shortYear), "bad"], d.unknown ? null : ["Left at the end", big(p.endReal)], d.unknown ? null : ["Can carry a month if markets do as well as average", money(p.affordableMonthly)], [marked("Planned a month", o.spending), money(p.spendingMonthly)]]),
       list(ui, [`Spending: ${lc(p.strategy)}.`, `Withdrawals: cash first, then ${lc(p.orderLabel)}.`, p.taxMode === "brackets" ? "Tax: the federal brackets on each year's income." : "Tax: one flat rate on pre-tax withdrawals."])));
-    if (d.history) sheet.append(section(ui, "If history repeated",
+    if (d.history && !d.unknown) sheet.append(section(ui, "If history repeated",
       ui.h("p", {}, `The plan replayed from every starting year with the real returns and inflation that followed (${d.history.from} to ${d.history.to}): the money lasts in ${d.history.windows ? fmt.pct(d.history.rate, 0) : "-"} of ${d.history.windows}.`),
       d.history.worst.length ? rtable(ui, [{ label: "Hardest starting years", get: (w) => String(w.startYear) }, { label: "Result", num: true, get: (w) => (w.failAge ? `runs out at ${w.failAge}` : `lasts, ${big(w.endReal)} left`) }], d.history.worst) : null));
     if (d.socialSecurity.people.length) sheet.append(section(ui, "Social Security",
@@ -54,10 +64,16 @@ export function render(page, ctx) {
     if (d.order) out.push(d.order.best === d.order.current ? `The withdrawal order (${lc(d.order.current)}) is already the one that leaves the most after tax.` : `Drawing ${lc(d.order.best)} would leave about ${big(d.order.gain)} more after tax than the plan's ${lc(d.order.current)} (Withdrawal order).`);
     if (d.roth) out.push(d.roth.gain > 500 ? `Roth conversions (${lc(d.roth.best)}) would leave about ${big(d.roth.gain)} more after tax (Roth conversions).` : "Roth conversions would make little difference to what is left after tax.");
     for (const r of d.rmd) out.push(`${NameOf(r.name)} required withdrawals begin in ${r.startYear}${r.firstRmdReal ? `, about ${money(r.firstRmdReal)} the first year` : ""}.`);
-    if (out.length) sheet.append(section(ui, "How the money comes out", list(ui, out)));
+    // how savings come out says nothing while there are none to take out (fix round, critic P1: "the withdrawal order ... leaves
+    // the most after tax" for $0 of savings)
+    if (out.length && !d.unknown) sheet.append(section(ui, "How the money comes out", list(ui, out)));
+    // a year the money does not cover is red "short" only when the answer is known; under "we can't say yet" it shows what is
+    // left, in the plain colour (critic P1). On a phone the value says what it is: "$1,000 left" (it read a bare "$1,000")
+    const shortCell = (r) => r.short > 0 && !d.unknown;
     sheet.append(section(ui, `The plan every ${5} years`,
-      wideTable(ui, [{ label: "Year", get: (r) => String(r.year) }, { label: "Ages", get: (r) => r.ages.join(" / ") }, { label: "Saved", num: true, get: (r) => (r.contributions ? big(r.contributions) : "-") }, { label: "Income", num: true, get: (r) => (r.income ? big(r.income) : "-") }, { label: "Spent", num: true, get: (r) => (r.spending ? big(r.spending) : "-") }, { label: "Tax", num: true, get: (r) => (r.taxes ? big(r.taxes) : "-") }, { label: "Left", num: true, get: (r) => (r.short > 0 ? ui.h("span", { class: "rp-bad" }, "short") : big(r.end)) }], d.years)));
-    if (d.market) sheet.append(section(ui, `Market stress tests (starting in ${d.hitYear})`,
+      wideTable(ui, [{ label: "Year", get: (r) => String(r.year) }, { label: "Ages", get: (r) => r.ages.join(" / ") }, { label: "Saved", num: true, get: (r) => (r.contributions ? big(r.contributions) : "-") }, { label: "Income", num: true, get: (r) => (r.income ? big(r.income) : "-") }, { label: "Spent", num: true, get: (r) => (r.spending ? big(r.spending) : "-") }, { label: "Tax", num: true, get: (r) => (r.taxes ? big(r.taxes) : "-") },
+        { label: "Left", num: true, get: (r) => (shortCell(r) ? ui.h("span", { class: "rp-bad" }, "short") : big(r.end)), narrow: (r) => (shortCell(r) ? ui.h("span", { class: "rp-bad" }, "short") : `${big(r.end)} left`) }], d.years)));
+    if (d.market && !d.unknown) sheet.append(section(ui, `Market stress tests (starting in ${d.hitYear})`,
       rtable(ui, [{ label: "", get: (m) => m.title }, { label: "Result", num: true, get: (m) => (m.success ? ui.h("span", { class: "rp-ok" }, `lasts, ${big(m.endReal)} left`) : ui.h("span", { class: "rp-bad" }, `runs out at ${m.failAge}`)) }], d.market)));
     if (d.ours) sheet.append(guessFoot(ui));
     sheet.append(ui.h("p", { class: "rp-foot" }, `Prepared with Financial Planner on ${longDate(d.today)}. The pretend futures draw returns around the plan's assumptions; history repeats only in rhyme. Look at it again at least once a year.`));

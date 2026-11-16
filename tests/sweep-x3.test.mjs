@@ -243,3 +243,44 @@ test("Life timeline: nothing saved -> no 'Savings run out 2067' box or event; 'N
   assert.equal(f.headline.unknown, undefined);
   assert.equal(f.headline.lastsTo, 2085);
 });
+
+test("Retirement report: nothing saved -> the lead says we can't say whether the money lasts; no chance, history or market lines that say it runs out; the family's report unchanged", async () => {
+  const { UNKNOWN_WHAT } = await import("../modules/reports/retirement/view.js");
+  for (const [who, plan, nothing] of [["renterDebt", rd(), true], ["sam", sam(), false]]) {
+    const r = await drawn("reports/retirement", plan);
+    assert.ok(r.text.includes(unknownWords({ nothingSaved: nothing }, UNKNOWN_WHAT)), `${who}: ${r.text.slice(0, 600)}`);
+    assert.doesNotMatch(r.text, RUNS_OUT, who);
+    assert.doesNotMatch(r.text, /pretend futures the money lasts|If history repeated|Market stress tests/, who);
+    assert.match(r.text, /Not known yet Whether the money lasts/, who);
+  }
+  const f = await drawn("reports/retirement", fam());
+  assert.match(f.text, /At expected returns the money lasts to 2085/);
+  assert.match(f.text, /If history repeated/);
+  assert.doesNotMatch(f.text, /can't say/);
+});
+
+test("Retirement report under 'we can't say yet': no red 'short' years, no 'Left at the end' or 'Can carry' figure, no withdrawal-order line; an outlined 'Add what you own' beside the one filled Print; each phone record's value says 'left' (critic P1)", async () => {
+  for (const plan of [rd(), sam()]) {
+    const r = await drawn("reports/retirement", plan);
+    assert.deepEqual(classed(r.root, "rp-bad").map((e) => e.textContent), [], "nothing red");
+    assert.doesNotMatch(r.text, /Left at the end|Can carry a month|How the money comes out|withdrawal order/i);
+    assert.match(r.text, /Not known yet Whether the money lasts/);
+    assert.deepEqual(r.filled, ["Print or save as PDF"]);
+    const add = r.root.all().filter((e) => e.tagName === "A" && e.textContent === "Add what you own ›");
+    assert.equal(add.length, 1); assert.equal(add[0].getAttribute("href"), "#/balance/net-worth");
+    assert.ok(!r.root.all().some((e) => e.tagName === "ARTICLE" && e.all?.().includes(add[0])), "outside the printed sheet");
+    // the phone records: "2026 ... $1,000 left", never a bare figure
+    const recs = classed(r.root, "rp-rh").map((e) => e.textContent);
+    assert.ok(recs.length > 5 && recs.every((t) => /left$/.test(t)), recs.join(" | "));
+  }
+  // the family: the same report as before, its phone records saying what the figure is
+  const f = await drawn("reports/retirement", fam());
+  assert.match(f.text, /Left at the end/); assert.match(f.text, /How the money comes out/);
+  assert.ok(!f.root.all().some((e) => e.tagName === "A" && e.textContent === "Add what you own ›"));
+  assert.ok(classed(f.root, "rp-rh").every((e) => /left$|short$/.test(e.textContent)));
+  // a plan with savings that runs short keeps its red "short" years
+  const one = rd(); one.accounts.find((a) => a.type === "401k").balance = 1;
+  const k = await drawn("reports/retirement", one);
+  assert.ok(classed(k.root, "rp-bad").length > 0);
+});
+

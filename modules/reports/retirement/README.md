@@ -58,3 +58,22 @@ A figure this report prints that rests on our guesses is marked "(our guess)", "
 (`../guess-marks.js`, report-kit `marked`; the rules and words are in reports/plan-summary/README.md, "Our guesses, marked").
 The compute's `ours` key is there only while one is, so a plan with no guess is unchanged. "Saved by then" is not marked when
 it comes to $0 (nothing there is a figure we filled in; critic F3).
+
+## Nothing saved yet: "we can't say" (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet"; this report said
+"At expected returns the money runs out in 2067, at 65. In 0% of 1,000 pretend futures the money lasts; replayed through history
+since 1928 it lasts in 0% of 27 starting years" on the same plan (Riley, 24, an empty Work 401(k)). `compute` now adds `unknown:
+{ nothingSaved }` when the projection's own `savingsUnknown` holds on the run it reports (`nothingSaved` from retirement/projection),
+and the sheet then says the projection's sentence with the report's question ("whether the money lasts", `UNKNOWN_WHAT`) in the
+lead, "Whether the money lasts: Not known yet" among the plan's figures, and leaves out the range chart, "If history repeated"
+and "Market stress tests" (each would say it runs out). Social Security and the plan every 5 years stay. Every other plan: the
+same report as before.
+
+Fix round (critic P1, Riley at 390 px; test `tests/sweep-x3.test.mjs`): under that lead the sheet still showed red "short" on every
+year from 2067, "Left at the end $0", "Can carry a month $0" and "The withdrawal order ... is already the one that leaves the most
+after tax" for $0 of savings, with no way to add any. Now, when it can't say: the plan's figures leave out "Left at the end" and
+"Can carry a month" (the answer's own figures), "How the money comes out" is left out (there is nothing to take out), the 5-year
+table shows what is left in the plain colour instead of a red "short", and an outlined "Add what you own ›" (Net worth) sits beside
+"Print or save as PDF", outside the sheet so it never prints (report-kit `reportFrame`'s `actions`). On a phone each record's value
+now says what it is, "$1,000 left" (it was a bare "$1,000" beside the ages; report-kit `wideTable`'s optional `narrow`), for every
+plan. A plan with savings that runs short keeps its red "short" years.

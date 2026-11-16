@@ -2,7 +2,7 @@
 // at expected returns, the chance the money lasts (Monte Carlo) and what history says, Social
 // Security, how the money comes out (the order, Roth conversions, required withdrawals), the plan
 // year by year at five-year steps, and the market stress tests.
-import { compute as computeProjection } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, savingsUnknown, nothingSaved } from "../../retirement/projection/compute.js";
 import { compute as computeMonteCarlo } from "../../retirement/monte-carlo/compute.js";
 import { compute as computeHistorical } from "../../retirement/historical/compute.js";
 import { compute as computeSocialSecurity } from "../../retirement/social-security/compute.js";
@@ -54,6 +54,9 @@ export function compute(plan, params = {}) {
   const ours = retireMarks(plan, pr, ss, !!params.estimates);
   return {
     ...(ours ? { ours } : {}),
+    // nothing saved for retirement and nothing going in: Will the money last?'s "We don't know yet" on this same run, so the report
+    // says it too, never "the money runs out in 2067" (whole-app sweep x3, 2026-11-16); absent for every other plan
+    ...(savingsUnknown(pr) ? { unknown: { nothingSaved: nothingSaved(plan) } } : {}),
     ready: true, missing: [], today,
     plan: { retireYear: pr.atRetirement?.year ?? null, spendingMonthly: firstYearly / 12, plannedMonthly: pr.spendingYearly / 12, affordableMonthly: pr.affordable / 12, success: pr.result.success, lastsTo: pr.result.success ? pr.atEnd.year : null, shortYear: pr.shortYear, shortAge: pr.shortAge, atRetirementReal: pr.atRetirement?.totalReal ?? null, endReal: pr.atEnd.totalReal, coverage: pr.coverage, strategy: strategyWords(pr.strategy, pr.inputs.guard), orderLabel: pr.orderLabel, taxMode: pr.inputs.tax?.mode ?? "flat" },
     chance: mc.ready ? { rate: mc.successRate, paths: mc.paths, bands: mc.bands.map((b) => ({ year: b.year, p10: b.p10, p50: b.p50, p90: b.p90 })), failAges: mc.failAges } : null,
