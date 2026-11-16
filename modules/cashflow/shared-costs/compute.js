@@ -4,6 +4,7 @@
 // live in whatIfs.shareCosts and are never counted in the plan.
 import { compute as computeIncome } from "../income/compute.js";
 import { compute as computeExpenses } from "../expenses/compute.js";
+import { monthsTaxOf } from "../forecast/compute.js";
 import { takeHome, hundred } from "../paycheck/compute.js";
 import { isYou, nameIn, nameOf, verbFor } from "../../../core/words.js";
 
@@ -65,18 +66,25 @@ export function dollars(parts, total) {
 /**
  * The costs to share: every cost on the Expenses page's month going now (each at what it comes to a month,
  * core/math/periods.js), and each payment the Debts page adds to that month (a debt with no bill of its own on Expenses),
- * id "debt:<id>" (one line "debts" when the Debts page's payments are counted together). Taxes not withheld are left out
- * (`taxes`): they come off the income of whoever earns it. One-time costs are not monthly. Largest first.
- * -> { rows: [{ id, name, category, monthly, fromDebts }], taxes }
+ * id "debt:<id>" (one line "debts" when the Debts page's payments are counted together). One-time costs are not monthly.
+ * Largest first. A line filed under "Taxes not withheld" is left out (`taxes`) only when it pays income tax: cashflow/forecast's
+ * one rule (monthsTaxOf, asked with no cover: this page takes no tax off income itself, so such a line is left out whole, as
+ * before), because it comes off the income of whoever earns it. Any other line filed there (a property tax, a car tax, a fee
+ * for filing, a city's tax, last year's tax owed) is a bill like any other, shared unless left out, and its row says
+ * `filedAsTax` (z2, 2026-11-16: the invented retired couple's $400 a month of property tax was never shared).
+ * -> { rows: [{ id, name, category, monthly, fromDebts, filedAsTax? }], taxes }
  */
 export function costsOf(plan, { today } = {}) {
   const exp = computeExpenses(plan, { today });
+  // the lines the shared rule leaves out, and how much of each (with no cover: all of it)
+  const out = new Map(monthsTaxOf(exp.items).lines.map((l) => [l.x, l.out]));
   const rows = [];
   let taxes = 0;
   exp.items.forEach((x, i) => {
     if (!x.active || !(x.monthly > 0.005)) return;
-    if (x.category === "taxes") { taxes += x.monthly; return; }
-    rows.push({ id: idOf(x) ?? `#${i}`, name: x.name || x.categoryLabel, category: x.categoryLabel, monthly: x.monthly, fromDebts: false });
+    if (out.has(x)) { taxes += out.get(x); return; }
+    const row = { id: idOf(x) ?? `#${i}`, name: x.name || x.categoryLabel, category: x.categoryLabel, monthly: x.monthly, fromDebts: false };
+    rows.push(x.category === "taxes" ? { ...row, filedAsTax: true } : row);
   });
   if ((exp.fromDebts ?? []).length) for (const r of exp.fromDebts) rows.push({ id: `debt:${r.id}`, name: `${r.name || "Loan"} payment`, category: "From the Debts page", monthly: r.monthly, fromDebts: true });
   else if (exp.debtFromDebts > 0.005) rows.push({ id: "debts", name: "Loan and card payments", category: "From the Debts page", monthly: exp.debtFromDebts, fromDebts: true });

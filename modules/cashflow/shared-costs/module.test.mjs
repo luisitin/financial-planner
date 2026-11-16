@@ -920,3 +920,142 @@ test("split #17, invariance: the bills change no page's result, and no bills is 
   }
   assert.ok(n > 1000, `${n} plans`);
 });
+
+// ---------------------------------------------------------------- z2 (a): a tax that is a bill is shared (2026-11-16)
+// cashflow/forecast's one rule (monthsTaxOf, inMonthsTax) decides which lines filed under "Taxes not withheld" are income tax: those
+// are left out (they come off the income of whoever earns it); every other line filed there is a bill like any other.
+test("z2 (a): the retired couple's $400 a month of property tax, filed under Taxes not withheld, is a shared cost now", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const d = run(retiredCouplePlan(TY), TY);
+  const tax = d.costs.find((r) => r.id === "e-tax");
+  assert.deepEqual(tax, { id: "e-tax", name: "Property tax", category: "Taxes not withheld", monthly: 400, fromDebts: false, filedAsTax: true, shared: true });
+  assert.equal(d.taxes, 0, "nothing left out: no income tax is filed there");
+  near(d.shared, 2780);   // $2,380 of other costs + $400 of property tax ($4,800 a year / 12)
+  // left out on "Which costs are shared", it is out like any other cost
+  const p = retiredCouplePlan(TY); p.whatIfs = { shareCosts: { leaveOut: ["e-tax"] } };
+  const e = run(p, TY);
+  assert.equal(e.costs.find((r) => r.id === "e-tax").shared, false); near(e.shared, 2380); assert.equal(e.taxes, 0);
+  // every other row is what it was, with no new field
+  assert.ok(d.costs.filter((r) => r.id !== "e-tax").every((r) => !("filedAsTax" in r)));
+});
+
+test("z2 (a): income tax filed there stays out, every other tax or fee filed there is shared, by the forecast's rule", async () => {
+  const { inMonthsTax } = await import("../forecast/compute.js");
+  const lines = [
+    ["Quarterly estimated taxes", 1400, "quarterly", false], ["Estimated tax", 300, "monthly", false], ["Taxes", 100, "monthly", false],
+    ["State income tax", 80, "monthly", false], ["", 50, "monthly", false], ["Self-employment tax", 60, "monthly", false],
+    ["Property tax", 4800, "annual", true], ["Car tax", 240, "annual", true], ["Tax preparer", 360, "annual", true],
+    ["County tax", 30, "monthly", true], ["Back taxes owed to the IRS", 150, "monthly", true],
+  ];
+  const p = couple();
+  lines.forEach(([name, amount, period], i) => p.expenses.push({ id: `t${i}`, name, category: "taxes", amount, period, essential: true }));
+  const d = run(p);
+  const items = (await import("../expenses/compute.js")).compute(migrate(structuredClone(p)), { today: TY }).items;
+  let out = 0, inn = 3900;
+  lines.forEach(([name, , , shared], i) => {
+    const x = items.find((y) => y.id === `t${i}`);
+    assert.equal(!inMonthsTax(x), shared, `${name || "(no name)"}: the forecast's rule says the same`);
+    const row = d.costs.find((r) => r.id === `t${i}`);
+    if (shared) { assert.equal(row.filedAsTax, true); assert.equal(row.shared, true); inn += x.monthly; } else { assert.equal(row, undefined, `${name} left out`); out += x.monthly; }
+  });
+  near(d.taxes, out); near(d.shared, inn);
+  near(d.taxes, 1400 / 3 + 300 + 100 + 80 + 50 + 60);             // $1,456.67 a month left out
+  near(d.shared, 3900 + 400 + 20 + 30 + 30 + 150);                 // $4,530 a month shared
+});
+
+// fix round (2026-11-17, critic M3): only the choice of which lines are income tax is shared with Next best action and Budget
+// (50/30/20); they cap such a line by the month's tax and keep the rest as spending, this page leaves it out whole (README)
+test("z2 fix (M3): an income-tax line is left out whole here, where Next best action keeps what it holds above the month's tax", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { compute: nba } = await import("../../overview/next-best-action/compute.js");
+  const p = migrate(structuredClone(ARCHETYPES.find((a) => a.id.startsWith("11-")).build()));
+  const T = "2026-11-16";
+  const c = costsOf(p, { today: T });
+  near(c.taxes, 1400);   // all of the $1,400 a month of quarterly estimated tax is left out
+  assert.ok(!c.rows.some((r) => r.filedAsTax), "and nothing of it is shared");
+  const n = nba(p, { today: T }).spare;
+  near(n.taxesTyped, 1400);
+  assert.ok(n.taxesListed < 1400 - 200, `Next best action leaves out only the month's tax (${n.taxesListed.toFixed(2)})`);
+});
+
+test("z2 (a): what How this is worked out says about lines filed under Taxes not withheld, one sentence per case", async () => {
+  const { taxWords } = await import("./view.js");
+  const m = (n) => usd(n);
+  // nothing filed there: nothing said
+  assert.equal(taxWords(run(couple()), m), "");
+  // only a property tax: shared, so nothing is left out and nothing is said (its row says it)
+  const prop = couple(); prop.expenses.push({ id: "pt", name: "Property tax", category: "taxes", amount: 4800, period: "annual" });
+  assert.equal(taxWords(run(prop), m), "");
+  // only income tax: the sentence as before
+  const est = couple(); est.expenses.push({ id: "et", name: "Estimated tax", category: "taxes", amount: 1400, period: "monthly" });
+  assert.equal(taxWords(run(est), m), "Taxes not withheld on Expenses ($1,400 a month) are left out: they come off the income of whoever earns it.");
+  // both: the income tax left out, the bill shared, by name
+  const both = structuredClone(est); both.expenses.push({ id: "pt", name: "Property tax", category: "taxes", amount: 4800, period: "annual" });
+  assert.equal(taxWords(run(both), m), "Income tax filed under \"Taxes not withheld\" on Expenses ($1,400 a month) is left out: it comes off the income of whoever earns it. \"Property tax\" is shared like any other bill.");
+  const two = structuredClone(both); two.expenses.push({ id: "ct", name: "Car tax", category: "taxes", amount: 30, period: "monthly" });
+  assert.match(taxWords(run(two), m), /\. "Property tax" and "Car tax" are shared like any other bill\.$/);
+  const three = structuredClone(two); three.expenses.push({ id: "fee", name: "Tax preparer", category: "taxes", amount: 25, period: "monthly" });
+  assert.match(taxWords(run(three), m), /\. The other 3 bills filed there are shared like any other bill\.$/);
+  // the bill left out of the split: only the income tax is said, as before
+  const left = structuredClone(both); left.whatIfs = { shareCosts: { leaveOut: ["pt"] } };
+  assert.equal(taxWords(run(left), m), "Taxes not withheld on Expenses ($1,400 a month) are left out: they come off the income of whoever earns it.");
+});
+
+// ---------------------------------------------------------------- z2 invariance (2026-11-16)
+// A line filed under "Taxes not withheld" on Expenses is now left out only when it is income tax, by cashflow/forecast's shared
+// rule (monthsTaxOf; README "Formulas"). Over every qa/fixtures/*-plan.mjs plan, the 14 households' base plans, the phone-built
+// ones, the round 8 households, the four personas (finished and mid-setup), the demo and the empty plan, with nothing new typed,
+// compute gives byte for byte what it gave at e223a42 (digests in z2-invariance.json, written by this test's `figures` on that
+// code), except a plan with a line filed there that is not income tax (a property tax): its costs without those rows are the
+// old costs, the shared costs are up and the taxes left out down by exactly those lines.
+// To write the digests down again (only on the code before a deliberate change): PRINT=1 node --test modules/cashflow/shared-costs/module.test.mjs
+test("z2 invariance: Sharing costs is e223a42's for every household, but a property tax filed as a tax is now shared", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const crypto = await import("node:crypto");
+  const { pathToFileURL, fileURLToPath } = await import("node:url");
+  const { inMonthsTax } = await import("../forecast/compute.js");
+  const { compute: expenses } = await import("../expenses/compute.js");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+  const T = "2026-11-16";
+  const dig = (x) => crypto.createHash("sha256").update(JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+  const plans = [];
+  const imp = (p) => import(pathToFileURL(path.join(ROOT, p)).href);
+  const dir = path.join(ROOT, "qa", "fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `fixture ${f}:${name}`, plan: fn(T) });
+  }
+  const { ARCHETYPES } = await imp("qa/households/lib/catalog.mjs");
+  for (const a of ARCHETYPES) plans.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(await imp("qa/fixtures/phone-households.mjs"))) if (typeof fn === "function") plans.push({ name: `phone ${name}`, plan: fn() });
+  for (const [name, fn] of Object.entries(await imp("qa/fixtures/round8-households.mjs"))) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `round8 ${name}`, plan: fn() });
+  const P = await imp("qa/fixtures/setup-personas.mjs");
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) { plans.push({ name: `persona ${n}`, plan: P.finishSetup(n, P[n](T), T) }); plans.push({ name: `persona ${n} mid`, plan: P[n](T) }); }
+  plans.push({ name: "demo", plan: (await imp("qa/fixtures/demo-household.mjs")).demoHousehold(T) });
+  plans.push({ name: "empty plan", plan: emptyPlan() });
+  const run = (f) => { try { return f(); } catch (e) { return { threw: e.message }; } };
+  const now = {};
+  for (const { name, plan } of plans) {
+    const p = migrate(structuredClone(plan));
+    const d = run(() => compute(structuredClone(p), { today: T }));
+    now[name] = { all: dig(d), ...(d?.ready ? { costs: dig(d.costs.filter((r) => !r.filedAsTax)), shared: Math.round(d.shared * 100), taxes: Math.round(d.taxes * 100) } : {}),
+      moved: Math.round(expenses(structuredClone(p), { today: T }).items.filter((x) => x.active && x.monthly > 0.005 && x.category === "taxes" && !inMonthsTax(x)).reduce((t, x) => t + x.monthly, 0) * 100) };
+  }
+  const file = new URL("./z2-invariance.json", import.meta.url);
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "Sharing costs at e223a42 (z2); PRINT=1 writes them again: only on that code", today: T, plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.deepEqual(Object.keys(now), Object.keys(was));
+  assert.ok(Object.keys(now).length >= 50, `${Object.keys(now).length} households`);
+  const moved = [];
+  for (const name of Object.keys(was)) {
+    const a = was[name], b = now[name];
+    assert.equal(b.moved, a.moved, `${name}: the lines filed as a tax that are not income tax`);
+    if (!a.moved || !a.costs) { assert.equal(b.all, a.all, `${name}: all of it`); continue; }
+    moved.push(name);
+    assert.equal(b.costs, a.costs, `${name}: the other costs`);
+    assert.equal(b.shared, a.shared + a.moved, `${name}: shared is up by the property tax`);
+    assert.equal(b.taxes, a.taxes - a.moved, `${name}: taxes left out are down by it`);
+  }
+  assert.deepEqual(moved, ["fixture retired-couple-plan.mjs:retiredCouplePlan", "08-retired/base", "12-high-net-worth/base"]);
+});

@@ -23,8 +23,9 @@ Parameters accepted by `compute(plan, params)`: `today` (ISO date; which income 
 - `case`: which sentence the page says (`no-costs`, `none-shared`, `no-income`, `one-earner`, `income`, `equal`, `own`).
 - `method` (as worked: "own" without usable shares is "income"), `asked` (as saved), `basis` ("take-home" when any of the
   couple's income is the Paycheck page's take-home, else "income": as typed).
-- `costs` `[{ id, name, category, monthly, fromDebts, shared }]` (largest first), `count`, `sharedCount`, `shared` (a month),
-  `taxes` (taxes not withheld on Expenses, left out).
+- `costs` `[{ id, name, category, monthly, fromDebts, filedAsTax?, shared }]` (largest first; `filedAsTax` only on a bill filed
+  under "Taxes not withheld" that is not income tax, such as a property tax), `count`, `sharedCount`, `shared` (a month),
+  `taxes` (the income tax filed under "Taxes not withheld" on Expenses, left out).
 - `people` `[{ key, id, income, gross, scaled, share, percent, part, dollars, keeps }]` for the two adults.
 - `total`, `household`, `leftOut`, `others`, `byIncome`, `byIncomeDollars`, `over`, `short` (see `compute.js`).
 Names are not in the result (the view reads them from the plan), so "Explain this page" sees only ids.
@@ -33,8 +34,23 @@ Names are not in the result (the view reads them from the plan), so "Explain thi
 - **Shared costs** = Σ over the costs checked as shared of each cost a month: `amount × times a year ÷ 12`
   (`core/math/periods.js`: weekly 52, every two weeks 26, twice a month 24, monthly 12, quarterly 4, yearly 1; a one-time
   cost is not monthly). The costs are the Expenses page's month (`cashflow/expenses` `compute`): every bill going on
-  `today`, plus each Debts payment that page adds (a debt with no bill of its own). Taxes not withheld are left out (they
-  come off the income of whoever earns it, as Budget (50/30/20) leaves them out).
+  `today`, plus each Debts payment that page adds (a debt with no bill of its own). A line filed under "Taxes not withheld"
+  is left out only when it pays income tax, by cashflow/forecast's one rule (`monthsTaxOf`, `inMonthsTax`; the rule Budget
+  (50/30/20) and Next best action ask too): an estimated or quarterly tax, a federal, state or income tax, self-employment tax,
+  or a line with no name or just "Taxes" comes off the income of whoever earns it (`taxes`). Every other line filed there is a
+  bill like any other and is shared unless left out: a property tax, a car tax, a fee for filing ("Tax preparer"), a city's or
+  county's tax, last year's tax owed. The rule is asked with no `cover` (this page takes no tax off income itself: it splits by
+  take-home or by income as typed), so an income-tax line is left out whole, as before. Only the choice of which lines are
+  income tax is shared: Next best action and Budget (50/30/20) ask with the month's tax as the cover and keep as spending what a
+  line holds above that tax (11-self-employed: $1,400 a month of quarterly estimated tax against about $1,138 of tax worked
+  out, so they keep about $262 as spending), while this page leaves all $1,400 out (fix round, 2026-11-17, critic M3: the
+  CHANGELOG said "by the one rule", broader than this). Sources, read 2026-11-16 (no figure
+  is taken from them, only which tax is which): IRS, "Estimated taxes",
+  https://www.irs.gov/businesses/small-businesses-self-employed/estimated-taxes ("Estimated tax is used to pay not only income
+  tax, but other taxes such as self-employment tax and alternative minimum tax"; page reviewed 25-Sep-2026); IRS Topic no. 503,
+  "Deductible taxes", https://www.irs.gov/taxtopics/tc503 (state and local real property taxes and personal property taxes are
+  taxes of their own beside income taxes; page reviewed 09-Nov-2026). Built z2 (2026-11-16): the invented retired couple's $400 a month of
+  property tax ($4,800 a year) was never shared; now their shared costs are $2,780 a month, not $2,380.
 - **Each person's income** a month = Σ of their going income lines (`personId`) × the Paycheck page's take-home share
   (`cashflow/paycheck` `takeHome().ratio`: a salary × its earner's take-home over pay, after tax withheld, Social Security,
   Medicare, the 401(k) and benefits; a bonus × (1 − 22% − 6.2% − 1.45% − the state's share); every other kind as typed)
@@ -116,7 +132,7 @@ Builder chose (the design left these open):
 2. The couple is the adult marked "Me" and the partner (else the first two adults); a third adult and their income are
    left out and "How this is worked out" says so; income of the household's own counts half each.
 3. Payments the Debts page adds to the Expenses month are costs too (id `debt:<id>`), so a mortgage kept only on Debts is
-   shared; taxes not withheld are left out.
+   shared; income tax filed under "Taxes not withheld" is left out, any other bill filed there is shared (z2).
 4. "Our own split" is a chip, as the design names it, and shows its one box in place (R23), instead of the helper's
    "Type my own" chip, whose box takes a figure, not a way to split.
 5. A choice for a cost not on the list today (ended, or not started) is kept on Save while the bill still exists.
@@ -143,12 +159,20 @@ large to be exact and days not on the calendar (M2 to M4); one adult's hero and 
 add form, with bills too (P1); "Bills and payments" (P2); the help line and example names (P4, P5). Before that,
 `module.test.mjs`: the formulas (60/40 example; shares add to 1, percents to 100, dollars to the shared costs, for every
 method; take-home equals the Paycheck page's per item; household income half each, a child's and a third adult's left
-out; `leaveOut` excluded, a Debts payment and a yearly bill counted, taxes and one-time costs not; own shares; the largest
+out; `leaveOut` excluded, a Debts payment and a yearly bill counted, income tax and one-time costs not; own shares; the largest
 remainder); one test per sentence case and per alarm (with "you" and "your spouse"); invariance over the qa households,
 every pack and the fixture plans (an empty `whatIfs.shareCosts` gives the same result; Budget (50/30/20) and Expenses give
 the same with a choice saved here); the page under the fake DOM: what is outside the parts, the three chips, a chip saves
 and the green line, "Our own split" and its box, unchecking a cost (the part stays open, the next draw shuts it), the empty
 states, the alarm outside the parts, and Budget (50/30/20)'s row.
+
+z2 (2026-11-16): the retired couple's property tax is a shared cost ($400 a month, the row's every field; `taxes` 0; shared
+$2,780; left out on "Which costs are shared" it is out); eleven lines filed under "Taxes not withheld" split by the forecast's
+own rule (income tax out: $1,456.67 a month; a property tax, a car tax, a preparer's fee, a county tax and back taxes shared:
+$4,530 a month); "How this is worked out" says one sentence per case (nothing; income tax only, as before; both, with one,
+two or more bills named; the bill left out of the split); invariance against e223a42 over every invented household
+(`z2-invariance.json`): byte for byte, except the three with a property tax filed as a tax (the retired couple, 08-retired,
+12-high-net-worth), whose other costs are the same and whose shared costs are up, and taxes left out down, by exactly it.
 
 ## Bills split with others (gap list next 60, item 17)
 Costs shared with people outside the couple: roommates, friends, a trip. A short list of bills (what, the day, the amount,

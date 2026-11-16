@@ -1,0 +1,293 @@
+{
+ "note": "Sharing costs at e223a42 (z2); PRINT=1 writes them again: only on that code",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "all": "7YeNg3D0R9DlX2ASVnonfn",
+   "costs": "41w09V7kfC0Ow_6etCCmvV",
+   "shared": 582633,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "all": "7YeNg3D0R9DlX2ASVnonfn",
+   "costs": "41w09V7kfC0Ow_6etCCmvV",
+   "shared": 582633,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "all": "i2p80-mYsLu0Pp3Vvl83tP",
+   "costs": "zEwUjU7SAN0WkFOc_VP0f9",
+   "shared": 470400,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "all": "7YeNg3D0R9DlX2ASVnonfn",
+   "costs": "41w09V7kfC0Ow_6etCCmvV",
+   "shared": 582633,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "all": "ULGsMSI2ULCadBMTflWRJH",
+   "costs": "XjwDy09Qf9Hb-aHGySiRZF",
+   "shared": 700000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "all": "UEo2BHLfyqe4WHhMaeo8Zj",
+   "costs": "1LyuoHFxA1qsYKdNNSmY9N",
+   "shared": 238000,
+   "taxes": 40000,
+   "moved": 40000
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "all": "2DvC1Q8Pxpd4D0xi2kCY9m",
+   "costs": "XjwDy09Qf9Hb-aHGySiRZF",
+   "shared": 700000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "all": "ULGsMSI2ULCadBMTflWRJH",
+   "costs": "XjwDy09Qf9Hb-aHGySiRZF",
+   "shared": 700000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "01-single-adult/base": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "02-couple-no-kids/base": {
+   "all": "T4hi0VcoyRxPqZ0XvnBLBf",
+   "costs": "-qKm3rwRIk5r82as6W-OOU",
+   "shared": 553000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "03-single-parent/base": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "04-two-parents/base": {
+   "all": "1Q5AFAOe2KNZOhNDpa0qPX",
+   "costs": "2ALY2MfTUKx51UMAzuOIZX",
+   "shared": 711000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "05-stay-at-home-parent/base": {
+   "all": "BCwlY4Nnn__ztg3RS41pJl",
+   "costs": "LiphAtUGbTCBl1tEwZ7qth",
+   "shared": 489167,
+   "taxes": 0,
+   "moved": 0
+  },
+  "06-blended-family/base": {
+   "all": "HBudS8DRgudm6EmhUywB0O",
+   "costs": "eDHf_aXH-Gn5hPHrdXdCCH",
+   "shared": 702667,
+   "taxes": 0,
+   "moved": 0
+  },
+  "07-multigenerational/base": {
+   "all": "dWXKN2VM0mDl1Z0rjHtvdj",
+   "costs": "qcZCmLP43DN1Gk2Y_OYiHl",
+   "shared": 824333,
+   "taxes": 0,
+   "moved": 0
+  },
+  "08-retired/base": {
+   "all": "PTSlo5JumPH1OwXfJ3phrX",
+   "costs": "12mkohI-XPtbCRTw-RUKs9",
+   "shared": 255500,
+   "taxes": 40000,
+   "moved": 40000
+  },
+  "09-near-retirement/base": {
+   "all": "EYQ3I5bEFIbRJZ_7X3Iyzr",
+   "costs": "PAnJPpuRVf0sy0RGTMd6dC",
+   "shared": 512333,
+   "taxes": 0,
+   "moved": 0
+  },
+  "10-student-and-starter/base": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "11-self-employed/base": {
+   "all": "eVjlqb5TEFynkShOIgFjgb",
+   "costs": "9GhlnFhga8Drq8V8JqMdqw",
+   "shared": 553333,
+   "taxes": 140000,
+   "moved": 0
+  },
+  "12-high-net-worth/base": {
+   "all": "V7PniTwu-TDDOkRHW-UrIF",
+   "costs": "Ag9toUYr7cZ4uJZptYR86r",
+   "shared": 3330000,
+   "taxes": 266667,
+   "moved": 266667
+  },
+  "13-in-crisis/base": {
+   "all": "17FqsT5Ybca9cvhq_3Ribw",
+   "costs": "L68NqakvgdLP6rU28FBsU4",
+   "shared": 608167,
+   "taxes": 0,
+   "moved": 0
+  },
+  "14-unusual-structures/base": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 45000
+  },
+  "phone casey": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "phone danaLee": {
+   "all": "b7ZoES31XbN7GcwG3H0Lts",
+   "costs": "-302UJ_rirN-PsOdkx6FCy",
+   "shared": 643000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "phone jamie": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "phone morgan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "phone robin": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 earlyRetireePlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 equityPlan": {
+   "all": "OfFP-W5Ptl_m2YCet113VR",
+   "costs": "T1PNoYwrqgwDVLtfmj7L5e",
+   "shared": 0,
+   "taxes": 0,
+   "moved": 0
+  },
+  "round8 firstRmdPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 freelancerPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 highFreelancerPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 landlordBusinessPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 landlordPlan": {
+   "all": "ubKtXuiUv6zX1boZVLvSW8",
+   "costs": "ndeMF7yzA--t8deLon8531",
+   "shared": 85100,
+   "taxes": 0,
+   "moved": 0
+  },
+  "round8 parentLoanPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 stockAndBusinessPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "round8 studentLoanPlan": {
+   "all": "yR2qyNUfDL0uH0EWLtGZTK",
+   "costs": "DqDa5HdUBo92HTzJlaYKiv",
+   "shared": 73000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "round8 widowPlan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "persona sam": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "persona sam mid": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "persona jordan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "persona jordan mid": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "persona patLee": {
+   "all": "MfAF7apsXMEC7RnKZEzAnY",
+   "costs": "g_E1jA12jMxkm09Ty9Dlnf",
+   "shared": 255000,
+   "taxes": 0,
+   "moved": 0
+  },
+  "persona patLee mid": {
+   "all": "_5NG53ypLNreGml062nC_4",
+   "costs": "T1PNoYwrqgwDVLtfmj7L5e",
+   "shared": 0,
+   "taxes": 0,
+   "moved": 0
+  },
+  "persona ruth": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "persona ruth mid": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  },
+  "demo": {
+   "all": "7YeNg3D0R9DlX2ASVnonfn",
+   "costs": "41w09V7kfC0Ow_6etCCmvV",
+   "shared": 582633,
+   "taxes": 0,
+   "moved": 0
+  },
+  "empty plan": {
+   "all": "TOWZStB80MNmlI9VlOBDNu",
+   "moved": 0
+  }
+ }
+}

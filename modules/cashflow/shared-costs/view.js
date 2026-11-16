@@ -354,13 +354,27 @@ function stillThere(plan, id) {
   return (plan.expenses ?? []).some((x) => x && String(x.id) === id);
 }
 
+/**
+ * What "How this is worked out" says about lines filed under "Taxes not withheld" on Expenses, or "" (one written sentence per
+ * case): income tax left out and nothing else filed there shared (the sentence as before); income tax left out and a bill filed
+ * there shared (a property tax: z2, 2026-11-16); nothing left out (the shared rows say it themselves).
+ */
+export function taxWords(d, money) {
+  if (!(d?.taxes > 0.5)) return "";
+  const filed = (d.costs ?? []).filter((r) => r.filedAsTax && r.shared);
+  if (!filed.length) return `Taxes not withheld on Expenses (${money(d.taxes)} a month) are left out: they come off the income of whoever earns it.`;
+  const named = filed.length === 1 ? `"${filed[0].name}" is` : filed.length === 2 ? `"${filed[0].name}" and "${filed[1].name}" are` : `The other ${filed.length} bills filed there are`;
+  return `Income tax filed under "Taxes not withheld" on Expenses (${money(d.taxes)} a month) is left out: it comes off the income of whoever earns it. ${named} shared like any other bill.`;
+}
+
 /** "How this is worked out": the sum with the household's own numbers, what it leaves out, where the method comes from. */
 export function howSteps(d, names, money) {
   const [A, B] = d.people;
   const nA = names.a ?? "", nB = names.b ?? "";
   const out = [];
   out.push(`Shared costs: ${money(d.shared)} a month, the ${d.sharedCount === 1 ? "one cost" : `${d.sharedCount} costs`} checked under "Which costs are shared", each at what it comes to a month (a weekly bill times 52 and divided by 12, a yearly one divided by 12). Payments the Debts page adds to your month are costs too.`);
-  if (d.taxes > 0.5) out.push(`Taxes not withheld on Expenses (${money(d.taxes)} a month) are left out: they come off the income of whoever earns it.`);
+  const taxSaid = taxWords(d, money);
+  if (taxSaid) out.push(taxSaid);
   if (d.total > 0.005) {
     out.push(d.basis === "take-home"
       ? `What each of you takes home: ${nameIn(nA)} ${money(A.income)} a month, ${nameIn(nB)} ${money(B.income)}. Pay counts after tax, Social Security and Medicare and what each paycheck puts into a 401(k) or benefits, as the Paycheck page works it out. Other income (a business, a pension, Social Security, rent) counts as typed on Income.`
