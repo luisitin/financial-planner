@@ -348,3 +348,15 @@ test("Capital gains on the empty plan: 'Add your income' is the one filled butto
   const f = await drawn("taxes/capital-gains", fam());
   assert.ok(f.filled.includes("Add sale") && f.filled.length === 1, String(f.filled));
 });
+
+test("Expenses with nothing listed and our guesses offered: 'Use these guesses' is the one filled button; 'I'll type mine' opens the add form", async () => {
+  const r = await drawn("cashflow/expenses", migrate(freelancerPlan()));
+  assert.deepEqual(r.filled, ["Use these guesses"]);
+  assert.match(r.text, /\+ Add an expense/);
+  assert.doesNotMatch(r.text, /Add expense/);
+  r.root.all().find((e) => e.tagName === "BUTTON" && /^I'll type mine/.test(textOf(e).trim())).click();
+  assert.match(textOf(r.root), /Add expense/, "the form opens");
+  // the empty plan has no offer: the form stays open, its "Add expense" the one filled button, as before
+  const e = await drawn("cashflow/expenses", migrate({}));
+  assert.deepEqual(e.filled, ["Add expense"]);
+});

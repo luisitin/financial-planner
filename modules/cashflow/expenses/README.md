@@ -216,3 +216,9 @@ leftover below zero and goals, the note adds "Your goals take another $300 a mon
   stays required, and "Is something missing?" (C7) offers our guesses for the rows not listed. Its help line gives an example
   instead (spec 9.2, an empty box with no guess): "what you pay each time, for example 1,200" (review round 2, P8: a bare box
   on a blank plan); no grey figure, since grey means counted, and no promise of a guess the form does not make.
+
+## One filled button under the guesses card (whole-app sweep x3, 2026-11-16; tests `tests/sweep-x3.test.mjs`)
+With nothing listed and our guesses offered ("Not sure what you spend?"), the card's "Use these guesses" is the page's filled
+button; the empty add form, whose "Add expense" was a second filled button on the same first view (the round 8 freelancer), now
+waits behind an outlined "+ Add an expense", and the card's "I'll type mine" opens it and puts the cursor in it (its Cancel folds
+it back). With no offer (the empty plan), the form stays open as before.

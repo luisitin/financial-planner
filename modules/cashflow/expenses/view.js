@@ -218,6 +218,10 @@ export function render(root, ctx) {
     pending = null;
   }
 
+  // the guesses card's "Use these guesses" is the page's one filled button while it shows: the empty add form waits behind an outlined
+  // "+ Add an expense", and the card's "I'll type mine" opens it (whole-app sweep x3, 2026-11-16: "Use these guesses" and "Add
+  // expense" both filled on one first view)
+  let offered = false;
   if (d.count === 0) {
     root.append(ui.h("section", { class: "card accent hero" },
       ui.h("h1", {}, "What goes out?"),
@@ -236,8 +240,9 @@ export function render(root, ctx) {
     if (missingSaid) { root.append(sayNotice(ctx, missingSaid, (kind, text, undo = null) => { missingSaid = { kind, text, undo }; })); missingSaid = null; }
     { const mc = monthCard(); if (mc) root.append(mc); }
     const spendOnly = offer?.length === 1;
+    offered = !!offer;
     if (offer) root.append(fillCard(ctx, offer, { reg, today: fmt.today(), only: spendOnly ? "spend" : null, ignoreLater: true, title: spendOnly ? "Not sure what you spend?" : null,
-      say: (kind, text, undo = null) => { missingSaid = { kind, text, undo }; }, onMine: () => { formHost.scrollIntoView?.({ behavior: "smooth", block: "start" }); formHost.querySelector?.("input")?.focus?.(); } }));
+      say: (kind, text, undo = null) => { missingSaid = { kind, text, undo }; }, onMine: () => { if (!showForm) { showForm = true; drawForm(); } formHost.scrollIntoView?.({ behavior: "smooth", block: "start" }); formHost.querySelector?.("input")?.focus?.(); } }));
   } else {
     root.append(ui.card(null, ui.row(
       ui.stat("Per month", fmt.money(d.monthly, cur), d.guessedMonthly > 0 ? (d.monthly - d.guessedMonthly < 5 ? "all of it our guesses for now" : `about ${fmt.money(Math.round(d.guessedMonthly / 10) * 10, cur)} of it our guesses for now`) : `${fmt.money(d.yearly, cur)} a year`),
@@ -337,14 +342,14 @@ export function render(root, ctx) {
   for (const w of d.warnings) if (!(nba?.ready && w === d.overspend) && !(d.guessedShare >= 0.5 && w === d.overspend)) root.append(ui.notice("warn", w));
   const formCard = ui.card(null);
   const formHost = ui.h("div");
-  let showForm = d.count === 0;
+  let showForm = d.count === 0 && !offered;
   const drawForm = () => {
     formHost.innerHTML = "";
     if (backNote) formHost.append(backNote);
     // opened from another page with a way back: after Cancel (or with no save) that way back is still offered
     else if (backMod && !editing && landedHere) formHost.append(ui.h("div", { class: "row", style: { marginBottom: "12px" } }, ui.h("a", { class: "btn secondary", href: `#/${backKey}` }, `Back to ${backMod.title} ›`)));
     if (!showForm && !editing) {
-      formHost.append(ui.button("+ Add another expense", () => { showForm = true; drawForm(); }, { class: "secondary" }));
+      formHost.append(ui.button(d.count > 0 ? "+ Add another expense" : "+ Add an expense", () => { showForm = true; drawForm(); }, { class: "secondary" }));
       return;
     }
     const values = editing ? { ...editing, inflates: editing.inflates !== false } : { category: "housing", period: "monthly", essential: true, inflates: true };
@@ -361,7 +366,7 @@ export function render(root, ctx) {
         else p.expenses.push({ id: ui.uid(), ...clean });
       });
       editing = null;
-    }, { submitLabel: editing ? "Save changes" : "Add expense", resetAfter: !editing, onCancel: (editing || d.count > 0) ? () => { editing = null; showForm = false; drawForm(); } : null });
+    }, { submitLabel: editing ? "Save changes" : "Add expense", resetAfter: !editing, onCancel: (editing || d.count > 0 || offered) ? () => { editing = null; showForm = false; drawForm(); } : null });
     // picking a category suggests whether it is a must-pay
     const catSel = f.querySelector("select[name=category]"), essBox = f.querySelector("input[name=essential]");
     if (catSel && essBox && !editing) catSel.addEventListener("change", () => { essBox.checked = (CATEGORIES[catSel.value] ?? CATEGORIES.other).essential; });
