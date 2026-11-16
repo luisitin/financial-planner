@@ -1,7 +1,7 @@
 # Goal seek  (`scenarios/goal-seek`)
 
 **Status:** usable (phase 9)
-**Purpose:** Set the goal (the money lasts and leaves what you want to leave) and see what each change would have to be: what you can spend, when you can retire, what to save, when to claim Social Security.
+**Purpose:** Set the goal and see what each change would need: what you can spend, when to retire, what to save, when to claim Social Security.
 
 ## Inputs
 Everything `retirement/projection` `buildInputs` reads. Params: `today`, `legacy` (today's dollars the plan should still hold at its end; the view's chips and box, kept on the device). Writes one field, and only by "Use age N" (below): `household.people[].retirementAge`. `heavy: true`.
