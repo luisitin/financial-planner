@@ -9,7 +9,7 @@
   its chain too (cashflow/income `chainId`): once a raise from a later date saved on Income has started, the chosen line
   has ended and the new pay `continues` it, so the page stays on that business (it went to the largest other one), also
   after the ended half is removed. Test: `module.test.mjs`.
-- `whatIfs.business = { name, incomeId, revenue, expenses: [{ id, name, category, amount, period }], drawMonthly,
+- `whatIfs.business = { name, incomeId, revenue, expenses: [{ id, name, category, amount, period, bank?, bankMonths? }], drawMonthly,
   healthPremiums, homeOfficeSqft, miles, salary, scorpCosts }`. With no expenses typed here, the one figure typed on the
   Self-employment page (`whatIfs.selfEmployment.expenses`) stands in for them, so the two pages show the same profit.
 - The household's federal tax (`taxes/federal` `taxInputs`, whose `year` sets the tax year of every figure here), the
@@ -123,7 +123,10 @@ Not ready (no business, no revenue): `{ ready: false, year, expenses, typedTotal
   against the solo 401(k)'s.
 
 ## Tests
-`module.test.mjs` (33; the 9 below the line came with the checklist): every headline and line case and the green line
+`module.test.mjs` (43; the 9 after the home office's came with the checklist, the 9 after them with the bank lines:
+the tie by tag, name and category; every kind's words and built-in category; the year's sums with refunds, splits, lines
+left out, moves, $0 lines and what is set apart; a year with no tied lines, no lines, lines with no cost; every sentence;
+useBank; Use these on the page with its question, green line, Undo and No; the row with no lines; invariance): every headline and line case and the green line
 after a save (`words.js`); the headline from the page's own figures; the checklist's rows and the two new kinds; every
 state of every row with its sentence; the checklist from the page's figures (and that it writes nothing); the page drawn
 on the stand-in DOM (the first view: the answer, the plans, four shut rows, no fold by hand, no box, one filled button;
@@ -168,7 +171,8 @@ The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` b
   self-employment tax, paying during the year, where retirement savings go in, side income).
 - **The rows** (shut on the first view): "Costs people often forget to count" (kind `more`, pinned title; status "4 not
   counted yet" / "nothing missing"), "The business" (own; the business's figures and, under them, its expenses; status "6
-  set by you", "from Income", "not set yet"), "As an S corporation" (own, with a profit; the comparison and its two
+  set by you", "from Income", "not set yet"), "Costs from your bank lines" (own, pinned title; below; status "$869 in
+  2026", "none tied yet", "no bank lines yet", "no costs in 2026"), "As an S corporation" (own, with a profit; the comparison and its two
   boxes; status "would save $1,234" / "would cost $1,479" / "about the same"), "How this is worked out" (how, "profit and
   tax": the year's profit line by line with its share of what comes in and the costs a month, the tax as a sole
   proprietor with what comes off income, each retirement plan's rules and deadlines, the earnings they count). Nothing
@@ -186,13 +190,107 @@ The page adopted `core/ui/more.js` (docs/OPTIONAL.md); it draws no `<details>` b
 - First view (`node qa/first-view-node.mjs career/business`, worst of the plan households, family): before 555 words, 32
   figures, 6 boxes, 4 tiles, 2 filled buttons; after 146 words, 8 figures, 0 boxes, 0 tiles, 1 filled button. Empty
   plan: before 143 words, 6 boxes, 2 filled; after 86 words, 0 boxes, 1 filled ("Add it on Income"). Inside the answer
-  budget, so the page left `tests/first-view.known.json`.
+  budget, so the page left `tests/first-view.known.json`. With "Costs from your bank lines" (the second commit) the
+  family reads 155 words and 8 figures, the empty plan 95 words: still inside it.
 - Builder's choices: the headline is what the business leaves the person after tax, not the S corporation's verdict the
   opt spec row suggested (R3: what happens to the person); the S corporation's saving is a worth line under it. The
   share of what comes in moved to "How this is worked out" so the first view keeps to eight figures. The business's
   status names the person's own state, not the revenue the hero already says. Five rows is the most a page may have
   (R12): the opt spec's four (The business, Expenses, S corporation figures, How) plus the brief's two would be six, so
   the expenses sit inside "The business".
+
+## Costs from your bank lines (gap list, next 60, item 6; map P11; 2026-11-16, claude-b)
+One quiet row (`costs.js` `bankCosts(plan, { year, today, incomeId })`): the ledger lines the person ties to the business,
+added up for the page's tax year by the page's own kinds of expense, each beside what is typed for it, then "Use these".
+- **Tying a line to the business: a tag or a category, no new field** (`bizTie`), reusing Rental analysis's idea and its
+  `tagKey` (letters, marks and digits only: "Weekend-Photography" and "weekend photography" are one). A line is the
+  business's when one of its tags is "business" or the business's own name as Transactions keeps a tag (`bizTag`: the
+  name typed here, else the Income line's; "Weekend photography" is "weekend photography"; a "#" or a comma becomes a
+  space; a name that gives no letter or digit, or "business" itself, gives none), or when it is filed under a spending
+  category of the person's own (or one they renamed) with the word "business" in its name ("Business supplies"). The
+  Income kind "Self-employment / business" is not a spending category: money in under it is what customers paid, not a
+  cost.
+- **Which kind** (`kindFor`): a built-in spending category still called by its own name goes by its id
+  (`BUILT_IN_KIND`: Rent or mortgage, Utilities, Groceries, Childcare and school, Fun and hobbies, Gifts and giving,
+  Personal care, Pets, Other → other; Subscriptions → software; Phone and internet → phone; Eating out → meals; Travel →
+  travel; Insurance → insurance; Shopping and clothes → supplies; Car, gas, transit → a car; Loan and card payments → a
+  loan; Taxes not withheld → tax; Health and medical → health): rent for a workspace is a business cost, a mortgage
+  payment rarely is. Any other name goes by its words (`KIND_WORDS`, first match: tax prep, accountant, bookkeeping,
+  lawyer, legal, professional → professional; software, subscription, app, hosting, domain, cloud → software; supplies,
+  materials (not a car's) → supplies; health, medical, dental → health; interest → other (business interest is a cost);
+  loan, mortgage → a loan; tax → tax; utility, electric, water → other; parking, tolls → other (Pub 334: on top of the
+  mileage rate); car, auto, vehicle, fuel, gas, transit, mileage → a car; rent, lease → other (a workspace's rent);
+  course, class, training, tuition, seminar, conference, workshop, education → education; meal, dining, restaurant,
+  lunch, dinner, coffee → meals; phone, internet, mobile, cell → phone; advertising, marketing, promotion, ads →
+  marketing; travel, hotel, flight, airline, lodging → travel; equipment, computer, camera, laptop, tools, hardware →
+  equipment; insurance → insurance; contractor, freelancer, assistant, payroll, wages → contractors; postage, office,
+  shipping → supplies; fee, license, permit, dues → fees), else other. Software and supplies come before health and tax
+  so that "Medical supplies", "Dental supplies" and "Business tax software" count, and rent before "office" so that
+  "Office rent" is a workspace's rent (money critic F4, 2026-11-16); "Business gas" stays a car's cost, which the IRS
+  rate a mile already covers. No category: money out is other. A move between your own accounts, a line left out of the totals (gap #32) and
+  a line of $0.00 count nowhere; a split purchase counts by its parts and once in the line count (`allLines`).
+- **Formulas.** Each kind's amount for the year = −(the tied amounts going to it): money back under a cost's category
+  (a refund) takes off that kind, and a kind whose money back is more than what was spent shows "$20 back" and is not
+  copied. The total = the kinds added up. Set apart, each with one sentence, never copied (`apartLine`): a car's costs
+  ("Car costs of $40 are not counted: the page counts your business miles at the IRS rate, and a car counts one way or
+  the other, not both."; Pub 334: "If you choose to use the standard mileage rate for a year, you can't deduct your
+  actual expenses for that year except for business-related parking fees and tolls"; with no miles typed it says to
+  type them), loan payments ("paying back a loan is not a cost"), tax payments ("income and self-employment tax are not
+  business costs"), health costs ("health insurance you pay for yourself has its own box under “The business”") and money
+  paid out under an income category ("it lowers what customers paid, not the costs").
+- **The year**: the page's tax year (the Federal estimate's); when nothing is tied to it and something is to the year
+  before, that year (a person in January to April looks at last year); a line dated after this year is no year (money
+  critic F7). The year still running says "so far" with the months that have a line counted ("January to October");
+  nothing is scaled up to a year: a guess of the missing months' costs would be a figure no bank line holds. The lines
+  and months said are those that went to a kind; the lines set apart have their own sentences (money critic F6: "7 lines
+  come to $480" counted a $300 car among them); when every line is set apart, every tied line.
+- **"Use these"** (outlined; shown when a kind comes to more than nothing and what is typed differs): `ui.confirm` first
+  (`bankAsk`: "Use your bank lines' totals for 2026 as the year's expenses for Supplies and materials, ... and Other?
+  They replace what is typed for those kinds; the other kinds stay as typed. They cover January to October only.",
+  said whenever the months do not run January to December; for each kind whose typed figure is more than the bank
+  total, "Supplies and materials would go down from the $600 a year typed here to $190." (money critic F3: a part-year
+  total replacing a whole year's); and, when the Self-employment page's one figure stands in for the expenses here, "The
+  $4,000 typed as one figure on the Self-employment page stops counting here."); then `useBank` replaces, for each such
+  kind, the expenses typed under it by one `{ name: "", category, amount (to the cent), period: "annual", bank: 2026,
+  bankMonths: [1, 10] }` (`bankMonths` only for part of a year); every other expense stays. Afterwards the page keeps
+  the caution (person critic P1: it was only in the question): beside the kind, "$190 from your bank lines, January to
+  October 2026 only" in place of "a year typed here" (`fromBank`); under the expense in The business, "From your bank
+  lines, January to October 2026 only" / "From your bank lines for 2025" (`bankFrom`); and the notice under the answer
+  (`partNote`, above). One
+  change, taken back by Undo (`ui.undoable`; "Undone. The expenses are back as they were."). The green line names the new
+  answer (R7): "Your bank lines' costs for 2026 are in: $869 in 7 kinds. After tax the business now leaves you about
+  $3,372 a month." The row stays open (R17). Once what is typed for every kind is the bank total (to the dollar), the
+  row says "The page counts these totals now." and has no button.
+- **Sentences** (one per case, each with a test): `bankSentence` (noLines: "No bank lines are in the plan yet. Add them
+  on Transactions, then type “business” or “weekend photography” in the Tags box of each line that was for the
+  business."; noneTied: "No bank lines are tied to the business for 2026 yet. On Transactions, type “business” or “weekend
+  photography” in the Tags box of its lines (a rule can do it for you), or file them under a category with “business” in
+  its name."; some: "9 bank lines tied to the business in 2026 so far (January to October) come to $869 of costs, by the
+  kinds this page uses:" / "1 bank line tied to the business in 2025 comes to $80 of costs, ..."; noCosts: "2 bank lines
+  tied to the business in 2026 so far (March to April) hold no cost this page counts."), `BANK_THEN` under the first two
+  ("Then their costs add up here for the year by the kinds this page uses, beside what you typed, and one tap puts the
+  totals in your expenses."), `apartLine`, `bankStatus`, `bankAsk`, `bankSaid`, `BANK_UNDONE`. With no bank lines the
+  row has "Bring in a bank file" (Import); with lines none tied, "Transactions" (Ledger); with tied lines, "See the lines
+  on Transactions ›" (`#/transactions/ledger?q=%23business`).
+- **No current figure** is used here: only the person's own bank lines; the mileage rate stays the page's own.
+- **Example** (the invented family's Bo, his "Weekend photography" with $60,000 typed here and $900 a year of expenses
+  typed: $50 a month of paper, $300 of advertising; tests "the year's sums ..."): fourteen 2026 lines tied by the tag
+  "business", by "Weekend-Photography" or by the category "Business supplies", nine of them costs (the row says "9 bank
+  lines"), give supplies $190 (120 + the $70 part of a
+  split receipt), software $25 (45 less $20 back), phone $60, meals $80, accountant $250, a course $199 and other $65 (the
+  $30 part and an uncategorized $35): $869. Set apart: a car $40, a loan payment $300, a tax payment $1,000, health $500,
+  $50 paid back to a customer. Not counted: $2,000 from a customer, a $150 line left out of the totals, a $500 move, a $0
+  line, last year's $999 (2025 holds only that). "Use these" replaces the $600 of paper with $190 and keeps the $300 of
+  advertising: typed expenses go from $900 to $1,169 and what the business leaves from about $3,389 to $3,372 a month.
+- **Invariance** (`module.test.mjs`, "invariance: ..."): over the 14 qa households, the family, renterDebt,
+  retiredCouple, cardGap, the empty plan, three round 8 business plans and the bank plan, compute() is byte-identical
+  before and after checklist() and bankCosts() run (they write nothing) and with every bank line tagged "business"
+  (the page's figures do not read the ledger). Against a491122 (a scratch comparison, not in the repo): compute() of
+  this page, Self-employment, the Federal estimate, Next best action, Side income and Income over 30 plans (the 14 qa
+  households, the family, renterDebt, retiredCouple, cardGap, the empty plan and every round 8 plan), each also with
+  every bank line tagged "business": 360 outputs, all byte-identical. The two outputs that move on purpose, what the
+  business leaves a month and the costs a month to break even with a home office typed, are in no invented plan (the
+  deliberate exception above, with its own test).
 
 ## Costs people often forget to count (gap list, next 60, item 6; map P10; 2026-11-16, claude-b)
 One quiet row (`costs.js` `checklist(d, s)`): an intro ("Costs the tax law lets a self-employed person count that are easy

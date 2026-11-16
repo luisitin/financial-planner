@@ -503,8 +503,9 @@ test("the page opens simple: the answer, the plans for retirement, then quiet ro
   assert.equal(a.textOf(root.querySelector("h1")), answerFor(d, $).title);
   assert.match(t, new RegExp(answerFor(d, $).line.replace(/[$().]/g, "\\$&")));
   assert.match(t, /You take out \$3,000 a month; that leaves \$[\d,]+ a month in the business\./);
-  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: false, how: false });
-  assert.deepEqual(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => a.textOf(x.querySelector(".fold-title"))), ["Costs people often forget to count", "The business", "As an S corporation", "How this is worked out"]);
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, bank: false, scorp: false, how: false });
+  assert.deepEqual(root.querySelectorAll("details").filter((x) => x.dataset.part).map((x) => a.textOf(x.querySelector(".fold-title"))), ["Costs people often forget to count", "The business", "Costs from your bank lines", "As an S corporation", "How this is worked out"]);
+  assert.equal(a.textOf(partEl(root, "bank").querySelector(".fold-status")), "no bank lines yet");
   assert.equal(a.textOf(partEl(root, "missed").querySelector(".fold-status")), "4 not counted yet");
   assert.equal(a.textOf(partEl(root, "business").querySelector(".fold-status")), "6 set by you", "revenue, home office, miles, what is taken out and the two expenses");
   assert.match(a.textOf(partEl(root, "scorp").querySelector(".fold-status")), /^would (save|cost) \$[\d,]+$/);
@@ -528,8 +529,8 @@ test("the empty plan: one sentence on what to do first and one filled way to sta
   assert.equal(a.textOf(root.querySelector("h1")), "Your small business");
   assert.deepEqual(filledOf(root).map((b) => a.textOf(b)), ["Add it on Income"]);
   assert.equal(boxesShown(root).length, 0);
+  // no business yet: the bank lines' row waits, and the costs list counts nothing as missed (person critic P2)
   assert.deepEqual(partsOpen(root), { missed: false, business: false });
-  // no business yet: the costs list counts nothing as missed (person critic P2)
   assert.equal(a.textOf(partEl(root, "missed").querySelector(".fold-status")), "a short list");
   assert.equal(a.textOf(partEl(root, "business").querySelector(".fold-status")), "not set yet");
   // the boxes a person may not know offhand carry a labelled example in their help line (P4), never grey text
@@ -579,26 +580,313 @@ test("a checklist row's button opens The business where it is, the box ready or 
 test("S11 (R17): a save in a row keeps that row open with its green line; no other row opens or shuts; the next visit opens shut", async () => {
   const a = await drawPage(withBiz(BIZ));
   let root = a.draw();
-  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: false, how: false });
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, bank: false, scorp: false, how: false });
   const f = boxOf(partEl(root, "business"), "miles").closest("form");
   boxOf(f, "miles").value = "4000"; f.dispatch("submit");
   assert.equal(a.saved.length, 1); assert.equal(a.plan().whatIfs.business.miles, 4000);
   root = a.draw();
-  assert.deepEqual(partsOpen(root), { missed: false, business: true, scorp: false, how: false }, "the row just saved stays open, no other moves");
+  assert.deepEqual(partsOpen(root), { missed: false, business: true, bank: false, scorp: false, how: false }, "the row just saved stays open, no other moves");
   assert.match(a.textOf(partEl(root, "business")), /Saved\. After tax the business now leaves you about \$[\d,]+ a month\./);
   root = a.draw();
-  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: false, how: false }, "the next draw opens shut");
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, bank: false, scorp: false, how: false }, "the next draw opens shut");
   // the S corporation's figures: Compare keeps its row open and says the new saving or cost
   const sf = boxOf(partEl(root, "scorp"), "salary").closest("form");
   boxOf(sf, "salary").value = "30000"; sf.dispatch("submit");
   root = a.draw();
-  assert.deepEqual(partsOpen(root), { missed: false, business: false, scorp: true, how: false });
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, bank: false, scorp: true, how: false });
   assert.match(a.textOf(partEl(root, "scorp")), /Saved\. As an S corporation you would now (keep|pay) about \$[\d,]+ more a year\./);
   // removing an expense keeps The business open, with its line
   root = a.draw();
   btnOf(partEl(root, "business"), "Remove").click();
   root = a.draw();
-  assert.deepEqual(partsOpen(root), { missed: false, business: true, scorp: false, how: false });
+  assert.deepEqual(partsOpen(root), { missed: false, business: true, bank: false, scorp: false, how: false });
   assert.match(a.textOf(partEl(root, "business")), /Equipment removed\. After tax the business now leaves you about \$[\d,]+ a month\./);
   assert.equal(a.plan().whatIfs.business.expenses.length, 1);
+});
+
+// ---------------------------------------------------------------- costs from your bank lines (costs.js bankCosts, useBank)
+import { bankCosts, bizTag, bizTie, kindFor, bankSentence, apartLine, bankStatus, bankAsk, bankSaid, useBank, usable, inUse, monthsWords, BANK_TITLE, BANK_UNDONE, KIND_WORDS, BUILT_IN_KIND, bankFrom, fromBank, partNote } from "./costs.js";
+import { categoriesOf } from "../../transactions/categories/compute.js";
+const BANK_TODAY = "2026-11-16";
+let txn = 0;
+const tx = (date, amount, category, tags = [], extra = {}) => ({ id: `t${++txn}`, accountId: "a-chk", date, amount, payee: `Payee ${txn}`, category, tags, ...extra });
+/** Bo's weekend photography (the family's Income line "Weekend photography"), $60,000 typed here, and a year of bank lines. */
+function bankPlan(lines = null) {
+  const p = familyPlan(BANK_TODAY);
+  p.whatIfs = { business: { revenue: 60000, expenses: [{ id: "s1", name: "Paper", category: "supplies", amount: 50, period: "monthly" }, { id: "m1", name: "", category: "marketing", amount: 300, period: "annual" }] } };
+  p.categories = [{ id: "biz-sup", label: "Business supplies", kind: "expense" }, { id: "acct", label: "Accountant fees", kind: "expense" }, { id: "course", label: "Online course", kind: "expense" }];
+  txn = 0;
+  p.transactions = lines ?? [
+    tx("2026-01-15", -45, "subscriptions", ["business"]),            // software 45
+    tx("2026-02-03", -120, "biz-sup"),                                 // tied by its category's name: supplies 120
+    tx("2026-03-10", -60, "phone", ["Weekend-Photography"]),          // tied by the business's own name: phone 60
+    tx("2026-03-12", -80, "dining", ["business", "trip"]),            // meals 80 (half counts on the page)
+    tx("2026-04-01", -40, "transport", ["business"]),                 // a car: set apart
+    tx("2026-04-05", -300, "debt", ["business"]),                     // a loan payment: set apart
+    tx("2026-04-15", -1000, "taxes", ["business"]),                   // tax: set apart
+    tx("2026-05-01", -500, "health", ["business"]),                   // health: set apart
+    tx("2026-05-02", 20, "subscriptions", ["business"]),              // money back: software 45 - 20 = 25
+    tx("2026-06-01", 2000, "income-business", ["business"]),          // money in from customers: not a cost
+    tx("2026-06-02", -50, "income-business", ["business"]),           // paid back to a customer: set apart
+    tx("2026-06-03", -200, "groceries"),                               // not the business's
+    tx("2026-07-01", -150, "shopping", ["business"], { exclude: true }), // left out of the totals
+    tx("2026-08-01", -100, "shopping", ["business"], { splits: [{ category: "shopping", amount: -70 }, { category: "fun", amount: -30 }] }), // supplies 70, other 30
+    tx("2026-08-02", -500, "transfer", ["business"]),                 // a move between your own accounts
+    tx("2026-09-01", 0, "shopping", ["business"]),                    // $0.00 is not a line
+    tx("2026-09-05", -250, "acct", ["business"]),                     // professional 250
+    tx("2026-10-07", -199, "course", ["business"]),                   // education 199
+    tx("2026-10-09", -35, "", ["business"]),                          // no category: other 35
+    tx("2025-12-15", -999, "shopping", ["business"]),                 // last year
+  ];
+  return p;
+}
+
+test("a bank line is the business's by the tag \"business\", by the business's own name as a tag, or by a category with \"business\" in its name", () => {
+  assert.equal(BANK_TITLE, "Costs from your bank lines");
+  assert.equal(bizTag("Weekend photography"), "weekend photography"); assert.equal(bizTag("Studio #2, upstairs"), "studio 2 upstairs");
+  assert.equal(bizTag("Business"), null, "the tag is \"business\" already"); assert.equal(bizTag("🙂"), null); assert.equal(bizTag(""), null);
+  const p = bankPlan();
+  const tie = bizTie(p, { incomeId: "i-side" });
+  const t = (o) => tie({ date: "2026-01-01", amount: -1, ...o });
+  assert.equal(t({ tags: ["business"] }), true); assert.equal(t({ tags: ["Business"] }), true); assert.equal(t({ tags: ["#business"] }), true);
+  assert.equal(t({ tags: ["weekend-photography"] }), true, "the name compared on letters and digits, as Rental analysis does");
+  assert.equal(t({ category: "biz-sup" }), true); assert.equal(t({ category: "acct" }), false, "a category without the word, untagged");
+  assert.equal(t({ category: "income-business" }), false, "the Income kind \"Self-employment / business\" is not a spending category");
+  assert.equal(t({ tags: ["trip"] }), false); assert.equal(t({}), false);
+  // a name typed on this page wins over the Income line's
+  p.whatIfs.business.name = "Bo Photo";
+  assert.equal(bizTie(p, { incomeId: "i-side" })({ tags: ["bo photo"] }), true);
+  assert.equal(bizTie(p, { incomeId: "i-side" })({ tags: ["weekend photography"] }), false);
+});
+
+test("each tied line goes to one of the page's kinds by its category: the words of its name first, then the built-in category, else other", () => {
+  const c = (label, id = "x", kind = "expense") => ({ id, label, kind });
+  const cases = [["Tax prep", "professional"], ["Bookkeeping", "professional"], ["Health insurance", "health"], ["Loan interest", "other"], ["Car loan", "loan"], ["Mortgage", "loan"], ["Sales taxes", "tax"],
+    ["Gas and electric", "other"], ["Parking and tolls", "other"], ["Car insurance", "car"], ["Gas", "car"], ["Online course", "education"], ["Client lunches", "meals"], ["Web hosting", "software"],
+    ["Cell phone", "phone"], ["Facebook ads", "marketing"], ["Hotels", "travel"], ["Camera gear", "equipment"], ["Business insurance", "insurance"], ["Freelancers", "contractors"],
+    ["Business supplies", "supplies"], ["Postage", "supplies"], ["License fees", "fees"], ["Business", "other"],
+    // a practice's own supplies, tax software and a workspace's rent are costs, not health, tax or supplies (money critic
+    // F4); a car's supplies or lease stay a car's; fuel is a car's cost, counted through the miles
+    ["Medical supplies", "supplies"], ["Dental supplies", "supplies"], ["Business tax software", "software"], ["Office rent", "other"], ["Studio lease", "other"],
+    ["Car supplies", "car"], ["Car lease", "car"], ["Business gas", "car"], ["Raw materials", "supplies"], ["Office supplies", "supplies"]];
+  for (const [label, k] of cases) assert.equal(kindFor(c(label), -10), k, label);
+  // the built-in categories by their own names: rent for a workspace is a cost, a car is set apart, shopping is supplies
+  const cats = new Map(categoriesOf(familyPlan(BANK_TODAY), { all: true }).map((x) => [x.id, x]));
+  for (const [id, k] of Object.entries({ housing: "other", utilities: "other", transport: "car", insurance: "insurance", health: "health", debt: "loan", phone: "phone", taxes: "tax", subscriptions: "software", dining: "meals", shopping: "supplies", travel: "travel", other: "other" })) assert.equal(kindFor(cats.get(id), -10), k, id);
+  assert.equal(kindFor({ ...cats.get("housing"), label: "Studio rent" }, -10), "other", "a renamed one goes by its new name");
+  assert.equal(kindFor({ ...cats.get("housing"), label: "Mortgage" }, -10), "loan");
+  // money in: not a cost under an income category or none; money out under one is set apart
+  assert.equal(kindFor(cats.get("income-business"), 100), null); assert.equal(kindFor(cats.get("income-business"), -100), "income");
+  assert.equal(kindFor(null, 100), null); assert.equal(kindFor(null, -100), "other"); assert.equal(kindFor(cats.get("transfer"), -100), null);
+  assert.equal(kindFor(cats.get("shopping"), 20), "supplies", "money back under a cost's category takes off that kind");
+  assert.ok(KIND_WORDS.length > 15 && Object.keys(BUILT_IN_KIND).length === 19);
+});
+
+test("the year's sums by kind: refunds, split purchases, lines left out, moves, $0 lines and what is set apart", () => {
+  const p = bankPlan(), was = JSON.stringify(p);
+  const b = bankCosts(p, { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(JSON.stringify(p), was, "bankCosts() writes nothing");
+  assert.equal(b.case, "some"); assert.equal(b.year, 2026); assert.equal(b.sofar, true); assert.deepEqual(b.years, [2026, 2025]); assert.equal(b.tag, "weekend photography");
+  assert.deepEqual(b.kinds.map((k) => [k.key, Math.round(k.amount * 100) / 100]), [["supplies", 190], ["software", 25], ["phone", 60], ["meals", 80], ["professional", 250], ["education", 199], ["other", 65]]);
+  assert.equal(b.kinds.find((k) => k.key === "supplies").label, "Supplies and materials");
+  assert.deepEqual(b.kinds.find((k) => k.key === "supplies").from.sort(), ["Business supplies", "Shopping and clothes"]);
+  assert.deepEqual(b.kinds.find((k) => k.key === "other").from.sort(), ["Fun and hobbies", "Uncategorized"]);
+  near(b.total, 190 + 25 + 60 + 80 + 250 + 199 + 65);
+  assert.deepEqual(b.apart.map((a) => [a.key, a.amount]), [["car", 40], ["loan", 300], ["tax", 1000], ["health", 500], ["income", 50]]);
+  // the lines and months said are those that went to a kind: the five set apart (a car, a loan, tax, health, money paid
+  // back) have their own sentences (money critic F6: "7 lines come to $480" counted a $300 car among them)
+  assert.equal(b.lines, 9, "every tied 2026 line that went to a kind; not the five set apart, the money in from customers, the one left out, the move or the $0 line; the split purchase once");
+  assert.deepEqual(b.months, [1, 2, 3, 5, 8, 9, 10]); assert.equal(monthsWords(b.months), "January to October"); assert.equal(monthsWords([3]), "March");
+  assert.equal(b.partial, true, "January to October is part of a year");
+  // a line dated after this year is no year to offer (money critic F7)
+  const later = bankCosts(bankPlan([...bankPlan().transactions, tx("2027-02-01", -10, "shopping", ["business"])]), { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.deepEqual(later.years, [2026, 2025]); assert.equal(later.total, b.total);
+  // last year: one line
+  const l = bankCosts(p, { year: 2025, today: BANK_TODAY, incomeId: "i-side" });
+  assert.deepEqual(l.kinds.map((k) => [k.key, k.amount]), [["supplies", 999]]); assert.equal(l.sofar, false); assert.equal(l.lines, 1);
+  assert.equal(l.partial, true, "one December line is December only");
+  const full = bankCosts(bankPlan([tx("2025-01-10", -40, "phone", ["business"]), tx("2025-12-10", -40, "phone", ["business"])]), { year: 2025, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(full.partial, false, "January to December");
+});
+
+test("a year with no tied lines: the year before when it has some, else none tied; no bank lines at all; tied lines that hold no cost", () => {
+  // only last year's line: the page's year 2026 shows 2025
+  let p = bankPlan([tx("2025-06-01", -80, "phone", ["business"]), tx("2026-02-01", -30, "groceries")]);
+  let b = bankCosts(p, { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(b.case, "some"); assert.equal(b.year, 2025); assert.equal(b.sofar, false);
+  assert.equal(bankSentence(b, $), "1 bank line tied to the business in 2025 comes to $80 of costs, by the kinds this page uses:");
+  // lines, none tied
+  p = bankPlan([tx("2026-02-01", -30, "groceries"), tx("2024-02-01", -30, "phone", ["business"])]);
+  b = bankCosts(p, { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(b.case, "noneTied"); assert.deepEqual(b.kinds, []); assert.equal(b.total, 0);
+  assert.equal(bankSentence(b, $), "No bank lines are tied to the business for 2026 yet. On Transactions, type “business” or “weekend photography” in the Tags box of its lines (a rule can do it for you), or file them under a category with “business” in its name.");
+  assert.equal(bankStatus(b, $), "none tied yet"); assert.deepEqual(usable(b), []);
+  // no lines at all
+  p = bankPlan([]);
+  b = bankCosts(p, { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(b.case, "noLines");
+  assert.equal(bankSentence(b, $), "No bank lines are in the plan yet. Add them on Transactions, then type “business” or “weekend photography” in the Tags box of each line that was for the business.");
+  assert.equal(bankStatus(b, $), "no bank lines yet");
+  assert.equal(bankSentence({ ...b, tag: null }, $), "No bank lines are in the plan yet. Add them on Transactions, then type “business” in the Tags box of each line that was for the business.");
+  // tied lines that are all set apart
+  p = bankPlan([tx("2026-03-01", -40, "transport", ["business"]), tx("2026-04-01", -60, "transport", ["business"])]);
+  b = bankCosts(p, { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(b.case, "noCosts"); assert.equal(bankStatus(b, $), "no costs in 2026");
+  assert.equal(bankSentence(b, $), "2 bank lines tied to the business in 2026 so far (March to April) hold no cost this page counts.");
+  assert.deepEqual(usable(b), []);
+});
+
+test("the row's words: the sentence, each line set apart, the status, the question, the green line", () => {
+  const b = bankCosts(bankPlan(), { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  assert.equal(bankSentence(b, $), "9 bank lines tied to the business in 2026 so far (January to October) come to $869 of costs, by the kinds this page uses:");
+  assert.equal(bankStatus(b, $), "$869 in 2026"); assert.ok(bankStatus({ ...b, total: 123456 }, $).length <= 20);
+  assert.deepEqual(b.apart.map((a) => apartLine(a, $, { miles: 3000 })), [
+    "Car costs of $40 are not counted: the page counts your business miles at the IRS rate, and a car counts one way or the other, not both.",
+    "Loan payments of $300 are left out: paying back a loan is not a cost.",
+    "Tax payments of $1,000 are left out: income and self-employment tax are not business costs.",
+    "Health costs of $500 are left out: health insurance you pay for yourself has its own box under “The business”.",
+    "$50 paid out under an income category is left out: it lowers what customers paid, not the costs.",
+  ]);
+  assert.equal(apartLine(b.apart[0], $), "Car costs of $40 are not counted: type your business miles under “The business” instead; the page counts them at the IRS rate, and a car counts one way or the other, not both.");
+  assert.equal(bankAsk(b, $), "Use your bank lines' totals for 2026 as the year's expenses for Supplies and materials, Software and subscriptions, Phone and internet, Business meals, Accountant, lawyer, tax help, Courses for your work and Other? They replace what is typed for those kinds; the other kinds stay as typed. They cover January to October only.");
+  // a typed figure larger than the bank lines' total is named with both (money critic F3): the $600 a year of paper
+  // against $190 from January to October
+  const typed0 = typedByKind(compute(bankPlan(), { today: BANK_TODAY }));
+  assert.equal(bankAsk(b, $, { typed: typed0 }), "Use your bank lines' totals for 2026 as the year's expenses for Supplies and materials, Software and subscriptions, Phone and internet, Business meals, Accountant, lawyer, tax help, Courses for your work and Other? They replace what is typed for those kinds; the other kinds stay as typed. They cover January to October only. Supplies and materials would go down from the $600 a year typed here to $190.");
+  assert.equal(bankAsk(b, $, { typed: { ...typed0, meals: 1200 } }).split("only. ")[1], "Supplies and materials would go down from the $600 a year typed here to $190 and Business meals from $1,200 to $80.");
+  assert.doesNotMatch(bankAsk(b, $, { typed: { supplies: 190.2, phone: 10 } }), /go down/, "a typed figure no larger is not named");
+  const one = { ...b, kinds: [b.kinds[2]], sofar: false, partial: false };
+  assert.equal(bankAsk(one, $, { seFigure: 4000 }), "Use your bank lines' totals for 2026 as the year's expenses for Phone and internet? They replace what is typed for that kind; the other kinds stay as typed. The $4,000 typed as one figure on the Self-employment page stops counting here.");
+  assert.equal(bankSaid(b, $), "Your bank lines' costs for 2026 are in: $869 in 7 kinds.");
+  assert.equal(bankSaid(one, $), "Your bank lines' costs for 2026 are in: $60 in 1 kind.");
+  assert.equal(BANK_UNDONE, "Undone. The expenses are back as they were.");
+});
+
+test("Use these: the bank totals replace what is typed for their kinds, the other kinds stay, each marked with its year; then the page counts them", () => {
+  const p = bankPlan();
+  const b = bankCosts(p, { year: 2026, today: BANK_TODAY, incomeId: "i-side" });
+  const w = structuredClone(p.whatIfs.business);
+  let n = 0;
+  assert.equal(useBank(w, b, () => `u${++n}`), 7);
+  assert.deepEqual(w.expenses.map((e) => [e.category, e.amount, e.period, e.bank ?? null]), [
+    ["marketing", 300, "annual", null],   // typed, no bank lines for it: kept
+    ["supplies", 190, "annual", 2026], ["software", 25, "annual", 2026], ["phone", 60, "annual", 2026], ["meals", 80, "annual", 2026],
+    ["professional", 250, "annual", 2026], ["education", 199, "annual", 2026], ["other", 65, "annual", 2026]]);
+  assert.ok(!w.expenses.some((e) => e.id === "s1"), "the $50 a month of paper typed under supplies is replaced");
+  // part of a year: each says which months it covers, so the page can keep saying so (person critic P1)
+  assert.ok(w.expenses.filter((e) => e.bank).every((e) => JSON.stringify(e.bankMonths) === "[1,10]"));
+  assert.equal(bankFrom(w.expenses[1]), "From your bank lines, January to October 2026 only"); assert.equal(bankFrom(w.expenses[0]), null);
+  assert.deepEqual(fromBank(w.expenses), { supplies: "from your bank lines, January to October 2026 only", software: "from your bank lines, January to October 2026 only", phone: "from your bank lines, January to October 2026 only", meals: "from your bank lines, January to October 2026 only", professional: "from your bank lines, January to October 2026 only", education: "from your bank lines, January to October 2026 only", other: "from your bank lines, January to October 2026 only" });
+  assert.equal(partNote(w.expenses), "The costs from your bank lines cover January to October 2026 only, so the profit leaves out the other months' costs. Use these again under “Costs from your bank lines” once more lines are in.");
+  assert.equal(partNote(p.whatIfs.business.expenses), null);
+  // a whole year: no months kept, nothing to warn of
+  const wf = { expenses: [] };
+  useBank(wf, bankCosts(bankPlan([tx("2025-01-10", -40, "phone", ["business"]), tx("2025-12-10", -40, "phone", ["business"])]), { year: 2025, today: BANK_TODAY, incomeId: "i-side" }), () => "f");
+  assert.deepEqual(wf.expenses, [{ id: "f", name: "", category: "phone", amount: 80, period: "annual", bank: 2025 }]);
+  assert.equal(bankFrom(wf.expenses[0]), "From your bank lines for 2025"); assert.equal(partNote(wf.expenses), null);
+  // a kind with a typed expense beside the bank one is said as typed
+  assert.deepEqual(fromBank([...wf.expenses, { id: "g", category: "phone", amount: 5, period: "monthly" }]), {});
+  // the page counts them: meals at half, the rest in full
+  const q = structuredClone(p); q.whatIfs.business = w;
+  const d = compute(q, { today: BANK_TODAY });
+  near(d.typedTotal, 300 + 190 + 25 + 60 + 80 + 250 + 199 + 65); near(d.expensesTotal, d.typedTotal - 40);
+  assert.equal(inUse(b, typedByKind(d)), true, "nothing left for Use these to do");
+  assert.equal(inUse(b, typedByKind(compute(p, { today: BANK_TODAY }))), false);
+  // nothing usable: nothing written
+  const w2 = structuredClone(p.whatIfs.business);
+  assert.equal(useBank(w2, { ...b, kinds: [] }, () => "x"), 0); assert.deepEqual(w2, p.whatIfs.business);
+});
+
+test("Use these on the page: asked first; the green line names the new answer, with Undo; the row stays open; no means nothing changes", async () => {
+  const a = await drawPage(bankPlan(), { today: BANK_TODAY });
+  let root = a.draw();
+  const part = partEl(root, "bank");
+  assert.equal(a.textOf(part.querySelector(".fold-title")), "Costs from your bank lines"); assert.equal(a.textOf(part.querySelector(".fold-status")), "$869 in 2026");
+  const t = a.textOf(part);
+  assert.match(t, /9 bank lines tied to the business in 2026 so far \(January to October\) come to \$869 of costs/);
+  assert.match(t, /Supplies and materials\s*\$190\s*\$600 a year typed here/); assert.match(t, /Courses for your work\s*\$199\s*none typed here/);
+  assert.match(t, /Car costs of \$40 are not counted/);
+  assert.equal(part.querySelectorAll("a").find((x) => /See the lines on Transactions/.test(a.textOf(x)))?.getAttribute("href"), "#/transactions/ledger?q=%23business");
+  const use = btnOf(part, "Use these");
+  assert.equal(use.className, "secondary", "outlined");
+  // no: nothing changes
+  const no = await drawPage(bankPlan(), { today: BANK_TODAY, answer: false });
+  btnOf(partEl(no.draw(), "bank"), "Use these").click();
+  assert.equal(no.saved.length, 0); assert.equal(no.asked.length, 1);
+  // yes
+  use.click();
+  assert.equal(a.asked.length, 1); assert.match(a.asked[0], /^Use your bank lines' totals for 2026 as the year's expenses for Supplies and materials/);
+  assert.match(a.asked[0], /They cover January to October only\. Supplies and materials would go down from the \$600 a year typed here to \$190\.$/);
+  assert.equal(a.saved.length, 1);
+  assert.deepEqual(a.plan().whatIfs.business.expenses.filter((e) => e.bank === 2026).map((e) => e.category), ["supplies", "software", "phone", "meals", "professional", "education", "other"]);
+  const d2 = compute(a.plan(), { today: BANK_TODAY });
+  root = a.draw();
+  assert.deepEqual(partsOpen(root), { missed: false, business: false, bank: true, scorp: false, how: false }, "the row saved in stays open (S11)");
+  const p2 = partEl(root, "bank");
+  assert.match(a.textOf(p2), new RegExp(`Your bank lines' costs for 2026 are in: \\$869 in 7 kinds\\. After tax the business now leaves you about \\${$(d2.keepMonthly)} a month\\.`));
+  assert.match(a.textOf(p2), /The page counts these totals now\./); assert.equal(btnOf(p2, "Use these"), undefined);
+  // the part-year caution stays on the page: beside each kind, under each expense, and under the answer (person critic P1)
+  assert.match(a.textOf(p2), /Supplies and materials\s*\$190\s*\$190 from your bank lines, January to October 2026 only/);
+  assert.doesNotMatch(a.textOf(p2), /a year typed here/);
+  assert.match(a.textOf(partEl(root, "business")), /From your bank lines, January to October 2026 only/);
+  const notes = root.querySelectorAll(".notice").map((x) => a.textOf(x));
+  assert.ok(notes.includes("The costs from your bank lines cover January to October 2026 only, so the profit leaves out the other months' costs. Use these again under “Costs from your bank lines” once more lines are in."), notes.join(" | "));
+  // Undo puts the expenses back as they were
+  btnOf(p2, "Undo").click();
+  assert.deepEqual(a.plan().whatIfs.business.expenses, bankPlan().whatIfs.business.expenses);
+  root = a.draw();
+  assert.match(a.textOf(partEl(root, "bank")), /Undone\. The expenses are back as they were\./);
+  assert.ok(btnOf(partEl(root, "bank"), "Use these"));
+  assert.ok(!root.querySelectorAll(".notice").some((x) => /cover January to October 2026 only/.test(a.textOf(x))), "the caution goes with the bank figures");
+});
+
+test("no costs typed while the bank lines hold some: the notice says where they are (person critic P3)", async () => {
+  const p = bankPlan(); p.whatIfs.business.expenses = [];
+  const a = await drawPage(p, { today: BANK_TODAY });
+  const root = a.draw();
+  const notes = root.querySelectorAll(".notice").map((x) => a.textOf(x));
+  assert.ok(notes.includes("No costs typed yet, so all of what customers pay counts as profit. Your bank lines show $869 of costs: open “Costs from your bank lines” below to use them."), notes.join(" | "));
+  // with no tied lines the notice is as it was
+  const q = bankPlan([tx("2026-02-01", -30, "groceries")]); q.whatIfs.business.expenses = [];
+  const b = await drawPage(q, { today: BANK_TODAY });
+  assert.ok(b.draw().querySelectorAll(".notice").map((x) => b.textOf(x)).includes("No costs typed yet, so all of what customers pay counts as profit."));
+});
+
+test("the row with no bank lines, and with lines none tied: what to do first, and the way there", async () => {
+  let a = await drawPage(bankPlan([]), { today: BANK_TODAY });
+  let part = partEl(a.draw(), "bank");
+  assert.equal(a.textOf(part.querySelector(".fold-status")), "no bank lines yet");
+  assert.match(a.textOf(part), /No bank lines are in the plan yet\. Add them on Transactions, then type “business” or “weekend photography”/);
+  assert.match(a.textOf(part), /Then their costs add up here for the year by the kinds this page uses, beside what you typed, and one tap puts the totals in your expenses\./);
+  assert.equal(part.querySelectorAll("a").find((x) => a.textOf(x) === "Bring in a bank file")?.getAttribute("href"), "#/transactions/import");
+  assert.equal(btnOf(part, "Use these"), undefined);
+  a = await drawPage(bankPlan([tx("2026-02-01", -30, "groceries")]), { today: BANK_TODAY });
+  part = partEl(a.draw(), "bank");
+  assert.equal(a.textOf(part.querySelector(".fold-status")), "none tied yet");
+  assert.equal(part.querySelectorAll("a").find((x) => a.textOf(x) === "Transactions")?.getAttribute("href"), "#/transactions/ledger");
+});
+
+test("invariance: nothing new typed, nothing changes; compute() is the same with the ledger tied to the business or not, and the two rows write nothing", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { cardGapPlan } = await import("../../../qa/fixtures/card-gap-plan.mjs");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const R8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const plans = [["family", familyPlan(BANK_TODAY)], ["renterDebt", renterDebtPlan()], ["retiredCouple", retiredCouplePlan()], ["empty", emptyPlan()], ["cardGap", cardGapPlan("2026-11-02")],
+    ["freelancer", R8.freelancerPlan()], ["landlordBusiness", R8.landlordBusinessPlan()], ["stockAndBusiness", R8.stockAndBusinessPlan()], ["bank", bankPlan()], ...ARCHETYPES.map((x) => [x.id, x.build()])];
+  assert.ok(plans.length >= 23);
+  for (const [name, p0] of plans) {
+    const p = migrate(structuredClone(p0));
+    const was = JSON.stringify(p);
+    const c0 = JSON.stringify(compute(p, { today: BANK_TODAY }));
+    const d = compute(p, { today: BANK_TODAY });
+    checklist(d, p.whatIfs?.business ?? {}); bankCosts(p, { year: d.year, today: BANK_TODAY, incomeId: d.incomeId });
+    assert.equal(JSON.stringify(p), was, `${name}: the rows write nothing`);
+    assert.equal(JSON.stringify(compute(p, { today: BANK_TODAY })), c0, `${name}: compute() unchanged after them`);
+    // every bank line tagged "business": the page's own figures do not read the ledger
+    const q = structuredClone(p);
+    for (const t of q.transactions ?? []) t.tags = [...(t.tags ?? []), "business"];
+    assert.equal(JSON.stringify(compute(q, { today: BANK_TODAY })), c0, `${name}: tagging the ledger changes no figure of the page`);
+  }
 });

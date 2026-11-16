@@ -2,15 +2,17 @@
 // spec 6.1, career/business, class C, done with gap list next 60 #6): the hero says what the business leaves the person
 // after tax (one sentence per case, words.js), an S corporation's saving when there is one, the retirement plans for the
 // business; then one card of quiet rows drawn by core/ui/more.js (no hand-written <details>): "Costs people often forget
-// to count" (costs.js), "The business" (its figures and its expenses), "As an S corporation", "How this is worked out".
+// to count" (costs.js), "The business" (its figures and its expenses), "Costs from your bank lines" (costs.js: the
+// ledger lines tied to the business added up by the page's kinds, "Use these" with a question first and Undo), "As an
+// S corporation", "How this is worked out".
 import { compute, CATEGORIES } from "./compute.js";
 import { HOME_OFFICE, SCORP_COSTS_EXAMPLE } from "./data/business.js";
 import { answerFor, drawLine, savedLine, scorpWorth, scorpStatus } from "./words.js";
-import { checklist, missedStatus, MISSED_TITLE, MISSED_INTRO, MISSED_SOURCES } from "./costs.js";
+import { checklist, missedStatus, typedByKind, MISSED_TITLE, MISSED_INTRO, MISSED_SOURCES, BANK_TITLE, BANK_TAG, BANK_THEN, BANK_UNDONE, bankCosts, bankSentence, apartLine, bankStatus, usable, inUse, bankAsk, bankSaid, useBank, bankFrom, fromBank, partNote } from "./costs.js";
 import { PERIOD_OPTIONS } from "../../../core/math/periods.js";
 import { parts, links } from "../../../core/ui/more.js";
 
-// the confirmation shown on the next render, and where: { text, at: "hero" | "business" | "scorp", undo?, back? }. The
+// the confirmation shown on the next render, and where: { text, at: "hero" | "business" | "bank" | "scorp", undo?, back? }. The
 // part saved in shows it and stays open (R17); no other part opens or shuts
 let pending = null;
 
@@ -77,7 +79,14 @@ export function render(page, ctx) {
 
   // ---------------------------------------------------------------- alarms and what is worth money (never folded, R9)
   const NO_COSTS = "No expenses typed yet: the profit below is all of the revenue.";   // compute's words, said here as the page reads now
-  for (const n of d.notes ?? []) root.append(ui.notice("info", n === NO_COSTS ? "No costs typed yet, so all of what customers pay counts as profit." : n));
+  // the bank lines' costs, read once for the notice and the row (they write nothing)
+  const B = bankCosts(plan, { year: d.year, today, incomeId: d.incomeId ?? s.incomeId ?? null });
+  const bankShows = d.ready && B.case === "some" && usable(B).length ? usable(B).reduce((t, k) => t + k.amount, 0) : 0;
+  // no costs typed while the bank lines hold some: say where they are (person critic P3)
+  for (const n of d.notes ?? []) root.append(ui.notice("info", n === NO_COSTS ? `No costs typed yet, so all of what customers pay counts as profit.${bankShows > 0.5 ? ` Your bank lines show ${money(bankShows)} of costs: open “${BANK_TITLE}” below to use them.` : ""}` : n));
+  // costs put in from the bank lines that cover part of a year: the profit is too high until the rest is in (P1)
+  const part = d.ready ? partNote(s.expenses) : null;
+  if (part) root.append(ui.notice("info", part));
   if (d.ready && d.draw === "over" && !d.loss) root.append(ui.notice("warn", `You take out ${money(d.drawMonthly)} a month, ${money(d.drawMonthly - d.keepMonthly)} more than it leaves after tax: the difference comes from savings or from the money you should keep for tax.`));
   if (d.ready && d.loss && d.drawMonthly > 0) root.append(ui.notice("warn", `You take out ${money(d.drawMonthly)} a month as well: all of it comes from savings while the business loses money.`));
   const worth = d.ready ? scorpWorth(d, money) : null;
@@ -159,6 +168,8 @@ export function render(page, ctx) {
       e.fromSelfEmployment ? h("div", { class: "rec-sub" }, "Typed there as one figure. Add your expenses here one by one to replace it.")
         : e.deductible < e.yearly - 0.5 ? h("div", { class: "rec-sub" }, `${e.name === e.label ? "" : `${e.label}: `}half of it counts for tax (${money(e.deductible)})`)
         : e.name !== e.label ? h("div", { class: "rec-sub" }, e.label) : null,
+      // put in from the bank lines: which ones, and when they cover part of a year only (P1)
+      (() => { const w = bankFrom((s.expenses ?? []).find((x) => x?.id === e.id)); return w ? h("div", { class: "rec-sub" }, w) : null; })(),
       e.fromSelfEmployment ? null : h("div", { class: "rec-foot" }, ui.button("Remove", () => { save(`${e.name} removed.`, "business", (w) => { w.expenses = (w.expenses ?? []).filter((x) => x.id !== e.id); }); }, { class: "secondary small", "aria-label": `Remove ${e.name}` }))))));
     const b = ui.button("+ Add another expense", () => openAdd("supplies"), { class: "secondary" });
     addBox.append(ui.row(b));
@@ -179,6 +190,37 @@ export function render(page, ctx) {
     for (let a = box?.parentNode; a && a !== el; a = a.parentNode) if (a.tagName === "DETAILS" && !a.open) a.open = true;
     (ui.reveal ?? ((x) => x?.scrollIntoView?.({ block: "center" })))(box ?? el, { block: "center" });
     try { box?.focus?.({ preventScroll: true }); } catch { /* not focusable here */ }
+  }
+
+  // ---------------------------------------------------------------- (b) costs from your bank lines
+  const typed = typedByKind(d), banked = fromBank(s.expenses);
+  const bankBody = () => {
+    const out = [noteAt("bank"), h("p", {}, bankSentence(B, money))];
+    if (B.case === "noLines") out.push(h("p", { class: "muted small" }, BANK_THEN), ui.row(h("a", { class: "btn secondary", href: "#/transactions/import" }, "Bring in a bank file")));
+    else if (B.case === "noneTied") out.push(h("p", { class: "muted small" }, BANK_THEN), ui.row(h("a", { class: "btn secondary", href: "#/transactions/ledger" }, "Transactions")));
+    else {
+      if (B.kinds.length) out.push(h("ul", { class: "records" }, B.kinds.map((k) => h("li", {},
+        h("div", { class: "rec-head" }, h("span", { class: "rec-title" }, k.label), h("span", { class: "rec-value" }, k.amount < 0 ? `${money(-k.amount)} back` : money(k.amount))),
+        h("div", { class: "rec-sub" }, (typed[k.key] ?? 0) > 0.5 ? `${money(typed[k.key])} ${banked[k.key] ?? "a year typed here"}` : "none typed here")))));
+      for (const a of B.apart) out.push(h("p", { class: "small" }, apartLine(a, money, { miles: d.miles?.miles ?? 0 })));
+      if (usable(B).length && inUse(B, typed)) out.push(h("p", { class: "muted small" }, "The page counts these totals now."));
+      else if (usable(B).length) {
+        out.push(ui.row(ui.button("Use these", () => useThese(), { class: "secondary" })));
+        out.push(h("p", { class: "muted small" }, "They replace what is typed for those kinds; the other kinds stay as typed. Nothing changes until you tap."));
+      }
+      out.push(h("a", { class: "small", href: `#/transactions/ledger?q=${encodeURIComponent(`#${BANK_TAG}`)}`, style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "See the lines on Transactions ›"));
+    }
+    return out;
+  };
+  // asked first; one change Undo takes back; the green line names the new answer (R7)
+  function useThese() {
+    const seFigure = !(s.expenses ?? []).length && d.seExpenses > 0 ? d.seExpenses : 0;
+    if (!ui.confirm(bankAsk(B, money, { seFigure, typed }))) return;
+    let text = bankSaid(B, money);
+    try { const p = structuredClone(plan); p.whatIfs = p.whatIfs ?? {}; p.whatIfs.business = p.whatIfs.business ?? {}; useBank(p.whatIfs.business, B, () => "new"); text = savedLine(compute(p, { today }), money, text); } catch { /* the lead alone */ }
+    const next = { text, at: "bank", back: BANK_UNDONE };
+    pending = next;
+    next.undo = ui.undoable(store, (q) => { q.whatIfs = q.whatIfs ?? {}; q.whatIfs.business = q.whatIfs.business ?? {}; useBank(q.whatIfs.business, B, ui.uid); });
   }
 
   // ---------------------------------------------------------------- an S corporation
@@ -252,6 +294,8 @@ export function render(page, ctx) {
     // the person's own state, not a figure the answer above already says: "4 set by you", "from Income", "not set yet"
     { id: "business", kind: "own", title: "The business", set: typedCount + (s.expenses ?? []).length, says: d.ready && d.revenueFrom === "income" ? "from Income" : "", missing: !d.ready && !typedCount && !expenses.length,
       open: said?.at === "business" || undefined, holds: [...bizFields.map((f) => f.key), "amount", "category"], body: bizBody },
+    // the bank lines wait until there is a business to tie them to (person critic P2)
+    d.ready && { id: "bank", kind: "own", title: BANK_TITLE, says: bankStatus(B, money), open: said?.at === "bank" || undefined, body: bankBody },
     scorpBody && { id: "scorp", kind: "own", title: "As an S corporation", says: scorpStatus(d, money), open: said?.at === "scorp" || undefined, holds: ["salary", "scorpCosts"], body: scorpBody },
     howBody && { id: "how", kind: "how", says: "profit and tax", body: howBody });
   root.append(h("div", {}, partsCard));
