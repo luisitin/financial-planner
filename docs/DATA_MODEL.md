@@ -97,4 +97,7 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
 * `sessionStorage["planner.typing"]`, `["planner.place"]`, `["planner.trail"]` (each `.sandbox` in the sandbox) -- this
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
   history entry, and the way each entry was reached.
+* `sessionStorage["planner.legacy.whose"]` (`.sandbox` in the sandbox) -- this tab only (estate/legacy): the case "Who gets
+  what" pictures for a couple, an adult's id or "both", so a reload keeps the chip picked. Never a name or a figure, never
+  in the plan; a case the plan no longer has draws the first.
 * `planner.properties` -- the server's settings (never inside the plan, never served).

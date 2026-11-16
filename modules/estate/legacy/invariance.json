@@ -1,0 +1,257 @@
+{
+ "today": "2026-11-16",
+ "compute": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "estate/legacy": "ipo_7NJsErFEa_VU1BoEoA",
+   "estate/beneficiaries": "adGhbqPSMUxQ4f7GVxBz64",
+   "estate/will-worksheet": "AWlwP1N9bTWL92_BADhabE",
+   "estate/estate-tax": "jAdPuCD5Py4vZhdFHb2HzG",
+   "balance/net-worth": "RD80V2JF6LcNPSJmYDxe_r"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "estate/legacy": "CC-AMrgE83Krv8ETk1pG-M",
+   "estate/beneficiaries": "-CDili7UIOjN7iMnzP3MxS",
+   "estate/will-worksheet": "4iy287RMTIGkuwwaHZFfMF",
+   "estate/estate-tax": "Zzt6sshyHkylmH1pQCd8Cb",
+   "balance/net-worth": "DrWePtZ3PSstPUneGPR4jk"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "estate/legacy": "ipo_7NJsErFEa_VU1BoEoA",
+   "estate/beneficiaries": "adGhbqPSMUxQ4f7GVxBz64",
+   "estate/will-worksheet": "AWlwP1N9bTWL92_BADhabE",
+   "estate/estate-tax": "jAdPuCD5Py4vZhdFHb2HzG",
+   "balance/net-worth": "RD80V2JF6LcNPSJmYDxe_r"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "estate/legacy": "ePVHLqbo7UyvXUOsVEuYGt",
+   "estate/beneficiaries": "mQyXI2w37OKfG4G2YmpEmO",
+   "estate/will-worksheet": "XRI4gF9UmU603F_icmrqxA",
+   "estate/estate-tax": "2ptIzk7BXOXfaFyg-nSRlF",
+   "balance/net-worth": "hFhQx_cU54gNpfTrZ-Aaig"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "estate/legacy": "LWGK1enOdTmRKFG8yafd_w",
+   "estate/beneficiaries": "2mor9V6KwZringSErdgNHi",
+   "estate/will-worksheet": "AWlwP1N9bTWL92_BADhabE",
+   "estate/estate-tax": "Pr2j2r5OEEFOV-aOlzf_JP",
+   "balance/net-worth": "BsRiOswuKzRRT-oMYeUf3l"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "estate/legacy": "CwhthwbDYU9vh23mqZoYFx",
+   "estate/beneficiaries": "a7fRjHHPutccDM-WGNJ9VX",
+   "estate/will-worksheet": "RwEtFh89P-qqkAHQhrBhcn",
+   "estate/estate-tax": "wE8_JTfL11B-CrIRgd3aZR",
+   "balance/net-worth": "8u8h1SYV0WBWPkXT5a65hV"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "estate/legacy": "LIcTDE4urOoQzGoOoI8yjO",
+   "estate/beneficiaries": "5LTAis_BM-NApUTPcLVAYY",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "448XJoD_ucVXBFMQuVLql3",
+   "balance/net-worth": "CDNTxkMfNzdC3YClI7iU1T"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "estate/legacy": "LIcTDE4urOoQzGoOoI8yjO",
+   "estate/beneficiaries": "5LTAis_BM-NApUTPcLVAYY",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "sXdeTp6A8j7Gy9Z7A0QA8V",
+   "balance/net-worth": "sCB7OfsFK2riGtyo04K0W0"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "estate/legacy": "9RV52rmI0i1aSk657JAq_F",
+   "estate/beneficiaries": "XGKbPshXGFyFpXoWLnEs1M",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "hjh5Bbh3q-8uLgT5ixLBh8",
+   "balance/net-worth": "8fK03ab2g5yW0a-ZT-0qJi"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "estate/legacy": "0_cjq2iVHxbiRymkSbE5Xa",
+   "estate/beneficiaries": "Z4Blmj6R2rxgRnsif0_bmY",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "IoUlv44A2-6ZAgkGOW6piX",
+   "balance/net-worth": "8BRJAp5n2158oHKlIFNM6o"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "estate/legacy": "CC-AMrgE83Krv8ETk1pG-M",
+   "estate/beneficiaries": "SiQDrRtrhnGAO8FH7cQVqd",
+   "estate/will-worksheet": "4iy287RMTIGkuwwaHZFfMF",
+   "estate/estate-tax": "4lLDgW9GOrHeJG-HU4sLNa",
+   "balance/net-worth": "HcjfTE2VY_kcGzeqhbSKky"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "estate/legacy": "cjCMmhUOhx3S4gtc1rRCTP",
+   "estate/beneficiaries": "Z4Blmj6R2rxgRnsif0_bmY",
+   "estate/will-worksheet": "RwEtFh89P-qqkAHQhrBhcn",
+   "estate/estate-tax": "gyHoxMFWd6MqJRCnxB4l2u",
+   "balance/net-worth": "8BRJAp5n2158oHKlIFNM6o"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "estate/legacy": "1fLev6nKie1ESzVPygJTh7",
+   "estate/beneficiaries": "RyiTVq6c8ZaqGpDHdKc_f8",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "G4WlnW9YOm7sP-pTbh1jeX",
+   "balance/net-worth": "2kZfoYJ28p-hJ-Qg6hwKQV"
+  },
+  "01-single-adult/base": {
+   "estate/legacy": "4IrE8I6snhpcDZ0qFXHQuO",
+   "estate/beneficiaries": "IVX-efRx-wXCyf6T9MjePs",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "SV4ZjJIrBdDAavnwDr2Rm3",
+   "balance/net-worth": "kJVZZ7lbqfTEUR4o9JwbGP"
+  },
+  "02-couple-no-kids/base": {
+   "estate/legacy": "KxHQR7dUrJj5sf6MGJkVHM",
+   "estate/beneficiaries": "kRZAtLhX_54cFj_ecaNUFD",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "DhgX1ye7R1IsR6YBhS9SMv",
+   "balance/net-worth": "y2SJCKq4hzT_2usexpR_DC"
+  },
+  "03-single-parent/base": {
+   "estate/legacy": "n3vZHAuru-wvuFBdhC6OhD",
+   "estate/beneficiaries": "a1Mm6DLl4TqWMbHQAws7Ca",
+   "estate/will-worksheet": "a-ba_7Dfhgi_EwBBh4_Jul",
+   "estate/estate-tax": "p-ggEv6fahzn_un0YOF-DQ",
+   "balance/net-worth": "UPCY3PWtfCcGUcliq_NPBk"
+  },
+  "04-two-parents/base": {
+   "estate/legacy": "und6XG94unJl7qHsvJigXB",
+   "estate/beneficiaries": "fLiry5ryBRQMj2L3N_0Yga",
+   "estate/will-worksheet": "ALaKpZggKVaiuXiGRDxwr9",
+   "estate/estate-tax": "IQJsGQP7alAiBjgq-F39hk",
+   "balance/net-worth": "4dzgmBGZe5WaQsbsW8gIxh"
+  },
+  "05-stay-at-home-parent/base": {
+   "estate/legacy": "PbyJgO0ifno-diDY2ziL98",
+   "estate/beneficiaries": "zM0Tadb7QtaM0ZEJu1Bome",
+   "estate/will-worksheet": "xilM00AhTrMJi1iChhRh9k",
+   "estate/estate-tax": "9bUgzUj4OJuVvd_nvlZLR1",
+   "balance/net-worth": "2sMFH9SlvfLX50jFMoJQ2v"
+  },
+  "06-blended-family/base": {
+   "estate/legacy": "vZKgO7VWzjm-QGFDOG1AD6",
+   "estate/beneficiaries": "KZTCZFfQ96xbRZbz7B8Ty3",
+   "estate/will-worksheet": "-5hCkfvTVEqWK7Fcr26PgJ",
+   "estate/estate-tax": "Xf8x_sBGm7KV9q_S4zK21h",
+   "balance/net-worth": "WWwr1PZHGtCvdJY8OkXxFP"
+  },
+  "07-multigenerational/base": {
+   "estate/legacy": "fjHRm2x3LYKIqud64A4c9V",
+   "estate/beneficiaries": "EHXaWE4K55k4UFPJd0V3e9",
+   "estate/will-worksheet": "mR96U9pjtQz38ixfZ0Kb6S",
+   "estate/estate-tax": "9VMmXm40gBhfB9Jn4PF70a",
+   "balance/net-worth": "Dl70YmnQPl4HztEjgf1X8s"
+  },
+  "08-retired/base": {
+   "estate/legacy": "9RV52rmI0i1aSk657JAq_F",
+   "estate/beneficiaries": "XGKbPshXGFyFpXoWLnEs1M",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "9dM8OLTfa13WUwIt4ZSyGc",
+   "balance/net-worth": "YGJ5QHTc7B96uVLKhHl-Vk"
+  },
+  "09-near-retirement/base": {
+   "estate/legacy": "p00f-h68K9w60aNvbdP-a3",
+   "estate/beneficiaries": "UR1BsrPzkhI73LmmIjWZXA",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "WEUFw4EOqB2phzh3ft8OJu",
+   "balance/net-worth": "c--6qO0GzggwRcOMKKCa88"
+  },
+  "10-student-and-starter/base": {
+   "estate/legacy": "LIcTDE4urOoQzGoOoI8yjO",
+   "estate/beneficiaries": "AN64MK2XKDJnqreAsCKa9F",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "imK1JN3R12tCt36w0ve2ED",
+   "balance/net-worth": "TYU_HInvyzVDMalqCoAm7-"
+  },
+  "11-self-employed/base": {
+   "estate/legacy": "und6XG94unJl7qHsvJigXB",
+   "estate/beneficiaries": "Qkb4F2YevCo_IL6_sYcCb8",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "DtHe-_-T5Gd5wkqfSRY7z-",
+   "balance/net-worth": "2qdxk4Sk8Q0Ui7qVeOEd8f"
+  },
+  "12-high-net-worth/base": {
+   "estate/legacy": "INAwQYwgDTEzxnP-erGkfe",
+   "estate/beneficiaries": "w3csJXCGDsskl5xjQAh5_u",
+   "estate/will-worksheet": "k4JdMThJYvs6dil67oA1rn",
+   "estate/estate-tax": "tK3kesui2J5_bfXMgQnHg7",
+   "balance/net-worth": "PuJatF9Yim3FfnH1HA8e8G"
+  },
+  "13-in-crisis/base": {
+   "estate/legacy": "qtthEFR9O-ARxNP02PhySb",
+   "estate/beneficiaries": "WfTYbSG96W3jpba2AyLq-t",
+   "estate/will-worksheet": "kIDn-QEXcytknIbKVUhFwR",
+   "estate/estate-tax": "POgKMCAPwRoxR4cqs6qH6U",
+   "balance/net-worth": "_ABLcZOsAOK1Vogf5qpFjK"
+  },
+  "14-unusual-structures/base": {
+   "estate/legacy": "eASFFceNEkQEY6ccHK7uYn",
+   "estate/beneficiaries": "S37VWRKTdmvlO9VuWI7CBs",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "xZKy875t4xoAfV-yEgiwLE",
+   "balance/net-worth": "9xd3GXJWFSMKJ63t4f7fCL"
+  },
+  "phone casey": {
+   "estate/legacy": "fjHRm2x3LYKIqud64A4c9V",
+   "estate/beneficiaries": "Tb4HOfH77PJHlL6fwuoC8S",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "Yem2HN7JZxz_PZyYoFY0-h",
+   "balance/net-worth": "gO-cCzSVFq40Z7tgnNdBvu"
+  },
+  "phone danaLee": {
+   "estate/legacy": "XWkTHN07wqElI8R0CMCSrb",
+   "estate/beneficiaries": "0X2JGxstWkwizQxQBlydpN",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "ZqNIsXeu_UyNPPF8x4VKAx",
+   "balance/net-worth": "cbjeqlP6JP7Op24cDEgK3-"
+  },
+  "phone jamie": {
+   "estate/legacy": "5BwqHtmrROmjYSPx1pc-Mt",
+   "estate/beneficiaries": "--5gfw6coTc9i3MdAPm7CV",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "tfCsVMRkv6VxzmqMdq46ua",
+   "balance/net-worth": "nbd8J2vHpnmg9oy9sd11j-"
+  },
+  "phone morgan": {
+   "estate/legacy": "3nlYhEuGZZURSJxwzTze39",
+   "estate/beneficiaries": "SZckZB2ktYQ4rgIQCWCRWK",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "0YX5KYBimJVnb1JOUUoqg9",
+   "balance/net-worth": "Iltyy9GbWgQY7yCGZDjKjm"
+  },
+  "phone robin": {
+   "estate/legacy": "WNDpCuIgrUJlUKy3fxFLF8",
+   "estate/beneficiaries": "xo5zbNjZJPFBvO6hkZUROr",
+   "estate/will-worksheet": "oakmggSo_ecW25ACFi4nob",
+   "estate/estate-tax": "3Laf7UP_sMrlQLkeQqCzUv",
+   "balance/net-worth": "PzqzvaRVKTlEbYczT0IQFz"
+  },
+  "empty plan": {
+   "estate/legacy": "DMB44nvvKYQ9U2Z61Fi3bQ",
+   "estate/beneficiaries": "-CDili7UIOjN7iMnzP3MxS",
+   "estate/will-worksheet": "4iy287RMTIGkuwwaHZFfMF",
+   "estate/estate-tax": "3uJXySmTanxrqk0IIZD7l-",
+   "balance/net-worth": "MjRCxAmwtWfBuixHQHh5aG"
+  },
+  "family with forms": {
+   "estate/legacy": "ipo_7NJsErFEa_VU1BoEoA",
+   "estate/beneficiaries": "ATAcHhN8H6N4emypig2vKD",
+   "estate/will-worksheet": "AWlwP1N9bTWL92_BADhabE",
+   "estate/estate-tax": "jAdPuCD5Py4vZhdFHb2HzG",
+   "balance/net-worth": "RD80V2JF6LcNPSJmYDxe_r"
+  },
+  "family with forms, wishes and wills": {
+   "estate/legacy": "ipo_7NJsErFEa_VU1BoEoA",
+   "estate/beneficiaries": "ATAcHhN8H6N4emypig2vKD",
+   "estate/will-worksheet": "9w7wHooEMbGp8OQ8LaLeeB",
+   "estate/estate-tax": "jAdPuCD5Py4vZhdFHb2HzG",
+   "balance/net-worth": "RD80V2JF6LcNPSJmYDxe_r"
+  },
+  "retired couple with wishes": {
+   "estate/legacy": "9RV52rmI0i1aSk657JAq_F",
+   "estate/beneficiaries": "XGKbPshXGFyFpXoWLnEs1M",
+   "estate/will-worksheet": "b1CTpZ_VMsMVOYpzXWJbjl",
+   "estate/estate-tax": "hjh5Bbh3q-8uLgT5ixLBh8",
+   "balance/net-worth": "8fK03ab2g5yW0a-ZT-0qJi"
+  }
+ }
+}
