@@ -360,7 +360,7 @@ async function page(plan, today = T2) {
 
 test("S11: Which coins count as sold: Work it out keeps the question, names the answer in green, keeps its part open and moves nothing else", async () => {
   const P = await page(wallet());
-  assert.deepEqual(P.states(), [["ways", false, "oldest first"]], "one quiet row, shut, saying the way that counts now");
+  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"]], "two quiet rows, shut; the first says the way that counts now");
   assert.ok(P.root.all().filter((e) => e.tagName === "DETAILS").every((e) => e.dataset.part || String(e.className).includes("form-more")), "no fold by hand: the add form is a button now");
   assert.equal(P.textOf(P.part("ways").querySelector(".fold-title")), "Which coins count as sold");
   const ways = P.open("ways");
@@ -376,7 +376,7 @@ test("S11: Which coins count as sold: Work it out keeps the question, names the 
   form.dispatch("submit");
   assert.equal(P.saved.length, 1);
   assert.deepEqual(P.plan.whatIfs.crypto, ask(0.1));
-  assert.deepEqual(P.states(), [["ways", true, "oldest first"]], "the saved part stays open; a question is not a way chosen, so the row still says the way that counts (P1)");
+  assert.deepEqual(P.states(), [["ways", true, "oldest first"], ["sales", false, "none in 2026"]], "the saved part stays open, the other as it was; a question is not a way chosen, so the row still says the way that counts (P1)");
   const green = P.part("ways").all().find((e) => String(e.className).includes("notice"));
   assert.equal(P.textOf(green), "Worked out for 0.1 BTC. Highest cost first costs least: about $1,125 less federal tax than oldest first.");
   assert.match(P.textOf(P.part("ways")), /Oldest first \$1,125 of tax A gain of \$7,500, all long-term, from one purchase\. Highest cost first no tax No gain or loss, from 2 purchases\. Coins are property, not securities/);
@@ -384,7 +384,7 @@ test("S11: Which coins count as sold: Work it out keeps the question, names the 
   assert.ok(P.button("+ Add another coin"), "the add button as it was");
   // the next draw (a reload, Back): shut, the question kept, the answer a plain sentence
   P.draw();
-  assert.deepEqual(P.states(), [["ways", false, "oldest first"]]);
+  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"]]);
   const again = P.open("ways");
   assert.ok(!again.all().some((e) => String(e.className).includes("notice")));
   assert.match(P.textOf(again), /Highest cost first costs least/);
@@ -398,7 +398,7 @@ test("The way your exchange counts: a chip saves at once (no question), says so 
     P.button("Highest cost first", P.open("ways")).click();
     assert.deepEqual(asked, [], "no browser question for a choice Undo takes back (P6)");
     assert.equal(P.saved.length, 1); assert.equal(P.plan.investments.cryptoMethod, "cost");
-    assert.deepEqual(P.states(), [["ways", true, "set by you"]]);
+    assert.deepEqual(P.states(), [["ways", true, "set by you"], ["sales", false, "none in 2026"]]);
     const ways = P.part("ways");
     assert.match(P.textOf(ways), /Saved: the sales you record here now count the coins that cost the most first\. Set your exchange the same way before you sell\. Undo/);
     assert.equal(P.button("Highest cost first", ways).getAttribute("aria-pressed"), "true");
@@ -406,7 +406,7 @@ test("The way your exchange counts: a chip saves at once (no question), says so 
     P.button("Undo", ways).click();
     assert.equal(P.saved.length, 2); assert.ok(!("cryptoMethod" in P.plan.investments), "none saved again: the field goes");
     assert.match(P.textOf(P.part("ways")), /Undone: back to oldest first, as before\./);
-    assert.deepEqual(P.states(), [["ways", true, "oldest first"]]);
+    assert.deepEqual(P.states(), [["ways", true, "oldest first"], ["sales", false, "none in 2026"]]);
     assert.ok(!P.button("Undo", P.part("ways")), "nothing more to undo");
     // a way already on does nothing (the chip is on)
     P.button("Oldest first", P.part("ways")).click();
@@ -424,7 +424,7 @@ test("The page: no coins, the add form open in a card; one purchase per coin, no
   assert.ok(!E.root.all().some((e) => e.tagName === "DETAILS" && !String(e.className).includes("form-more")), "no fold by hand");
   const one = wallet(); one.holdings[0].lots = [{ id: "l1", date: "2023-03-01", shares: 0.25, cost: 17000 }];
   const P = await page(one);
-  assert.deepEqual(P.states(), [], "every way sells the same coins: no row");
+  assert.deepEqual(P.states().map((x) => x[0]), ["sales"], "every way sells the same coins: no row for the ways (the sales row stays)");
   assert.ok(!P.root.all().some((e) => e.tagName === "H2" && /Add another coin/.test(P.textOf(e))), "the form waits behind its button");
   P.button("+ Add another coin").click();
   assert.ok(P.root.all().some((e) => e.tagName === "H2" && P.textOf(e) === "Add another coin"), "the form in place of the button");
@@ -468,5 +468,417 @@ test("invariance: with investments.cryptoMethod and whatIfs.crypto saved, every 
   const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
   const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith(".js") ? [path.join(dir, e.name)] : []));
   const readers = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core"))].filter((f) => !f.includes(`${path.sep}crypto${path.sep}`) && /cryptoMethod|whatIfs\??\.crypto\b/.test(fs.readFileSync(f, "utf8")));
+  assert.deepEqual(readers, []);
+});
+
+// =============================================================================================================================
+// Sales for your tax return (gap list, next 60, item 46; sales.js): record a coin sale, take it back, the year's coin sales
+// as Form 8949 lines, the CSV and the words
+// =============================================================================================================================
+const sell = (units, proceeds, sold, extra = {}) => ({ holdingId: "c1", units, proceeds, sold, ...extra });
+
+test("Record a sale: the purchases it takes each way, short or long at the sale day, against a hand calculation", () => {
+  // oldest first: 0.15 BTC sold Oct 3, 2026 for 14,100 (94,000 a coin) takes all of the 2023 purchase (0.1: 9,400 - 2,500 =
+  // 6,900, long-term) and half the Dec 2025 one (0.05: 4,700 - 4,500 = 200, held under a year: short-term)
+  const s = S.planSale(wallet(), sell(0.15, 14100, "2026-10-03"), { today: T2 });
+  assert.equal(s.ok, true); assert.equal(s.method, "oldest");
+  assert.deepEqual(s.pieces, [{ lotId: "l1", acquired: "2023-03-01", units: 0.1, cost: 2500, proceeds: 9400, gain: 6900, term: "long", noCost: false }, { lotId: "l2", acquired: "2025-12-01", units: 0.05, cost: 4500, proceeds: 4700, gain: 200, term: "short", noCost: false }]);
+  near(s.gain, 7100); near(s.shortGain, 200); near(s.longGain, 6900);
+  assert.deepEqual(s.rows.map((r) => [r.name, r.proceeds, r.basis, r.held, r.coin.acquired, r.coin.sold, r.coin.units, r.coin.lot]), [["0.1 BTC", 9400, 2500, "long", "2023-03-01", "2026-10-03", 0.1, "l1"], ["0.05 BTC", 4700, 4500, "short", "2025-12-01", "2026-10-03", 0.05, "l2"]]);
+  assert.equal(S.recordedSentence(s, money0), "Recorded: 0.15 BTC sold Oct 3, 2026 for $14,100, oldest first: a gain of $7,100 (+$200 short-term, +$6,900 long-term). It is now in this year's gains for your tax estimate.");
+  assert.equal(S.moneyNote(s, money0), "The $14,100 you got is not added to any account here: add it to the account it went to.");
+  // highest cost first (the way saved): the 0.05 at 110,000 (4,700 - 5,500 = -800) then the 0.1 at 90,000 (9,400 - 9,000 = 400)
+  const c = S.planSale(wallet({ investments: { cryptoMethod: "cost" } }), sell(0.15, 14100, "2026-10-03"), { today: T2 });
+  assert.equal(c.method, "cost");
+  assert.deepEqual(c.pieces.map((p) => [p.lotId, p.units, p.cost, p.proceeds, p.gain, p.term]), [["l3", 0.05, 5500, 4700, -800, "short"], ["l2", 0.1, 9000, 9400, 400, "short"]]);
+  assert.equal(S.recordedSentence(c, money0), "Recorded: 0.15 BTC sold Oct 3, 2026 for $14,100, highest cost first: a loss of $400, short-term. It is now in this year's gains for your tax estimate.");
+  // the purchases checked win over the way saved: the 2023 one and the Jun 2026 one, oldest first among them
+  const k = S.planSale(wallet({ investments: { cryptoMethod: "cost" } }), sell(0.15, 14100, "2026-10-03", { picked: ["l1", "l3"] }), { today: T2 });
+  assert.equal(k.method, "picked");
+  assert.deepEqual(k.pieces.map((p) => [p.lotId, p.gain, p.term]), [["l1", 6900, "long"], ["l3", -800, "short"]]);
+  assert.equal(S.recordedSentence(k, money0), "Recorded: 0.15 BTC sold Oct 3, 2026 for $14,100, the purchases you checked: a gain of $6,100 (−$800 short-term, +$6,900 long-term). It is now in this year's gains for your tax estimate.");
+  // all long-term, and nothing gained
+  const l = S.planSale(wallet(), sell(0.1, 9400, "2026-10-03"), { today: T2 });
+  assert.equal(S.recordedSentence(l, money0), "Recorded: 0.1 BTC sold Oct 3, 2026 for $9,400, oldest first: a gain of $6,900, long-term. It is now in this year's gains for your tax estimate.");
+  const z = S.planSale(wallet(), sell(0.1, 2500, "2026-10-03"), { today: T2 });
+  assert.equal(S.recordedSentence(z, money0), "Recorded: 0.1 BTC sold Oct 3, 2026 for $2,500, oldest first: no gain or loss. It is now in this year's gains for your tax estimate.");
+});
+
+test("Record a sale: a purchase made after the sale day is not taken; a year and a day makes long-term; the money adds up in cents", () => {
+  // sold May 15, 2026: the Jun 2026 purchase was not yet bought, so 0.2 coins were held and highest cost first takes the 90,000 one
+  const p = wallet({ investments: { cryptoMethod: "cost" } });
+  assert.deepEqual(S.planSale(p, sell(0.25, 20000, "2026-05-15"), { today: T2 }), { ok: false, field: "units", error: "BTC in Wallet held 0.2 coins on May 15, 2026 (the rest was bought after that day): type at most that." });
+  assert.deepEqual(S.planSale(p, sell(0.1, 8000, "2026-05-15"), { today: T2 }).pieces.map((x) => x.lotId), ["l2"]);
+  // bought Oct 3, 2025: sold Oct 3, 2026 is a year to the day, short-term; Oct 4 is more than a year, long-term (Pub. 550: from the day after)
+  const q = wallet(); q.holdings[0].lots[1].date = "2025-10-03";
+  const day = (d) => S.planSale(q, sell(0.1, 9000, d, { picked: ["l2"] }), { today: T2 }).pieces[0].term;
+  assert.equal(day("2026-10-03"), "short"); assert.equal(day("2026-10-04"), "long");
+  // three equal purchases sold for 100.00: 33.33, 33.33 and the last takes the rest, 33.34
+  const r = wallet(); r.holdings[0].lots = [{ id: "a", date: "2024-01-01", shares: 0.1, cost: 10 }, { id: "b", date: "2024-02-01", shares: 0.1, cost: 10 }, { id: "c", date: "2024-03-01", shares: 0.1, cost: 10 }]; r.holdings[0].shares = 0.3; r.holdings[0].costBasis = 30;
+  const t = S.planSale(r, sell(0.3, 100, "2026-10-03"), { today: T2 });
+  assert.deepEqual(t.pieces.map((x) => x.proceeds), [33.33, 33.33, 33.34]); near(t.pieces.reduce((a, x) => a + x.proceeds, 0), 100, 1e-9);
+  // "The ones you pick" saved and a coin of one purchase: nothing to check, it is that purchase
+  const one = wallet({ investments: { cryptoMethod: "picked" } }); one.holdings[0].lots = [{ id: "only", date: "2024-01-01", shares: 0.25, cost: 17000 }];
+  assert.deepEqual(S.planSale(one, sell(0.1, 10000, "2026-10-03"), { today: T2 }).pieces.map((x) => x.lotId), ["only"]);
+});
+
+test("Record a sale: one written sentence per refusal (R5)", () => {
+  const p = wallet();
+  const no = (input, more = {}) => S.planSale(more.plan ?? p, input, { today: T2 });
+  assert.deepEqual(no({ holdingId: "nope", units: 1, proceeds: 1, sold: "2026-10-03" }), { ok: false, field: "coin", error: "Choose the coin you sold." });
+  assert.deepEqual(no(sell(0, 100, "2026-10-03")), { ok: false, field: "units", error: "Type how many coins you sold." });
+  assert.deepEqual(no(sell(0.1, 100, "")), { ok: false, field: "sold", error: "Type the day you sold them." });
+  assert.deepEqual(no(sell(0.1, 100, "2026-12-01")), { ok: false, field: "sold", error: "A sale date cannot be in the future." });
+  assert.deepEqual(no(sell(0.1, 100, "2025-12-30")), { ok: false, field: "sold", error: "A sale on Dec 30, 2025 belongs on the 2025 return, and the Federal estimate works out 2026: record 2026's sales here, or set the year on the Federal estimate." });
+  assert.deepEqual(no(sell(0.1, null, "2026-10-03")), { ok: false, field: "proceeds", error: "Type what you got for them, in dollars." });
+  assert.deepEqual(no(sell(0.1, -5, "2026-10-03")), { ok: false, field: "proceeds", error: "Type what you got for them, in dollars." });
+  assert.deepEqual(no(sell(0.3, 100, "2026-10-03")), { ok: false, field: "units", error: "BTC in Wallet held 0.25 coins on Oct 3, 2026: type at most that." });
+  assert.deepEqual(no(sell(0.1, 100, "2026-10-03"), { plan: wallet({ investments: { cryptoMethod: "picked" } }) }), { ok: false, field: "picked", error: "Check the purchases you sold, under “Pick the purchases yourself”." });
+  assert.deepEqual(no(sell(0.1, 100, "2026-10-03", { picked: ["l3"] })), { ok: false, field: "picked", error: "The purchases you checked held 0.05 coins: check more, or type fewer." });
+  assert.equal(no(sell(0.1, 0, "2026-10-03")).ok, true, "sold for nothing is a sale (a loss)");
+  // the Federal estimate set to 2025: 2025's sales are recorded, a 2026 one is refused
+  const last = wallet(); last.taxes.year = 2025;
+  assert.equal(S.planSale(last, sell(0.1, 9000, "2025-12-30"), { today: T2 }).ok, true);
+  assert.match(S.planSale(last, sell(0.1, 9000, "2026-10-03"), { today: T2 }).error, /^A sale on Oct 3, 2026 belongs on the 2026 return, and the Federal estimate works out 2025: record 2025's sales here/);
+  assert.equal(S.recordWay({ key: "oldest" }), "Counted oldest first (first in, first out), unless you check the purchases you sold.");
+  assert.equal(S.recordWay({ key: "cost" }), "Counted highest cost first, the way you chose, unless you check the purchases you sold.");
+  assert.equal(S.recordWay({ key: "picked" }), "Check the purchases you sold under “Pick the purchases yourself”, the way you chose.");
+});
+
+test("Record a sale, then take it back: the coins, the costs, the account and the year's sales are as they were; a coin sold out goes and comes back", async () => {
+  const p = wallet();
+  const s = S.planSale(p, sell(0.15, 14100, "2026-10-03"), { today: T2 });
+  const d = structuredClone(p);
+  assert.equal(S.applySale(d, s, "s1", T2), true);
+  const btc = d.holdings[0];
+  near(btc.shares, 0.1); near(btc.costBasis, 10000);
+  assert.deepEqual(btc.lots, [{ id: "l2", date: "2025-12-01", shares: 0.05, cost: 4500 }, { id: "l3", date: "2026-06-01", shares: 0.05, cost: 5500 }], "the 2023 purchase is gone, half the Dec 2025 one left");
+  near(d.accounts[0].balance, 10000, 1e-9);
+  assert.deepEqual(d.taxes.gains.map((g) => [g.id, g.coin.sale, g.proceeds, g.basis, g.held]), [["s1-1", "s1", 9400, 2500, "long"], ["s1-2", "s1", 4700, 4500, "short"]]);
+  // the Federal estimate counts it: 6,900 long-term at 15% and 200 short-term at 22% = 1,079 more
+  const { taxView } = await import("../../taxes/federal/known.js");
+  const fed = (q) => taxView(q, { today: T2 }).result.totalTax;
+  near(fed(d) - fed(p), 6900 * 0.15 + 200 * 0.22, 0.01);
+  const back = structuredClone(d);
+  assert.equal(S.removeSale(back, "s1", T2), true);
+  assert.deepEqual(back.holdings, p.holdings); assert.deepEqual(back.taxes.gains, p.taxes.gains); near(back.accounts[0].balance, 25000);
+  assert.equal(S.removeSale(back, "s1", T2), false, "nothing left to take back");
+  // every coin sold: the holding goes, the wallet's balance is 0; taken back, it is made again at the sale's price on its day
+  const all = S.planSale(p, sell(0.25, 24000, "2026-10-03"), { today: T2 });
+  const e = structuredClone(p); S.applySale(e, all, "s2", T2);
+  assert.deepEqual(e.holdings, []); assert.equal(e.accounts[0].balance, 0);
+  S.removeSale(e, "s2", T2);
+  assert.equal(e.holdings.length, 1);
+  const h = e.holdings[0];
+  assert.deepEqual([h.id, h.symbol, h.shares, h.costBasis, h.price, h.priceAsOf, h.name], ["c1", "BTC", 0.25, 17000, 96000, "2026-10-03", "Bitcoin"]);
+  assert.deepEqual(h.lots, p.holdings[0].lots, "the purchases back in date order");
+  near(e.accounts[0].balance, 24000);
+});
+
+test("Sales for your tax return: the year's coin sales as Form 8949 lines, grouped by sale, with one sentence per case", () => {
+  const p = wallet();
+  const a = S.planSale(p, sell(0.15, 14100, "2026-10-03"), { today: T2 });
+  S.applySale(p, a, "s1", T2);
+  const b = S.planSale(p, sell(0.05, 4000, "2026-11-02"), { today: T2 });
+  S.applySale(p, b, "s2", T2);
+  // a coin sale of another year on Capital gains, and a sale typed there by hand (no coin): neither is a line
+  p.taxes.gains.push({ id: "old", name: "0.01 ETH", proceeds: 30, basis: 20, held: "short", coin: { sale: "old", holding: "x", account: "w", symbol: "ETH", units: 0.01, acquired: null, sold: "2025-06-01", lot: null } },
+    { id: "g1", name: "100 VTI", proceeds: 30000, basis: 22000, held: "long" });
+  const cs = S.coinSales(p, { today: T2 });
+  assert.equal(cs.year, 2026); assert.equal(cs.count, 2); assert.equal(cs.elsewhere, 1);
+  assert.deepEqual(cs.lines.map((l) => [l.description, l.acquired, l.sold, l.proceeds, l.cost, l.gain, l.term]), [
+    ["0.1 BTC", "2023-03-01", "2026-10-03", 9400, 2500, 6900, "long"], ["0.05 BTC", "2025-12-01", "2026-10-03", 4700, 4500, 200, "short"],
+    ["0.05 BTC", "2025-12-01", "2026-11-02", 4000, 4500, -500, "short"]]);
+  assert.deepEqual(cs.sales.map((s) => [s.id, s.units, s.proceeds, s.cost, s.gain, s.lines.length]), [["s2", 0.05, 4000, 4500, -500, 1], ["s1", 0.15, 14100, 7000, 7100, 2]], "newest first");
+  near(cs.shortTotal, -300); near(cs.longTotal, 6900);
+  assert.equal(S.coinSalesSentence(cs, money0), "Your 2026 coin sales: a short-term loss of $300 and a long-term gain of $6,900.");
+  assert.equal(S.elsewhereSentence(cs), "One coin sale dated outside 2026 is still on Capital gains, where the Federal estimate counts it as 2026's: remove it there once that year's return is done.");
+  assert.equal(S.elsewhereSentence({ ...cs, elsewhere: 2 }), "2 coin sales dated outside 2026 are still on Capital gains, where the Federal estimate counts them as 2026's: remove them there once that year's return is done.");
+  assert.equal(S.elsewhereSentence({ ...cs, elsewhere: 0 }), "");
+  const of = (shortTotal, longTotal) => S.coinSalesSentence({ year: 2026, count: 1, shortTotal, longTotal }, money0);
+  assert.equal(of(200, 0), "Your 2026 coin sales: a short-term gain of $200.");
+  assert.equal(of(0, -700), "Your 2026 coin sales: a long-term loss of $700.");
+  assert.equal(of(0.2, 0), "Your 2026 coin sales come out even: no gain or loss.");
+  assert.equal(S.coinSalesSentence({ year: 2026, count: 0 }), "No coin sales recorded for 2026 yet. When you sell, record it here: the coins come off your list, the sale counts in your tax estimate, and the list is ready for your tax preparer.");
+  assert.equal(S.lineText(cs.lines[0], money0), "0.1 bought Mar 1, 2023: sold for $9,400, cost $2,500, +$6,900 long-term");
+  assert.equal(S.lineText({ ...cs.lines[2], acquired: null }, money0), "0.05 bought on a day not on file: sold for $4,000, cost $4,500, −$500 short-term");
+  assert.equal(S.removeAsk(cs.sales[1]), "Remove the sale of 0.15 BTC on Oct 3, 2026? It comes off Capital gains and its coins go back on your list.");
+  assert.equal(S.removedSaid(cs.sales[1]), "Sale removed: 0.15 BTC back on your list and off Capital gains.");
+  // an edit on Capital gains shows here
+  p.taxes.gains.find((g) => g.id === "s2-1").proceeds = 4600;
+  assert.equal(S.coinSales(p, { today: T2 }).sales[0].gain, 100);
+});
+
+test("Record a sale: fewer coins than one satoshi is refused, and a sale with no rows writes nothing (F1)", () => {
+  const p = wallet();
+  for (const u of [1e-10, 1e-9, 5e-9]) assert.deepEqual(S.planSale(p, sell(u, 5, "2026-10-03"), { today: T2 }), { ok: false, field: "units", error: "Type at least 0.00000001 of a coin, the smallest amount this list keeps." }, String(u));
+  // one satoshi is a sale: one row, and Undo puts the coin back to the last place
+  const s = S.planSale(p, sell(1e-8, 5, "2026-10-03"), { today: T2 });
+  assert.equal(s.ok, true); assert.equal(s.rows.length, 1); assert.equal(s.units, 1e-8);
+  const d = structuredClone(p); S.applySale(d, s, "s1", T2);
+  assert.equal(d.holdings[0].shares, 0.24999999); assert.equal(d.taxes.gains.length, 1);
+  assert.equal(S.removeSale(d, "s1", T2), true); assert.deepEqual(d.holdings, p.holdings);
+  // the coins sold are the pieces': what comes off is what Undo puts back
+  near(S.planSale(p, sell(0.15, 14100, "2026-10-03"), { today: T2 }).units, 0.15, 0);
+  // a sale with no rows (made by hand, or by a future change) changes nothing
+  const e = structuredClone(p);
+  assert.equal(S.applySale(e, { ...s, pieces: [], rows: [] }, "s2", T2), false);
+  assert.deepEqual(e, p);
+});
+
+test("Record a sale: a day not on the calendar is refused with its own sentence (F3)", () => {
+  const p = wallet();
+  for (const d of ["2026-02-31", "2026-13-45", "2026-04-31", "2026-00-10"]) assert.deepEqual(S.planSale(p, sell(0.1, 100, d), { today: T2 }), { ok: false, field: "sold", error: "That day is not on the calendar: check the day and the month." }, d);
+  assert.equal(S.planSale(p, sell(0.1, 100, "2026-02-28"), { today: T2 }).ok, true);
+  const leap = wallet(); leap.taxes.year = 2024;
+  assert.equal(S.planSale(leap, sell(0.1, 100, "2024-02-29"), { today: T2 }).ok, true, "a leap day is a day");
+});
+
+test("Record a sale: what was paid not on file is said before and after, on the list, the printout and the file; a blank cost stays blank (F2)", async () => {
+  const { splitCsv } = await import("../../../core/csv.js");
+  // ETH with no cost on file (left blank on Holdings) and no purchases typed: sold 0.5 for 1,000
+  const p = wallet(); p.holdings.push({ id: "e1", accountId: "w", symbol: "ETH", shares: 1, price: 3000, priceAsOf: T2, costBasis: null, lots: [] });
+  const eth = S.recordable(p, T2).find((c) => c.id === "e1");
+  assert.equal(eth.noCost, 1); assert.equal(S.recordable(p, T2).find((c) => c.id === "c1").noCost, 0);
+  assert.equal(S.costMissing(eth), "What you paid for this ETH is not on file, so a sale of it counts as all gain: add it on Holdings first, if you know it.");
+  assert.equal(S.costMissing(S.recordable(p, T2)[0]), "", "every BTC purchase has its cost");
+  const s = S.planSale(p, { holdingId: "e1", units: 0.5, proceeds: 1000, sold: "2026-11-02" }, { today: T2 });
+  assert.equal(s.ok, true); assert.equal(s.noCost, 0.5); assert.deepEqual(s.pieces.map((x) => [x.cost, x.gain, x.noCost]), [[0, 1000, true]]);
+  assert.equal(s.rows[0].coin.noCost, true);
+  assert.equal(S.costNote(s, money0), "What you paid for the 0.5 ETH is not on file, so the whole $1,000 counts as gain. If you know it, tap Undo, add it on Holdings, then record the sale again.");
+  assert.equal(S.costNote(S.planSale(p, sell(0.1, 9400, "2026-10-03"), { today: T2 }), money0), "", "a cost on file: no note");
+  const d = structuredClone(p); S.applySale(d, s, "s1", T2);
+  const left = d.holdings.find((h) => h.id === "e1");
+  assert.equal(left.shares, 0.5); assert.equal(left.costBasis, null, "a blank cost is not made $0 by a sale");
+  const cs = S.coinSales(d, { today: T2 });
+  assert.equal(cs.lines[0].noCost, true);
+  assert.equal(S.lineText(cs.lines[0], money0), "0.5 bought on a day not on file: sold for $1,000, cost not on file (counted as $0), +$1,000 long-term");
+  const rows = splitCsv(S.form8949Csv(cs, d), ",").filter((r) => r.length > 1);
+  assert.deepEqual(rows[0], ["What was sold", "Date bought", "Date sold", "Sold for", "Cost", "Gain or loss", "Short or long term", "Note"]);
+  assert.deepEqual(rows[1], ["0.5 ETH", "unknown", "11/02/2026", "1000.00", "0.00", "1000.00", "long-term", "cost not on file, counted as 0"]);
+  // Undo: back exactly, still blank; sold out and taken back, made again with a blank cost
+  assert.equal(S.removeSale(d, "s1", T2), true); assert.deepEqual(d.holdings, p.holdings);
+  const all = structuredClone(p); S.applySale(all, S.planSale(all, { holdingId: "e1", units: 1, proceeds: 2000, sold: "2026-11-02" }, { today: T2 }), "s2", T2);
+  assert.ok(!all.holdings.some((h) => h.id === "e1")); S.removeSale(all, "s2", T2);
+  assert.equal(all.holdings.find((h) => h.id === "e1").costBasis, null);
+  // a cost left as "" reads the same; a cost of 0 typed is a cost on file
+  const blank = structuredClone(p); blank.holdings[1].costBasis = "";
+  assert.equal(S.recordable(blank, T2)[1].noCost, 1);
+  const typed0 = structuredClone(p); typed0.holdings[1].costBasis = 0;
+  assert.equal(S.recordable(typed0, T2)[1].noCost, 0);
+  // some coins with a cost, some without: a purchase typed with its cost, the rest of the coins on a blank holding cost
+  const part = structuredClone(p); part.holdings[1].lots = [{ id: "e-a", date: "2024-01-01", shares: 0.4, cost: 800 }];
+  const pc = S.recordable(part, T2)[1];
+  assert.equal(pc.noCost, 0.6);
+  assert.equal(S.costMissing(pc), "What you paid for 0.6 coins of this ETH is not on file, so selling those counts as all gain: add it on Holdings first, if you know it.");
+  const ps = S.planSale(part, { holdingId: "e1", units: 0.8, proceeds: 2400, sold: "2026-11-02" }, { today: T2 });
+  assert.deepEqual(ps.pieces.map((x) => [x.lotId, x.units, x.cost, x.noCost]), [[null, 0.6, 0, true], ["e-a", 0.2, 400, false]], "the undated rest first, then the 2024 purchase");
+  assert.equal(S.costNote(ps, money0), "What you paid for 0.6 of the 0.8 ETH is not on file, so it counts as $0. If you know it, tap Undo, add it on Holdings, then record the sale again.");
+  // a purchase typed with a blank cost: not on file, and it stays blank after a part of it is sold and taken back
+  const lot = structuredClone(p); lot.holdings[1].lots = [{ id: "e-b", date: "2024-01-01", shares: 1, cost: null }];
+  const ls = S.planSale(lot, { holdingId: "e1", units: 0.25, proceeds: 750, sold: "2026-11-02" }, { today: T2 });
+  assert.equal(ls.noCost, 0.25);
+  const ld = structuredClone(lot); S.applySale(ld, ls, "s3", T2);
+  assert.equal(ld.holdings[1].lots[0].cost, null); S.removeSale(ld, "s3", T2); assert.deepEqual(ld.holdings, lot.holdings);
+  // the ways say it too
+  const ways = S.coinOrders(part, { today: T2, ask: { holdingId: "e1", by: "coins", amount: 0.5, picked: [] } });
+  assert.equal(S.costMissing(ways.coin), S.costMissing(pc));
+});
+
+test("Record a sale: a short- or long-term part that comes to $0 is not named, and a line with no gain says so (P5)", () => {
+  // sold at 90,000 a coin: the 2023 purchase +6,500 long-term, half the Dec 2025 one (bought at 90,000) 0 short-term
+  const s = S.planSale(wallet(), sell(0.15, 13500, "2026-10-03"), { today: T2 });
+  assert.deepEqual(s.pieces.map((x) => [x.gain, x.term]), [[6500, "long"], [0, "short"]]);
+  assert.equal(S.recordedSentence(s, money0), "Recorded: 0.15 BTC sold Oct 3, 2026 for $13,500, oldest first: a gain of $6,500, all of it long-term. It is now in this year's gains for your tax estimate.");
+  const p = wallet(); S.applySale(p, s, "s1", T2);
+  const lines = S.coinSales(p, { today: T2 }).lines;
+  assert.equal(S.lineText(lines[1], money0), "0.05 bought Dec 1, 2025: sold for $4,500, cost $4,500, no gain or loss, short-term");
+  assert.equal(S.recordedSentence({ ...s, gain: -800, shortGain: -800, longGain: 0 }, money0), "Recorded: 0.15 BTC sold Oct 3, 2026 for $13,500, oldest first: a loss of $800, all of it short-term. It is now in this year's gains for your tax estimate.");
+});
+
+test("Sales for your tax return: the preparer's note says what the IRS instructions say (F4; read 2026-11-16)", () => {
+  // Instructions for Form 1099-DA (2026), box 1f: "You must reduce the proceeds by digital asset transaction costs"; its
+  // "Applicable Checkbox on Form 8949": codes G, H, J, K. Instructions for Form 8949 (2025): column (d) the proceeds shown on
+  // the form, code E in column (f) for transaction costs not reflected; "Use box I" / "Use box L" without a 1099-DA.
+  assert.equal(S.FORM_NOTE, "“Sold for” is what was got after the exchange's fee. A Form 1099-DA shows proceeds with the fee already taken out: use its amount, and adjust (code E) only for a fee it leaves out. Short-term lines go on Part I of Form 8949 and long-term lines on Part II, in the digital-asset boxes: the one the 1099-DA names in its “Applicable checkbox on Form 8949” (G, H, J or K), or I or L for a sale with no 1099-DA. This list is information for the preparer, not a filing.");
+  assert.ok(!/enters the form's amount and the fee as an adjustment/.test(S.FORM_NOTE), "no longer says the fee is always an adjustment");
+  assert.equal(S.FORM_SCREEN, "For your tax preparer: print this list (the printout also says where each line goes on the form) or save it as a spreadsheet. It is not a filing.");
+});
+
+test("Sales for your tax return: the CSV in Form 8949's order, dates as the form writes them, coins to eight places, never a formula", async () => {
+  const { splitCsv } = await import("../../../core/csv.js");
+  const p = wallet();
+  p.holdings[0].lots.unshift({ id: "l0", date: null, shares: 0.00012345, cost: 1 }); p.holdings[0].shares = 0.25012345; p.holdings[0].costBasis = 17001;
+  S.applySale(p, S.planSale(p, sell(0.10012345, 9500, "2026-10-03"), { today: T2 }), "s1", T2);
+  const cs = S.coinSales(p, { today: T2 });
+  const rows = splitCsv(S.form8949Csv(cs, p), ",").filter((r) => r.length > 1);
+  assert.deepEqual(rows[0], ["What was sold", "Date bought", "Date sold", "Sold for", "Cost", "Gain or loss", "Short or long term"]);
+  assert.deepEqual(rows.slice(1), [["0.00012345 BTC", "unknown", "10/03/2026", "11.71", "1.00", "10.71", "long-term"], ["0.1 BTC", "03/01/2023", "10/03/2026", "9488.29", "2500.00", "6988.29", "long-term"]]);
+  // a typed symbol a spreadsheet would run as a formula ("=SUM"): the description starts with the coins, so it never is one
+  // (Tax lots' csvText still guards the column, and the owner's name when filing separately)
+  const q = wallet(); q.holdings[0].symbol = "=SUM"; q.holdings[0].id = "c1";
+  S.applySale(q, S.planSale(q, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  assert.equal(splitCsv(S.form8949Csv(S.coinSales(q, { today: T2 }), q), ",")[1][0], "0.1 =SUM", "the description starts with the units, so it is never a formula");
+  // filing separately with an owner: "Whose"
+  const r = wallet(); r.household.people.push({ id: "a2", name: "Adult 2", role: "partner", birthDate: "1981-01-01" }); r.household.filingStatus = "married_separate"; r.accounts[0].ownerId = "a1";
+  S.applySale(r, S.planSale(r, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const sep = splitCsv(S.form8949Csv(S.coinSales(r, { today: T2 }), r), ",");
+  assert.equal(sep[0][7], "Whose"); assert.equal(sep[1][7], "Adult 1");
+  assert.equal(S.formDay("2026-01-05"), "01/05/2026"); assert.equal(S.formDay(null), "");
+});
+
+test("S11: Sales for your tax return: Record the sale writes it, names it in green with Undo, keeps its part open and moves no other part", async () => {
+  const had = globalThis.window.confirm;
+  try {
+    const P = await page(wallet());
+    const sales = P.open("sales");
+    assert.match(P.textOf(sales), /^Sales for your tax return none in 2026 › No coin sales recorded for 2026 yet\./);
+    assert.match(P.textOf(sales), /Record a sale Counted oldest first \(first in, first out\), unless you check the purchases you sold\./);
+    const form = sales.all().find((e) => e.tagName === "FORM");
+    assert.deepEqual(form.all().filter((e) => ["INPUT", "SELECT"].includes(e.tagName) && !e.closest(".form-more")).map((e) => e.getAttribute("name")), ["units", "sold", "proceeds"], "three boxes; the purchases folded");
+    assert.equal(P.textOf(form.all().find((e) => e.tagName === "BUTTON" && e.getAttribute("type") === "submit")), "Record the sale");
+    assert.equal(form.querySelector('[name="sold"]').value, T2, "Sold on starts on today (P5)");
+    form.querySelector('[name="units"]').value = "0.15"; form.querySelector('[name="sold"]').value = "2026-10-03"; form.querySelector('[name="proceeds"]').value = "14100";
+    form.dispatch("submit");
+    assert.equal(P.saved.length, 1);
+    assert.equal(P.plan.taxes.gains.length, 2); near(P.plan.holdings[0].shares, 0.1);
+    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", true, "1 in 2026"]], "the saved part open, the other shut as it was");
+    const t = P.textOf(P.part("sales"));
+    assert.match(t, /Recorded: 0\.15 BTC sold Oct 3, 2026 for \$14,100, oldest first: a gain of \$7,100 \(\+\$200 short-term, \+\$6,900 long-term\)\. It is now in this year's gains for your tax estimate\. The \$14,100 you got is not added to any account here: add it to the account it went to\. Undo/);
+    assert.match(t, /Your 2026 coin sales: a short-term gain of \$200 and a long-term gain of \$6,900\. 0\.15 BTC · Oct 3, 2026 \+\$7,100 sold for \$14,100, cost \$7,000 0\.1 bought Mar 1, 2023: sold for \$9,400, cost \$2,500, \+\$6,900 long-term 0\.05 bought Dec 1, 2025: sold for \$4,700, cost \$4,500, \+\$200 short-term Remove this sale/);
+    assert.match(t, /For your tax preparer: print this list \(the printout also says where each line goes on the form\) or save it as a spreadsheet\. It is not a filing\. Save as a spreadsheet/);
+    assert.ok(!/Part I|G to L|adjustment/.test(t), "the form's details are on the printout, not on the phone (P2)");
+    const buttons = P.part("sales").all().filter((e) => e.tagName === "BUTTON" && e.getAttribute("type") !== "submit");
+    assert.deepEqual(buttons.map((b) => [P.textOf(b), String(b.className)]), [["Undo", "secondary"], ["Remove this sale", "secondary small"], ["Save as a spreadsheet (CSV)", "secondary"], ["Print this list", "secondary"], ["+ Record another sale", "secondary"]], "all outlined: the page keeps no second filled button");
+    // the headline follows the coins left: 0.1 BTC at 100,000
+    assert.match(P.text(), /\$10,​?000 Crypto/);
+    // Undo takes it back
+    P.button("Undo", P.part("sales")).click();
+    assert.equal(P.saved.length, 2); assert.equal(P.plan.taxes.gains.length, 0); assert.deepEqual(P.plan.holdings, wallet().holdings);
+    assert.match(P.textOf(P.part("sales")), /Undone: the sale is off Capital gains and its coins are back on your list\./);
+    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", true, "none in 2026"]]);
+    // a refusal is said at its box and nothing is saved
+    const f2 = P.part("sales").all().find((e) => e.tagName === "FORM");
+    f2.querySelector('[name="units"]').value = "0.3"; f2.querySelector('[name="sold"]').value = "2026-10-03"; f2.querySelector('[name="proceeds"]').value = "1";
+    f2.dispatch("submit");
+    assert.equal(P.saved.length, 2);
+    // record again, then remove it later: asked first; No keeps it
+    f2.querySelector('[name="units"]').value = "0.1"; f2.dispatch("submit");
+    assert.equal(P.saved.length, 3);
+    P.draw();
+    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "1 in 2026"]], "the next draw: shut, saying what it holds");
+    const opened = P.open("sales");
+    assert.ok(!opened.all().some((e) => String(e.className).includes("notice")), "the green line was for that draw only");
+    const asked = [];
+    globalThis.window.confirm = (text) => { asked.push(text); return false; };
+    P.button("Remove this sale", opened).click();
+    assert.equal(P.saved.length, 3); assert.equal(asked[0], "Remove the sale of 0.1 BTC on Oct 3, 2026? It comes off Capital gains and its coins go back on your list.");
+    globalThis.window.confirm = () => true;
+    P.button("Remove this sale", P.part("sales")).click();
+    assert.equal(P.saved.length, 4); assert.equal(P.plan.taxes.gains.length, 0);
+    assert.match(P.textOf(P.part("sales")), /Sale removed: 0\.1 BTC back on your list and off Capital gains\./);
+  } finally { globalThis.window.confirm = had; }
+});
+
+test("Sales for your tax return: the CSV's green line, the printout, + Record another sale and Cancel; every coin sold still lists the sales", async () => {
+  const p = wallet();
+  S.applySale(p, S.planSale(p, sell(0.15, 14100, "2026-10-03"), { today: T2 }), "s1", T2);
+  const P = await page(p);
+  const sales = P.open("sales");
+  globalThis.URL.createObjectURL ??= () => "blob:x"; globalThis.Blob ??= class { constructor(parts) { this.parts = parts; } };
+  P.button("Save as a spreadsheet (CSV)", sales).click();
+  assert.match(P.textOf(sales), /coin-sales-2026\.csv is downloading\. Open it with Excel, Numbers or Google Sheets, or send it to your tax preparer\./);
+  P.button("Print this list", sales).click();
+  const sheet = sales.all().find((e) => String(e.className).includes("rp-sheet"));
+  assert.ok(sheet && sales.all().some((e) => String(e.className).includes("cr-print")), "the sheet is drawn, for the printer only");
+  assert.match(P.textOf(sheet), /^Coin sales in 2026, for your tax preparer From the plan on Nov 16, 2026: the coin sales recorded on Crypto, one line per purchase sold\. Your 2026 coin sales: a short-term gain of \$200/);
+  assert.match(P.textOf(sheet), /0\.1 BTC Mar 1, 2023 Oct 3, 2026 \$9,400 \$2,500 \+\$6,900 long-term/);
+  assert.equal(sheet.all().filter((e) => e.tagName === "TR").length, 3, "a header and the two lines");
+  assert.ok(P.textOf(sheet).endsWith(S.FORM_NOTE), "the preparer's note (fees, Parts, boxes) is on the printout");
+  assert.equal(P.saved.length, 0, "neither the file nor the printout changes the plan");
+  // with a sale on the list the form waits behind "+ Record another sale"; Cancel puts the button back
+  assert.ok(!sales.all().some((e) => e.tagName === "FORM" && e.querySelector('[name="sold"]')));
+  P.button("+ Record another sale", sales).click();
+  assert.ok(sales.all().some((e) => e.tagName === "FORM" && e.querySelector('[name="sold"]')));
+  P.button("Cancel", sales).click();
+  assert.ok(P.button("+ Record another sale", sales)); assert.equal(P.saved.length, 0);
+  // every coin sold: the hero and the add form, and the sales row still there
+  const all = wallet();
+  S.applySale(all, S.planSale(all, sell(0.25, 24000, "2026-10-03"), { today: T2 }), "s2", T2);
+  const Q = await page(all);
+  assert.deepEqual(Q.states(), [["sales", false, "1 in 2026"]]);
+  assert.match(Q.textOf(Q.open("sales")), /0\.25 BTC · Oct 3, 2026 \+\$7,000/);
+  // two coins: the coin box, and choosing another draws its purchases and keeps what was typed
+  const two = wallet(); two.holdings.push({ id: "e1", accountId: "w", symbol: "ETH", shares: 2, price: 3000, priceAsOf: T2, costBasis: 5000, lots: [{ id: "e-a", date: "2024-01-01", shares: 1, cost: 2000 }, { id: "e-b", date: "2025-01-01", shares: 1, cost: 3000 }] });
+  const R = await page(two);
+  const f = R.open("sales").all().find((e) => e.tagName === "FORM");
+  f.querySelector('[name="units"]').value = "1"; f.querySelector('[name="coin"]').value = "e1"; f.querySelector('[name="coin"]').dispatch("change");
+  const f2 = R.part("sales").all().find((e) => e.tagName === "FORM");
+  assert.equal(f2.querySelector('[name="units"]').value, "1"); assert.match(R.textOf(f2), /ETH in Wallet: 2 coins on your list/); assert.match(R.textOf(f2), /1 coin, bought Jan 1, 2024, \$2,000 a coin/);
+  assert.equal(R.saved.length, 0);
+});
+
+test("The page, a coin with no cost on file: said above the form, under the ways and under the green line; the printout says not on file (F2, P4)", async () => {
+  const p = wallet(); p.holdings[0].costBasis = null; p.holdings[0].lots = [];   // 0.25 BTC, nothing paid on file, one undated purchase
+  p.holdings.push({ id: "e1", accountId: "w", symbol: "ETH", shares: 1, price: 3000, priceAsOf: T2, costBasis: 2000, lots: [] });
+  const P = await page(p);
+  P.open("sales");
+  const pick = (id) => { const x = P.part("sales").all().find((e) => e.tagName === "FORM"); x.querySelector('[name="coin"]').value = id; x.querySelector('[name="coin"]').dispatch("change"); };
+  pick("c1");   // (an earlier test may have left the form on another coin: typing is kept across draws)
+  const sales = P.part("sales");
+  const flag = (el) => el.all().filter((e) => String(e.className).includes("cr-flag")).map((e) => P.textOf(e));
+  assert.deepEqual(flag(sales), ["What you paid for this BTC is not on file, so a sale of it counts as all gain: add it on Holdings first, if you know it."]);
+  pick("e1");
+  assert.deepEqual(flag(P.part("sales")), [], "ETH has its cost: no line");
+  assert.match(P.textOf(P.part("sales")), /ETH in Wallet: 1 coin on your list/, "1 coin, not 1 coins (P4)");
+  pick("c1");
+  const h = P.part("sales").all().find((e) => e.tagName === "FORM");
+  h.querySelector('[name="units"]').value = "0.05"; h.querySelector('[name="sold"]').value = "2026-10-03"; h.querySelector('[name="proceeds"]').value = "4700";
+  h.dispatch("submit");
+  assert.equal(P.saved.length, 1); assert.equal(P.plan.holdings[0].costBasis, null);
+  assert.match(P.textOf(P.part("sales")), /Recorded: 0\.05 BTC sold Oct 3, 2026 for \$4,700, oldest first: a gain of \$4,700, long-term\./);
+  assert.equal(flag(P.part("sales"))[0], "What you paid for the 0.05 BTC is not on file, so the whole $4,700 counts as gain. If you know it, tap Undo, add it on Holdings, then record the sale again.");
+  assert.match(P.textOf(P.part("sales")), /0\.05 BTC · Oct 3, 2026 \+\$4,700 sold for \$4,700, cost not on file 0\.05 bought on a day not on file: sold for \$4,700, cost not on file \(counted as \$0\), \+\$4,700 long-term/);
+  P.button("Print this list", P.part("sales")).click();
+  const sheet = P.part("sales").all().find((e) => String(e.className).includes("rp-sheet"));
+  assert.match(P.textOf(sheet), /0\.05 BTC not on file Oct 3, 2026 \$4,700 not on file \(\$0\) \+\$4,700 long-term/);
+  // part of a sale without a cost on file: the sale's line says so
+  const m = wallet(); m.holdings[0].shares = 0.3; m.holdings[0].costBasis = null;   // 0.05 BTC with no purchase and no cost
+  S.applySale(m, S.planSale(m, sell(0.1, 9400, "2026-10-03"), { today: T2 }), "s1", T2);
+  const M = await page(m);
+  assert.match(M.textOf(M.open("sales")), /0\.1 BTC · Oct 3, 2026 \+\$\d[\d,]* sold for \$9,400, cost \$1,250 \(part not on file\)/);
+  // the ways: three purchases with their costs, and 0.05 more coins with none on file
+  const w = wallet(); w.holdings[0].shares = 0.3; w.holdings[0].costBasis = null;
+  const Q = await page({ ...w, whatIfs: { crypto: ask(0.1) } });
+  const ways = Q.open("ways");
+  assert.ok(ways.all().some((e) => String(e.className).includes("cr-flag") && Q.textOf(e) === "What you paid for 0.05 coins of this BTC is not on file, so selling those counts as all gain: add it on Holdings first, if you know it."));
+});
+
+// ---- invariance: a recorded sale's `coin` object is read by this page alone ----------------------------------------------------
+test("invariance: the `coin` object on a recorded sale's rows changes no figure on any page: every page's compute is the same with and without it", async () => {
+  const { default: REGISTRY } = await import("../../registry.js");
+  const mods = (await Promise.all(REGISTRY.map(async (e) => (await e.load()).default))).filter((m) => !m.placeholder && !m.heavy && !(m.group === "reports" && m.id === "export"));
+  // Capital gains and the Federal estimate hand the year's rows back as they are: a row's own `coin` is left out of the
+  // comparison there, every figure is compared
+  const drop = (k, v) => (k === "coin" && v && typeof v === "object" && "sale" in v ? undefined : v);
+  const out = (m, q) => { try { const r = m.compute(q, { today: T2 }); if (["diagnostics", "settings"].includes(m.id) && r) { delete r.size; delete r.sizeKB; } return JSON.stringify(r, drop); } catch (e) { return `THROW ${e.message}`; } };
+  const plans = [wallet(), withCoins()];
+  plans[1].holdings.find((h) => h.symbol === "BTC").lots[0].date = "2024-05-30";
+  S.applySale(plans[0], S.planSale(plans[0], sell(0.15, 14100, "2026-10-03"), { today: T2 }), "s1", T2);
+  const s2 = S.planSale(plans[1], sell(0.05, 4800, "2026-10-03"), { today: T2 });
+  assert.equal(s2.ok, true); S.applySale(plans[1], s2, "s2", T2);
+  for (const plan of plans) {
+    const bare = structuredClone(plan); for (const g of bare.taxes.gains) delete g.coin;
+    for (const m of mods) {
+      if (m.group === "investments" && m.id === "crypto") continue;   // this page reads it (its compute does not: checked next)
+      assert.equal(out(m, plan), out(m, bare), `${m.group}/${m.id}`);
+    }
+    assert.equal(JSON.stringify(compute(plan, { today: T2 })), JSON.stringify(compute(bare, { today: T2 })), "Crypto's own compute() does not read it either");
+  }
+  // and no code outside this page reads it
+  const fs = await import("node:fs"); const path = await import("node:path"); const { fileURLToPath } = await import("node:url");
+  const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith(".js") ? [path.join(dir, e.name)] : []));
+  const readers = [...walk(path.join(ROOT, "modules")), ...walk(path.join(ROOT, "core"))].filter((f) => !f.includes(`${path.sep}crypto${path.sep}`) && /\.coin\??\.(sale|sold|acquired|units|holding|lot)\b/.test(fs.readFileSync(f, "utf8")));
   assert.deepEqual(readers, []);
 });

@@ -12,6 +12,9 @@
   is kept equal to its coins (shares × price) whenever they change here.
 - Optional (gap list, next 60, item 46): `investments.cryptoMethod` (the way the exchange counts which coins a sale takes)
   and `whatIfs.crypto` (the question in "Which coins count as sold"); both read only by `sales.js`.
+- Writes, when a coin sale is recorded ("Sales for your tax return"): one `taxes.gains` row per purchase taken, each with an
+  optional `coin` object (docs/DATA_MODEL.md), and the coins and their cost off the holding and its purchases (a holding
+  sold out goes), the crypto account's balance following its coins; Undo and "Remove this sale" put them back.
 
 ## Outputs
 `{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, returns, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount }`.
@@ -99,6 +102,12 @@ too many, nothing or too few picked, the question kept or dropped, every sentenc
 (and no match for a coin bought again), the coins offered, the way read with its default and its words; the page on the fake
 DOM (S11: Work it out keeps its part open and moves nothing else; the chips ask first, save, Undo; no coins, one purchase,
 "+ Add another coin" and Cancel; "More on this"); invariance with both new fields saved, every page, every household.
+Sales for your tax return (2026-11-16): the purchases each way takes against the hand check, a purchase after the sale day,
+a year and a day, cents adding up, one purchase with "The ones I pick", every refusal, recording then taking back (exactly
+as before; a coin sold out goes and comes back), the Federal estimate's $1,079, the lines grouped by sale with every
+sentence case, the CSV (columns, dates, eight places, "Whose"); the page (S11: Record the sale keeps its part open and moves
+no other; Undo; a refusal saves nothing; Remove this sale asked first; the CSV's green line; the printout; "+ Record another
+sale" and Cancel; every coin sold; two coins); invariance: the `coin` object changes no figure on any page.
 
 ## First view and the parts (simple first; docs/OPTIONAL.md, opt spec C17's crypto row, done in this page's gap commit)
 
@@ -110,6 +119,10 @@ DOM (S11: Work it out keeps its part open and moves nothing else; the chips ask 
   two or more purchases (with one, every way sells the same coins). Its status is the way that counts ("oldest first"),
   or "set by you" once a way is chosen with a chip; a question worked out is not a way chosen, so it leaves "oldest first"
   (the question is kept inside). After its own save it stays open (R17), with the green line.
+  "Sales for your tax return" (kind `item`), when there is a coin to sell or a coin sale recorded this year (also with
+  every coin sold, under the hero); its status "1 in 2026" or "none in 2026". The form "Record a sale" is open in it while
+  no sale is recorded, else behind an outlined "+ Record another sale". Inside, the only filled buttons are each form's
+  own (Work it out, Record the sale); Undo, Remove this sale, the CSV and the printout are outlined.
 
 ## Which coins count as sold (gap list, next 60, item 46; `sales.js`)
 
@@ -190,6 +203,100 @@ Builder's choices (where the brief left it open): one way for the household, not
 exchanges set two ways is rare; the IRS rule that matters per wallet, which purchases a sale can take, holds anyway);
 "The ones I pick" saved means the purchases are checked at each sale; the question in the row is asked first (as on Tax
 lots), not worked for a made-up amount.
+
+## Sales for your tax return (gap list, next 60, item 46; `sales.js`)
+
+What the person gets: when they sell coins, they record the sale here once (coin, how many, the day, what they got); the
+page takes the purchases by their way (or the ones they check), takes those coins off their list, puts the sale on
+Capital gains where the Federal estimate counts it, and lays the year's coin sales out as Form 8949 lines, as a CSV and a
+printout for a tax preparer. Information for a preparer, not a filing.
+
+Where the brief was wrong about the code: it asked for "the year's coin sales", but the page recorded none, and the sales
+typed on Capital gains carry no dates or units (Form 8949 needs both). Recording a sale here is the smallest thing that
+gives the list its lines, and it keeps one place for each sale: the rows are Capital gains' own, with a `coin` object.
+
+- **Which purchases a recorded sale takes** (`planSale`): those of that coin in that account bought on or before the sale
+  day (a purchase made after it cannot have been sold; undated ones count as bought first, as both pages count them), in
+  the order of the purchases checked, else the saved way (`methodOf`; absent: oldest first, IRS FAQs 86, 87, 92). With
+  "The ones I pick" saved and a coin of one purchase, that purchase. Wallet by wallet: only that account's purchases.
+- **Short or long at the sale day**: `lotsOf` on the sale day: long-term when held more than a year, counted from the day
+  after the purchase (Pub. 550, as Tax lots quotes it: "begin counting on the date after the day you acquired the
+  property"; IRC 1222); bought
+  Oct 3, 2025 and sold Oct 3, 2026 is short-term, sold Oct 4 long-term (tested).
+- **The money** (cents): what was got is shared out by coins, each piece's proceeds = what was got x its coins / the coins
+  sold, rounded to the cent, the last piece taking the rest so the pieces add up (100.00 over three equal purchases: 33.33,
+  33.33, 33.34); a piece's cost = its purchase's cost per coin x its coins (the whole purchase's cost when all of it goes;
+  Tax lots' `takeShares`); gain = proceeds - cost. "What you got for them" is after the exchange's fee: the Instructions
+  for Form 8949 (2025) ask for "the net proceeds" when no 1099 was received, and when one was, for "the proceeds shown on
+  the form" in column (d), with code "E" and an adjustment in column (g) only for "digital asset transaction costs that
+  aren't reflected on the form" (read 2026-11-16, https://www.irs.gov/instructions/i8949); the Instructions for Form
+  1099-DA (2026), box 1f, tell the exchange "You must reduce the proceeds by digital asset transaction costs" (read
+  2026-11-16, https://www.irs.gov/instructions/i1099da). So the printout says the 1099-DA's proceeds normally already have
+  the fee out, and to adjust only for a fee it leaves out (a review found the earlier wording, "your preparer enters the
+  form's amount and the fee as an adjustment", wrong for that normal case).
+- **A cost not on file** (`onFile`, `noCost`): Holdings reads a cost left blank as $0, and so does Tax lots; this page
+  counts it at $0 too (the plan has nothing else) but says so: above the sale's form and under the ways (`costMissing`:
+  "What you paid for this ETH is not on file, so a sale of it counts as all gain: add it on Holdings first, if you know
+  it."), under the green line after a sale (`costNote`, with "tap Undo, add it on Holdings, then record the sale again"),
+  on each line ("cost not on file (counted as $0)"), on the printout ("not on file ($0)") and in the file (a "Note" column,
+  only when a line needs it). Blank = null, undefined, "" or not a number; a 0 typed is a cost. A purchase's own cost when
+  it is typed, else the holding's for the coins no purchase covers. Recording and taking back keep a blank cost blank (it
+  had become $0).
+- **Hand check** (module test, the single adult above): 0.15 BTC sold Oct 3, 2026 for $14,100, oldest first: the 2023
+  purchase (0.1: $9,400 - $2,500 = +$6,900, long-term) and half the Dec 2025 one (0.05: $4,700 - $4,500 = +$200,
+  short-term); the Federal estimate then counts $6,900 x 15% + $200 x 22% = $1,079 more. Highest cost first instead: the
+  0.05 at $110,000 (-$800) and the 0.1 at $90,000 (+$400), a $400 short-term loss.
+- **Refusals** (one sentence each, tested): no coin; no coins; fewer than 0.00000001 of a coin (`MIN_UNITS`, one satoshi:
+  the pieces stop at a billionth of a coin, so a smaller sale took the coins off the list and wrote no row, and Undo could
+  not put them back); no day; a day not on the calendar (2026-02-31; the date box prevents it, a typed or pasted plan may
+  not); a day to come; a day outside the Federal estimate's year (the rows are that year's sales); nothing typed for what
+  was got (0 is a sale); more coins than were held that day (with "the rest was bought after that day" when purchases came
+  later); "The ones I pick" with nothing checked; the checked purchases too few. The coins a sale records are the pieces'
+  sum, so what comes off the list is exactly what Undo puts back; `applySale` writes nothing for a sale with no rows.
+- **Writing it** (`applySale`): each purchase taken loses its coins and cost (an emptied one goes), the holding loses the
+  coins and their cost (a holding sold out goes), the rows go on `taxes.gains` (ids `<sale>-1` ...), and the account's
+  balance follows its coins (shares x price). The money got is not put in any account (the person may have left it at the
+  exchange or moved it to the bank): the green line says to add it where it went.
+- **Taking it back** (`removeSale`: Undo, and "Remove this sale", asked first): the rows go and their coins and cost go
+  back to their purchase (put back in date order when it had gone) and holding (made again, at the sale's price on its
+  day, when it had gone); tested to give back the holdings and the year's sales exactly.
+- **The lines** (`coinSales`): the rows with a `coin` sold in the Federal estimate's year, one line each (Form 8949 asks for
+  each transaction on its own row, and short- and long-term on separate Parts even when one sale took both); the figures
+  are the rows' as they stand on Capital gains. Grouped by sale on screen, newest first; one line per row in the CSV and
+  the printout. Coin sales dated in another year are counted and named (`elsewhereSentence`).
+- **Form 8949's columns** (Instructions for Form 8949 (2025), read 2026-11-16): (a) "For a digital asset, include the full
+  name or an abbreviated symbol of the digital asset and the exact units sold" = "0.1 BTC" (units to eight places); (b) the
+  date acquired; (c) the date sold; (d) proceeds; (e) cost; (h) gain or loss; short-term on Part I, long-term on Part II;
+  "Do not use box C to report digital asset transactions. Use box I" (and box L, not F, for long-term): the boxes are G to
+  L, chosen from the 1099-DA's "Applicable checkbox", which the person has and the plan does not, so the list names the
+  boxes and leaves the choice to the form. The CSV's columns are those, in that order, in plain words ("What was sold",
+  "Date bought", "Date sold", "Sold for", "Cost", "Gain or loss", "Short or long term", and "Whose" when filing separately);
+  dates as the form writes them (MM/DD/YYYY, "unknown" when the purchase has no date); money with two decimals, no $ sign
+  (core/csv.js, and Tax lots' `csvText` guarding the text columns). The 1099-DA's "Applicable Checkbox on Form 8949" holds
+  "Code G", "H", "J" or "K" (Instructions for Form 1099-DA (2026), read again 2026-11-16 after a review; boxes I and L are
+  for a sale with no 1099-DA, Instructions for Form 8949 (2025)).
+- **The words** (each tested): `coinSalesSentence` (five cases: none yet; short and long; short only; long only; even),
+  `recordedSentence` (both terms, one term, both with one at $0 = "all of it long-term", a loss, nothing gained or lost),
+  `moneyNote`, `costNote` and `costMissing` (all or part of the coins), `lineText` ("no gain or loss" for a line at $0),
+  `recordWay` (three ways), `removeAsk`, `removedSaid`, `UNDONE_SALE`, `FORM_SCREEN`, `FORM_NOTE`, `elsewhereSentence` (one,
+  several, none). On the phone after a review: no form words ("Part I", boxes, adjustments) on screen: the sentence names
+  short- and long-term only, the line above the buttons says "For your tax preparer: print this list (the printout also
+  says where each line goes on the form) or save it as a spreadsheet. It is not a filing." (`FORM_SCREEN`), and the
+  preparer's note (`FORM_NOTE`) is on the printout. (A quiet fold for it would be a part inside a part, which R11 refuses.)
+  The green line ends "It is now in this year's gains for your tax estimate." "Sold on" starts on today when today is in
+  the year (the green line names the day, so a thumb that only confirms sees it).
+- **The file and the printout** are made on the phone; nothing is sent anywhere. The printout is the report kit's sheet
+  (`reportFrame`, `rtable`, `printSheet`), hidden on screen and shown by the printer, as Tax lots does.
+
+After a reload the parts come back shut, the status saying what they hold ("1 in 2026"): a part with boxes is kept open
+for the visit by wave 1 only while the person's own tap is on the screen, and after a save the page draws the part open
+itself (R17), so the tap is not kept past that draw. Every page with an item part works this way (Tax lots' "Compare ways
+to sell part of a fund" too); it is core/place.js's to change, not this page's.
+
+Builder's choices: one row per purchase taken (not "VARIOUS"), so each line has its own date and term and the preparer can
+match the 1099-DA; a coin sale is recorded for the Federal estimate's year only (its rows are that year's sales); the money
+from a sale is left to the person to put in an account, since the page cannot know where it went; a bitcoin fund's sale is
+not recorded here (its broker sends a 1099-B and it goes on Capital gains, with Tax lots' list).
 
 ## Ideas / not yet
 - Prices fetched by the PC server from a public price feed (needs a network setting and a source).

@@ -3,17 +3,22 @@
 // lots and a quick price update; the tax if sold today, losses to bank and gains to wait on; the rules worth
 // knowing; adding a coin (open while there are none, else behind "+ Add another coin"); then one quiet card of
 // optional parts (core/ui/more.js; docs/OPTIONAL.md): "Which coins count as sold" (a sale of some of a coin worked three
-// ways, and the way your exchange counts, saved with Undo); then "More on this".
+// ways, and the way your exchange counts, saved with Undo) and "Sales for your tax return" (record a coin sale, the year's
+// coin sales as Form 8949 lines, a CSV and a printout for a tax preparer); then "More on this".
 import { shareText } from "../tax-lots/compute.js";
 import { orderValue } from "../tax-lots/sell.js";
 import { compute, COINS, FALLS, SHARE } from "./compute.js";
-import { coinOrders, coinsOf, hasWays, methodOf, methodSaid, methodUndone, waysSentence, wayLine, washNote, unitsText, coinsText, METHODS, METHOD_TITLES, METHOD_SHORT, METHOD_CHIPS } from "./sales.js";
+import { coinOrders, coinsOf, hasWays, methodOf, methodSaid, methodUndone, waysSentence, wayLine, washNote, unitsText, coinsText, METHODS, METHOD_TITLES, METHOD_SHORT, METHOD_CHIPS,
+  recordable, planSale, applySale, removeSale, coinSales, coinSalesSentence, elsewhereSentence, recordedSentence, moneyNote, costNote, costMissing, lineText, recordWay, removeAsk, removedSaid, UNDONE_SALE, form8949Csv, dayText, FORM_NOTE, FORM_SCREEN } from "./sales.js";
 import { parts, choice, links } from "../../../core/ui/more.js";
+import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
 
 let pending = null;   // the confirmation shown on the next render (a price updated, a coin added)
 let said = null;      // { part, kind: "worked" | "method", text, undo? }: the green line inside a part after its own save; that part stays open (R17)
 let adding = false;   // "+ Add another coin" was tapped: its form stays drawn across a redraw until it adds or is cancelled
 let draft = null;     // { coin, by, amount } typed in "Which coins count as sold" but not worked out yet (another coin redraws the form)
+let recording = false; // "+ Record another sale" was tapped: the form stays drawn across a redraw until it records or is cancelled
+let recDraft = null;  // { coin, units, sold, proceeds } typed in "Record a sale" when another coin redraws the form
 
 const STYLE = `
 .cr-root .cr-flag { color: var(--warn); font-weight: 650; }
@@ -47,6 +52,10 @@ export function render(page, ctx) {
       ui.h("p", { class: "lede" }, "Bitcoin, ether and other coins, and the funds that hold them: what they are worth against what you paid, the tax if you sold, and how much they could swing."),
       ui.h("p", { class: "muted small" }, "Add a coin below. A bitcoin or ether fund bought in a brokerage account (IBIT, FBTC, ETHA ...) shows up here once it is on Holdings.")));
     root.append(addCard(true));
+    // every coin sold this year: the list for the tax return is still there
+    const left = coinSales(plan, { today });
+    if (left.count || left.elsewhere) root.append(ui.h("div", {}, parts(ctx, salesPartOf(left, []))));
+    said = null;
     return;
   }
 
@@ -145,7 +154,8 @@ export function render(page, ctx) {
   const method = methodOf(plan);
   const waysPart = coins.some(hasWays) ? { id: "ways", kind: "item", title: "Which coins count as sold", says: METHOD_SHORT[method.key], set: method.saved ? true : 0,
     open: said?.part === "ways" ? true : undefined, holds: ["amount"], body: () => waysBody() } : null;
-  root.append(ui.h("div", {}, parts(ctx, waysPart)));
+  const cs = coinSales(plan, { today }), rec = recordable(plan, today);
+  root.append(ui.h("div", {}, parts(ctx, waysPart, rec.length || cs.count || cs.elsewhere ? salesPartOf(cs, rec) : null)));
 
   root.append(ui.h("div", {}, links(ctx, [
     { href: "#/investments/holdings", ask: "Where is everything I hold?", says: "every account, coins and funds" },
@@ -218,9 +228,102 @@ export function render(page, ctx) {
         ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, METHOD_TITLES[o.key], r.method.saved && r.method.key === o.key ? ui.h("span", { class: "pill accent" }, "yours") : null), ui.h("span", { class: "rec-value" }, orderValue(o, money))),
         ui.h("div", { class: "rec-sub" }, wayLine(o, money))))),
       note ? ui.h("p", { class: "small" }, note) : null,
+      costMissing(r.coin) ? ui.h("p", { class: "small cr-flag" }, costMissing(r.coin)) : null,
       one ? ui.h("p", { class: "muted small" }, `All of ${r.coin.symbol}'s coins in ${r.coin.account} are one purchase on this page, so every way is the same.`) : null,
       ui.h("p", { class: "muted small" }, `Selling ${unitsText(r.units)} ${r.coin.symbol} at the price on file, ${exact(r.coin.price)}, brings in about ${money(r.proceeds)}. This is ${r.year}'s federal tax only${r.otherYear ? ` (a sale today falls in ${r.year}; the Federal estimate is set to ${r.otherYear})` : ""}; state tax is not counted.`),
     ];
+  }
+
+  // ---- "Sales for your tax return": record a coin sale; the year's coin sales as Form 8949 lines, a CSV and a printout
+  function salesPartOf(cs, rec) {
+    return { id: "sales", kind: "item", title: "Sales for your tax return", says: cs.count ? `${cs.count} in ${cs.year}` : `none in ${cs.year}`,
+      open: said?.part === "sales" ? true : undefined, holds: ["units", "sold", "proceeds"], body: () => salesBody(cs, rec) };
+  }
+  function salesBody(cs, rec) {
+    const mine = said?.part === "sales" ? said : null;
+    const out = [];
+    if (mine) out.push(ui.notice("ok", mine.text), mine.note ? ui.h("p", { class: "muted small" }, mine.note) : null, mine.cost ? ui.h("p", { class: "small cr-flag" }, mine.cost) : null, mine.undo ? ui.row(ui.button("Undo", mine.undo, { class: "secondary" })) : null);
+    out.push(ui.h("p", {}, coinSalesSentence(cs, money)));
+    const other = elsewhereSentence(cs);
+    if (other) out.push(ui.h("p", { class: "small cr-flag" }, other));
+    if (cs.count) {
+      const signedM = (n) => (n < 0 ? `−${money(-n)}` : `+${money(n)}`);
+      out.push(ui.h("ul", { class: "records" }, cs.sales.map((s) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${unitsText(s.units)} ${s.symbol} · ${dayText(s.sold)}`), ui.h("span", { class: `rec-value${s.gain < 0 ? " cr-down" : ""}` }, signedM(s.gain))),
+        ui.h("div", { class: "rec-sub" }, `sold for ${money(s.proceeds)}, cost ${s.lines.every((l) => l.noCost) ? "not on file" : `${money(s.cost)}${s.lines.some((l) => l.noCost) ? " (part not on file)" : ""}`}`),
+        ...s.lines.map((l) => ui.h("div", { class: "rec-sub" }, lineText(l, money))),
+        ui.h("div", { class: "rec-foot" }, ui.button("Remove this sale", () => {
+          if (!ui.confirm(removeAsk(s))) return;
+          said = { part: "sales", text: removedSaid(s) };
+          store.update((p) => { removeSale(p, s.id, today); });
+        }, { class: "secondary small" }))))));
+      const say = ui.h("div", { "aria-live": "polite" }), sheetHost = ui.h("div");
+      out.push(ui.h("p", { class: "muted small" }, FORM_SCREEN), say,
+        ui.row(ui.button("Save as a spreadsheet (CSV)", () => saveCsv(cs, say), { class: "secondary" }), ui.button("Print this list", () => printList(cs, sheetHost), { class: "secondary" })),
+        sheetHost);
+    }
+    // the form: open while no sale is recorded, else behind "+ Record another sale" (R20)
+    if (rec.length) { const host = ui.h("div"); drawRecord(host, rec, cs, cs.count > 0 && !recording); out.push(host); }
+    return out;
+  }
+  function drawRecord(host, rec, cs, folded) {
+    host.replaceChildren?.();
+    if (folded) { host.append(ui.row(ui.button("+ Record another sale", () => { recording = true; drawRecord(host, rec, cs, false); host.querySelector?.("input, select")?.focus?.({ preventScroll: true }); }, { class: "secondary" }))); return; }
+    const coin = rec.find((c) => c.id === recDraft?.coin) ?? rec[0];
+    const m = methodOf(plan);
+    const last = today && today < `${cs.year}-12-31` ? today : `${cs.year}-12-31`;
+    const fields = [
+      rec.length > 1 ? { key: "coin", label: "Coin", type: "select", options: rec.map((c) => ({ value: c.id, label: `${c.symbol} · ${c.account}` })) } : null,
+      { key: "units", label: "How many coins you sold", type: "number", required: true, min: 0, max: 1e12, step: "any", help: `${coin.symbol} in ${coin.account}: ${coinsText(coin.units)} on your list` },
+      { key: "sold", label: "Sold on", type: "date", required: true, min: `${cs.year}-01-01`, max: last },
+      { key: "proceeds", label: "What you got for them", type: "money", required: true, min: 0, max: 1e10, help: "in dollars, after the exchange's fee" },
+      ...(hasWays(coin) ? coin.lots.map((l) => ({ key: `pick-${l.key}`, label: lotLabel(l), type: "checkbox", more: true })) : []),
+    ].filter(Boolean);
+    // "Sold on" starts on today when today is in the year (a thumb only confirms it); the green line names the day
+    const values = { coin: coin.id, units: recDraft?.units ?? null, sold: recDraft?.sold ?? (today && today >= `${cs.year}-01-01` && today <= last ? today : ""), proceeds: recDraft?.proceeds ?? null };
+    const f = ui.form(fields, values, (v) => {
+      const c = rec.find((y) => y.id === (v.coin ?? coin.id)) ?? coin;
+      const picked = c.lots.filter((l) => v[`pick-${l.key}`]).map((l) => l.key);
+      const sale = planSale(plan, { holdingId: c.id, units: v.units, proceeds: v.proceeds, sold: v.sold, picked }, { today });
+      if (!sale.ok) {
+        const box = sale.field === "picked" ? f.querySelector?.('input[type="checkbox"]') : f.elements?.[sale.field === "coin" ? "coin" : sale.field];
+        if (box) return ui.fieldError(box, sale.error);
+        f.prepend(ui.notice("error", sale.error));
+        return false;
+      }
+      const id = ui.uid();
+      said = { part: "sales", text: recordedSentence(sale, money), note: moneyNote(sale, money), cost: costNote(sale, money), undo: () => { said = { part: "sales", text: UNDONE_SALE }; store.update((p) => { removeSale(p, id, today); }); } };
+      recording = false; recDraft = null;
+      store.update((p) => { applySale(p, sale, id, today); });
+    }, { submitLabel: "Record the sale", moreLabel: "Pick the purchases yourself (optional)", moreOpen: m.key === "picked" && hasWays(coin) ? true : undefined, onCancel: cs.count ? () => { recording = false; recDraft = null; drawRecord(host, rec, cs, true); } : undefined });
+    // another coin: its purchases are drawn, keeping what was typed (nothing is saved until "Record the sale")
+    f.elements?.coin?.addEventListener?.("change", () => { recDraft = { coin: f.elements.coin.value, units: f.elements.units?.value ?? null, sold: f.elements.sold?.value ?? "", proceeds: f.elements.proceeds?.value ?? null }; drawRecord(host, rec, cs, false); });
+    host.append(...[ui.h("h3", {}, "Record a sale"), ui.h("p", { class: "muted small" }, recordWay(m)), costMissing(coin) ? ui.h("p", { class: "small cr-flag" }, costMissing(coin)) : null, f].filter(Boolean));
+  }
+  // the file for a tax preparer (core/csv.js; made on this phone, nothing sent anywhere); its green line under the buttons
+  function saveCsv(cs, say) {
+    const name = `coin-sales-${cs.year}.csv`;
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([form8949Csv(cs, plan)], { type: "text/csv;charset=utf-8" }));
+      a.download = name; a.click();
+      setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch { /* gone */ } }, 5000);
+      say.replaceChildren?.(ui.notice("ok", `${name} is downloading. Open it with Excel, Numbers or Google Sheets, or send it to your tax preparer.`));
+    } catch (e) { say.replaceChildren?.(ui.notice("error", `The file could not be made: ${e.message}. Reload the page and try again.`)); }
+  }
+  // the printout: the report kit's sheet, drawn on the tap and shown only by the printer (scoped to this page's own class)
+  function printList(cs, host) {
+    const title = `Coin sales in ${cs.year}, for your tax preparer`;
+    const { wrap, sheet } = reportFrame(ui, { title });
+    wrap.className = `${wrap.className} cr-print`;
+    wrap.append(ui.h("style", {}, ".cr-print { display: none; } @media print { .cr-print { display: block !important; } }"));
+    const sign = (n) => (n < 0 ? `−${money(-n)}` : `+${money(n)}`);
+    const cols = [{ label: "What was sold", get: (l) => l.description }, { label: "Bought", get: (l) => (l.acquired ? dayText(l.acquired) : "not on file") }, { label: "Sold", get: (l) => dayText(l.sold) },
+      { label: "Sold for", num: true, get: (l) => money(l.proceeds) }, { label: "Cost", num: true, get: (l) => (l.noCost ? "not on file ($0)" : money(l.cost)) }, { label: "Gain or loss", num: true, get: (l) => sign(l.gain) }, { label: "Held", get: (l) => (l.term === "long" ? "long-term" : "short-term") }];
+    sheet.append(ui.h("h1", {}, title), ui.h("p", { class: "rp-sub" }, `From the plan on ${dayText(today)}: the coin sales recorded on Crypto, one line per purchase sold.`),
+      ui.h("p", { class: "rp-lead" }, coinSalesSentence(cs, money)), rtable(ui, cols, cs.lines), ui.h("p", { class: "rp-foot" }, FORM_NOTE));
+    host.replaceChildren?.(wrap);
+    if (typeof window !== "undefined" && typeof window.print === "function") printSheet(title, sheet);
   }
 
   // adding a coin: a holding in a crypto account (made if there is none), the account's balance kept equal to its coins
