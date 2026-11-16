@@ -294,6 +294,7 @@ export const PINNED_TITLES = ["Figures the plan cannot see", "Retirement setting
   "Fix a mistake on your report",  // debt/credit-score (gap #18): how to dispute an error with the bureaus, by name, beside the page's own working
   "How to ask for a lower price",  // cashflow/subscriptions (gap #6): the steps Bills' link of that name promises and opens (?show=lower), not a sum
   "Which costs are shared",        // cashflow/shared-costs (gap #22): a tick per cost on Expenses, its Save; not numbers, so not "Set my own numbers"
+  "Bills split with others",       // cashflow/shared-costs (gap next-60 #17): the person's own list of bills shared outside the couple and who owes whom; the page's second "own" part, and its only one for one adult, where a named part needs this pin
   "Health costs rise",             // system/assumptions (gap #10): one choice, read with its status as a sentence ("Health costs rise · with prices"); the whole page is the household's own numbers, so "Set my own numbers" would name the page, not this row
   "Your earlier plan",             // balance/net-worth (gap #35): read with its status as a sentence ("Your earlier plan · ahead by $12,400"); a comparison with a plan kept months ago, not how today's figure is worked out
   "How the pretend futures end",   // retirement/monte-carlo (gap next-60 #36): the picture of how the runs end, beside "8 more numbers"; fixed while the number of runs is a choice
