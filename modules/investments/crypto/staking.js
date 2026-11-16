@@ -7,7 +7,7 @@
 //   - joins the coin's purchases as a lot with that worth as its cost ({ id: the reward's id, date: day, shares: units,
 //     cost: value }): the coin's coins and its cost on file go up by as much.
 //   - moves the crypto account's balance by what its coins on file moved, at their prices (walletFollows): a part of the
-//     balance that is not listed coins (Crypto's "the rest of the balance") stays as it was.
+//     balance that is not listed coins (Crypto's "the rest of the balance") stays as it was; a balance left blank stays blank.
 
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 const cents = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -80,6 +80,9 @@ export function planReward(plan, input = {}, params = {}) {
   return { ok: true, reward: { holdingId: c.h.id, accountId: c.a.id, symbol, units: fix(units), day, value: cents(value) } };
 }
 
+/** A balance left blank (none typed: null, missing, or only spaces), as against one typed, $0 included. A blank balance is not
+ *  $0: Net worth counts nothing for it, and a reward recorded or removed leaves it blank (recheck leftover y2 (d), 2026-11-16). */
+export const blankBalance = (v) => v === null || v === undefined || (typeof v === "string" && !v.trim());
 /** What an account's coins on file are worth: coins x price, each coin. */
 const coinsWorth = (draft, accountId) => (draft.holdings ?? []).filter((h) => h && h.accountId === accountId).reduce((s, h) => s + (Number(h.shares) || 0) * (Number(h.price) || 0), 0);
 /**
@@ -87,13 +90,15 @@ const coinsWorth = (draft, accountId) => (draft.holdings ?? []).filter((h) => h 
  * moves the crypto account's balance by what its coins on file moved, at their prices on file: new balance = the coins' worth
  * now + the part of the balance that was not listed coins before (Crypto's "the rest of the balance": money the person typed
  * on the account, kept as it was). A balance within a cent of its coins is just its coins: it becomes their worth, as of
- * today (as sales.js syncWallets makes it); a balance with more (or less) in it keeps its own day.
+ * today (as sales.js syncWallets makes it); a balance with more (or less) in it keeps its own day. A balance left blank
+ * (blankBalance) is left as it is, day and all: there is no typed figure to follow.
  */
 function walletFollows(draft, accountId, change, today) {
   const a = (draft.accounts ?? []).find((x) => x && x.id === accountId && x.type === "crypto");
   const before = coinsWorth(draft, accountId);
   const done = change();
-  if (!a || !(done === true || done?.ok)) return done;
+  // a balance left blank stays blank, and its day as it was (it read $32 after a record and $0 after the removal: y2 (d))
+  if (!a || !(done === true || done?.ok) || blankBalance(a.balance)) return done;
   const bal = Number(a.balance);
   const rest = !Number.isFinite(bal) || Math.abs(bal - before) < 0.01 ? 0 : cents(bal - before);
   a.balance = cents(cents(coinsWorth(draft, accountId)) + rest);

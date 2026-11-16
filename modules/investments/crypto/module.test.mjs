@@ -1484,3 +1484,101 @@ test("staking, the page: Remove this reward asks first, says so with Undo; refus
     assert.equal(Q.textOf(red), K.SOLD_SINCE);
   } finally { globalThis.window.confirm = had; }
 });
+
+// ---------------------------------------------------------------- leftovers of the rechecks (y2, 2026-11-16)
+/** Every invented household (y2 invariance, against 398a01e): the qa fixture plans, the qa/households archetypes, the phone,
+ *  round 8 and persona households, and the empty plan. */
+async function y2Plans(today) {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { migrate, emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const out = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`fixture ${f}:${name}`, fn(today)]);
+  }
+  for (const a of ARCHETYPES) out.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) out.push([`persona ${n}`, personas.finishSetup(n, personas[n](today), today)]);
+  out.push(["empty plan", blank()]);
+  return out.map(([name, p]) => [name, migrate(structuredClone(p))]);
+}
+const y2Digest = async (x) => (await import("node:crypto")).createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+/** wallet() with its balance left blank (null, "" or no balance at all) and 1.5 ETH at 3,200 listed. */
+function blankWallet(blank) {
+  const base = wallet();
+  base.accounts = [{ id: "w", name: "Wallet", type: "crypto", balance: blank, asOf: "2026-06-30", history: [] }];
+  if (blank === undefined) delete base.accounts[0].balance;
+  base.holdings = [{ id: "c1", accountId: "w", symbol: "ETH", shares: 1.5, price: 3200, priceAsOf: T2, costBasis: null, lots: [] }];
+  return base;
+}
+// (d) A crypto account whose balance was left blank read $32 after a staking reward was recorded and $0 after it was removed (the
+// blank was read as $0, and the part "not listed coins" as minus the coins). A blank balance now stays blank, as a blank cost does.
+test("y2 (d) staking: a wallet whose balance was left blank stays blank through record, remove and Undo; its day too", async () => {
+  const { changesOf, takeBack } = await import("../../../core/ui/undo.js");
+  const { compute: netWorth } = await import("../../balance/net-worth/compute.js");
+  assert.deepEqual(["", null, undefined, "  ", 0, "0", 5000].map(K.blankBalance), [true, true, true, true, false, false, false]);
+  for (const blank of [null, "", undefined]) {
+    const base = blankWallet(blank);
+    const nw0 = netWorth(base, { today: T2 }).netWorth;
+    // recorded: the coins and the income move, the balance does not
+    const p = staked([["r1", reward(0.01, "2026-03-01", 31.5, { holdingId: "c1" })]], base);
+    assert.equal(p.accounts[0].balance, blank, `${JSON.stringify(blank)}: not made $32`);
+    assert.equal("balance" in p.accounts[0], blank !== undefined);
+    assert.equal(p.accounts[0].asOf, "2026-06-30", "its day stays");
+    near(p.holdings[0].shares, 1.51, 1e-12);
+    assert.equal(K.stakingIn(p, 2026).total, 31.5);
+    assert.equal(netWorth(p, { today: T2 }).netWorth, nw0, "net worth counts a blank balance as before: not at all");
+    // removed: blank, not $0
+    const q = structuredClone(p);
+    assert.equal(K.removeReward(q, "r1", T2).ok, true);
+    assert.equal(q.accounts[0].balance, blank, `${JSON.stringify(blank)}: not made $0`);
+    assert.deepEqual(q.accounts, base.accounts, "the account exactly as it was");
+    // Undo of the record, and Undo of the removal (the page's undoable: changesOf, then takeBack)
+    const undoRecord = structuredClone(p); takeBack(undoRecord, changesOf(base, p));
+    assert.deepEqual(undoRecord.accounts, base.accounts);
+    const undoRemove = structuredClone(q); takeBack(undoRemove, changesOf(p, q));
+    assert.deepEqual(undoRemove.accounts, p.accounts);
+  }
+});
+test("y2 (d) staking: a typed balance moves exactly as before ($0 typed is a balance, not a blank)", () => {
+  // $0 typed against 4,800 of coins keeps its gap: 0 - 4,800, then 4,832 - 4,800 = 32
+  const zero = blankWallet(0);
+  const p = staked([["r1", reward(0.01, "2026-03-01", 31.5)]], zero);
+  assert.equal(p.accounts[0].balance, 32);
+  const q = structuredClone(p); K.removeReward(q, "r1", T2);
+  assert.equal(q.accounts[0].balance, 0);
+});
+
+// (d) invariance: with nothing new typed (a balance on file), recording a reward and removing it write exactly what they wrote at
+// 398a01e, for every household with a wallet added at four typed balances (above, at, below its coins, and $0). Written with
+// PRINT_Y2=1 on 398a01e's code. (Crypto's figures, the Federal estimate's and the page's words with no reward are pinned by the
+// staking invariance test above.)
+test("y2 (d) invariance: a reward recorded and removed on a typed balance writes what it wrote at 398a01e, for every household", async () => {
+  const fs = await import("node:fs");
+  const file = new URL("./y2-invariance.json", import.meta.url);
+  const now = {};
+  for (const [name, plan] of await y2Plans(T2)) {
+    const out = [];
+    for (const bal of [5000, 4800, 4000, 0]) {
+      const p = structuredClone(plan);
+      p.accounts = [...(p.accounts ?? []), { id: "y2w", name: "Wallet", type: "crypto", balance: bal, asOf: "2026-06-30", history: [] }];
+      p.holdings = [...(p.holdings ?? []), { id: "y2c", accountId: "y2w", symbol: "ETH", shares: 1.5, price: 3200, priceAsOf: T2, costBasis: 4000, lots: [] }];
+      const w = K.planReward(p, { holdingId: "y2c", units: 0.01, day: "2026-03-01", value: 31.5 }, { today: T2 });
+      K.applyReward(p, w.reward, "y2r", T2);
+      const rec = structuredClone(p);
+      K.removeReward(p, "y2r", T2);
+      out.push([rec.accounts.at(-1), rec.holdings.at(-1), rec.investments?.staking ?? null, p.accounts.at(-1), p.holdings.at(-1), p.investments?.staking ?? null]);
+    }
+    now[name] = await y2Digest(out);
+  }
+  if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(was).length >= 45, `${Object.keys(was).length} households`);
+  assert.deepEqual(now, was);
+});

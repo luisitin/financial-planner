@@ -483,8 +483,11 @@ saves nothing; its "Record the reward" is the row's one filled button. Last, a m
   balance that was not listed coins before (the "rest of the balance", money typed on the account), so a reward of 0.01 ETH
   at a price of $3,200 adds $32 to a balance of $5,000 that holds 1.5 ETH ($4,800): $5,032, and net worth rises $32 (setting
   the balance to coins x price, as a coin sale does, gave $4,832; critic F1, tested). A balance within a cent of its coins
-  becomes their worth, as of today, as before; one with more (or less) in it keeps its own day. Removing does the same the
-  other way. Selling later counts it like any purchase (oldest first, highest cost first, or picked), its gain = what it
+  becomes their worth, as of today, as before; one with more (or less) in it keeps its own day. A balance left blank (`blankBalance`:
+  none typed, null or only spaces; $0 typed is a balance) stays blank, day and all, as a blank cost does: there is no typed figure
+  to follow, and Net worth counts nothing for it before or after (recheck leftover y2 (d), 2026-11-16: it read $32 after the
+  record, because a blank was read as $0 and the listed coins as minus their worth, and $0 after the removal). Removing does the
+  same the other way. Selling later counts it like any purchase (oldest first, highest cost first, or picked), its gain = what it
   sells for - its worth that day.
 - Taken back: the purchase, its coins and its cost come off and the reward leaves the list (the list itself goes when empty),
   so record then remove leaves the plan as it was, byte for byte (tested). Refused, in red, when a sale took some of its coins
@@ -535,3 +538,14 @@ file-for-tax-software digests leave the new row out too).
 ## Which return it reads (round 8, batch 1 follow-up)
 
 **(a) This household's own tax year.** Sales and losses are taxed on this year's return. Source: the same function the Federal estimate uses, `known()` in `modules/taxes/federal/known.js` (through `taxView()`), so this page and that one quote one marginal rate, one AGI and one tax. Same helper as Tax-lot harvesting (`taxView()`), with and without the coins sold.
+
+## A balance left blank stays blank (recheck leftover y2 (d), 2026-11-16)
+A crypto account whose balance was left blank read $32 after a staking reward of 0.01 ETH (at $3,200) was recorded, and $0 after
+it was removed or the record undone: `walletFollows` read the blank as $0 (`Number(null)` is 0), so the part "not listed coins" came
+to minus the coins' worth. Rule now: `blankBalance(a.balance)` (null, missing, or a string of spaces) -> the reward still goes on
+and off the coin and the income, and the account (balance and day) is left exactly as it was. A typed balance, $0 included, moves
+as before (balance after = coins' worth after + (typed - coins' worth before)). Tests: null, "" and a missing balance through record,
+remove, Undo of the record and Undo of the removal (core/ui/undo.js `changesOf`/`takeBack`, what the page's Undo runs), net worth
+unchanged; $0 typed moving to $32 and back; and `y2-invariance.json` (written with `PRINT_Y2=1` on 398a01e): on every invented
+household with a wallet added at $5,000, $4,800, $4,000 and $0 typed, recording and removing a reward write what they wrote at
+398a01e. No new field.
