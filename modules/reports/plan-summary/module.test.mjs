@@ -62,7 +62,11 @@ test("review UX: the summary's retirement and stress-test lines never ask for mo
   // under "not known yet" (smart guesses C8, critic F4)
   assert.match(t, /The stress tests need your retirement savings first\./);
   assert.ok(!/The plan survives \d+ of \d+ shocks/.test(t));
-  assert.match(t, /To make the money last: save about \$250 a month more/);
+  // the score's retirement part is not known yet there either (whole-app sweep x3 fix round, critic F2): its next step is the
+  // shared words, never "save about $250 a month more" under "Retirement: not known yet" (the score's own tests keep that hint, with
+  // $1 saved)
+  assert.match(t, /Retirement on track\. Once you start saving, add it and we can answer\./);
+  assert.ok(!/To make the money last/.test(t), "no way to make it last under not known yet");
   // with $1,000 saved the stress tests run: the plan carries $0 of the $2,040 planned, so "spend about $2,040 a month less"
   // would be all of it, and does not make it last
   const saved = renterDebtPlan();

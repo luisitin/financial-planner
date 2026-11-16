@@ -6,7 +6,7 @@
 import { yearSaving } from "../../../core/math/leftover.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities, rentsHome, DTI_LINES, shownShare } from "../../balance/liabilities/compute.js";
-import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown } from "../../retirement/projection/compute.js";
+import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown, savingsUnknown, nothingSaved, unknownParts } from "../../retirement/projection/compute.js";
 import { retirementGap } from "../setup/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoalSeek, roundUp } from "../../scenarios/goal-seek/compute.js";
@@ -108,8 +108,12 @@ export function compute(plan, params = {}) {
   const known = retirementKnown(plan, today);
   // what is missing, named: a birth date goes to People, Social Security to its page (setup's retirementGap, review 2026-11-02)
   const gap = known ? null : retirementGap(plan);
+  // nothing saved for retirement and nothing going in: Will the money last? says "We don't know yet" (savingsUnknown on this same
+  // run), so the score does not say "The money runs out in 2067" either (whole-app sweep x3, fix round, critic F2)
+  const unknown = pr.ready && known && savingsUnknown(pr) ? unknownParts({ nothingSaved: nothingSaved(plan) }, "whether the money lasts") : null;
   if (!pr.ready) add("retirement", "Retirement on track", null, "The plan cannot be run yet.", `Add ${andList(pr.missing.map(needItem))}.`, ["retirement", "projection"]);
   else if (!known) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
+  else if (unknown) add("retirement", "Retirement on track", null, `Not scored yet. ${unknown.sentence}`, unknown.next, ["balance", "net-worth"]);
   else {
     const ratio = pr.spendingYearly > 0 ? pr.affordable / pr.spendingYearly : 1;
     const ways = ratio < FULL_RETIREMENT ? retirementWays(plan, { today, ratio, money }) : null;
@@ -120,9 +124,11 @@ export function compute(plan, params = {}) {
   }
 
   // 5. protection: the stress tests' life shocks (job loss, never working again, a death, a care home, a long life)
-  const st = pr.ready && known ? computeStress(plan, { today }) : null;
+  const st = pr.ready && known && !unknown ? computeStress(plan, { today }) : null;
   const life = st?.ready ? st.scenarios.filter((s) => s.group === "life") : [];
   if (pr.ready && !known) add("protection", "Protection", null, `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first, like the retirement part.`, "Scored as soon as the retirement part above is.", gap?.go ?? ["retirement", "social-security"]);
+  // the stress tests say "we can't say which shocks your plan would survive yet" for the same plan: not scored either
+  else if (unknown) add("protection", "Protection", null, "Not scored yet: the stress tests need what you own first, like the retirement part.", "Scored as soon as the retirement part above is.", ["balance", "net-worth"]);
   else if (!life.length) add("protection", "Protection", null, "The stress tests need the plan basics first.", "Fill in the basics on Will the money last?", ["scenarios", "stress-tests"]);
   else {
     const passed = life.filter((s) => s.success);

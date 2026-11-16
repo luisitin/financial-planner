@@ -149,3 +149,15 @@ own / Add what goes out), never the questions again.
 
 ## Review 2026-11-11 round 4 (claude-r N18)
 - The "No score yet" button reads "Set up my plan ›" (to the Set up page), the words every other page uses for an empty plan; it read "Answer a few easy questions ›" to the same place. With an account and the questions never opened it is the Dashboard's first step instead (`firstStep()` kind `basics`, e.g. "Continue your plan: Add your household ›"), with "Add what is still missing."
+
+## Nothing saved for retirement yet: not scored (whole-app sweep x3, fix round, 2026-11-16; test `module.test.mjs`)
+For a plan with nothing saved for retirement and nothing going in, Will the money last? says "We don't know yet" and twelve other
+pages now say they can't tell, but this page said "The money runs out in 2067: it can carry about $0 a month against the $2,040
+planned." (Riley, 24, an empty Work 401(k); critic F2). The retirement part now follows the projection's own rule
+(`savingsUnknown` on the run it already makes, words from `unknownParts`): not scored, "Not scored yet. Nothing is saved for
+retirement, so we can't say whether the money lasts yet.", its fix "Once you start saving, add it and we can answer." (told
+nothing: "You haven't told us about retirement savings, ..." and "Add what you own and we can answer."), opening Net worth. The
+protection part is not scored with it ("Not scored yet: the stress tests need what you own first, like the retirement part."), as
+the Stress tests page says it can't tell which shocks the plan would survive; the stress tests are not run then. Both score 0 of
+their points, as a part not known yet always has. With a dollar saved or going in, the parts are scored as before (the three
+round 8 and review tests that used Riley's plan for "short of lasting" now put $1 in the 401(k)).

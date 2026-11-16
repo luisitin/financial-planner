@@ -253,9 +253,12 @@ test("F1: an amount you must reach rounds up to the shown $10, a limit rounds do
   // a return you must earn rounds up to the shown tenth of a percent
   const r = { id: "returns", unit: "rate", status: "needs", value: 0.05412 };
   assert.equal(shownValue(r), 0.055); assert.equal(shownValue({ ...r, status: "same" }), 0.054);
-  // the Plan health score's hint says the same $250
+  // the Plan health score's hint says the same $250 once its answer is known: $1 in the 401(k) (with nothing saved the score's
+  // retirement part is "not known yet", as Will the money last? says; whole-app sweep x3 fix round, critic F2)
   const { compute: score } = await import("../../overview/health-score/compute.js");
-  assert.match(score(p, { today }).parts.find((x) => x.id === "retirement").fix, /save about \$250 a month more/);
+  const one = renterDebtPlan(); one.accounts.find((a) => a.id === "k401").balance = 1;
+  assert.match(score(one, { today }).parts.find((x) => x.id === "retirement").fix, /save about \$250 a month more/);
+  assert.equal(score(p, { today }).parts.find((x) => x.id === "retirement").status, "unknown");
 });
 
 // --- round 8 batch 4 follow-ups F4 and F5 (2026-11-07): ?target=last is read once; a "Room for bad luck (115%)" chip -----------------

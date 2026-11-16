@@ -140,14 +140,17 @@ test("round 8: short of lasting, the hint quotes Goal seek's saving for the mone
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
   const { compute: goalSeek } = await import("../../scenarios/goal-seek/compute.js");
   const today = "2026-11-06";
-  const p = renterDebtPlan();
+  // $1 in Riley's 401(k): the answer is known (with nothing saved it is "not known yet": the sweep x3 test at the end)
+  const p = renterDebtPlan(); p.accounts.find((a) => a.id === "k401").balance = 1;
   const ret = compute(p, { today }).parts.find((x) => x.id === "retirement");
   // the plan can carry $0 against $2,040 planned: it said "about $2,350 a month less spending", (1.15 x 24,480 - 0) / 12,
   // a yearly gap in retirement spending put as a monthly cut larger than the whole planned spending
   assert.ok(!/2,350|less spending/.test(ret.fix), ret.fix);
   // Goal seek, same plan, the money lasting (leave nothing): about $243.53 a month more saving (shown as $250: a need rounds up, 2026-11-07); spending alone cannot do it and
   // working to 75 does not either, so neither is offered
-  const gs = goalSeek(p, { today }).levers;
+  // asked the way the score asks it (retirementWays: these three levers, the age by bisection); with $1 saved Goal seek's plain call
+  // lands on $290 on its coarser search, where with nothing saved the two agreed at $250
+  const gs = goalSeek(p, { today, only: ["spending", "retire", "saving"], retireSearch: "bisect" }).levers;
   const save = gs.find((l) => l.id === "saving");
   assert.equal(Math.ceil((save.value - save.current) / 10) * 10, 250);
   assert.equal(gs.find((l) => l.id === "spending").status, "cannot");
@@ -203,7 +206,7 @@ test("review D3 and D7: a renter's debt part is of the required payments, graded
 
 test("review D5: under a spending rule that never runs out, the hint is worked out on steady spending, the score's own measure", async () => {
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
-  const p = renterDebtPlan(); p.retirement.strategy = "percent";
+  const p = renterDebtPlan(); p.retirement.strategy = "percent"; p.accounts.find((a) => a.id === "k401").balance = 1;   // $1 saved: an answer
   const fix = compute(p, { today: "2026-11-06" }).parts.find((x) => x.id === "retirement").fix;
   // the same $250 as on steady spending (the plan's own rule gave Goal seek's saving lever $10)
   assert.match(fix, /^To carry the planned spending every year: save about \$250 a month more/);
@@ -211,7 +214,8 @@ test("review D5: under a spending rule that never runs out, the hint is worked o
 
 test("review D4: the hint names the target Goal seek must be set to, and the link opens it there", async () => {
   const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
-  const ret = compute(renterDebtPlan(), { today: "2026-11-06" }).parts.find((x) => x.id === "retirement");
+  const one = () => { const p = renterDebtPlan(); p.accounts.find((a) => a.id === "k401").balance = 1; return p; };   // $1 saved: an answer
+  const ret = compute(one(), { today: "2026-11-06" }).parts.find((x) => x.id === "retirement");
   assert.match(ret.fix, /^To make the money last: save about \$250 a month more\. Open the Goal seek page to see the amount that just makes it last\./);
   assert.deepEqual(ret.query, { target: "last" });
   // lasting but under 115%: Goal seek has no such target, so the hint says how it was worked out instead of pointing at the page
@@ -221,7 +225,7 @@ test("review D4: the hint names the target Goal seek must be set to, and the lin
   assert.deepEqual(r2.query, { target: "badluck" });
   // the page's link carries the target
   const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
-  const page = await renderPage(new URL("./view.js", import.meta.url), renterDebtPlan(), "2026-11-06", { computeRemote: { "overview/health-score": compute } });
+  const page = await renderPage(new URL("./view.js", import.meta.url), one(), "2026-11-06", { computeRemote: { "overview/health-score": compute } });
   assert.ok(page.root.querySelectorAll("a").some((a) => a.getAttribute("href") === "#/scenarios/goal-seek?target=last"));
 });
 
@@ -265,4 +269,29 @@ test("an empty plan's filled button says what every other page says: Set up my p
   assert.ok(view.includes('["#/overview/setup", "Set up my plan \\u203a"]') && !view.includes("Answer a few easy questions"));
   // with an account the never-opened button is the Dashboard's first step (firstStep basics), not "Set up my plan" (attack on N18)
   assert.ok(view.includes("firstStep(ctx.plan)") && view.includes('fs?.kind === "basics" ? [fs.href'));
+});
+
+test("nothing saved for retirement and nothing going in: retirement and protection 'not known yet', never 'The money runs out in 2067' beside Will the money last?'s 'We don't know yet' (whole-app sweep x3, critic F2)", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { compute: proj, savingsUnknown, unknownWords } = await import("../../retirement/projection/compute.js");
+  const T16 = "2026-11-16";
+  const sam = migrate(personas.finishSetup("sam", personas.sam(T16), T16));
+  for (const [who, plan, nothing] of [["Riley (an empty Work 401(k))", renterDebtPlan(), true], ["Sam (nothing said)", sam, false]]) {
+    assert.ok(savingsUnknown(proj(structuredClone(plan), { today: T16 })), `${who}: Will the money last? says "We don't know yet"`);
+    const d = compute(structuredClone(plan), { today: T16 });
+    const ret = d.parts.find((x) => x.id === "retirement"), pro = d.parts.find((x) => x.id === "protection");
+    assert.equal(ret.status, "unknown", who); assert.equal(ret.points, 0);
+    // the shared words, apart: the sentence as the part's words, the way on as its fix (unknownWords is the two together)
+    assert.equal(`${ret.detail.replace(/^Not scored yet\. /, "")} ${ret.fix}`, unknownWords({ nothingSaved: nothing }, "whether the money lasts"), who);
+    assert.deepEqual(ret.go, ["balance", "net-worth"]);
+    assert.equal(ret.hint, undefined, `${who}: no way to make it last is worked out`);
+    assert.equal(pro.status, "unknown", who); assert.match(pro.detail, /^Not scored yet: the stress tests need what you own first/);
+    assert.doesNotMatch(JSON.stringify(d), /runs? out|ran out|runs short/i, who);
+  }
+  // one dollar saved: scored as before (the money runs out, and the hint says what makes it last)
+  const one = renterDebtPlan(); one.accounts.find((a) => a.id === "k401").balance = 1;
+  const r1 = compute(one, { today: T16 }).parts.find((x) => x.id === "retirement");
+  assert.notEqual(r1.status, "unknown"); assert.match(r1.detail, /^The money runs out in \d{4}/);
 });

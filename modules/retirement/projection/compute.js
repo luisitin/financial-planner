@@ -1825,7 +1825,13 @@ export function retirementUnknown(plan, params = {}) {
  * and the way on in a few words (fix round of the whole-app sweep x3, 2026-11-16: a 33-word sentence with two "yet"s, said word for
  * word on twelve pages). */
 export function unknownWords(unknown, what) {
+  const { sentence, next } = unknownParts(unknown, what);
+  return `${sentence} ${next}`;
+}
+/** unknownWords in its two parts, for a page that says them apart (the Plan health score: the sentence as the part's words, the
+ * way on as its fix): `sentence` (why we can't say) and `next` (what to do). */
+export function unknownParts(unknown, what) {
   return unknown?.nothingSaved
-    ? `Nothing is saved for retirement, so we can't say ${what} yet. Once you start saving, add it and we can answer.`
-    : `You haven't told us about retirement savings, so we can't say ${what} yet. Add what you own and we can answer.`;
+    ? { sentence: `Nothing is saved for retirement, so we can't say ${what} yet.`, next: "Once you start saving, add it and we can answer." }
+    : { sentence: `You haven't told us about retirement savings, so we can't say ${what} yet.`, next: "Add what you own and we can answer." };
 }

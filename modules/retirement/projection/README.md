@@ -2016,6 +2016,8 @@ Long-term care, How am I doing, the Timeline, the Retirement report).
   we can't say <what> yet. Add what you own and we can answer." Goal seek and What matters most say theirs with it too. (Fix
   round, critics P3 and P4: the first words, Goal seek's, ran to 33 words with "yet" twice and were said word for word on
   twelve pages; tests/sweep-x3.test.mjs pins one "yet" and at most 24 words.)
+- `unknownParts(unknown, what)` -> `{ sentence, next }`: the same words in their two parts, for the Plan health score, which says
+  the sentence as a part's words and the way on as its fix.
 - `modules/retirement/needs.js` `unknownHero(ui, words, { title })`: the hero those pages show, with one filled link, "Add what
   you own ›" (Net worth).
 No figure changes: the pages that use it add `unknown` to their result only when it holds (the invariance test compares every
