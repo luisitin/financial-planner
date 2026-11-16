@@ -1,0 +1,256 @@
+{
+ "note": "digests at dca545e, before the rewards from staking; module.test.mjs says how to write them again",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "ribYLD9AWq31h4Wb5Q9mTg",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "uz9tfRybSku0EiFSGZraF4",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "ribYLD9AWq31h4Wb5Q9mTg",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "XlHYmkrJX1Sy6T0zHfMrlf",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "ribYLD9AWq31h4Wb5Q9mTg",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "yt0WJCgdHl_NXFVd87ThCp",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "qawwU8tfFLNofIpi6jBUgT",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "qawwU8tfFLNofIpi6jBUgT",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "9vaWCQkZEP0JQQNFiV9Rxv",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "RqV_HI8XzuVHPGM6PUl-NB",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "HevtmE8jTpF2maKBaUHGWt",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "yt0WJCgdHl_NXFVd87ThCp",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "ng023TF2tNoETjbPUsXqtA",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "01-single-adult/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "z3az_DdbQ4dfRX6CxHfWxg",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "02-couple-no-kids/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "0SSCxo4xO_TzKq9-52VyRT",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "03-single-parent/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "gIFD1giG_EWZksY6tjylE-",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "04-two-parents/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "IBK1v9Efd9BVB58whtMj8U",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "05-stay-at-home-parent/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "yi-gaO6_eL7w6Aac-vKTxX",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "06-blended-family/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "FkEazuaDviDc0Z6KdXTnzk",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "07-multigenerational/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "J_gzq4PjzPgcn-mp3MmVE8",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "08-retired/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "9vaWCQkZEP0JQQNFiV9Rxv",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "09-near-retirement/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "-C3YbKD4spKY3GBQi6TdLS",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "10-student-and-starter/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "2XOtDYt1OMxMR5S1NNJuBM",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "11-self-employed/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "zmwSfHMaRflLZ-S7Tihsy_",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "12-high-net-worth/base": {
+   "crypto": "zIWYEDGcGsIrR6TZpqy8bP",
+   "federal": "DTIpj--XVY6vJNfDfzbmBP",
+   "cryptoPage": "fOw0QjotvgDDEtzQj5AIb9"
+  },
+  "13-in-crisis/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "kh2lYZOQtq2lTExT66w02w",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "14-unusual-structures/base": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "6u3ynsODAtenZNn9mJ-oJU",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "phone casey": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "dDk88jicI-AAE5Fkwi-ISL",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "phone danaLee": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "neIgz7LYZ-2DXehQyLwXmv",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "phone jamie": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "uF2vub-im5mzcUeEYD5Lt3",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "phone morgan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "BO2gbbAPJFH4ZU-aBCY7Ps",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "phone robin": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "bzkHbAvEhF2Hq9csHPMf05",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 earlyRetireePlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "MBK0MBPa6R5k1d2RUayZhi",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 equityPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "oGBGveNQpuLNYJP7dq--le",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 firstRmdPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "fUatQm7vEHTFAD5Mc8Ce9-",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 freelancerPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "1JRoDFwTxXduQoHDHry50O",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 highFreelancerPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "sgJ4WuzahmLZ4ohpZUyxH-",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 landlordBusinessPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "XgOJH_PrFvrR9aAUzVZZlo",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 landlordPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "GY1R93Fu3gmqlWsqtRdywC",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 parentLoanPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "eTxBxK1kdadwoTfTFfqiuo",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 stockAndBusinessPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "pdUeX_VlUu79yJ42aJlQUQ",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 studentLoanPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "uywjzx6nKOo0yqwX1gbtcr",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "round8 widowPlan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "th6NsD1EKJfZm8GuDxldG_",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "persona sam": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "dU815IEHFpCiwINYLIvkUf",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "persona jordan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "Kmjeh3MeYS7_eYf8NjT3L9",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "persona patLee": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "_fABNuTGmCop_cZmPckWQ_",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "persona ruth": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "XUeNUBSHfUMOisJwkjGzCR",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "empty plan": {
+   "crypto": "-3TybaaRTYq_DRJPCGJZe0",
+   "federal": "HevtmE8jTpF2maKBaUHGWt",
+   "cryptoPage": "Dauwfanx0T2rS7aRZ4BdH2"
+  },
+  "coins: wallet": {
+   "crypto": "w4kLmWeVQkD6Y2zL36StV9",
+   "federal": "2hAfbsEaE0G80NtGMofiAf",
+   "cryptoPage": "WXtRBFdBGznoSZUGBqT6Hq"
+  },
+  "coins: with funds": {
+   "crypto": "Kpy_F7uxnchlerfQmOAWMZ",
+   "federal": "ribYLD9AWq31h4Wb5Q9mTg",
+   "cryptoPage": "r0TfvdhBZWy7YDBdiJ2tmx"
+  }
+ }
+}

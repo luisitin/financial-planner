@@ -6,6 +6,8 @@
 //   4. rentals after their costs, interest and depreciation, through the passive-loss rules (Rental analysis)
 //   5. the traditional IRA deduction cut by the income limits for someone covered at work (IRC 219(g))
 //   6. student loan interest (IRC 221)
+//   2b. crypto staking rewards received this year, as other income (Crypto's staking.js; gap list, next 60, item 45): only
+//      when a reward is recorded for the year, else the inputs go through untouched
 //   7. the alternative minimum tax, last, on everything the others left (minimum-tax.js; gap list, next 60, item 29): only
 //      when it applies or an incentive-option spread is typed, else the inputs go through untouched
 // Each step takes the inputs the one before left and gives back new inputs and a line saying what it did. The year's tax
@@ -30,6 +32,7 @@ import { compute as computeLiabilities } from "../../balance/liabilities/compute
 import { yearOfPayments } from "../../../core/math/finance.js";
 import { studentLoanFor } from "./data/adjustments.js";
 import { minimumTaxStep } from "./minimum-tax.js";
+import { stakingIn } from "../../investments/crypto/staking.js";
 import * as W from "../../../core/words.js";
 
 const n = (v) => Number(v) || 0;
@@ -304,6 +307,36 @@ export function stockStep({ plan, fed, inputs, params = {} }) {
   return { inputs: next, line, note: null, stock: { value, personId: who, name, withheld, withheldAfter, vests, shares, price: es.price } };
 }
 
+// ---- 2b. crypto staking rewards (gap list, next 60, item 45) -------------------------------------------------------------
+
+/**
+ * stakingStep({ plan, fed, inputs }) -> { inputs, line | null, note: null, staking?: { total, count, year } }. Coins that
+ * staking pays are income in the year the person can first sell or move them, at what they were worth then (Rev. Rul.
+ * 2023-14, IRB 2023-33), reported on Schedule 1 line 8v (Instructions for Form 1040 (2025), line 8v: "income from forks,
+ * staking, or mining"). The rewards recorded on Crypto for this return's year (staking.js stakingIn) go into other ordinary
+ * income: filing separately, on the return of the crypto account's owner, half on each return for an account in neither
+ * name (as taxInputs puts income in neither name). Not added to the 3.8% tax's investment income (Form 8960's instructions:
+ * digital-asset income "may be subject" to it; not settled for staking: Crypto README). No reward this year: the inputs
+ * come back untouched, so every figure is as before.
+ */
+export function stakingStep({ plan, fed, inputs }) {
+  const s = stakingIn(plan, fed.year);
+  if (!(s.total > 0)) return { inputs, line: null, note: null };
+  const owner = new Map((plan.accounts ?? []).filter((a) => a && typeof a === "object").map((a) => [a.id, a.ownerId || null]));
+  const sep = Array.isArray(inputs.separate) && inputs.separate.length ? inputs.separate : null;
+  let next = inputs;
+  for (const [accountId, amount] of s.byAccount) {
+    const pid = owner.get(accountId) ?? null;
+    if (!sep) next = onReturn(next, null, { otherOrdinary: amount });
+    else if (sep.some((x) => x.personId != null && x.personId === pid)) next = onReturn(next, pid, { otherOrdinary: amount });
+    else for (const x of sep) next = onReturn(next, x.personId, { otherOrdinary: amount / sep.length });
+  }
+  const one = s.count === 1;
+  const line = { key: "staking", label: "Crypto staking rewards", amount: s.total, from: "plan",
+    detail: `Crypto page: ${s.count} ${one ? "reward" : "rewards"} received in ${fed.year}, at what ${one ? "it was" : "they were"} worth the day you got ${one ? "it" : "them"} (Schedule 1, line 8v)` };
+  return { inputs: next, line, note: null, staking: { total: s.total, count: s.count, year: fed.year } };
+}
+
 // ---- 3. a business at its profit ---------------------------------------------------------------------------------------
 
 /**
@@ -540,7 +573,7 @@ export function loanStep({ plan, fed, inputs, params = {} }) {
 
 // ---- the page's figures ---------------------------------------------------------------------------------------------------
 
-const STEPS = [withdrawalStep, stockStep, businessStep, rentalStep, iraStep, loanStep, qbiStep, minimumTaxStep];
+const STEPS = [withdrawalStep, stockStep, stakingStep, businessStep, rentalStep, iraStep, loanStep, qbiStep, minimumTaxStep];
 
 /**
  * known(plan, params, fed?) -> {
@@ -549,6 +582,7 @@ const STEPS = [withdrawalStep, stockStep, businessStep, rentalStep, iraStep, loa
  *   lines: [{ key, label, amount, from, detail }] what each step put in (in its order), sources (fed.sources with the steps'
  *   lines in place of the ones they replace), notes (the steps' notes),
  *   withdrawal, stock, se (businessStep's), rental, ira, loan (each step's figures or null),
+ *   staking ({ total, count, year }: only when a staking reward is recorded for the year; stakingStep),
  *   seTax (self-employment tax with its Additional Medicare tax, 0 without a business), earlyTax (the extra 10% on a
  *   withdrawal before 59½, IRC 72(t); 0 without one), total (result.totalTax + seTax + earlyTax: the year's federal tax),
  *   totalAtGross (with a business: the same with it at its Income-page gross and no self-employment tax), rate (total /
@@ -662,6 +696,7 @@ export function known(plan, params = {}, fed = null) {
     fed: f, year: f.year, filingStatus: f.filingStatus, inputs, result, changed, lines, sources, notes,
     withdrawal: out.withdrawal ?? null, stock: out.stock ?? null, se, rental: out.rental ?? null, ira: out.ira ?? null, loan: out.loan ?? null,
     seTax, earlyTax, total, totalAtGross, rate, steps, returns, nextDollar, careSets, careFalls, hasIncome: !!f.hasIncome || gross > 0,
+    ...(out.staking ? { staking: out.staking } : {}),   // only with a reward this year: a plan without one gives what it gave
   };
 }
 
@@ -676,7 +711,8 @@ function pageWalk(f, result, inputs, out, { seTax, earlyTax = 0, total, rate, ne
   const wages = n(inc.wages), business = se ? n(se.s?.net) : 0, drawn = n(out.withdrawal?.counted ?? out.withdrawal?.total), rent = Math.max(0, n(out.rental?.net));
   const pension = (f.sources ?? []).filter((x) => x.key === "pension").reduce((t, x) => t + n(x.amount), 0);
   const rentLeft = n(out.rental?.left);
-  const other = n(inc.ordinary) - wages - business - drawn - rent - pension - rentLeft;
+  const staked = n(out.staking?.total);   // crypto staking rewards (stakingStep): 0 without one
+  const other = n(inc.ordinary) - wages - business - drawn - rent - pension - rentLeft - staked;
   const rentGross = (out.rental?.rentals ?? []).reduce((t, r) => t + n(r.rent), 0);
   const first = steps.find((x) => x.label === "Income");
   if (first) first.sub = [
@@ -684,6 +720,7 @@ function pageWalk(f, result, inputs, out, { seTax, earlyTax = 0, total, rate, ne
     business >= 0.5 ? `business profit ${fmtInt(business)}` : null,
     drawn >= 0.5 ? `IRA and 401(k) withdrawals ${fmtInt(drawn)}` : null,
     pension >= 0.5 ? `pension ${fmtInt(pension)}` : null,
+    staked >= 0.5 ? `crypto staking rewards ${fmtInt(staked)}` : null,
     out.rental ? `rentals ${fmtInt(rent)} after costs (${fmtInt(rentGross)} of rent; see below)` : null,
     rentLeft >= 0.5 ? `other rent ${fmtInt(rentLeft)} before costs` : null,
     other >= 0.5 ? `other income ${fmtInt(other)}` : null,

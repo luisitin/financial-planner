@@ -10,6 +10,8 @@ import { lossCarryover } from "../../taxes/federal/compute.js";
 import { taxView } from "../../taxes/federal/known.js";
 import { federalTax } from "../../../core/math/tax.js";
 import { daysBetween, isoOf } from "../../../core/math/dates.js";
+import { salesYear } from "../tax-lots/sell.js";
+import { stakingIn } from "./staking.js";
 
 const addDays = (iso, n) => isoOf(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)), Number(iso.slice(8, 10)) + n);
 
@@ -43,7 +45,9 @@ export function cryptoKind(h) {
  *   lossLimit (3,000; 1,500 filing separately), why (when total is 0: "none" | "even" | "zero" | "carry" | "limit" | "under"),
  *   year (the tax year worked), otherYear (the Federal estimate's year when it is not today's), marginal, gainsRate },
  *   harvest: [{ symbol, kind, account, personId, date, lot, loss, allowed, disallowed, washedBy, saved (that lot sold on its own) }], harvestSaved (all of them
- *   together), harvestCarry, harvestDisallowed, waitLong: [{ symbol, date, longOn, gain, saved }], staleCount
+ *   together), harvestCarry, harvestDisallowed, waitLong: [{ symbol, date, longOn, gain, saved }], staleCount,
+ *   staking? (only when a staking reward is on file: staking.js stakingIn for the Federal estimate's year: { year, rewards, count,
+ *   total (the year's income), byAccount, others, any })
  * }
  */
 export function compute(plan, params = {}) {
@@ -152,5 +156,12 @@ export function compute(plan, params = {}) {
     tax: { shortGain, longGain, net, addShort: sold.short, addLong: sold.long, total: sold.change, carry: carryOf(sold.carry), disallowed: soldFunds.reduce((s, c) => s + c.disallowed, 0), lossLimit, returns: parts?.length || 1, why, year: yr.year, otherYear: yr.other, marginal, gainsRate },
     harvest: harvest.sort((a, b) => b.saved - a.saved), harvestSaved: Math.max(0, -banked.change), harvestCarry: carryOf(banked.carry), harvestDisallowed: harvest.reduce((s, x) => s + x.disallowed, 0),
     waitLong: waitLong.sort((a, b) => a.longOn.localeCompare(b.longOn)), staleCount: items.filter((i) => i.stale).length,
+    ...stakingOf(plan, today),
   };
+}
+
+/** The year's staking rewards (staking.js), only when one is on file: a plan without any gives what it gave before. */
+function stakingOf(plan, today) {
+  const s = stakingIn(plan, salesYear(plan, today));
+  return s.any ? { staking: s } : {};
 }

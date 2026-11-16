@@ -360,7 +360,7 @@ async function page(plan, today = T2) {
 
 test("S11: Which coins count as sold: Work it out keeps the question, names the answer in green, keeps its part open and moves nothing else", async () => {
   const P = await page(wallet());
-  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"]], "two quiet rows, shut; the first says the way that counts now");
+  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"], ["staking", false, "only if you stake"]], "three quiet rows, shut; the first says the way that counts now");
   assert.ok(P.root.all().filter((e) => e.tagName === "DETAILS").every((e) => e.dataset.part || String(e.className).includes("form-more")), "no fold by hand: the add form is a button now");
   assert.equal(P.textOf(P.part("ways").querySelector(".fold-title")), "Which coins count as sold");
   const ways = P.open("ways");
@@ -376,7 +376,7 @@ test("S11: Which coins count as sold: Work it out keeps the question, names the 
   form.dispatch("submit");
   assert.equal(P.saved.length, 1);
   assert.deepEqual(P.plan.whatIfs.crypto, ask(0.1));
-  assert.deepEqual(P.states(), [["ways", true, "oldest first"], ["sales", false, "none in 2026"]], "the saved part stays open, the other as it was; a question is not a way chosen, so the row still says the way that counts (P1)");
+  assert.deepEqual(P.states(), [["ways", true, "oldest first"], ["sales", false, "none in 2026"], ["staking", false, "only if you stake"]], "the saved part stays open, the other as it was; a question is not a way chosen, so the row still says the way that counts (P1)");
   const green = P.part("ways").all().find((e) => String(e.className).includes("notice"));
   assert.equal(P.textOf(green), "Worked out for 0.1 BTC. Highest cost first costs least: about $1,125 less federal tax than oldest first.");
   assert.match(P.textOf(P.part("ways")), /Oldest first \$1,125 of tax A gain of \$7,500, all long-term, from one purchase\. Highest cost first no tax No gain or loss, from 2 purchases\. Coins are property, not securities/);
@@ -384,7 +384,7 @@ test("S11: Which coins count as sold: Work it out keeps the question, names the 
   assert.ok(P.button("+ Add another coin"), "the add button as it was");
   // the next draw (a reload, Back): shut, the question kept, the answer a plain sentence
   P.draw();
-  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"]]);
+  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"], ["staking", false, "only if you stake"]]);
   const again = P.open("ways");
   assert.ok(!again.all().some((e) => String(e.className).includes("notice")));
   assert.match(P.textOf(again), /Highest cost first costs least/);
@@ -398,7 +398,7 @@ test("The way your exchange counts: a chip saves at once (no question), says so 
     P.button("Highest cost first", P.open("ways")).click();
     assert.deepEqual(asked, [], "no browser question for a choice Undo takes back (P6)");
     assert.equal(P.saved.length, 1); assert.equal(P.plan.investments.cryptoMethod, "cost");
-    assert.deepEqual(P.states(), [["ways", true, "set by you"], ["sales", false, "none in 2026"]]);
+    assert.deepEqual(P.states(), [["ways", true, "set by you"], ["sales", false, "none in 2026"], ["staking", false, "only if you stake"]]);
     const ways = P.part("ways");
     assert.match(P.textOf(ways), /Saved: the sales you record here now count the coins that cost the most first\. Set your exchange the same way before you sell\. Undo/);
     assert.equal(P.button("Highest cost first", ways).getAttribute("aria-pressed"), "true");
@@ -406,7 +406,7 @@ test("The way your exchange counts: a chip saves at once (no question), says so 
     P.button("Undo", ways).click();
     assert.equal(P.saved.length, 2); assert.ok(!("cryptoMethod" in P.plan.investments), "none saved again: the field goes");
     assert.match(P.textOf(P.part("ways")), /Undone: back to oldest first, as before\./);
-    assert.deepEqual(P.states(), [["ways", true, "oldest first"], ["sales", false, "none in 2026"]]);
+    assert.deepEqual(P.states(), [["ways", true, "oldest first"], ["sales", false, "none in 2026"], ["staking", false, "only if you stake"]]);
     assert.ok(!P.button("Undo", P.part("ways")), "nothing more to undo");
     // a way already on does nothing (the chip is on)
     P.button("Oldest first", P.part("ways")).click();
@@ -424,7 +424,7 @@ test("The page: no coins, the add form open in a card; one purchase per coin, no
   assert.ok(!E.root.all().some((e) => e.tagName === "DETAILS" && !String(e.className).includes("form-more")), "no fold by hand");
   const one = wallet(); one.holdings[0].lots = [{ id: "l1", date: "2023-03-01", shares: 0.25, cost: 17000 }];
   const P = await page(one);
-  assert.deepEqual(P.states().map((x) => x[0]), ["sales"], "every way sells the same coins: no row for the ways (the sales row stays)");
+  assert.deepEqual(P.states().map((x) => x[0]), ["sales", "staking"], "every way sells the same coins: no row for the ways (the sales row and the staking row stay)");
   assert.ok(!P.root.all().some((e) => /^H[23]$/.test(e.tagName) && /Add another coin/.test(P.textOf(e))), "the form waits behind its button");
   P.button("+ Add another coin").click();
   assert.ok(P.root.all().some((e) => e.tagName === "H3" && P.textOf(e) === "Add another coin"), "the form in place of the button, inside the list's card");
@@ -742,7 +742,7 @@ test("S11: Sales for your tax return: Record the sale writes it, names it in gre
     form.dispatch("submit");
     assert.equal(P.saved.length, 1);
     assert.equal(P.plan.taxes.gains.length, 2); near(P.plan.holdings[0].shares, 0.1);
-    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", true, "1 in 2026"]], "the saved part open, the other shut as it was");
+    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", true, "1 in 2026"], ["staking", false, "only if you stake"]], "the saved part open, the other shut as it was");
     const t = P.textOf(P.part("sales"));
     assert.match(t, /Recorded: 0\.15 BTC sold Oct 3, 2026 for \$14,100, oldest first: a gain of \$7,100 \(\+\$200 short-term, \+\$6,900 long-term\)\. It is now in this year's gains for your tax estimate\. The \$14,100 you got is not added to any account here: add it to the account it went to\. Undo/);
     assert.match(t, /Your 2026 coin sales: a short-term gain of \$200 and a long-term gain of \$6,900\. 0\.15 BTC · Oct 3, 2026 \+\$7,100 sold for \$14,100, cost \$7,000 0\.1 bought Mar 1, 2023: sold for \$9,400, cost \$2,500, \+\$6,900 long-term 0\.05 bought Dec 1, 2025: sold for \$4,700, cost \$4,500, \+\$200 short-term Remove this sale/);
@@ -756,7 +756,7 @@ test("S11: Sales for your tax return: Record the sale writes it, names it in gre
     P.button("Undo", P.part("sales")).click();
     assert.equal(P.saved.length, 2); assert.equal(P.plan.taxes.gains.length, 0); assert.deepEqual(P.plan.holdings, wallet().holdings);
     assert.match(P.textOf(P.part("sales")), /Undone: the sale is off Capital gains and its coins are back on your list\./);
-    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", true, "none in 2026"]]);
+    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", true, "none in 2026"], ["staking", false, "only if you stake"]]);
     // a refusal is said at its box and nothing is saved
     const f2 = P.part("sales").all().find((e) => e.tagName === "FORM");
     f2.querySelector('[name="units"]').value = "0.3"; f2.querySelector('[name="sold"]').value = "2026-10-03"; f2.querySelector('[name="proceeds"]').value = "1";
@@ -766,7 +766,7 @@ test("S11: Sales for your tax return: Record the sale writes it, names it in gre
     f2.querySelector('[name="units"]').value = "0.1"; f2.dispatch("submit");
     assert.equal(P.saved.length, 3);
     P.draw();
-    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "1 in 2026"]], "the next draw: shut, saying what it holds");
+    assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "1 in 2026"], ["staking", false, "only if you stake"]], "the next draw: shut, saying what it holds");
     const opened = P.open("sales");
     assert.ok(!opened.all().some((e) => String(e.className).includes("notice")), "the green line was for that draw only");
     const asked = [];
@@ -927,6 +927,8 @@ test("invariance: the file for tax software changes no figure, no spreadsheet an
     const root = new FakeElement("main");
     try {
       render(root, { ui, fmt: { ...fmt, today: () => T2 }, plan: p, route: { group, id, rest: [], query: {} }, module: { group, id }, store: { get: () => p, update: () => {} }, redraw: () => {} });
+      // a later quiet row, "Rewards from staking" (gap list, next 60, item 45), is left out: its own tests and digests read it
+      for (const d of root.all().filter((e) => e.tagName === "DETAILS" && e.dataset?.part === "staking")) d.remove();
       return textOf(root);
     } catch (e) { return `THROW ${e.message}`; }
   };
@@ -1170,4 +1172,315 @@ test("TXF on the page: beside the spreadsheet, outlined; the tap downloads the e
   // no coin sale: no file, no words about it
   const N = await page(wallet());
   assert.ok(!/\.txf|TXF|tax software/.test(N.textOf(N.open("sales"))));
+});
+
+// =============================================================================================================================
+// Invariance of "Rewards from staking" (gap list, next 60, item 45; staking.js): with no reward recorded, Crypto's compute, the
+// Federal estimate as every tax page reads it (known(): the steps, the sources, the walk, the total) and the Crypto page's
+// words (the new quiet row taken out) are what they were at dca545e, before the rewards existed. Over every qa fixture plan,
+// every invented household, the phone, round 8 and persona households and the empty plan.
+// `PRINT=1 node --test modules/investments/crypto/module.test.mjs` writes the digests again; only do that on the old code.
+// =============================================================================================================================
+test("invariance: with no staking reward, Crypto's figures, the Federal estimate's and the Crypto page's words are those of dca545e", async () => {
+  const fs = await import("node:fs"); const path = await import("node:path"); const nodeCrypto = await import("node:crypto");
+  const { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { known } = await import("../../taxes/federal/known.js");
+  const { render: renderCrypto } = await import("./view.js");
+  FakeElement.prototype.getBoundingClientRect ??= () => ({ top: 100, bottom: 140 });
+  const file = new URL("./staking-invariance.json", import.meta.url);
+  const digest = (x) => nodeCrypto.createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x, (k, v) => (v instanceof Map ? [...v] : v)) ?? "undefined").digest("base64url").slice(0, 22);
+  const plans = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push([`fixture ${f}:${name}`, fn(T2)]);
+  }
+  for (const a of ARCHETYPES) plans.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") plans.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) plans.push([`persona ${n}`, personas.finishSetup(n, personas[n](T2), T2)]);
+  plans.push(["empty plan", emptyPlan()], ["coins: wallet", wallet()], ["coins: with funds", withCoins()]);
+  const drawn = (p) => {
+    const root = new FakeElement("main");
+    try {
+      renderCrypto(root, { ui, fmt: { ...fmt, today: () => T2 }, plan: p, route: { group: "investments", id: "crypto", rest: [], query: {} }, module: { group: "investments", id: "crypto" }, store: { get: () => p, update: () => {} }, redraw: () => {} });
+      // the one new quiet row, "Rewards from staking", is the only addition (its own tests read it)
+      for (const d of root.all().filter((e) => e.tagName === "DETAILS" && e.dataset?.part === "staking")) d.remove();
+      return textOf(root);
+    } catch (e) { return `THROW ${e.message}`; }
+  };
+  const safe = (f) => { try { return f(); } catch (e) { return `THROW ${e.message}`; } };
+  const now = { today: T2, plans: {} };
+  for (const [name, raw] of plans) {
+    const p = migrate(structuredClone(raw));
+    now.plans[name] = { crypto: digest(safe(() => compute(structuredClone(p), { today: T2 }))), federal: digest(safe(() => known(structuredClone(p), { today: T2 }))), cryptoPage: digest(drawn(structuredClone(p))) };
+  }
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at dca545e, before the rewards from staking; module.test.mjs says how to write them again", ...now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.ok(Object.keys(was.plans).length >= 45, `${Object.keys(was.plans).length} plans`);
+  assert.deepEqual(Object.keys(now.plans), Object.keys(was.plans), "the same plans");
+  for (const name of Object.keys(was.plans)) assert.deepEqual(now.plans[name], was.plans[name], name);
+});
+
+// =============================================================================================================================
+// Rewards from staking (gap list, next 60, item 45; staking.js): income in the year received at the worth that day (Rev. Rul.
+// 2023-14), each a purchase on the list at that cost (digital asset FAQs 59 and 107), counted by the Federal estimate through
+// one step (known.js stakingStep, Schedule 1 line 8v)
+// =============================================================================================================================
+const K = await import("./staking.js");
+const { known } = await import("../../taxes/federal/known.js");
+const { lotsOf } = await import("../tax-lots/compute.js");
+const reward = (units, day, value, extra = {}) => ({ holdingId: "c1", units, day, value, ...extra });
+/** wallet() with the rewards given recorded, each through planReward and applyReward (which moves the wallet's balance with its
+ *  coins), as the page does. */
+function staked(list, base = wallet()) {
+  const p = structuredClone(base);
+  list.forEach(([id, r]) => { const w = K.planReward(p, r, { today: T2 }); assert.ok(w.ok, w.error); assert.ok(K.applyReward(p, w.reward, id, T2)); });
+  return p;
+}
+
+test("staking: the year's rewards add up, other years stay apart, and each is a purchase at its worth that day (hand sums)", () => {
+  const p = staked([["r1", reward(0.001, "2026-03-31", 85)], ["r2", reward(0.002, "2026-09-30", 220.5)], ["r0", reward(0.0015, "2025-12-31", 140)]]);
+  const s = K.stakingIn(p, 2026);
+  // 85 + 220.50 = 305.50 in 2026; the 140 of Dec 31, 2025 is 2025's
+  assert.deepEqual([s.year, s.count, s.total, s.others, s.any], [2026, 2, 305.5, 1, 3]);
+  assert.deepEqual(s.rewards.map((r) => [r.id, r.day, r.units, r.value, r.symbol, r.accountId]), [["r1", "2026-03-31", 0.001, 85, "BTC", "w"], ["r2", "2026-09-30", 0.002, 220.5, "BTC", "w"]], "oldest first");
+  assert.deepEqual(s.byAccount, [["w", 305.5]]);
+  assert.deepEqual(K.stakingIn(p, 2025).total, 140);
+  // the coin: 0.25 + 0.001 + 0.002 + 0.0015 = 0.2545 coins; 17,000 + 85 + 220.50 + 140 = 17,445.50 on file
+  const h = p.holdings[0];
+  near(h.shares, 0.2545, 1e-12); assert.equal(h.costBasis, 17445.5);
+  assert.deepEqual(h.lots.map((l) => [l.id, l.date, l.shares, l.cost]), [["l1", "2023-03-01", 0.1, 2500], ["l2", "2025-12-01", 0.1, 9000], ["r0", "2025-12-31", 0.0015, 140], ["r1", "2026-03-31", 0.001, 85], ["l3", "2026-06-01", 0.05, 5500], ["r2", "2026-09-30", 0.002, 220.5]], "each reward a purchase, in date order");
+  // the wallet's balance follows its coins: 0.2545 x 100,000
+  assert.equal(p.accounts[0].balance, 25450);
+  // a reward is a purchase like any other: its cost per coin is its worth (220.50 / 0.002 = 110,250), short-term until a year
+  // and a day has passed (FAQ 74: the holding period begins the day after)
+  const lot = lotsOf({ ...h, price: 100000 }, T2).find((l) => l.id === "r2");
+  near(lot.costPerShare, 110250, 1e-6); assert.equal(lot.term, "short"); near(lot.gain, 200 - 220.5, 1e-9);
+  // Crypto's compute carries the year's figure, only when a reward is on file
+  assert.equal(compute(p, { today: T2 }).staking.total, 305.5);
+  assert.ok(!("staking" in compute(wallet(), { today: T2 })), "no reward: no new key");
+});
+
+test("staking: what is refused, one sentence each (no coin, no coins, too few, no day, not on the calendar, the future, no worth)", () => {
+  const p = wallet();
+  const no = (input, field, error) => assert.deepEqual(K.planReward(p, input, { today: T2 }), { ok: false, field, error });
+  no(reward(0.01, "2026-10-01", 30, { holdingId: "zz" }), "coin", "Choose the coin you received.");
+  no(reward("", "2026-10-01", 30), "units", "Type how many coins you received.");
+  no(reward(0, "2026-10-01", 30), "units", "Type how many coins you received.");
+  no(reward(0.000000001, "2026-10-01", 30), "units", "Type at least 0.00000001 of a coin, the smallest amount this list keeps.");
+  no(reward(0.01, "", 30), "day", "Type the day you received them.");
+  no(reward(0.01, "2026-02-31", 30), "day", "That day is not on the calendar: check the day and the month.");
+  no(reward(0.01, "2026-11-17", 30), "day", "A reward cannot be dated in the future.");
+  no(reward(0.01, "2026-10-01", ""), "value", "Type what they were worth that day, in dollars.");
+  no(reward(0.01, "2026-10-01", -5), "value", "Type what they were worth that day, in dollars.");
+  // $0 (or less than a cent) is a box left at nothing: no coins at no cost, no income of $0 (critic P1)
+  no(reward(0.01, "2026-10-01", 0), "value", "Type what they were worth that day, more than $0.");
+  no(reward(0.01, "2026-10-01", "0"), "value", "Type what they were worth that day, more than $0.");
+  no(reward(0.01, "2026-10-01", 0.004), "value", "Type what they were worth that day, more than $0.");
+  // a coin outside a crypto account (a fund in a brokerage account) is not one staking pays
+  const q = withCoins();
+  assert.equal(K.planReward(q, { holdingId: "c4", units: 1, day: "2026-10-01", value: 50 }, { today: TODAY }).field, "coin");
+  // a cent is a worth
+  assert.deepEqual(K.planReward(p, reward(0.01, "2026-10-01", 0.01), { today: T2 }), { ok: true, reward: { holdingId: "c1", accountId: "w", symbol: "BTC", units: 0.01, day: "2026-10-01", value: 0.01 } });
+});
+
+test("staking: the wallet's balance moves by the reward's coins at the coin's price, keeping a part that is not listed coins (critic F1)", () => {
+  // a wallet whose balance (5,000) is more than its listed coins (1.5 ETH x 3,200 = 4,800): 200 of it is not listed coins
+  const base = wallet();
+  base.accounts = [{ id: "w", name: "Wallet", type: "crypto", balance: 5000, asOf: "2026-06-30", history: [] }];
+  base.holdings = [{ id: "c1", accountId: "w", symbol: "ETH", shares: 1.5, price: 3200, priceAsOf: T2, costBasis: null, lots: [] }];
+  const nw0 = compute(base, { today: T2 }).netWorth;
+  const p = staked([["r1", reward(0.01, "2026-03-01", 31.5)]], base);
+  // 0.01 ETH x 3,200 = 32 more: 5,032 (it was 4,832 when the balance was set to coins x price, and net worth fell 168)
+  assert.equal(p.accounts[0].balance, 5032);
+  assert.equal(p.accounts[0].asOf, "2026-06-30", "a balance with more than its coins keeps its own day");
+  near(compute(p, { today: T2 }).netWorth - nw0, 32, 1e-9, "net worth rises by the new coins at today's price");
+  assert.equal(compute(p, { today: T2 }).items.find((i) => i.kind === "account")?.value, 200, "the rest of the balance stays as it was");
+  // removed: back to 5,000 (and Undo, which takes back the changes, the same)
+  const q = structuredClone(p);
+  assert.equal(K.removeReward(q, "r1", T2).ok, true);
+  assert.equal(q.accounts[0].balance, 5000);
+  // a balance below its coins (4,000 typed against 4,800 of coins) keeps its gap the same way: 4,032
+  const low = structuredClone(base); low.accounts[0].balance = 4000;
+  assert.equal(staked([["r1", reward(0.01, "2026-03-01", 31.5)]], low).accounts[0].balance, 4032);
+  // a balance that is just its coins (within a cent) becomes their worth, as of today, as before: 4,832 on Nov 2
+  const just = structuredClone(base); just.accounts[0].balance = 4800;
+  const j = staked([["r1", reward(0.01, "2026-03-01", 31.5)]], just);
+  assert.deepEqual([j.accounts[0].balance, j.accounts[0].asOf], [4832, T2]);
+  // a refusal (sold since) moves nothing, not even the day
+  const r = staked([["r1", reward(0.001, "2026-03-31", 85)]]);
+  S.applySale(r, S.planSale(r, sell(0.2005, 20050, "2026-11-02"), { today: T2 }), "s1", T2);
+  const was = structuredClone(r);
+  assert.equal(K.removeReward(r, "r1", "2026-12-01").ok, false);
+  assert.deepEqual(r, was);
+});
+
+test("staking: a reward taken back leaves the plan as it was, byte for byte; refused once a sale took some of its coins", () => {
+  const before = wallet();
+  const p = staked([["r1", reward(0.004, "2026-10-31", 412)]]);
+  const res = K.removeReward(p, "r1", T2);
+  assert.equal(res.ok, true);
+  // (the wallet's day of balance is today's after any change)
+  assert.deepEqual(p, { ...before, accounts: [{ ...before.accounts[0], asOf: T2 }] }, "coins, cost, purchases and the list as before; no empty list left behind");
+  assert.ok(!("staking" in p.investments));
+  assert.deepEqual(K.removeReward(p, "r1"), { ok: false, error: "That reward is no longer on file." });
+  // sold since: the oldest first takes 0.1 + 0.1 and half of the reward of Mar 31, 2026 (0.0005 of its 0.001)
+  const q = staked([["r1", reward(0.001, "2026-03-31", 85)]]);
+  S.applySale(q, S.planSale(q, sell(0.2005, 20050, "2026-11-02"), { today: T2 }), "s1", T2);
+  near(q.holdings[0].lots.find((l) => l.id === "r1").shares, 0.0005, 1e-12);
+  const was = structuredClone(q);
+  assert.deepEqual(K.removeReward(q, "r1"), { ok: false, error: K.SOLD_SINCE });
+  assert.deepEqual(q, was, "a refusal changes nothing");
+  assert.equal(K.SOLD_SINCE, "Some of these coins have been sold since, so the reward cannot come off on its own: remove that sale first, under Sales for your tax return, then this reward.");
+});
+
+test("staking on the Federal estimate: the year's rewards are other income, the tax rises by the 22% on them and by nothing else (hand calculation)", () => {
+  // one adult filing single, pay 100,000: taxable income 83,900, inside the 22% bracket; 412 more income = 412 x 22% = 90.64
+  const k0 = known(wallet(), { today: T2 });
+  const k1 = known(staked([["r1", reward(0.004, "2026-10-31", 412)]]), { today: T2 });
+  near(k1.total - k0.total, 90.64, 1e-6);
+  near(k1.inputs.otherOrdinary - k0.inputs.otherOrdinary, 412, 1e-9);
+  assert.equal(k1.inputs.investmentIncome ?? 0, k0.inputs.investmentIncome ?? 0, "not in the 3.8% tax's investment income (README)");
+  assert.deepEqual(k1.staking, { total: 412, count: 1, year: 2026 });
+  assert.ok(!("staking" in k0), "no reward: no new key");
+  assert.deepEqual(k1.sources.at(-1), { key: "staking", label: "Crypto staking rewards", amount: 412, from: "plan", detail: "Crypto page: 1 reward received in 2026, at what it was worth the day you got it (Schedule 1, line 8v)" });
+  assert.equal(k1.steps.find((x) => x.label === "Income").sub, "wages $100,000, crypto staking rewards $412");
+  // two rewards: "rewards ... they were ... them"
+  const two = known(staked([["r1", reward(0.004, "2026-10-31", 412)], ["r2", reward(0.001, "2026-11-01", 100)]]), { today: T2 });
+  assert.equal(two.sources.at(-1).detail, "Crypto page: 2 rewards received in 2026, at what they were worth the day you got them (Schedule 1, line 8v)");
+  near(two.total - k0.total, 512 * 0.22, 1e-6);
+  // a reward of 2025 is 2025's income: 2026's estimate does not move, to the byte
+  assert.equal(JSON.stringify(known(staked([["r0", reward(0.0015, "2025-12-31", 140)]]), { today: T2 })), JSON.stringify(k0));
+  // the Federal estimate set to 2025 counts it
+  const y25 = staked([["r0", reward(0.0015, "2025-12-31", 140)]]); y25.taxes.year = 2025;
+  const b25 = wallet(); b25.taxes.year = 2025;
+  near(known(y25, { today: T2 }).inputs.otherOrdinary - known(b25, { today: T2 }).inputs.otherOrdinary, 140, 1e-9);
+});
+
+test("staking on the Federal estimate, filing separately: on the account owner's return; an account in neither name, half on each", () => {
+  const apart = (owner) => { const p = wallet(); p.household.people.push({ id: "a2", name: "Adult 2", role: "partner", birthDate: "1981-01-01" }); p.household.filingStatus = "married_separate"; p.accounts[0].ownerId = owner; return p; };
+  const parts = (p) => known(p, { today: T2 }).inputs.separate.map((x) => [x.personId, x.otherOrdinary]);
+  assert.deepEqual(parts(apart("a1")), [["a1", 0], ["a2", 0]]);
+  assert.deepEqual(parts(staked([["r1", reward(0.004, "2026-10-31", 412)]], apart("a1"))), [["a1", 412], ["a2", 0]]);
+  assert.deepEqual(parts(staked([["r1", reward(0.004, "2026-10-31", 412)]], apart("a2"))), [["a1", 0], ["a2", 412]]);
+  assert.deepEqual(parts(staked([["r1", reward(0.004, "2026-10-31", 412)]], apart(""))), [["a1", 206], ["a2", 206]]);
+  const k = known(staked([["r1", reward(0.004, "2026-10-31", 412)]], apart("a1")), { today: T2 });
+  near(k.inputs.otherOrdinary, k.inputs.separate.reduce((t, x) => t + x.otherOrdinary, 0), 1e-9, "the total is the returns added up");
+});
+
+test("staking: one written sentence per case (R5), the row's status, and the green lines", () => {
+  const money = (n) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+  const none = K.stakingIn(wallet(), 2026);
+  assert.equal(K.stakingStatus(none, money), "only if you stake", "no reward on file at all: the row says it is only for people who stake (critic P5)");
+  assert.equal(K.stakingSentence(none, money), "No staking rewards recorded yet. When coins you stake earn more coins, record each reward with what it was worth on the day you got it: that worth is income for that year, and the new coins join your list at that cost.");
+  assert.equal(K.othersSentence(none), "");
+  const last = K.stakingIn(staked([["r0", reward(0.0015, "2025-12-31", 140)]]), 2026);
+  assert.equal(K.stakingSentence(last, money), "No staking rewards recorded for 2026 yet. The 1 reward from other years stays on your list at its cost; each is income in its own year.");
+  assert.equal(K.stakingStatus(last, money), "none in 2026");
+  const lasts = K.stakingIn(staked([["r0", reward(0.0015, "2025-12-31", 140)], ["r9", reward(0.001, "2024-06-30", 60)]]), 2026);
+  assert.equal(K.stakingSentence(lasts, money), "No staking rewards recorded for 2026 yet. The 2 rewards from other years stay on your list at their cost; each is income in its own year.");
+  const one = K.stakingIn(staked([["r1", reward(0.004, "2026-10-31", 412)]]), 2026);
+  assert.equal(K.stakingStatus(one, money), "$412 in 2026");
+  assert.equal(K.stakingSentence(one, money), "Your staking rewards in 2026 come to $412, from 1 reward: income for 2026, which the Federal estimate counts.");
+  const both = K.stakingIn(staked([["r1", reward(0.004, "2026-10-31", 412)], ["r2", reward(0.001, "2026-11-01", 100)], ["r0", reward(0.0015, "2025-12-31", 140)]]), 2026);
+  assert.equal(K.stakingSentence(both, money), "Your staking rewards in 2026 come to $512, from 2 rewards: income for 2026, which the Federal estimate counts.");
+  assert.equal(K.othersSentence(both), "1 more reward from other years: each is income in its own year, not in 2026.");
+  const r = { units: 0.004, symbol: "BTC", day: "2026-10-31", value: 412 };
+  assert.equal(K.recordedSentence(r, one, money), "Recorded: 0.004 BTC received Oct 31, 2026, worth $412. Your 2026 staking rewards now come to $412, counted as income, and the coins are on your list at that cost.");
+  assert.equal(K.recordedSentence({ ...r, day: "2025-12-31", value: 140 }, one, money), "Recorded: 0.004 BTC received Dec 31, 2025, worth $140, on your list at that cost. It is income for 2025, so the 2026 estimate does not change.");
+  assert.equal(K.removeAsk(r, money), "Remove the reward of 0.004 BTC received Oct 31, 2026? Its coins come off your list and its $412 off your income.");
+  assert.equal(K.removedSaid(r), "Reward removed: 0.004 BTC of Oct 31, 2026 is off your list and off your income.");
+  assert.equal(K.rewardTitle(r), "0.004 BTC · Oct 31, 2026");
+  assert.equal(K.rewardLine(r, money), "on your list at a cost of $412");
+  assert.equal(K.earlierLine(1), "and 1 earlier one, counted in the total above.");
+  assert.equal(K.earlierLine(3), "and 3 earlier ones, counted in the total above.");
+  // the estimate the chip fills in (critic P2): coins x the price on the list, to the cent, as the box shows it
+  assert.equal(K.estimateWorth("0.004", 100000), 400);
+  assert.equal(K.estimateWorth("0.01", 3150), 31.5);
+  assert.equal(K.estimateWorth("1,000", 0.153), 153);
+  assert.equal(K.estimateWorth("0.0123", 2451.37), 30.15, "0.0123 x 2,451.37 = 30.151851, to the cent");
+  for (const [u, pr] of [["", 100], [null, 100], ["abc", 100], ["0", 100], ["-1", 100], ["1", 0], ["1", null]]) assert.equal(K.estimateWorth(u, pr), null, `${u} x ${pr}`);
+  assert.deepEqual([K.estimateText(400), K.estimateText(31.5), K.estimateText(1234.56), K.estimateText(25000)], ["400", "31.50", "1,234.56", "25,000"]);
+  assert.equal(K.ESTIMATE_CHIP, "Estimate it at the price on your list");
+  assert.equal(K.ESTIMATE_NEEDS, "Type how many coins you received first.");
+});
+
+test("staking, the page: one quiet row; inside, the sentence and the form; Record the reward names the new total in green with Undo, stays open, moves nothing else", async () => {
+  const P = await page(wallet());
+  assert.equal(P.textOf(P.part("staking").querySelector(".fold-title")), "Rewards from staking");
+  const st = P.open("staking");
+  assert.match(P.textOf(st), /No staking rewards recorded yet\. When coins you stake earn more coins/);
+  const form = st.all().find((e) => e.tagName === "FORM");
+  assert.deepEqual(form.all().filter((e) => ["INPUT", "SELECT"].includes(e.tagName)).map((e) => e.getAttribute("name")), ["staked", "received", "worth"], "one coin: no coin box; four boxes at most");
+  assert.equal(form.querySelector('[name="received"]').value, T2, "the day starts on today");
+  assert.match(P.textOf(st), /The IRS counts staking rewards as income in the year you can first sell or move them, at what they are worth then; that worth is also what the new coins cost you\./);
+  assert.equal(st.all().filter((e) => e.tagName === "BUTTON" && !/secondary|chip/.test(String(e.className))).length, 1, "one filled button: the form's own (the estimate is a quiet chip)");
+  // no statement at hand: the chip under the worth fills in the coins at the price on the list, an estimate; nothing is saved
+  const chip = P.button("Estimate it at the price on your list", st);
+  assert.ok(chip, "the chip is there"); assert.equal(chip.getAttribute("type"), "button", "it does not send the form");
+  chip.click();
+  assert.equal(form.querySelector('[name="worth"]').value, "", "no coins typed yet: nothing filled in");
+  form.querySelector('[name="staked"]').value = "0.004";
+  chip.click();
+  assert.equal(form.querySelector('[name="worth"]').value, "400", "0.004 x $100,000 = $400");
+  assert.equal(P.saved.length, 0, "the chip saves nothing");
+  // a worth of $0 is refused at its box, nothing written (critic P1)
+  form.querySelector('[name="worth"]').value = "0";
+  form.dispatch("submit");
+  assert.equal(P.saved.length, 0, "$0: not recorded");
+  form.querySelector('[name="staked"]').value = "0.004"; form.querySelector('[name="received"]').value = "2026-10-31"; form.querySelector('[name="worth"]').value = "412";
+  form.dispatch("submit");
+  assert.equal(P.saved.length, 1);
+  assert.deepEqual(P.plan.investments.staking.map((r) => [r.holdingId, r.accountId, r.symbol, r.units, r.day, r.value]), [["c1", "w", "BTC", 0.004, "2026-10-31", 412]]);
+  assert.equal(P.plan.accounts[0].balance, 25400, "the wallet follows its coins");
+  assert.deepEqual(P.states(), [["ways", false, "oldest first"], ["sales", false, "none in 2026"], ["staking", true, "$412 in 2026"]], "the saved part stays open (R17), the others as they were");
+  const green = P.part("staking").all().find((e) => String(e.className).includes("notice"));
+  assert.equal(P.textOf(green), "Recorded: 0.004 BTC received Oct 31, 2026, worth $412. Your 2026 staking rewards now come to $412, counted as income, and the coins are on your list at that cost.");
+  assert.match(P.textOf(P.part("staking")), /Your staking rewards in 2026 come to \$412, from 1 reward: income for 2026, which the Federal estimate counts\. The Federal estimate adds them as other income\. If you typed them there yourself, under Other income, take them out there, so they are not counted twice\. 0\.004 BTC · Oct 31, 2026 \$412 on your list at a cost of \$412 Remove this reward \+ Record another reward/);
+  // Undo: the plan as it was
+  P.button("Undo", P.part("staking")).click();
+  assert.deepEqual(P.plan.holdings, wallet().holdings);
+  assert.ok(!("staking" in P.plan.investments));
+  assert.equal(P.textOf(P.part("staking").all().find((e) => String(e.className).includes("notice"))), "Undone: the reward is off your list and off your income.");
+  // the next draw (a reload): shut, saying what it holds
+  P.draw();
+  assert.deepEqual(P.states().at(-1), ["staking", false, "only if you stake"]);
+});
+
+test("staking, the page: Remove this reward asks first, says so with Undo; refused in red when a sale took some of its coins", async () => {
+  const had = globalThis.window.confirm, asked = [];
+  try {
+    const P = await page(staked([["r1", reward(0.004, "2026-10-31", 412)]]));
+    assert.deepEqual(P.states().at(-1), ["staking", false, "$412 in 2026"]);
+    const st = P.open("staking");
+    assert.ok(P.button("+ Record another reward", st), "a reward this year: the form waits behind an outlined button");
+    globalThis.window.confirm = (text) => { asked.push(text); return false; };
+    P.button("Remove this reward", st).click();
+    assert.equal(P.saved.length, 0, "No: nothing changes");
+    globalThis.window.confirm = (text) => { asked.push(text); return true; };
+    P.button("Remove this reward", P.part("staking")).click();
+    assert.deepEqual(asked, ["Remove the reward of 0.004 BTC received Oct 31, 2026? Its coins come off your list and its $412 off your income.", "Remove the reward of 0.004 BTC received Oct 31, 2026? Its coins come off your list and its $412 off your income."]);
+    assert.equal(P.saved.length, 1);
+    assert.deepEqual(P.plan.holdings, wallet().holdings);
+    assert.equal(P.textOf(P.part("staking").all().find((e) => String(e.className).includes("notice"))), "Reward removed: 0.004 BTC of Oct 31, 2026 is off your list and off your income.");
+    P.button("Undo", P.part("staking")).click();
+    assert.deepEqual(P.plan.investments.staking.map((r) => r.id), ["r1"]);
+    assert.equal(P.textOf(P.part("staking").all().find((e) => String(e.className).includes("notice"))), "Undone: the reward is back on your list and in your income.");
+    // sold since: refused, said in red, nothing written
+    const q = staked([["r1", reward(0.001, "2026-03-31", 85)]]);
+    S.applySale(q, S.planSale(q, sell(0.2005, 20050, "2026-11-02"), { today: T2 }), "s1", T2);
+    const Q = await page(q);
+    Q.button("Remove this reward", Q.open("staking")).click();
+    assert.equal(Q.saved.length, 0);
+    const red = Q.part("staking").all().find((e) => String(e.className).includes("notice error"));
+    assert.equal(Q.textOf(red), K.SOLD_SINCE);
+  } finally { globalThis.window.confirm = had; }
 });

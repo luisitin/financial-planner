@@ -4,13 +4,17 @@
 // knowing; adding a coin (open while there are none, else behind "+ Add another coin"); then one quiet card of
 // optional parts (core/ui/more.js; docs/OPTIONAL.md): "Which coins count as sold" (a sale of some of a coin worked three
 // ways, and the way your exchange counts, saved with Undo) and "Sales for your tax return" (record a coin sale, the year's
-// coin sales as Form 8949 lines, a CSV and a printout for a tax preparer, and a file for tax software, TXF); then "More on
-// this".
+// coin sales as Form 8949 lines, a CSV and a printout for a tax preparer, and a file for tax software, TXF) and "Rewards from
+// staking" (coins staking paid, income in the year received, each a purchase at its worth that day; staking.js); then "More
+// on this".
 import { shareText } from "../tax-lots/compute.js";
 import { orderValue } from "../tax-lots/sell.js";
 import { compute, COINS, FALLS, SHARE } from "./compute.js";
 import { coinOrders, coinsOf, hasWays, methodOf, methodSaid, methodUndone, waysSentence, wayLine, washNote, unitsText, coinsText, METHODS, METHOD_TITLES, METHOD_SHORT, METHOD_CHIPS,
   recordable, planSale, applySale, removeSale, coinSales, coinSalesSentence, elsewhereSentence, recordedSentence, moneyNote, costNote, costMissing, lineText, recordWay, removeAsk, removedSaid, UNDONE_SALE, form8949Csv, dayText, FORM_NOTE, FORM_SCREEN } from "./sales.js";
+import { stakingIn, planReward, applyReward, removeReward, stakingStatus, stakingSentence, othersSentence, TWICE, RULE, rewardLine, rewardTitle, earlierLine,
+  recordedSentence as rewardSaid, removeAsk as rewardAsk, removedSaid as rewardRemoved, UNDONE_RECORD, UNDONE_REMOVE, SHOWN, estimateWorth, estimateText, ESTIMATE_CHIP, ESTIMATE_NEEDS } from "./staking.js";
+import { salesYear } from "../tax-lots/sell.js";
 import { txfFile, txfOffer, txfStats, txfName, txfSaid, txfFailed, TXF_FORM_SCREEN, TXF_SCREEN, TXF_SEPARATE } from "./txf.js";
 import { parts, choice, links } from "../../../core/ui/more.js";
 import { reportFrame, rtable, printSheet } from "../../reports/report-kit.js";
@@ -21,6 +25,8 @@ let adding = false;   // "+ Add another coin" was tapped: its form stays drawn a
 let draft = null;     // { coin, by, amount } typed in "Which coins count as sold" but not worked out yet (another coin redraws the form)
 let recording = false; // "+ Record another sale" was tapped: the form stays drawn across a redraw until it records or is cancelled
 let recDraft = null;  // { coin, units, sold, proceeds } typed in "Record a sale" when another coin redraws the form
+let rewarding = false; // "+ Record another reward" was tapped: the form stays drawn across a redraw until it records or is cancelled
+let rewDraft = null;  // { coin, staked, received, worth } typed in "Record a reward" when another coin redraws the form
 
 const STYLE = `
 .cr-root .cr-flag { color: var(--warn); font-weight: 650; }
@@ -58,7 +64,8 @@ export function render(page, ctx) {
     root.append(addCard(true));
     // every coin sold this year: the list for the tax return is still there
     const left = coinSales(plan, { today });
-    if (left.count || left.elsewhere) root.append(ui.h("div", {}, parts(ctx, salesPartOf(left, []))));
+    const st0 = stakingIn(plan, salesYear(plan, today));
+    if (left.count || left.elsewhere || st0.any) root.append(ui.h("div", {}, parts(ctx, left.count || left.elsewhere ? salesPartOf(left, []) : null, st0.any ? stakingPartOf(st0, []) : null)));
     said = null;
     return;
   }
@@ -161,7 +168,9 @@ export function render(page, ctx) {
   const waysPart = coins.some(hasWays) ? { id: "ways", kind: "item", title: "Which coins count as sold", says: METHOD_SHORT[method.key], set: method.saved ? true : 0,
     open: said?.part === "ways" ? true : undefined, holds: ["amount"], body: () => waysBody() } : null;
   const cs = coinSales(plan, { today }), rec = recordable(plan, today);
-  root.append(ui.h("div", {}, parts(ctx, waysPart, rec.length || cs.count || cs.elsewhere ? salesPartOf(cs, rec) : null)));
+  // "Rewards from staking": with a coin to record it for, or a reward on file
+  const st = stakingIn(plan, cs.year);
+  root.append(ui.h("div", {}, parts(ctx, waysPart, rec.length || cs.count || cs.elsewhere ? salesPartOf(cs, rec) : null, rec.length || st.any ? stakingPartOf(st, rec) : null)));
 
   root.append(ui.h("div", {}, links(ctx, [
     { href: "#/investments/holdings", ask: "Where is everything I hold?", says: "every account, coins and funds" },
@@ -318,6 +327,94 @@ export function render(page, ctx) {
     f.elements?.coin?.addEventListener?.("change", () => { recDraft = { coin: f.elements.coin.value, units: f.elements.units?.value ?? null, sold: f.elements.sold?.value ?? "", proceeds: f.elements.proceeds?.value ?? null }; drawRecord(host, rec, cs, false); });
     host.append(...[ui.h("h3", {}, "Record a sale"), ui.h("p", { class: "muted small" }, recordWay(m)), costMissing(coin) ? ui.h("p", { class: "small cr-flag" }, costMissing(coin)) : null, f].filter(Boolean));
   }
+  // ---- "Rewards from staking": coins staking paid are income in the year received, at their worth that day, and a purchase
+  // on the list at that cost (staking.js; the Federal estimate counts the year's through known.js stakingStep)
+  function stakingPartOf(st, rec) {
+    return { id: "staking", kind: "item", title: "Rewards from staking", says: stakingStatus(st, money),
+      open: said?.part === "staking" ? true : undefined, holds: ["staked", "received", "worth"], body: () => stakingBody(st, rec) };
+  }
+  function stakingBody(st, rec) {
+    const mine = said?.part === "staking" ? said : null;
+    const out = [];
+    if (mine) {
+      // the list above the tapped button changes after a save: the green line is brought under the top bar (ui.reveal)
+      const n = mine.error ? ui.notice("error", mine.text) : ui.notice("ok", mine.text);
+      out.push(n, mine.undo ? ui.row(ui.button("Undo", mine.undo, { class: "secondary" })) : null);
+      ui.reveal?.(n, { block: "start" });
+    }
+    out.push(ui.h("p", {}, stakingSentence(st, money)));
+    const others = othersSentence(st);
+    if (others) out.push(ui.h("p", { class: "small" }, others));
+    if (st.count) {
+      out.push(ui.h("p", { class: "muted small" }, TWICE));
+      const shown = [...st.rewards].reverse().slice(0, SHOWN);
+      out.push(ui.h("ul", { class: "records" }, shown.map((r) => ui.h("li", {},
+        ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, rewardTitle(r)), ui.h("span", { class: "rec-value" }, money(r.value))),
+        ui.h("div", { class: "rec-sub" }, rewardLine(r, money)),
+        ui.h("div", { class: "rec-foot" }, ui.button("Remove this reward", () => takeBack(r), { class: "secondary small" }))))));
+      if (st.count > SHOWN) out.push(ui.h("p", { class: "muted small" }, earlierLine(st.count - SHOWN)));
+    }
+    // the form: open while the year has no reward, else behind "+ Record another reward" (R20)
+    if (rec.length) { const host = ui.h("div"); drawReward(host, rec, st, st.count > 0 && !rewarding); out.push(host); }
+    out.push(ui.h("p", { class: "muted small" }, RULE));
+    return out;
+  }
+  // a reward taken back asks first, says so, and offers Undo; refused (and said in red) when some of its coins were sold since
+  function takeBack(r) {
+    if (!ui.confirm(rewardAsk(r, money))) return;
+    const can = removeReward(structuredClone(plan), r.id);   // tried on a copy first: a refusal changes nothing
+    if (!can.ok) { said = { part: "staking", text: can.error, error: true }; ctx.redraw?.(); return; }
+    let undo = null;
+    said = { part: "staking", text: rewardRemoved(r), undo: () => { said = { part: "staking", text: UNDONE_REMOVE }; undo?.(); } };
+    undo = ui.undoable(store, (p) => { removeReward(p, r.id, today); });   // the wallet's balance comes down by its coins (staking.js walletFollows)
+  }
+  function drawReward(host, rec, st, folded) {
+    host.replaceChildren?.();
+    if (folded) { host.append(ui.row(ui.button("+ Record another reward", () => { rewarding = true; drawReward(host, rec, st, false); host.querySelector?.("input, select")?.focus?.({ preventScroll: true }); }, { class: "secondary" }))); return; }
+    const coin = rec.find((c) => c.id === rewDraft?.coin) ?? rec[0];
+    const fields = [
+      rec.length > 1 ? { key: "coin", label: "Coin", type: "select", options: rec.map((c) => ({ value: c.id, label: `${c.symbol} · ${c.account}` })) } : null,
+      { key: "staked", label: "How many coins you received", type: "number", required: true, min: 0, max: 1e12, step: "any", help: `${coin.symbol} in ${coin.account}` },
+      { key: "received", label: "Received on", type: "date", required: true, max: today },
+      { key: "worth", label: "What they were worth that day", type: "money", required: true, min: 0, max: 1e10, help: "in dollars, on the day you got them; your exchange's statement shows it. A month's rewards can go on one line, on the month's last day." },
+    ].filter(Boolean);
+    const values = { coin: coin.id, staked: rewDraft?.staked ?? null, received: rewDraft?.received ?? today, worth: rewDraft?.worth ?? null };
+    const f = ui.form(fields, values, (v) => {
+      const c = rec.find((y) => y.id === (v.coin ?? coin.id)) ?? coin;
+      const r = planReward(plan, { holdingId: c.id, units: v.staked, day: v.received, value: v.worth }, { today });
+      if (!r.ok) {
+        const box = f.elements?.[{ coin: "coin", units: "staked", day: "received", value: "worth" }[r.field]];
+        if (box) return ui.fieldError(box, r.error);
+        f.prepend(ui.notice("error", r.error));
+        return false;
+      }
+      const id = ui.uid();
+      // the green line is set before the change (the page is drawn again by it): its new total from the change tried on a copy
+      const dry = structuredClone(plan);
+      applyReward(dry, r.reward, id);
+      let undo = null;
+      said = { part: "staking", text: rewardSaid(r.reward, stakingIn(dry, st.year), money), undo: () => { said = { part: "staking", text: UNDONE_RECORD }; undo?.(); } };
+      rewarding = false; rewDraft = null;
+      undo = ui.undoable(store, (p) => { applyReward(p, r.reward, id, today); });   // the wallet's balance goes up by its coins, the rest of it kept
+    }, { submitLabel: "Record the reward", onCancel: st.count ? () => { rewarding = false; rewDraft = null; drawReward(host, rec, st, true); host.querySelector?.("button")?.focus?.(); } : undefined });
+    // another coin: its line under the box follows, keeping what was typed (nothing is saved until "Record the reward")
+    f.elements?.coin?.addEventListener?.("change", () => { rewDraft = { coin: f.elements.coin.value, staked: f.elements.staked?.value ?? null, received: f.elements.received?.value ?? "", worth: f.elements.worth?.value ?? null }; drawReward(host, rec, st, false); });
+    // no statement at hand: one quiet chip under the worth fills in an estimate, the coins typed at the price on the list
+    // (staking.js estimateWorth); the box stays the person's to change, and nothing is saved until "Record the reward"
+    const price0 = Number((plan.holdings ?? []).find((x) => x && x.id === coin.id)?.price);
+    const wBox = f.elements?.worth, sBox = f.elements?.staked;
+    if (price0 > 0 && wBox) {
+      const chip = ui.h("button", { type: "button", class: "chip", onClick: () => {
+        const est = estimateWorth(sBox?.value, price0);
+        if (est === null) { if (sBox) ui.fieldError(sBox, ESTIMATE_NEEDS); return; }
+        wBox.value = estimateText(est);
+        if (typeof wBox.dispatchEvent === "function" && typeof Event === "function") wBox.dispatchEvent(new Event("input", { bubbles: true })); else wBox.dispatch?.("input");
+      } }, ESTIMATE_CHIP);
+      wBox.closest?.(".field")?.after?.(ui.h("div", { class: "chips" }, chip));
+    }
+    host.append(ui.h("h3", {}, "Record a reward"), f);
+  }
+
   // the file for a tax preparer (core/csv.js; made on this phone, nothing sent anywhere); its green line under the buttons
   function saveCsv(cs, say) {
     const name = `coin-sales-${cs.year}.csv`;

@@ -12,12 +12,18 @@
   is kept equal to its coins (shares × price) whenever they change here.
 - Optional (gap list, next 60, item 46): `investments.cryptoMethod` (the way the exchange counts which coins a sale takes)
   and `whatIfs.crypto` (the question in "Which coins count as sold"); both read only by `sales.js`.
+- Optional (gap list, next 60, item 45): `investments.staking` (the rewards from staking recorded here; read by `staking.js`
+  and, for the year's income, by the Federal estimate's `stakingStep` in `taxes/federal/known.js`).
+- Writes, when a staking reward is recorded ("Rewards from staking"): the reward on `investments.staking`, a purchase on its
+  coin at the reward's worth, the coin's coins and cost, and the crypto account's balance; Undo and "Remove this reward" put
+  them back.
 - Writes, when a coin sale is recorded ("Sales for your tax return"): one `taxes.gains` row per purchase taken, each with an
   optional `coin` object (docs/DATA_MODEL.md), and the coins and their cost off the holding and its purchases (a holding
   sold out goes), the crypto account's balance following its coins; Undo and "Remove this sale" put them back.
 
 ## Outputs
-`{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, returns, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount }`.
+`{ ready, items: [{ id, symbol, name, kind, account, bucket, shares, value, cost, gain, gainPct, price, priceAsOf, stale, lots }], total, cost, gain, volatile, share, level, netWorth, stress: { drop, loss, share }, tax: { shortGain, longGain, net, addShort, addLong, total, carry, disallowed, lossLimit, returns, why, year, otherYear, marginal, gainsRate }, harvest, harvestSaved, harvestCarry, harvestDisallowed, waitLong, staleCount, staking? }` (`staking` only when a reward is on file:
+`stakingIn` for the Federal estimate's year).
 
 `sales.js` (pure, called by the view beside `compute()`, which it does not change): `coinsOf`, `coinOrders`, `methodOf`
 and the sentences, below. `txf.js` (pure, the same): the year's coin sales as a file for tax software, "A file for tax
@@ -429,9 +435,102 @@ the green line after it.
 Not done: the wash-sale field (coins are not reached); a file per spouse when filing separately; the digital-asset boxes,
 which version 042 cannot write.
 
+## Rewards from staking (gap list, next 60, item 45; `staking.js`)
+
+**What a person sees.** Nothing new above the parts card. One more quiet row there (kind `item`), drawn when there is a coin
+on the list or a reward recorded: **"Rewards from staking"**, status "$412 in 2026", "none in 2026" once a reward of another
+year is on file, or "only if you stake" with none at all (most people never stake; the row says it is not one to fill in) (the
+Federal estimate's year, as "Sales for your tax return"). Inside: the green line and Undo after a change (the row stays open, R17); one sentence
+(three cases, below); with rewards this year, a muted line that the Federal estimate adds them, so they are not typed there
+too; the year's rewards, newest first ("0.012 ETH · Oct 31, 2026" / "$41", "on your list at a cost of $41"), each with an
+outlined "Remove this reward" that asks first (at most 12 drawn, then "and N earlier ones, counted in the total above."); the
+form "Record a reward", open while the year has none, else behind an outlined "+ Record another reward" (R20): Coin (only
+with two or more), "How many coins you received", "Received on" (today to start; no later), "What they were worth that day"
+(its help: a month's rewards can go on one line, on the month's last day; more than $0, or it is refused at the box: "Type
+what they were worth that day, more than $0."), and under it one quiet chip, "Estimate it at the price on your list", for a
+person without the statement at hand: it fills the box with the coins typed x the coin's price on the list (`estimateWorth`,
+to the cent; "Type how many coins you received first." when the coins box is empty), an estimate the person can change, and
+saves nothing; its "Record the reward" is the row's one filled button. Last, a muted line with the rule.
+
+**The rule and its sources** (read 2026-11-16):
+- Rev. Rul. 2023-14, Internal Revenue Bulletin 2023-33 (https://www.irs.gov/irb/2023-33_IRB): "If a cash-method taxpayer
+  stakes cryptocurrency native to a proof-of-stake blockchain and receives additional units of cryptocurrency as rewards when
+  validation occurs, the fair market value of the validation rewards received is included in the taxpayer's gross income in
+  the taxable year in which the taxpayer gains dominion and control over the validation rewards. The fair market value is
+  determined as of the date and time the taxpayer gains dominion and control over the validation rewards." And "The same is
+  true if a taxpayer stakes cryptocurrency ... through a cryptocurrency exchange". Dominion and control: the day the person
+  can "sell, exchange, or otherwise dispose of" the units. The page asks for that day and that day's worth.
+- Instructions for Form 1040 (2025), line 8v (https://www.irs.gov/instructions/i1040gi, page reviewed 07-May-2026): "If, in
+  2025, you received ordinary income in connection with digital assets that isn't reported elsewhere on your return (for
+  example, digital assets, such as income from forks, staking, or mining, which aren't wages ...), report this income on line
+  8v." Schedule 1 (2025), line 8v "Digital assets received as ordinary income not reported elsewhere"
+  (https://www.irs.gov/pub/irs-pdf/f1040s1.pdf).
+- Frequently asked questions on digital asset transactions (https://www.irs.gov/individuals/international-taxpayers/frequently-asked-questions-on-digital-asset-transactions,
+  page reviewed 29-Jun-2026): the cost of digital assets received as income is the fair market value included in income
+  (FAQ 59: "your basis in the digital assets is the fair market value of the digital assets, measured in U.S. dollars, when
+  received, provided that you include the fair market value of the digital assets in income"; FAQ 107 for a hard fork: "equal
+  to the amount you included in income"); the holding period "begins the day after they are received" (FAQ 74, for an
+  exchange; the page counts a reward's purchase the same way, through Tax lots' `lotsOf`); FAQ 110: "Individuals must report
+  non-business ordinary income from digital assets on Form 1040 ... or Form 1040, Schedule 1". The FAQs do not name staking.
+
+**Formulas.**
+- The year's staking income = the sum of the worth typed for each reward whose day falls in the Federal estimate's year
+  (`stakingIn(plan, year).total`, to the cent). A reward of another year is that year's income: it does not move this year's
+  estimate (tested to the byte), and its coins still cost what they were worth.
+- A reward recorded = one purchase on its coin: `{ id: the reward's id, date: day, shares: units, cost: value }` in date order;
+  the coin's coins + units and its cost on file + value (a cost left blank stays blank). The crypto account's balance moves by
+  what its coins on file moved (`walletFollows`): new balance = the coins' worth now (coins x their prices) + the part of the
+  balance that was not listed coins before (the "rest of the balance", money typed on the account), so a reward of 0.01 ETH
+  at a price of $3,200 adds $32 to a balance of $5,000 that holds 1.5 ETH ($4,800): $5,032, and net worth rises $32 (setting
+  the balance to coins x price, as a coin sale does, gave $4,832; critic F1, tested). A balance within a cent of its coins
+  becomes their worth, as of today, as before; one with more (or less) in it keeps its own day. Removing does the same the
+  other way. Selling later counts it like any purchase (oldest first, highest cost first, or picked), its gain = what it
+  sells for - its worth that day.
+- Taken back: the purchase, its coins and its cost come off and the reward leaves the list (the list itself goes when empty),
+  so record then remove leaves the plan as it was, byte for byte (tested). Refused, in red, when a sale took some of its coins
+  since (the purchase is no longer whole): "remove that sale first".
+- The Federal estimate (`taxes/federal/known.js` `stakingStep`, after stock pay and before the business, so the IRA,
+  student loan and 20% deduction limits and the minimum tax all see it): the year's total as other ordinary income; filing
+  separately, each account's rewards on its owner's return, half on each for an account in neither name (as `taxInputs` puts
+  income in neither name). Its line in the sources: "Crypto staking rewards", "Crypto page: 1 reward received in 2026, at
+  what it was worth the day you got it (Schedule 1, line 8v)"; the walk's Income line names it ("crypto staking rewards
+  $412"). With no reward this year the step hands back the very inputs it was given and no line: `known()` is byte-identical
+  (digests over 50 plans).
+- Worked example (tests): one adult filing single, pay $100,000 (taxable income $83,900, in the 22% bracket): a reward worth
+  $412 adds $412 x 22% = $90.64 of federal tax, and nothing else moves.
+
+**Builder's choices** (where the sources are silent):
+- Not added to the 3.8% tax's investment income: the Instructions for Form 8960 (2025) (https://www.irs.gov/instructions/i8960,
+  reviewed 30-Apr-2026) say only that "Income derived from transactions involving digital assets may be subject to" it, and
+  nothing read says staking rewards are; under the 3.8% tax's line ($200,000 single, $250,000 joint) it changes nothing
+  either way. A person above that line should ask a preparer.
+- Staking run as a business (a validator as a trade) is self-employment income (FAQ 60 for services): not modelled here; the
+  Self-employment page takes a business's income.
+- A reward on a coin not on the list cannot be recorded (add the coin first); a coin in a brokerage account (a fund) is not
+  one staking pays.
+- The rewards of a month may share one line, dated the month's last day (the page says so): an exchange's statement gives a
+  month's total; the purchase's holding period then starts a few days late at most.
+- A worth of $0 is refused (critic P1): a box left at nothing would record coins at no cost and no income. Coins that truly
+  had no market value that day are income of $0 and need no line.
+- The estimate chip uses the coin's price on the list, not the day's own price (the page never looks prices up); for a reward
+  received today it is that day's worth, for an older one it is only an estimate, and the box's help still points to the
+  exchange's statement.
+- The Federal estimate adds the rewards; a person who typed them under its Other income is asked, in the row, to take them out
+  there (the plan cannot tell).
+
+**Tests** (`module.test.mjs`, "staking"): the year's total and other years kept apart, the purchases in date order, the
+cost per coin and the term; Crypto's `staking` only with a reward; every refusal's sentence ($0 included); the wallet's
+balance keeping a part that is not listed coins (5,000 -> 5,032 -> 5,000; a balance below its coins; one equal to them);
+the estimate (`estimateWorth`, `estimateText`) and its chip, which fills the box and saves nothing; record then remove gives the
+plan back byte for byte, refused after a sale took part of it; the Federal estimate: +$90.64 on $412 at 22%, the line, the
+walk, two rewards, a 2025 reward byte-identical for 2026 and counted when the estimate is set to 2025, filing separately on
+the owner's return or half each; every sentence case and green line; the page: the row, its sentence and form, one filled
+button, Record writes and says the new total in green, stays open, Undo, Remove asks first with Undo, a refused removal in
+red; invariance against dca545e (Crypto's compute, `known()`, the page's words without the new row, 50 plans; the older
+file-for-tax-software digests leave the new row out too).
+
 ## Ideas / not yet
 - Prices fetched by the PC server from a public price feed (needs a network setting and a source).
-- Staking income (taxed as income when received).
 
 ## Which return it reads (round 8, batch 1 follow-up)
 

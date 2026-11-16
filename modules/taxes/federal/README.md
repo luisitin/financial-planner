@@ -192,6 +192,13 @@ the same code.
    the two dependents over 17 (500 each), plus 0.9% x (210,000 + 30,000 + 105,000 - 250,000) = 855 of Additional Medicare
    tax = **53,643**. Held back from
    the stock: 22% x 105,000 = 23,100 + 0.9% x (315,000 - 200,000 - (210,000 - 200,000)) = 945 -> 24,045.
+2b. **Crypto staking rewards** (`stakingStep`; gap list, next 60, item 45; added, nothing else moved). The rewards recorded
+   on Crypto for this return's year (`investments.staking`, Crypto's `staking.js` `stakingIn`) are other ordinary income at
+   what they were worth the day received (Rev. Rul. 2023-14; Form 1040 instructions (2025), line 8v; Crypto README "Rewards
+   from staking"); filing separately on the crypto account owner's return, half on each for an account in neither name; not
+   in the 3.8% tax's investment income. Its source line: "Crypto staking rewards". With no reward for the year the step
+   hands back the inputs it was given and no line, so every figure is byte for byte what it was (Crypto's tests: `known()`
+   over 50 plans against dca545e).
 3. **A business at its profit** (`businessStep`; item 20). The Income page's business at its profit after the
    Self-employment page's costs, on its owner's return (`businessOn`), half its self-employment tax off income (IRC
    164(f)), the 20% deduction after AGI (IRC 199A; Form 1040 line 13, at most 20% of taxable income before it, with
