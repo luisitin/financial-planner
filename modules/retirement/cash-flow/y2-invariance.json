@@ -1,0 +1,245 @@
+{
+ "note": "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "figures": "WAwABDZysVNPpysEN6vw3A",
+   "words": "tJtGmJ_b9oOSfaAfavWiZU",
+   "unknown": false
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "figures": "ljKz2C4627B_wVTx-LQtO5",
+   "words": "EgfWEGFnYxoNY4Yk6U-1sx",
+   "unknown": false
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "figures": "WAwABDZysVNPpysEN6vw3A",
+   "words": "tJtGmJ_b9oOSfaAfavWiZU",
+   "unknown": false
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "figures": "UuLJL1QSQQPFWNXebDNDgc",
+   "words": "HRVASV61zABqPT2oc5b7HZ",
+   "unknown": false
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "figures": "Z7iyb32Ck5xTve7cV3aEkO",
+   "words": "oPNm3nYyVmrjJo11Pga7s1",
+   "unknown": false
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "figures": "wsRi_26JJbh9qo9i8mSzix",
+   "words": "i3N56vBScnTr-EYhUMTSMV",
+   "unknown": false
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "figures": "WK2hXp732xRq0HdwJnjO7S",
+   "words": "wjLc0tUoYaTx3O8LI9x87R",
+   "unknown": true
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "figures": "WK2hXp732xRq0HdwJnjO7S",
+   "words": "wjLc0tUoYaTx3O8LI9x87R",
+   "unknown": true
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "figures": "Aio_2CzH8u9C52l1Aa9oW9",
+   "words": "8AgRzQe4HQUNGIwKH8U_dK",
+   "unknown": false
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "figures": "-QEkLGFLa74Nl8aPfsSyUC",
+   "words": "VkCGGyBnT3fMmVEmffv-H_",
+   "unknown": false
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "figures": "ljKz2C4627B_wVTx-LQtO5",
+   "words": "EgfWEGFnYxoNY4Yk6U-1sx",
+   "unknown": false
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "figures": "kod_Ww2RtCsrbnp2BC5SFw",
+   "words": "_1EtbbjFEKj9Z0IfxfWTYF",
+   "unknown": false
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "figures": "hV7HGwHQSCubrBbeiP434q",
+   "words": "Gj2dfj-dbFQ5hqWEoIawGl",
+   "unknown": false
+  },
+  "01-single-adult/base": {
+   "figures": "bASeP_0X3s3JozQKXXu9Hn",
+   "words": "hlGys3S2B3-SoYTcWlyUot",
+   "unknown": false
+  },
+  "02-couple-no-kids/base": {
+   "figures": "JEYomlEUo_tojb1JILdjw0",
+   "words": "5w7inUrGAce2sIrmj8fViu",
+   "unknown": false
+  },
+  "03-single-parent/base": {
+   "figures": "vrGi7ysFwliOX0e6kdrZZe",
+   "words": "8dksFVjmbeBXC1bbXWlfg-",
+   "unknown": false
+  },
+  "04-two-parents/base": {
+   "figures": "lSxzU7oroVCBdBmM268b9L",
+   "words": "z8vMLzizrKdZRtZHSO0_IH",
+   "unknown": false
+  },
+  "05-stay-at-home-parent/base": {
+   "figures": "F0ph2HusDdpZLkFWjEf7pA",
+   "words": "8UOsH-BRpG-16M8ZZVkyKg",
+   "unknown": false
+  },
+  "06-blended-family/base": {
+   "figures": "2o8vNMedJJP1OkrerDd25p",
+   "words": "LV2-T28KaJ-y6CxBgRpgbI",
+   "unknown": false
+  },
+  "07-multigenerational/base": {
+   "figures": "ESuTlk49b7RqnGU1BuZnva",
+   "words": "atN8sIpmUYNcWY1VWzbmHH",
+   "unknown": false
+  },
+  "08-retired/base": {
+   "figures": "HT6ubVd1R317K16yjewvw7",
+   "words": "TgWz4JavacM8MnPHN3fDZR",
+   "unknown": false
+  },
+  "09-near-retirement/base": {
+   "figures": "0H0giyhJbUrq7_E1i7rT4e",
+   "words": "iaJ1rjRJ01-LCs9uhMe1Sd",
+   "unknown": false
+  },
+  "10-student-and-starter/base": {
+   "figures": "2PIvQPewGDAmwLwdpyYfSY",
+   "words": "ObKsVw9yMI9zbY233SsA0h",
+   "unknown": false
+  },
+  "11-self-employed/base": {
+   "figures": "nJOL0H-eY-gfn1jzpJfNwV",
+   "words": "7NP0x40XWWWKVRQ3sD7Uqh",
+   "unknown": false
+  },
+  "12-high-net-worth/base": {
+   "figures": "4ZyK9Ds2zojF20ffkMS1M0",
+   "words": "CzO7OSZShr9Erk2Qg7yQH7",
+   "unknown": false
+  },
+  "13-in-crisis/base": {
+   "figures": "Xi2ZFHUy-FW2aOv5chxmev",
+   "words": "DCQvk5MnvrEdPLjJGR95YH",
+   "unknown": false
+  },
+  "14-unusual-structures/base": {
+   "figures": "ZYQq_5UTVn-YlUZqtd0fOY",
+   "words": "B6lLQZ6me8DWU7Rm6spiuR",
+   "unknown": false
+  },
+  "phone casey": {
+   "figures": "i_aEk3yYWNpStMJt4hqJ-K",
+   "words": "5H7Gbc-NlzoeFVbGsIhTb0",
+   "unknown": false
+  },
+  "phone danaLee": {
+   "figures": "jcom8WbJPTubrYEu7boNAN",
+   "words": "TfqB_WYSBWlDJjfuJd36WV",
+   "unknown": false
+  },
+  "phone jamie": {
+   "figures": "J_pt5ssMuEWN3cE7Zfm-jr",
+   "words": "pLJekiPQdvLz0hZs45Wg_T",
+   "unknown": false
+  },
+  "phone morgan": {
+   "figures": "Q6rujonIrYBN-ffdqWBOsx",
+   "words": "mUkIyvzZ7yVXOZ9BjwkRpk",
+   "unknown": false
+  },
+  "phone robin": {
+   "figures": "Ocdu6jXX0JKIcf1OOIcQg4",
+   "words": "bTukcTHhrTlyJ5ntHtkT1U",
+   "unknown": false
+  },
+  "round8 earlyRetireePlan": {
+   "figures": "_a73exz90XzMNpS186RNPb",
+   "words": "dIWPcysVaE9G6Sgq6fxI2N",
+   "unknown": false
+  },
+  "round8 equityPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 firstRmdPlan": {
+   "figures": "aCSEs80TGPz_Fyw3h9i7N0",
+   "words": "G7sA2Af2eF6qyc6bbx5-TZ",
+   "unknown": false
+  },
+  "round8 freelancerPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 highFreelancerPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 landlordBusinessPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 landlordPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 parentLoanPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 stockAndBusinessPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 studentLoanPlan": {
+   "figures": "HcXryrLrPf8O935ix0KFci",
+   "words": "1eV0DRSpd3KDteYzAxVUTe",
+   "unknown": false
+  },
+  "round8 widowPlan": {
+   "figures": "wSaPsodW63k6MCK5GMW4a8",
+   "words": "q8hd4hiBM09uZNoU5OXI_Q",
+   "unknown": false
+  },
+  "persona sam": {
+   "figures": "EPZ6IyQ9esmM2KgU10mew_",
+   "words": "C71WNBL676eviW8ZtR29RS",
+   "unknown": true
+  },
+  "persona jordan": {
+   "figures": "yFLNAnV56Rh8-xeUXnuQ5l",
+   "words": "joFvPRqCusR1UHQ7C0wgnx",
+   "unknown": true
+  },
+  "persona patLee": {
+   "figures": "LrY6DkB_ED6FjTmObRKU2i",
+   "words": "aM4ye7dPdmykYh8BYOcF2R",
+   "unknown": false
+  },
+  "persona ruth": {
+   "figures": "iLPNFX6JhQguzzXaqdVngz",
+   "words": "EFw5iAMKRlMcLRXffq7FEN",
+   "unknown": false
+  },
+  "empty plan": {
+   "figures": "t1dURNGvuQ3G5IT3K-xeMQ",
+   "words": "6OO8UDNNiUKR6HQdLy4HZq",
+   "unknown": false
+  }
+ }
+}

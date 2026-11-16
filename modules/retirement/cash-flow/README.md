@@ -174,6 +174,25 @@ nothingSaved }` when the projection's own `savingsUnknown` holds on the very run
 retirement/projection), and the lede says, in place of "The money runs out in ...", the projection's sentence with this page's
 question ("whether the money lasts", `UNKNOWN_WHAT`), with one filled link, "Add what you own ›". The years stay below as they
 are worked out, and a year the money does not cover then reads in the page's plain colour as "$29,040 of spending not covered this
-year" (the run of empty years: "nothing left; about $29,711 of spending a year not covered"), never the red "$0 left" and "short"
+year" (the run of empty years: "about $29,711 of spending a year not covered"), never the red "$0 left" and "short"
 under a hero that says we can't say (`shortWords`; fix round, critic P2). A plan that has savings and runs short keeps its red. For every other plan the result is the same as before (absent field; the invariance test compares it with
 ce79d70 over the invented households).
+
+**"Left: not known yet", not "$0 left" (recheck leftover y2 (b), 2026-11-16).** Under that lede a year with nothing left still read
+"$0 left", in the plain colour, beside "we can't say whether the money lasts yet". While `unknown` is set, a year whose savings at
+year end are under 50 cents now reads `LEFT_UNKNOWN_RECORD` ("Left: not known yet") where "$0 left" was, in its phone record and in
+the folded run of such years (whose line no longer starts "nothing left;" either), and `LEFT_UNKNOWN` ("not known yet") in the
+table's Left column, whose heading names it. (A bare dash at first; fix round, critic P1: the record's bold value said nothing, where
+"$450,880 left" names its figure, and a screen reader read "dash".) A year with money in it says what is left as before (Riley's
+$1,020 of cash in 2026). Rule: `gone(r) = unknown && !(r.end.total >= 0.5)`; nothing in `compute` changed.
+The lede, under that sentence, also left out "Over the whole plan: ... of guaranteed income, ... taken from savings, ... of tax on
+withdrawals." (fix round, critic P2): for Sam it read "$715,836 of guaranteed income, $1,341 taken from savings" right after "You
+haven't told us about retirement savings", over a first retired year with "$0 guaranteed income". The totals are said whenever the
+page can answer, as before. Tests: Riley's records, folded run and table, the four `shortWords` cases, Riley's and Sam's lede and the
+family's, the family unchanged; and the invariance test `y2-invariance.json` (written with `PRINT_Y2=1` on 398a01e): the figures
+(both dollar choices) for every household, and the words for every household whose answer is known, are those of 398a01e.
+
+Left as it was (not part of this change): the folded run's "about $X a year" is the largest year in the run. For Sam, who retires
+in 2067 and whose Social Security starts in 2069, the run "2068 to 2097" says about $32,231 (2068's) where every year from 2069
+leaves $7,547 not covered; the run is the design log's (2026-09-16, pass 4) and every plan that runs short reads it the same way,
+so it is for its own item.

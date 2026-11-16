@@ -492,7 +492,7 @@ test("critic F4 and F5: money in says where it goes; a change in a year with no 
   rd.retirement = { ...(rd.retirement ?? {}), happenings: [{ id: "h1", kind: "in", year: lastYear, name: "A gift", amount: 500 }] };
   const r = await renderPage(new URL("./view.js", import.meta.url).href, rd, TY);
   const t = textOf(r.root);
-  assert.match(t, / to \d{4} \$0 left nothing left/, "the folded row is there");
+  assert.match(t, / to \d{4} Left: not known yet about \$[\d,]+ of spending a year not covered/, "the folded row is there (\"Left: not known yet\" under \"we can't say yet\": y2 (b))");
   assert.match(t, new RegExp(`Your changes in years not listed here: A gift in ${lastYear}: \\$500 into savings\\. (?!Choose)`));
 });
 
@@ -516,4 +516,123 @@ test("critic P2 and P4: a chevron on each record, the open row tinted, and Close
   s.tap(2060);
   assert.ok(s.row(2060).querySelector(".cf-panel"), "and opens again");
   assert.equal(s.saves, 0);
+});
+
+// ---------------------------------------------------------------- leftovers of the rechecks (y2, 2026-11-16)
+/** Every invented household (y2 invariance, against 398a01e): the qa fixture plans, the qa/households archetypes, the phone,
+ *  round 8 and persona households, and the empty plan. */
+async function y2Plans(today) {
+  const fs = await import("node:fs"), path = await import("node:path"), { fileURLToPath, pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { migrate, emptyPlan: blank } = await import("../../../core/schema/migrate.js");
+  const out = [];
+  const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "../../../qa/fixtures");
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`fixture ${f}:${name}`, fn(today)]);
+  }
+  for (const a of ARCHETYPES) out.push([`${a.id}/base`, a.build()]);
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push([`phone ${name}`, fn()]);
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) out.push([`round8 ${name}`, fn()]);
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) out.push([`persona ${n}`, personas.finishSetup(n, personas[n](today), today)]);
+  out.push(["empty plan", blank()]);
+  return out.map(([name, p]) => [name, migrate(structuredClone(p))]);
+}
+const y2Digest = async (x) => (await import("node:crypto")).createHash("sha256").update(typeof x === "string" ? x : JSON.stringify(x) ?? "undefined").digest("base64url").slice(0, 22);
+
+// (b) Under "we can't say ... yet" (nothing saved for retirement and nothing going in: the invented Riley), a year whose savings are
+// gone read "$0 left" beside that lead; it reads "Left: not known yet" now (a bare dash at first; fix round, critic P1: the value
+// said nothing), "not known yet" in the table's Left column, and the folded run of such years says only what is not covered.
+test("y2 (b) nothing saved (Riley): a year with nothing left reads Left: not known yet, not $0 left, in the records, the folded run and the table", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const { LEFT_UNKNOWN, LEFT_UNKNOWN_RECORD } = await import("./view.js");
+  assert.equal(LEFT_UNKNOWN, "not known yet"); assert.equal(LEFT_UNKNOWN_RECORD, "Left: not known yet");
+  const s = await yearPage(renterDebtPlan());
+  s.draw();
+  const d = compute(s.now, { today: TY });
+  assert.ok(d.unknown?.nothingSaved, "Riley: the page's lead says we can't say whether the money lasts");
+  assert.match(s.text(), /Nothing is saved for retirement, so we can't say whether the money lasts yet\./);
+  assert.doesNotMatch(s.text(), /\$0 left/, "no $0 left anywhere on the page");
+  // 2067, the first year retired: "Left: not known yet", then what the year does, in the plain colour (as before)
+  const y = s.row(2067);
+  const value = y.all().find((e) => e.className.split(/\s+/).includes("rec-value"));
+  assert.equal(s.text(value), "Left: not known yet"); assert.doesNotMatch(value.className, /\bbad\b/);
+  assert.match(s.text(y), /^2067 · age 65 Left: not known yet \$[\d,]+ spent \(\$[\d,]+ health insurance\) · .* tax \$[\d,]+ of spending not covered this year$/);
+  // the folded run of years: "Left: not known yet" and what is not covered, with no "nothing left" under it
+  const tail = s.root.all().filter((e) => e.tagName === "LI").at(-1);
+  assert.match(s.text(tail), /^2068 to 2097 Left: not known yet about \$[\d,]+ of spending a year not covered$/);
+  // the table (a wider screen): the Left cell of 2067 is "not known yet" under the column's heading, and the line under it has no
+  // "nothing left"
+  const cells = s.root.all().filter((e) => e.tagName === "TD");
+  const row2067 = s.root.all().find((e) => e.tagName === "TR" && e.all().some((c) => c.tagName === "BUTTON" && s.text(c) === "2067"));
+  assert.equal(s.text(row2067.children.at(-1)), "not known yet");
+  assert.ok(cells.length > 0);
+  assert.match(s.text(), /2068 to 2097: about \$[\d,]+ of spending a year not covered\./);
+  // a year with money in it still says it: Riley's cash before retirement
+  s.root.all().find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Years").value = "all";
+  s.root.all().find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Years").dispatch("change");
+  s.draw();
+  assert.match(s.text(s.row(2026)), /^2026 · age 24 \$1,020 left /);
+  const years = s.root.all().find((e) => e.tagName === "SELECT" && e.getAttribute("aria-label") === "Years");
+  years.value = "retirement"; years.dispatch("change");
+});
+test("y2 (b) the words: what a year the money does not cover says, four cases", async () => {
+  const { shortWords } = await import("./view.js");
+  assert.equal(shortWords("$29,040"), "$29,040 short this year");
+  assert.equal(shortWords("$29,040", { unknown: true }), "$29,040 of spending not covered this year");
+  assert.equal(shortWords("$29,711", { every: true }), "nothing left; about $29,711 short every year");
+  assert.equal(shortWords("$29,711", { unknown: true, every: true }), "about $29,711 of spending a year not covered");
+});
+test("y2 (b) a plan with savings reads as before: the family's records say what is left, in red when short", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const s = await yearPage(familyPlan(TY));
+  s.draw();
+  assert.ok(!compute(s.now, { today: TY }).unknown);
+  assert.doesNotMatch(s.text(), /not known yet/);
+  assert.match(s.text(s.row(2060)), /^2060 · ages [\d]+ and [\d]+ \$[\d,]+ left /);
+});
+// fix round, critic P2: under "we can't say yet" the lede also said "Over the whole plan: $715,836 of guaranteed income, $1,341
+// taken from savings, $0 of tax on withdrawals." (Sam), beside "You haven't told us about retirement savings" and a first retired
+// year with "$0 guaranteed income". The whole plan's totals are said only when the page can answer.
+test("y2 (b) fix P2: the lede leaves out the whole plan's totals under \"we can't say yet\", and keeps them for a plan it answers", async () => {
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const lede = (s) => s.text(s.root.all().find((e) => e.tagName === "P" && e.className === "lede"));
+  const riley = await yearPage(renterDebtPlan()); riley.draw();
+  assert.equal(lede(riley), "72 years, from 2026 to 2097. Nothing is saved for retirement, so we can't say whether the money lasts yet. Once you start saving, add it and we can answer.");
+  const sam = await yearPage(personas.finishSetup("sam", personas.sam(TY), TY)); sam.draw();
+  assert.ok(compute(sam.now, { today: TY }).unknown, "Sam: the page cannot answer");
+  assert.doesNotMatch(lede(sam), /Over the whole plan|guaranteed income|taken from savings/);
+  assert.match(lede(sam), /^\d+ years, from 2026 to \d{4}\. You haven't told us about retirement savings, so we can't say whether the money lasts yet\. Add what you own and we can answer\.$/);
+  const fam = await yearPage(familyPlan(TY)); fam.draw();
+  assert.match(lede(fam), /^\d+ years, from 2026 to \d{4}\. The money (runs out in \d{4}|lasts to the end)\. Over the whole plan: \$[\d,]+ of guaranteed income, \$[\d,]+ taken from savings, \$[\d,]+ of tax on withdrawals\.$/);
+});
+
+// (b) invariance: with nothing new typed, Year by year's figures (both dollar choices) are those of 398a01e for every household, and
+// its words too for every household the page can answer for (no "we can't say yet"). Written with PRINT_Y2=1 on 398a01e's code.
+test("y2 (b) invariance: the figures for every household, and the words wherever the answer is known, are those of 398a01e", async () => {
+  const fs = await import("node:fs");
+  const file = new URL("./y2-invariance.json", import.meta.url);
+  const now = {};
+  for (const [name, plan] of await y2Plans(TY)) {
+    const safe = (f) => { try { return f(); } catch (e) { return `THROW ${e.message}`; } };
+    const real = safe(() => compute(structuredClone(plan), { today: TY })), nominal = safe(() => compute(structuredClone(plan), { today: TY, real: false }));
+    const s = await yearPage(plan, { route: { rest: [], query: {}, name } });
+    const words = safe(() => { s.draw(); return s.text(); });
+    now[name] = { figures: await y2Digest([real, nominal]), words: await y2Digest(words), unknown: !!real?.unknown };
+  }
+  if (process.env.PRINT_Y2) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at 398a01e (y2 leftovers); PRINT_Y2=1 writes them again: only on that code", plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8")).plans;
+  assert.ok(Object.keys(was).length >= 45, `${Object.keys(was).length} households`);
+  assert.deepEqual(Object.keys(now), Object.keys(was));
+  assert.ok(Object.values(was).some((x) => x.unknown), "a household the page cannot answer for is among them");
+  for (const name of Object.keys(was)) {
+    assert.equal(now[name].figures, was[name].figures, `${name}: figures`);
+    assert.equal(now[name].unknown, was[name].unknown, name);
+    if (!was[name].unknown) assert.equal(now[name].words, was[name].words, `${name}: words`);
+  }
 });

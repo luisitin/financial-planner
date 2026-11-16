@@ -192,11 +192,12 @@ test("Year by year: under 'we can't say yet' the years the money does not cover 
   assert.equal(shortWords("$29,040"), "$29,040 short this year");
   assert.equal(shortWords("$29,040", { unknown: true }), "$29,040 of spending not covered this year");
   assert.equal(shortWords("$29,711", { every: true }), "nothing left; about $29,711 short every year");
-  assert.equal(shortWords("$29,711", { unknown: true, every: true }), "nothing left; about $29,711 of spending a year not covered");
+  assert.equal(shortWords("$29,711", { unknown: true, every: true }), "about $29,711 of spending a year not covered");   // beside a dash, not "$0 left" (y2 (b))
   for (const plan of [rd(), sam()]) {
     const r = await drawn("retirement/cash-flow", plan);
     assert.match(r.text, /\$[\d,]+ of spending not covered this year/);
-    assert.match(r.text, /nothing left; about \$[\d,]+ of spending a year not covered/);
+    assert.match(r.text, / Left: not known yet about \$[\d,]+ of spending a year not covered/);
+    assert.doesNotMatch(r.text, /\$0 left|nothing left/, "\"Left: not known yet\" where \"$0 left\" was (y2 (b))");
     assert.doesNotMatch(r.text, /short this year|short every year/);
     assert.deepEqual(classed(r.root, "bad").map((e) => e.textContent), [], "nothing red");
   }

@@ -17,7 +17,9 @@ export const UNKNOWN_WHAT = "whether the money lasts";
  * whole-app sweep x3, critic P2: red "$0 left" and "short every year" under "we can't say"). `every`: the folded run of years.
  */
 export function shortWords(amount, { unknown = false, every = false } = {}) {
-  if (every) return unknown ? `nothing left; about ${amount} of spending a year not covered` : `nothing left; about ${amount} short every year`;
+  // the folded run under "we can't say yet" stands beside "Left: not known yet" (LEFT_UNKNOWN_RECORD), so it does not say "nothing
+  // left" either (y2 (b))
+  if (every) return unknown ? `about ${amount} of spending a year not covered` : `nothing left; about ${amount} short every year`;
   return unknown ? `${amount} of spending not covered this year` : `${amount} short this year`;
 }
 
@@ -97,6 +99,16 @@ export function hiddenSaid(text, { byFilter = false, many = false } = {}) {
   const first = `Your changes in years not listed here: ${text}.`;
   return byFilter ? `${first} Choose every year under Years to see ${many ? "them" : "it"}.` : first;
 }
+/**
+ * What a year with nothing left reads where "$0 left" was, while the plan's answer is not known yet (nothing saved for retirement
+ * and nothing going in; compute's `unknown`), as the hero says we can't say whether the money lasts (recheck leftover y2 (b),
+ * 2026-11-16: "$0 left" in the plain colour beside "we can't say yet"). In the table's Left column, "not known yet" (the column's
+ * heading says what it is); in a phone record's value, LEFT_UNKNOWN_RECORD, "Left: not known yet" (fix round, critic P1: a bare
+ * dash there said nothing, where "$450,880 left" names its figure). A year with money in it (cash before retirement) still says
+ * what is left.
+ */
+export const LEFT_UNKNOWN = "not known yet";
+export const LEFT_UNKNOWN_RECORD = `Left: ${LEFT_UNKNOWN}`;
 /** "Tap a year to change it.": its own line first in the ledger (critic of item 32, P2), with a chevron on each phone record. */
 export const TAP_WORDS = "Tap a year to change it.";
 
@@ -136,7 +148,9 @@ export function render(root, ctx) {
     ui.h("h1", {}, "Year by year"),
     // nothing saved for retirement and nothing going in: the projection's own "we can't say yet" in place of "The money runs out"
     // (whole-app sweep x3, 2026-11-16); the years stay below, as they are worked out
-    ui.h("p", { class: "lede" }, `${d.rows.length} years, from ${d.rows[0].year} to ${d.rows[d.rows.length - 1].year}. ${d.unknown ? unknownWords(d.unknown, UNKNOWN_WHAT) : d.verdict === "short" ? `The money runs out in ${d.shortYear}.` : "The money lasts to the end."} Over the whole plan: ${money(d.totals.income)} of guaranteed income, ${money(d.totals.withdrawn)} taken from savings, ${money(d.totals.taxes)} of tax on withdrawals.`),
+    // the whole plan's totals only when the page can answer: under "we can't say yet" they read against it ("$1,341 taken from
+    // savings" beside "you haven't told us about retirement savings"; fix round, critic P2)
+    ui.h("p", { class: "lede" }, `${d.rows.length} years, from ${d.rows[0].year} to ${d.rows[d.rows.length - 1].year}. ${d.unknown ? unknownWords(d.unknown, UNKNOWN_WHAT) : `${d.verdict === "short" ? `The money runs out in ${d.shortYear}.` : "The money lasts to the end."} Over the whole plan: ${money(d.totals.income)} of guaranteed income, ${money(d.totals.withdrawn)} taken from savings, ${money(d.totals.taxes)} of tax on withdrawals.`}`),
     d.unknown ? ui.row(ui.h("a", { class: "btn", href: "#/balance/net-worth" }, "Add what you own ›")) : null,
   ));
   const realSel = ui.select([{ value: "real", label: "today's dollars" }, { value: "nominal", label: "each year's dollars" }], state.real ? "real" : "nominal", { "aria-label": "Dollars", onChange: (e) => { state.real = e.target.value === "real"; redraw(); } });
@@ -144,6 +158,9 @@ export function render(root, ctx) {
   page.append(ui.card(null, ui.h("div", { class: "form" }, ui.field("Show amounts in", realSel), ui.field("Years", fromSel))));
   const rowsAll = state.from === "all" ? d.rows : d.rows.filter((r) => r.retired);
   const taken = (r) => r.from.cash + r.from.taxable + r.from.deferred + r.from.free;
+  // what is left at a year's end: "not known yet" for a year with nothing left while the answer is not known yet (LEFT_UNKNOWN)
+  const gone = (r) => !!d.unknown && !(r.end.total >= 0.5);
+  const leftOf = (r) => (gone(r) ? LEFT_UNKNOWN : money(r.end.total));
   // Once the money is gone every later year reads the same: collapse them into one row
   // (design log 2026-09-16, pass 4).
   let firstEmpty = rowsAll.findIndex((r, i) => r.end.total <= 0 && r.shortfall && i > 0 && rowsAll[i - 1].end.total <= 0);
@@ -279,7 +296,7 @@ export function render(root, ctx) {
     { key: "spending", label: "Spending", align: "right", render: (r) => money(r.out.spending) },
     { key: "taken", label: "From savings", align: "right", render: (r) => money(taken(r)) },
     { key: "taxes", label: "Tax", align: "right", render: (r) => money(r.out.taxes) },
-    { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall && !d.unknown ? "bad" : "" }, money(r.end.total)) },
+    { key: "end", label: "Left", align: "right", render: (r) => ui.h("span", { class: r.shortfall && !d.unknown ? "bad" : "" }, leftOf(r)) },
   ], rows);
   // what is open, and the green line, under the table's row on a wider screen
   if (wide) {
@@ -311,7 +328,7 @@ export function render(root, ctx) {
     const open = !wide && state.open === r.year;
     const btn = ui.h("button", { type: "button", class: "cf-row", "aria-expanded": open ? "true" : "false", onClick: () => toggle(r, btn, (panel) => { li.append(panel); return panel; }, li) },
       // the bold figure says what it is (stress test 2026-11-11, RB4: "$450,880" with its meaning 3,000 px below)
-      ui.h("span", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall && !d.unknown ? "bad" : ""}` }, `${money(r.end.total)} left`)),
+      ui.h("span", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${r.year} · ${d.people.length > 1 ? "ages " + r.ages.join(" and ") : "age " + r.age}`), ui.h("span", { class: `rec-value ${r.shortfall && !d.unknown ? "bad" : ""}` }, gone(r) ? LEFT_UNKNOWN_RECORD : `${money(r.end.total)} left`)),
       ui.h("span", { class: "rec-sub" }, r.retired ? `${money(r.out.spending)} spent${r.out.health > 0.5 ? ` (${money(r.out.health)} health insurance)` : ""} · ${money(r.in.income)} guaranteed income${r.in.lines.length ? ` (${r.in.lines.map((l) => l.name).join(", ")})` : ""} · ${money(taken(r))} from savings${r.rmd ? ` (${money(r.rmd)} required)` : ""} · ${money(r.out.taxes)} tax` : `${money(r.in.contributions)} added · growing`),
       r.moves ? ui.h("span", { class: "rec-sub" }, `${r.moves.map((m) => moveSaid(m, money)).join("; ")}.`) : null,
       r.shortfall ? ui.h("span", { class: d.unknown ? "rec-sub" : "rec-sub bad" }, shortWords(money(r.shortfall), { unknown: !!d.unknown })) : null,
@@ -324,7 +341,7 @@ export function render(root, ctx) {
   const bad = d.unknown ? "" : " bad";   // the red of a year the money does not cover, left out under "we can't say yet" (critic P2)
   const records = ui.h("ul", { class: "records only-narrow" }, rows.map(recordOf),
     // under "we can't say yet" (compute's `unknown`) the years the money does not cover read in the plain colour (critic P2)
-    tailRow ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: `rec-title${bad}` }, `${tailRow.first} to ${tailRow.last}`), ui.h("span", { class: `rec-value${bad}` }, `${money(0)} left`)), ui.h("div", { class: `rec-sub${bad}` }, shortWords(money(tailRow.short), { unknown: !!d.unknown, every: true }))) : null);
+    tailRow ? ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: `rec-title${bad}` }, `${tailRow.first} to ${tailRow.last}`), ui.h("span", { class: `rec-value${bad}` }, d.unknown ? LEFT_UNKNOWN_RECORD : `${money(0)} left`)), ui.h("div", { class: `rec-sub${bad}` }, shortWords(money(tailRow.short), { unknown: !!d.unknown, every: true }))) : null);
   page.append(ui.card(null,
     // a green line whose year has no row now (the money runs out before it): at the top of the ledger
     notice,
