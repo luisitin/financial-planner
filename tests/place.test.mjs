@@ -233,7 +233,8 @@ function miniDom() {
     return (e) => tests.every((t) => t(e));
   }
   const compile = (sel) => {
-    if (!cache.has(sel)) cache.set(sel, sel.split(",").map((x) => x.trim()).map((x) => { const scope = /^:scope\s*>\s*/.test(x); return { scope, test: compound(x.replace(/^:scope\s*>\s*/, "")) }; }));
+    // (a comma inside [...] is part of an attribute's value, as a form's identity in data-for: not a list)
+    if (!cache.has(sel)) cache.set(sel, sel.split(/,(?![^[]*\])/).map((x) => x.trim()).map((x) => { const scope = /^:scope\s*>\s*/.test(x); return { scope, test: compound(x.replace(/^:scope\s*>\s*/, "")) }; }));
     return cache.get(sel);
   };
   class N {
@@ -982,5 +983,234 @@ test("y2 (f) invariance: the same page without the mark keeps the typing through
   await later();
   assert.equal(n.box.value, NOTE, "put back, as at 398a01e");
   assert.equal(cueOn(n.box), true);
+  place.forgetAll();
+});
+
+// ---------------------------------------------------------------- a box renamed after typing (ha (a), 2026-11-17)
+// Net worth's add form renames its boxes as the person picks: Type "Something else I own" turns "Account name" into "What
+// to call it" and "Balance as of" into "Worth that on"; gold turns it into "Price as of". A form's typing is kept under its
+// identity, which holds its boxes' names, so one form was written down under three identities and Save forgot only the last:
+// "Not saved yet: what you typed in “Add an account”" was left under the list (three times) after the account was added, and
+// a reload opened the add form again. A form's typing is now one record however often its boxes are renamed (moved to the
+// new identity, the old ones kept as its `alias`), found again by any of them, and Save forgets it whatever the boxes were
+// called when the typing began. With no save, a reload puts all of it back, in as many passes as the renames take.
+const formOf = (rec, fks) => place.formOf(rec, fks);
+
+test("formOf: a record's form by its identity now, else by an identity it had before its boxes were renamed; twins by position", () => {
+  assert.equal(formOf({ fk: "b", i: 0, of: 1 }, ["a", "b"]), 1, "its own identity, as pickForm");
+  assert.equal(formOf({ fk: "c", i: 0, of: 1, alias: [{ fk: "a", i: 0, of: 1 }] }, ["x", "a"]), 1, "drawn again under its first names");
+  assert.equal(formOf({ fk: "c", i: 0, of: 1, alias: [{ fk: "a", i: 0, of: 1 }, { fk: "b", i: 0, of: 1 }] }, ["a", "b"]), 1, "the newest name first: it holds most of the boxes' names");
+  assert.equal(formOf({ fk: "c", i: 0, of: 1, alias: [{ fk: "a", i: 0, of: 1 }] }, ["a", "a"]), -1, "a twin appeared: never a guess");
+  assert.equal(formOf({ fk: "c", i: 1, of: 2, alias: [{ fk: "a", i: 1, of: 2 }] }, ["a", "x", "a"]), 2, "the second of two alike");
+  assert.equal(formOf({ fk: "c", i: 0, of: 1 }, ["a"]), -1);
+  assert.equal(formOf({ fk: "a", i: 0, of: 1, alias: [] }, ["a"]), 0);
+});
+
+// ha (a) fix round (critic F2): a tab's stored typing is read back as it was written (fmt 1), so an `alias` in another shape
+// (corrupted, or written by hand) must not break refill, tell and reopen on that page: read as no alias, never a throw.
+test("ha (a) fix F2: an alias in another shape is read as none; the entries that name a form still count", () => {
+  const good = { fk: "a", i: 0, of: 1 };
+  for (const alias of [[null], 5, "x", {}, [{ fk: 3 }], [{}], [undefined, 7, "a"], null]) {
+    const rec = { fk: "c", i: 0, of: 1, alias };
+    assert.doesNotThrow(() => place.formOf(rec, ["a", "b"]), JSON.stringify(alias));
+    assert.doesNotThrow(() => place.drawnAs(rec, ["a", "b"]), JSON.stringify(alias));
+    assert.equal(place.formOf(rec, ["a", "b"]), -1, JSON.stringify(alias));
+    assert.equal(place.drawnAs(rec, ["a", "b"]), false, JSON.stringify(alias));
+    assert.deepEqual(place.aliasesOf(rec), [], JSON.stringify(alias));
+  }
+  const mixed = { fk: "c", i: 0, of: 1, alias: [null, 5, good, { fk: 9 }] };
+  assert.deepEqual(place.aliasesOf(mixed), [good], "only the entries that name a form");
+  assert.equal(place.formOf(mixed, ["x", "a"]), 1, "the good entry still finds its form");
+  assert.equal(place.drawnAs(mixed, ["x", "a"]), true);
+  assert.equal(place.formOf(null, ["a"]), -1); assert.equal(place.drawnAs(undefined, ["a"]), false);
+  assert.deepEqual(place.aliasesOf({ fk: "a" }), [], "a form never renamed: none, as before");
+});
+
+// ha (a) fix round (critic F3): formOf never guesses a twin; drawnAs is not that question. It asks "is the form on the page?",
+// and a twin is on the page though formOf will not say which one: 452408a answered so for the record's own identity
+// (`pickForm(r, fks) < 0 && fks.includes(r.fk)`: no typing put back, and no "Not saved yet" line naming a form on the screen);
+// drawnAs answers the same for each name the record had.
+test("ha (a) fix F3: a twin counts as drawn by any name the record had, as 452408a counted it by its own; formOf still never guesses", () => {
+  const own = { fk: "b", i: 1, of: 2 };
+  assert.equal(place.pickForm(own, ["b"]), -1); assert.equal(["b"].includes(own.fk), true, "452408a: the own identity of a twin, drawn");
+  assert.equal(place.formOf(own, ["b"]), -1); assert.equal(place.drawnAs(own, ["b"]), true, "the same now");
+  const renamed = { fk: "a", i: 0, of: 1, alias: [{ fk: "b", i: 0, of: 2 }] };
+  assert.equal(place.formOf(renamed, ["a2", "b"]), -1, "one form left of two alike: never a guess which");
+  assert.equal(place.drawnAs(renamed, ["a2", "b"]), true, "but on the page: no 'Not saved yet' line under it");
+  assert.equal(place.drawnAs(renamed, ["a2", "c"]), false, "not drawn under any name it had: told, as before");
+});
+
+/** Net worth as it draws its accounts: the list, then either "+ Add another account" or the add form, whose Type and
+ * kind rename its boxes (as modules/balance/net-worth/view.js does). `rows`: the accounts listed. */
+function worthPage(rows, { open = false } = {}) {
+  for (const c of [...dom.root.childNodes]) c.parentNode = null;
+  dom.root.childNodes = [];
+  const card = uiH("section", { class: "card" }, uiH("h2", {}, "Accounts"), uiH("ul", {}, rows.map((r) => uiH("li", {}, r))));
+  const host = uiH("div", {});
+  card.append(host);
+  dom.root.append(card);
+  const out = { host };
+  const drawForm = () => {
+    for (const c of [...host.childNodes]) c.parentNode = null;
+    host.childNodes = [];
+    const lab = (t) => uiH("span", { class: "field-label" }, t);
+    const type = uiH("select", { name: "type" }); type.value = "checking";
+    const kind = uiH("select", { name: "kindOf" }); kind.value = "";
+    const name = uiH("input", { type: "text", name: "name" });
+    const weight = uiH("input", { type: "text", name: "weight" });
+    const asOf = uiH("input", { type: "date", name: "asOf" });
+    const L = { name: lab("Account name"), asOf: lab("Balance as of") };
+    const relabel = () => {
+      const thing = type.value === "other_asset", gold = thing && kind.value === "gold";
+      L.name.textContent = thing ? "What to call it" : "Account name";
+      L.asOf.textContent = gold ? "Price as of" : thing ? "Worth that on" : "Balance as of";
+    };
+    type.addEventListener("change", relabel); kind.addEventListener("change", relabel);
+    const save = uiH("button", { type: "submit" }, "Add account");
+    const cancel = uiH("button", { type: "button" }, "Cancel");
+    const f = uiH("form", {}, uiH("h3", {}, "Add an account"),
+      uiH("label", { class: "field" }, L.name, name), uiH("label", { class: "field" }, lab("Type"), type),
+      uiH("label", { class: "field" }, lab("What it is"), kind), uiH("label", { class: "field" }, lab("How much gold"), weight),
+      uiH("label", { class: "field" }, L.asOf, asOf), uiH("div", { class: "form-actions" }, save, cancel));
+    host.append(f);
+    Object.assign(out, { f, type, kind, name, weight, asOf, save, cancel, L });
+    return f;
+  };
+  if (open) drawForm();
+  else { const b = uiH("button", { type: "button" }, "+ Add another account"); b.addEventListener("click", () => { const f = drawForm(); out.opened = f; }); host.append(b); out.opener = b; }
+  return out;
+}
+/** The typing kept for a page, as this tab stores it (the stand-in's sessionStorage). */
+const storedTyping = () => JSON.parse(globalThis.sessionStorage?.getItem("planner.typing.sandbox") ?? "null")?.pages ?? {};
+function withSession() {
+  place.forgetAll();                                       // a case that failed before its end leaves nothing for the next
+  // a form is a form (core/place.js isForm: a Save forgets the form it submitted, not the boxes of a card)
+  globalThis.HTMLFormElement ??= { [Symbol.hasInstance]: (e) => e?.tagName === "FORM" };
+  if (!globalThis.sessionStorage) { const s = new Map(); globalThis.sessionStorage = { getItem: (k) => (s.has(k) ? s.get(k) : null), setItem: (k, v) => s.set(k, String(v)), removeItem: (k) => s.delete(k) }; }
+}
+/** The person opens the add form and types an ounce of gold's worth of boxes, renaming them twice on the way. */
+function typeGold(p) {
+  tap(p.opener); p.opener.dispatchEvent({ type: "click" });
+  place._test.watch([added(p.host)]);                      // the page's observer: the form appeared after that tap (in what was added)
+  typeInto(p.type, "other_asset");                         // "Account name" becomes "What to call it"
+  typeInto(p.kind, "gold");                                // "Worth that on" becomes "Price as of"
+  typeInto(p.name, "Gold coins");
+  typeInto(p.weight, "2");
+}
+const NW = "#/balance/net-worth";
+const keptLines = () => dom.root.querySelectorAll("[data-place=kept]");
+
+test("ha (a) a save clears the typing of the form it saved, though its boxes were renamed after the typing began", async () => {
+  roomy(NW);
+  withSession();
+  place.visit({ v: "ha-a", n: 1 }, NW);
+  echoes.length = 0;
+  const p = worthPage(["Checking $400"]);
+  typeGold(p);
+  assert.equal(p.L.name.textContent, "What to call it"); assert.equal(p.L.asOf.textContent, "Price as of");
+  place.remember();
+  assert.equal(Object.keys(storedTyping()[NW]?.forms ?? {}).length, 1, "one record for one form, however often its boxes were renamed");
+  // "Add account": a save, and the page lists the new account with "+ Add another account" (the form folded away)
+  tap(p.save);
+  const q = savedAndRedrawn(() => worthPage(["Checking $400", "Gold coins $4,000"]));
+  await later();
+  assert.equal(keptLines().length, 0, "no 'Not saved yet: what you typed in “Add an account”' under the list");
+  assert.equal(place.hasTyping(), false, "nothing kept for a reload");
+  assert.deepEqual(storedTyping(), {}, "nothing in this tab");
+  // a reload: the list, and no form opened again
+  place.visit({ v: "ha-a", n: 1 }, NW);
+  const r = worthPage(["Checking $400", "Gold coins $4,000"]);
+  place.refill(dom.root); place._test.reopen(dom.root); place.tell(dom.root);
+  await later();
+  assert.equal(r.opened, undefined, "the add form is not opened again");
+  assert.equal(keptLines().length, 0);
+  assert.ok(q.opener && !said().length);
+  place.forgetAll();
+});
+
+test("ha (a) with no save, a reload opens the form again and puts all of the typing back, renames and all", async () => {
+  roomy(NW);
+  withSession();
+  place.visit({ v: "ha-b", n: 1 }, NW);
+  echoes.length = 0;
+  let p = worthPage(["Checking $400"]);
+  typeGold(p);
+  place.remember();                                        // the page goes (pagehide): the typing is written down
+  const kept = Object.values(storedTyping()[NW].forms);
+  assert.equal(kept.length, 1);
+  assert.deepEqual(kept[0].boxes.map((b) => [b.k.split("|").slice(3).join("|"), b.v]),
+    [["type|type", "other_asset"], ["kindOf|what it is", "gold"], ["name|what to call it", "Gold coins"], ["weight|how much gold", "2"]], "each box once, under the name it has now");
+  assert.equal(kept[0].alias.length, 2, "found again by either name it had before");
+  // the reload: the list with "+ Add another account"; what afterArrive does, then the page's observer once the form is drawn
+  place.visit({ v: "ha-b", n: 1 }, NW);
+  p = worthPage(["Checking $400"]);
+  place.refill(dom.root); place._test.reopen(dom.root); place.tell(dom.root);
+  assert.ok(p.opened, "the add form is opened again, as the person left it");
+  place._test.watch([added(p.host)]); await later(); await later();
+  assert.deepEqual([p.type.value, p.kind.value, p.name.value, p.weight.value], ["other_asset", "gold", "Gold coins", "2"], "all of it back");
+  assert.deepEqual([p.L.name.textContent, p.L.asOf.textContent], ["What to call it", "Price as of"], "the boxes renamed as the person left them");
+  assert.ok(p.f.querySelector("[data-place=hint]"), "'Not saved yet. Undo my typing' by the button");
+  assert.equal(keptLines().length, 0, "no line above it: the form is on the screen");
+  assert.deepEqual(echoes.filter((t) => /not put back|not saved/i.test(t)), [], "never 'that form has changed since'");
+  // typing on after the reload: still one record, the weight changed in it
+  typeInto(p.weight, "3"); place.remember();
+  const again = Object.values(storedTyping()[NW].forms);
+  assert.equal(again.length, 1); assert.equal(again[0].boxes.find((b) => b.k.endsWith("|weight|how much gold")).v, "3");
+  // then saved: forgotten, though the record was found by its first names
+  tap(p.save);
+  savedAndRedrawn(() => worthPage(["Checking $400", "Gold coins $4,000"]));
+  await later();
+  assert.equal(place.hasTyping(), false); assert.deepEqual(storedTyping(), {}); assert.equal(keptLines().length, 0);
+  place.forgetAll();
+});
+
+test("ha (a) Cancel and 'Undo my typing' let go of the whole typing of a renamed form, as for any form", async () => {
+  roomy(NW);
+  withSession();
+  place.visit({ v: "ha-c", n: 1 }, NW);
+  let p = worthPage(["Checking $400"]);
+  typeGold(p);
+  place.remember();
+  tap(p.cancel);                                            // the form's Cancel: thrown away on purpose
+  assert.deepEqual(storedTyping(), {});
+  // typed again, left, reloaded (put back), then "Undo my typing" by the button
+  p = worthPage(["Checking $400"]);
+  typeGold(p);
+  place.remember();
+  place.visit({ v: "ha-c", n: 1 }, NW);
+  p = worthPage(["Checking $400"]);
+  place.refill(dom.root); place._test.reopen(dom.root); place.tell(dom.root);
+  place._test.watch([added(p.host)]); await later(); await later();
+  assert.equal(p.name.value, "Gold coins");
+  p.f.querySelector("[data-place=hint]").querySelector("button").dispatchEvent({ type: "click" });
+  assert.deepEqual([p.type.value, p.kind.value, p.name.value, p.weight.value], ["checking", "", "", ""], "every box as the page drew it");
+  assert.equal(p.L.name.textContent, "Account name", "and its names with them");
+  assert.deepEqual(storedTyping(), {}, "nothing kept");
+  place.forgetAll();
+});
+
+test("ha (a) invariance: a form whose boxes keep their names writes the record 452408a wrote, and Save forgets it as before", async () => {
+  roomy(NW);
+  withSession();
+  place.visit({ v: "ha-d", n: 1 }, NW);
+  const p = worthPage(["Checking $400"]);
+  tap(p.opener); p.opener.dispatchEvent({ type: "click" });
+  place._test.watch([added(p.host)]);
+  typeInto(p.name, "Rainy day"); typeInto(p.weight, "3");   // no Type picked: no box renamed
+  place.remember();
+  const forms = storedTyping()[NW].forms;
+  const ids = Object.keys(forms);
+  assert.equal(ids.length, 1);
+  const { at, ...rec } = forms[ids[0]];
+  assert.equal(typeof at, "number");
+  // written out from 452408a's own record of the same typing (fk, its id, the opener, every key): byte for byte
+  const FK = "add an account§c:accounts§add account§C|INPUT|text|name|account name,C|SELECT||type|type,C|SELECT||kindOf|what it is,C|INPUT|text|weight|how much gold,C|INPUT|date|asOf|balance as of";
+  assert.deepEqual(ids, [`${FK}#0`]);
+  assert.equal(JSON.stringify(rec), JSON.stringify({ fk: FK, i: 0, of: 1, title: "Add an account", opener: { k: "A|BUTTON|+ add another account", s: "c:accounts", r: "", i: 0, of: 1, sn: 1, gi: 0, gof: 1 }, open: true,
+    boxes: [{ k: "C|INPUT|text|name|account name", j: 0, v: "Rainy day", d: "" }, { k: "C|INPUT|text|weight|how much gold", j: 0, v: "3", d: "" }] }), "no fam, no alias");
+  tap(p.save);
+  savedAndRedrawn(() => worthPage(["Checking $400", "Rainy day $3"]));
+  await later();
+  assert.deepEqual(storedTyping(), {}); assert.equal(keptLines().length, 0);
   place.forgetAll();
 });

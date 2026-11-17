@@ -110,6 +110,9 @@ number in `meta.currency`, rates are fractions (0.07), people are referenced by 
   tab only (core/place.js, core/router.js): typing not saved yet (a day at most), the spot and open sections of each
   history entry, and the way each entry was reached. A kept box in no form may carry `took: 1` (optional; absent reads as
   0): the page took that figure itself, so another figure drawn there later is the page's answer, not "changed since".
+  A kept form may carry `fam` (the id its typing began under, only when it differs from the record's own id) and `alias`
+  (`[{ fk, i, of }]`, the identities it had before the page renamed its boxes; optional, added 2026-11-17): one record per
+  form however often its boxes are renamed, found again by any of them, and forgotten whole by its Save or Cancel.
 * The address's `?share=` on House down payment, Rent vs buy and Refinance (core/share-link.js; gap list next 60, item 33,
   added 2026-11-16) -- a shared calculator's own figures, `name:value` pairs (`#/goals/house?share=price:420000,rate:6.25`),
   read in the page for that visit only: the page is drawn from a copy of the plan with them in its own key. Never stored

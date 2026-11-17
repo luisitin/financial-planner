@@ -57,6 +57,22 @@ export function pickForm(rec, fks) {
   if (same.length > 1 && same.length === rec.of && same[rec.i] !== undefined) return same[rec.i];
   return -1;
 }
+/** The identities a kept record had before its boxes were renamed (`alias`), oldest first: only entries that name one (an
+ * object with a string `fk`), so a tab's stored typing in another shape is read as having none, never a throw (ha (a) fix F2). */
+export const aliasesOf = (rec) => (Array.isArray(rec?.alias) ? rec.alias.filter((a) => a && typeof a === "object" && typeof a.fk === "string") : []);
+/** Which drawn form a record names, by the identity its form has now or, failing that, by one it had before the page
+ * renamed its boxes (`alias`; the newest first, as it holds most of the boxes' names now): pickForm for each, so twins
+ * count only by position, never a guess. -1 when none (ha (a), 2026-11-17). */
+export function formOf(rec, fks) {
+  if (!rec) return -1;
+  for (const n of [rec, ...aliasesOf(rec).reverse()]) { const j = pickForm(n, fks); if (j >= 0) return j; }
+  return -1;
+}
+/** A form drawn under one of the identities a record knows it by: on the page, not "not saved yet". A twin counts as drawn
+ * even where formOf will not say which one it is (its typing is not put back into a guessed twin, and no "Not saved yet"
+ * line names a form the person sees): the rule 452408a had for the record's own identity (`fks.includes(r.fk)`), for each
+ * name it had too. */
+export const drawnAs = (rec, fks) => !!rec && [rec, ...aliasesOf(rec)].some((n) => fks.includes(n.fk));
 /** A notice can be read: its first line is not under the top bar (6 px of slack), and at least 60% of it (or 48 px of
  * it) is between the top bar and the bottom edge. A line half under the bar is not read (place NP4). */
 export function seenEnough(r, top, bottom) {
@@ -254,6 +270,9 @@ export const fkOf = (f) => [shape(formTitle(f), 60), sectOf(f), shape(textOf(sub
 const base = new WeakMap();        // box -> the value it showed before the person changed it
 const where = new WeakMap();       // box -> the page key it was typed on (taken at the first keystroke)
 const metaOf = new WeakMap();      // form -> { fk, i, of, title, key }: its identity while it was on the page
+const famOf = new WeakMap();       // form -> the id its typing began under (its lineage, however its boxes are renamed)
+const filledFrom = new WeakMap();  // form -> { fk, i } of the record its typing was put back from
+const lastSpot = new WeakMap();    // box -> "key#index" it was last written down under (its name may change since)
 const dirty = new Set();           // boxes the person changed
 const touchedForms = new WeakSet();
 const foldBy = new WeakMap();      // details -> { by: "open" | "shut", drew }: set by the person's own tap on its summary
@@ -358,15 +377,33 @@ export function remember() {
   }
   for (const [f, { key, cs }] of forms) {
     const m = conn(f) ? identity(f) : metaOf.get(f), id = `${m.fk}#${m.i}`;
+    // the identity its typing was put back from (until it is first written down again), else the one it was last written
+    // under: the page may have renamed its boxes since (Net worth's Type and gold: "Account name" becomes "What to call
+    // it"), so the identity is another, and the form the same
+    const p = filledFrom.get(f) ?? metaOf.get(f), pid = p ? `${p.fk}#${p.i}` : id;
+    filledFrom.delete(f);
     metaOf.set(f, m);
     const rec = pageRec(key), was = rec.forms[id], all = formControls(f);
+    const fam = famOf.get(f) ?? was?.fam ?? rec.forms[pid]?.fam ?? pid;
+    famOf.set(f, fam);
+    // renamed: the record moves to the new identity, and the old one goes into its `alias` (one record per form, found again
+    // by any of them; ha (a), 2026-11-17: three records for one form, and Save forgot only the last)
+    const old = pid !== id && rec.forms[pid] && (rec.forms[pid].fam ?? pid) === fam ? rec.forms[pid] : null;
     const spot = (c) => { const k = keyOf(c); return { k, j: all.filter((x) => keyOf(x) === k).indexOf(c) }; };
-    // the boxes looked at now replace their entries; a box written down before and not looked at now stays (a change event
-    // that fires as the page goes away must not drop the other boxes of its form)
-    const now_ = new Set([...dirty].filter((c) => c.form === f).map((c) => { const x = spot(c); return `${x.k}#${x.j}`; }));
-    const boxes = cs.map((c) => ({ ...spot(c), v: valOf(c), d: base.get(c) })).concat((was?.boxes ?? []).filter((b) => !now_.has(`${b.k}#${b.j}`)));
+    // the boxes looked at now replace their entries, under their names now and the names they were last written under; a box
+    // written down before and not looked at now stays (a change event that fires as the page goes away must not drop the
+    // other boxes of its form)
+    const mine = [...dirty].filter((c) => c.form === f);
+    const now_ = new Set(mine.flatMap((c) => { const x = spot(c); return [`${x.k}#${x.j}`, lastSpot.get(c)].filter(Boolean); }));
+    const prior = [...(was?.boxes ?? []), ...(old && old !== was ? old.boxes : [])].filter((b, n, a) => !now_.has(`${b.k}#${b.j}`) && a.findIndex((x) => x.k === b.k && x.j === b.j) === n);
+    const boxes = cs.map((c) => ({ ...spot(c), v: valOf(c), d: base.get(c) })).concat(prior);
+    for (const c of mine) { const x = spot(c); lastSpot.set(c, `${x.k}#${x.j}`); }
+    if (old) delete rec.forms[pid];
     if (!boxes.length) { if (touchedForms.has(f)) delete rec.forms[id]; tidy(key); continue; }   // typed, then put back as drawn
-    rec.forms[id] = { fk: m.fk, i: m.i, of: m.of, title: m.title, opener: openerOf.get(f) ?? was?.opener ?? null, open: conn(f), at, boxes };
+    const alias = [...aliasesOf(was), ...(old ? [...aliasesOf(old), { fk: old.fk, i: old.i, of: old.of }] : [])]
+      .filter((a, n, all_) => !(a.fk === m.fk && a.i === m.i) && all_.findIndex((x) => x.fk === a.fk && x.i === a.i) === n);
+    // (a form never renamed stores what it stored before: no `fam` while it is the record's own id, no `alias`)
+    rec.forms[id] = { fk: m.fk, i: m.i, of: m.of, title: m.title, opener: openerOf.get(f) ?? was?.opener ?? old?.opener ?? null, open: conn(f), at, boxes, ...(fam !== id ? { fam } : {}), ...(alias.length ? { alias } : {}) };
   }
   // loose boxes: the ones changed now replace their entries; entries not drawn this time stay
   for (const [key, cs] of loose) { const rec = pageRec(key); rec.loose = rec.loose.filter((x) => !cs.some((c) => keyOf(c) === x.loc.k)).concat(cs.map((c) => ({ loc: locOf(root, c), v: valOf(c), d: base.get(c), at }))); }
@@ -381,7 +418,14 @@ export function forget(f) {
   for (const c of cs) dirty.delete(c);
   $$(f, "[data-place]").forEach((x) => x.remove());
   const m = conn(f) ? identity(f) : metaOf.get(f); if (!m) return;
-  for (const key of keys) if (typing[key]) { delete typing[key].forms[`${m.fk}#${m.i}`]; tidy(key); }
+  // whatever its boxes were called when the typing began: the record under its identity now, the one it was last written
+  // under or put back from, and every record of its lineage (ha (a))
+  const ids = new Set([m, metaOf.get(f), filledFrom.get(f)].filter(Boolean).map((x) => `${x.fk}#${x.i}`)), fam = famOf.get(f);
+  for (const key of keys) if (typing[key]) {
+    for (const [id, r] of Object.entries(typing[key].forms)) if (ids.has(id) || (fam && (r.fam ?? id) === fam)) delete typing[key].forms[id];
+    tidy(key);
+  }
+  famOf.delete(f); filledFrom.delete(f);
   saveTyping();
 }
 /** A box in no form whose figure the page took (its own change drew it away; or a save by its card's button wrote it, seen
@@ -476,13 +520,28 @@ export function refill(root = pageRoot()) {
   };
   const here = formsOn(root), fks = here.map(fkOf);
   for (const [id, r] of Object.entries(rec.forms)) {
-    const j = pickForm(r, fks); if (j < 0) continue;
+    const j = formOf(r, fks); if (j < 0) continue;
     const f = here[j]; if (seenForms.has(f)) continue; seenForms.add(f);
+    // the form's typing goes on as this record's (its lineage), whatever its boxes are called next
+    if (!famOf.has(f)) { famOf.set(f, r.fam ?? id); filledFrom.set(f, { fk: r.fk, i: r.i }); }
     // the form is on the page again (its row tapped again): a bottom note offering to open it is stale
     for (const n of document.querySelectorAll(".save-echo.info")) if (r.title && textOf(n).includes(`“${r.title}”`)) n.remove();
-    const all = formControls(f), filled = [];
+    const filled = [], gone = new Set();
     if (r.opener && !openerOf.has(f)) openerOf.set(f, r.opener);
-    r.boxes = r.boxes.filter((x) => { const c = all.filter((y) => keyOf(y) === x.k)[x.j]; if (!c) return true; const v = fill(c, x); if (v === "fill") filled.push(c); if (v === "changed") { letGo++; letGoTitle = r.title; return false; } return true; });
+    // a choice put back may rename the boxes after it (Type, then the kind): the boxes not found go round again after a pass
+    // that filled something, at most four times; a form never renamed finds them all in the first
+    let wait = r.boxes;
+    for (let pass = 0, more = true; more && wait.length && pass < 4; pass++) {
+      const all = formControls(f), next = [];
+      more = false;
+      for (const x of wait) {
+        const c = all.filter((y) => keyOf(y) === x.k)[x.j]; if (!c) { next.push(x); continue; }
+        lastSpot.set(c, `${x.k}#${x.j}`);
+        const v = fill(c, x); if (v === "fill") { filled.push(c); more = true; } if (v === "changed") { letGo++; letGoTitle = r.title; gone.add(x); }
+      }
+      wait = next;
+    }
+    if (gone.size) r.boxes = r.boxes.filter((x) => !gone.has(x));
     if (!r.boxes.length) delete rec.forms[id];
     if (filled.length) { hint(f); const b = submitOf(f), far = b && filled.find((c) => Math.abs(rectOf(c).top - rectOf(b).top) > 320); if (far) cueBox(far, false); }   // by the button; once more by the first far box
     $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)?.remove();
@@ -513,7 +572,7 @@ export function refill(root = pageRoot()) {
 function reopen(root) {
   const rec = typing[shownKey]; if (!rec) return;
   const fks = formsOn(root).map(fkOf);
-  const r = Object.values(rec.forms).filter((x) => x.open && x.opener && pickForm(x, fks) < 0 && !fks.includes(x.fk)).sort((a, b) => b.at - a.at)[0];
+  const r = Object.values(rec.forms).filter((x) => x.open && x.opener && formOf(x, fks) < 0 && !drawnAs(x, fks)).sort((a, b) => b.at - a.at)[0];
   if (!r) return;
   const mark0 = actMark;
   const press = () => {
@@ -548,7 +607,7 @@ export function tell(root = pageRoot(), { now: atOnce = false, quiet = false } =
   const here = formsOn(root), fks = here.map(fkOf), titles = here.map(formTitle);
   let gone = "";
   for (const [id, r] of Object.entries(rec.forms)) {
-    if (pickForm(r, fks) >= 0 || fks.includes(r.fk) || $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)) continue;   // on the page (filled, or a twin not guessed), or said
+    if (formOf(r, fks) >= 0 || drawnAs(r, fks) || $1(root, `[data-place=kept][data-for="${CSS.escape(id)}"]`)) continue;   // on the page (filled, or a twin not guessed; by any name it had), or said
     // the form is on the page, drawn another way (its boxes are not the ones typed in): never a line above it naming the
     // form the person sees, without that typing; the typing goes, said once (regress-break 3)
     if (r.title && titles.includes(r.title)) { delete rec.forms[id]; gone = r.title; continue; }

@@ -70,7 +70,8 @@ no "open sections" memory of their own):
   "+ Add another ..." or a row's edit form) is opened again on Back, Forward and Reload by tapping its opener for them
   (no step is added to Back). A form that is still shut gets one line, "Not saved yet: what you typed in “Add an
   income”.", with "Open it". Save forgets it, so does the form's Cancel, and so do Settings' erase and restore
-  (`planner:erased`). Typing the page took itself (a box in no form that its page answers on change and draws away, as
+  (`planner:erased`), whatever the form's boxes were called when the typing began: a page may rename a box as the person
+  picks (Net worth's Type and gold), and the typing stays one form's, put back under any name it had. Typing the page took itself (a box in no form that its page answers on change and draws away, as
   `choice()`'s own box; or a box in a card whose figure a button there saved, as the save's redraw shows) is the page's:
   drawn again with the page's own figure, or the same amount in its own writing ("50,000" for "50000"; never "15" for
   "1,5"), nothing is said; "Some of what you typed was not put back: those figures were changed since." is only for
