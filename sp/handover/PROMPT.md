@@ -60,6 +60,11 @@ Later:
 - 2026-11-12: "Continue and be aggressive with OPTIONALITY. Allow a user to have optionality of complexity. Default to less is more and allow more complexity or toggles. We want subtle optional complexity".
 - 2026-11-13: "Continue. I want you to make sure that there is no stone left unturned. There should be complete optionality, and there should not exist a single other application in the entire internet, that doesn't have the functionality or optionality of this application. Now, it is extremely important to keep in mind that it should stay simple by default. There should be ways for you to upgrade the complexity and the depth of it, and it should also flow fluid and easy to understand for a human user. Do not stop until you're out of credit when you're 98% or 99 you're 99% of total weekly usage that is when you make sure you update your handoff and send me a prompt here that I could just send to a new session but only 99%."
   (For you: the same holds. Work until 99% of the weekly usage, then refresh the hand-over and write me the prompt.)
+- 2026-11-15, to the third claude-b session: "You can boot up again at 9 PM CST and go until you reach the usage limit. However, real quick, can you create a pipeline artifact similar to other ones you made for [another project of mine; name left out here] but for the assets in this project with a pre-pipeline and the stuff merged in the past 6 hours ranked by importance?"
+- 2026-11-15: "Update the pipeline every 6 hours"
+  (The page is titled "Planner Pipeline" in my Claude account; its address is not written here because this file is
+  public: find it with your artifact tool's list. A scheduled task, "Update the planner pipeline page", refreshes it
+  every 6 hours, but it fires into the session that made it: take it over, see STATE.md section 000 FINAL.)
 
 ### 2b. Not my words: the earlier session's working habits, which I accept. Where they clash with 2a, 2a wins.
 
@@ -230,8 +235,26 @@ Why so careful: the site is static files, and a phone that mixes old and new fil
 
 ## 7. Where things stand (summary; STATE.md section 00 has the final detail and the exact next steps)
 
+**Update, 2026-11-17 (the third claude-b session wrote this; it is the newest word, before the older updates below).**
+Read `STATE.md` from the top: section 000 FINAL, then 000z back to 000. In short:
+- Live on `main`: everything through batch hb (STATE.md 000 FINAL names the commit). Batches gp to hb landed on
+  2026-11-15 to 2026-11-17, each built in a worktree, read by a money critic and a person-on-a-phone critic, fixed,
+  rechecked, run through the full suite (about 192,200 tests) and the live-check on both browser profiles.
+- The "next 60" gap list is down to 13 items, none small and mine: #19 and #18 landed in batch gz; what is left
+  needs your yes (#2, #9), belongs to another builder (#10, #24, #27, #41, #47), is blocked (#5 studentaid.gov
+  refuses the cloud machine; #38 no free licence; #55 no reachable cost-of-care source) or is large (#34 edit a list
+  like a spreadsheet, #39 your own charts and saved reports, #60 other countries). Pick from STATE.md's list of
+  follow-ups first; they are small and in my lane.
+- Landing lesson worth keeping: when tracks of one batch land together, each track's "nothing else moves" test was
+  pinned before the others. If the full suite fails only there, prove every changed cell against a tree with one
+  track alone (STATE.md 000x to 000z show the scripts) before writing the stored digests again.
+- The cloud machine restarted three times in one night, most likely out of memory (16 GB, 4 cores, two agents each
+  running tests and a browser). Keep agents to named test files with `--test-concurrency=2`, one browser at a time.
+  A workflow resume reuses its cache only up to the first changed call, so give every agent a note, or pass the
+  saved results in as `args.pre` (STATE.md 000x).
+
 **Update, 2026-11-14 (a second claude-b session wrote this; read it before the numbered list below).** Read
-`STATE.md` sections 000 to 000z first (000z is the last word): they are newer than everything else in the package.
+`STATE.md` sections 000 FINAL and 000 to 000z first (000 FINAL is the last word): they are newer than everything else in the package.
 - Of "what other apps offer" (`gap/spec.md`, 40 designs), these are live: #1 to #22, #24 to #32, #34 to #38.
   Open: #23, #33, #39, #40 (STATE.md 000h says where each lives). Build them
   in batches of three or four with the workflow script `gap-batch-gj.js` (in the old session's scratchpad; `gap-batch-gh.js` in this package is the same shape) as the template (one worktree per design:
