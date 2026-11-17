@@ -161,3 +161,34 @@ protection part is not scored with it ("Not scored yet: the stress tests need wh
 the Stress tests page says it can't tell which shocks the plan would survive; the stress tests are not run then. Both score 0 of
 their points, as a part not known yet always has. With a dollar saved or going in, the parts are scored as before (the three
 round 8 and review tests that used Riley's plan for "short of lasting" now put $1 in the 401(k)).
+
+## One retirement answer (z1, 2026-11-16; tests `tests/one-answer.test.mjs`)
+
+"Retirement on track" was not scored until every adult's Social Security was in (`retirementKnown`). It is now also scored
+when Social Security is the only gap and Will the money last? says the money lasts even counting the missing figure as none
+(overview/setup `lastsWithoutSs`, the one rule every overview page asks; its README, "One retirement answer"), on this same
+run: the part's formula is unchanged, share = (affordable / planned - 0.6) / 0.55, and "on track" needs the ratio at 1.15 or
+more, so such a plan has full marks. The detail adds the shared sentence "Sam's Social Security is not counted yet."
+(`ssLeftOutLine`).
+
+"Protection" still waits for the missing figure: the stress tests' shocks are not one-way (a shock the plan fails without the
+Social Security might pass with it), so it stays not scored, now in its own words, "Not scored yet: the stress tests need
+Social Security for Sam first." with the Social Security page's fix line (it said "..., like the retirement part" and
+"Scored as soon as the retirement part above is", which would now be false). Short or only just lasting without it, both
+parts read as before.
+
+Ruth and Sam (the invented retired couple, Sam with no figure): the retirement part goes from 0 to 25 of 25 ("The plan can
+carry about $7,120 a month against the $2,780 it plans (256%). Sam's Social Security is not counted yet."), and the score
+from 51 to 76 ("Good"). 08-retired: 52 to 77; 14-unusual-structures: 49 to 74. Every other household's score is byte for
+byte what it was (`tests/one-answer-invariance.test.mjs`). Plan summary, the yearly review, Export and the AI critic read
+this score, so they say the same.
+
+
+Fix round (critic P4): one missing figure was three asks for Ruth and Sam ("+15 Protection: Add Social Security for Sam ...",
+the retirement part's "not counted yet" and "+4 The plan knows enough: Still to do: add a Social Security figure for every
+adult; ..."). While the retirement part is scored on that answer, "The plan knows enough" names the figure as the one
+Protection asks for: "Still to do: add Sam's Social Security (as above); ...". Protection always comes before it, in the seven
+parts and in the gains (15 points against at most 10), so "as above" holds on this page and in the next steps of Plan summary
+and the yearly review, which list the gains in the same order (test "z1 fix P4", `tests/one-answer.test.mjs`). The points do
+not change. Kept as they are, for every plan: the "(256%)" (the score's own measure; "How the score is worked out" says
+nothing at 60%, full marks at 115%) and "Open Goal seek ›" (each part names the page it opens, OV-5).

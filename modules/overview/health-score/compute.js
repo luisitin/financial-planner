@@ -7,7 +7,7 @@ import { yearSaving } from "../../../core/math/leftover.js";
 import { compute as computeLiquidity } from "../../balance/liquidity/compute.js";
 import { compute as computeLiabilities, rentsHome, DTI_LINES, shownShare } from "../../balance/liabilities/compute.js";
 import { compute as computeProjection, householdRetired, ssOnIncome, retirementKnown, savingsUnknown, nothingSaved, unknownParts } from "../../retirement/projection/compute.js";
-import { retirementGap } from "../setup/compute.js";
+import { retirementGap, lastsWithoutSs, ssLeftOutLine } from "../setup/compute.js";
 import { compute as computeStress } from "../../scenarios/stress-tests/compute.js";
 import { compute as computeGoalSeek, roundUp } from "../../scenarios/goal-seek/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
@@ -106,18 +106,22 @@ export function compute(plan, params = {}) {
   // "none") with birth dates, as the Dashboard does (projection's retirementKnown): without it the plan runs short and the
   // score said "runs out in 2067" and asked for $3,040 a month less spending (round 4, 2026-11-02)
   const known = retirementKnown(plan, today);
+  // Social Security the only gap and the money lasts even without it (overview/setup lastsWithoutSs, the one rule every overview
+  // page asks; z1): this same run's answer stands, so the part is scored as for a checked plan and says whose it leaves out
+  const without = known || !pr.ready ? null : lastsWithoutSs(plan, { today, proj: pr });
+  const answered = known || !!without;
   // what is missing, named: a birth date goes to People, Social Security to its page (setup's retirementGap, review 2026-11-02)
   const gap = known ? null : retirementGap(plan);
   // nothing saved for retirement and nothing going in: Will the money last? says "We don't know yet" (savingsUnknown on this same
   // run), so the score does not say "The money runs out in 2067" either (whole-app sweep x3, fix round, critic F2)
-  const unknown = pr.ready && known && savingsUnknown(pr) ? unknownParts({ nothingSaved: nothingSaved(plan) }, "whether the money lasts") : null;
+  const unknown = pr.ready && answered && savingsUnknown(pr) ? unknownParts({ nothingSaved: nothingSaved(plan) }, "whether the money lasts") : null;
   if (!pr.ready) add("retirement", "Retirement on track", null, "The plan cannot be run yet.", `Add ${andList(pr.missing.map(needItem))}.`, ["retirement", "projection"]);
-  else if (!known) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
+  else if (!answered) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
   else if (unknown) add("retirement", "Retirement on track", null, `Not scored yet. ${unknown.sentence}`, unknown.next, ["balance", "net-worth"]);
   else {
     const ratio = pr.spendingYearly > 0 ? pr.affordable / pr.spendingYearly : 1;
     const ways = ratio < FULL_RETIREMENT ? retirementWays(plan, { today, ratio, money }) : null;
-    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, pr.result.success ? `The plan can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
+    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, `${pr.result.success ? `The plan can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`}${without ? ` ${ssLeftOutLine(without.words)}` : ""}`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
     // the link opens Goal seek on the target the hint was worked out for ("Just last"), and the hint without the score's own
     // words for reports that say how to make the money last (Plan summary)
     if (ways) Object.assign(parts[parts.length - 1], { hint: ways.text, ...(ways.query ? { query: ways.query } : {}) });
@@ -126,7 +130,9 @@ export function compute(plan, params = {}) {
   // 5. protection: the stress tests' life shocks (job loss, never working again, a death, a care home, a long life)
   const st = pr.ready && known && !unknown ? computeStress(plan, { today }) : null;
   const life = st?.ready ? st.scenarios.filter((s) => s.group === "life") : [];
-  if (pr.ready && !known) add("protection", "Protection", null, `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first, like the retirement part.`, "Scored as soon as the retirement part above is.", gap?.go ?? ["retirement", "social-security"]);
+  // (the retirement part scored on the answer that stands without the Social Security not in yet: a shock the plan fails without
+  // it might pass with it, so the stress tests still wait for it, and say so in their own words; z1)
+  if (pr.ready && !known) add("protection", "Protection", null, without ? `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first.` : `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first, like the retirement part.`, without ? gap?.fix ?? "Add Social Security on the Social Security page." : "Scored as soon as the retirement part above is.", gap?.go ?? ["retirement", "social-security"]);
   // the stress tests say "we can't say which shocks your plan would survive yet" for the same plan: not scored either
   else if (unknown) add("protection", "Protection", null, "Not scored yet: the stress tests need what you own first, like the retirement part.", "Scored as soon as the retirement part above is.", ["balance", "net-worth"]);
   else if (!life.length) add("protection", "Protection", null, "The stress tests need the plan basics first.", "Fill in the basics on Will the money last?", ["scenarios", "stress-tests"]);
@@ -162,7 +168,9 @@ export function compute(plan, params = {}) {
     ["add your accounts", (plan.accounts ?? []).length > 0],
     ["update your balances (at least every 90 days)", (plan.accounts ?? []).length > 0 && (plan.accounts ?? []).every((a) => a.asOf && daysBetween(a.asOf, today) <= 90)],
     ["enter your income and expenses", (plan.income ?? []).length > 0 && (plan.expenses ?? []).length > 0],
-    ["add a Social Security figure for every adult", people.length > 0 && people.every((p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || ssOnIncome(plan, p.id, today))],
+    // (the retirement part scored without the Social Security not in yet: Protection above already asks for it, so this one says
+    // it is the same figure, not a third ask; z1 fix round, critic P4)
+    [without ? `add ${without.words} (as above)` : "add a Social Security figure for every adult", people.length > 0 && people.every((p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || ssOnIncome(plan, p.id, today))],
     // retired: what they spend now is what they spend in retirement (the setup does not ask it)
     ["say what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0 || householdRetired(plan, { today })],
     ["look over your assumptions (once a year)", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],

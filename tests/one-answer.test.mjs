@@ -23,6 +23,7 @@ import { compute as alerts } from "../modules/overview/alerts/compute.js";
 import { compute as yourPlan } from "../modules/overview/plan/compute.js";
 import { compute as quick, answerFor } from "../modules/overview/quick/compute.js";
 import { compute as timeline } from "../modules/overview/timeline/compute.js";
+import { compute as health } from "../modules/overview/health-score/compute.js";
 import { markGuess } from "../core/estimate/index.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -91,6 +92,13 @@ function timelineSays(d) {
   if (h.unknown) return "unknown";
   return h.needsSS && /Social Security/.test(h.needs ?? "") ? "asks-ss" : "asks";
 }
+/** Health score's "Retirement on track" part: full marks at 115% carried (what "on track" needs), part marks below, "runs out". */
+function healthSays(d) {
+  const x = (d?.parts ?? []).find((p) => p.id === "retirement");
+  if (!x) return "asks";
+  if (x.share === null) return /^Not scored yet: whether the money lasts needs .*Social Security/.test(x.detail) ? "asks-ss" : /^Not scored yet\. /.test(x.detail) ? "unknown" : "asks";
+  return /^The money runs out/.test(x.detail) ? "short" : x.share >= 0.999 ? "lasts" : "tight";
+}
 /** Needs attention: its only retirement item is "Your retirement money runs out at N". */
 const attentionSays = (a) => (a.alerts.some((x) => x.id === "retire-short") ? "short" : "none");
 
@@ -99,7 +107,8 @@ const RUNS = ALL.map(({ name, plan }) => {
   const st = standing(c(plan), { today: T });
   return { name, plan, d, st, page: pageSays(d), missing: ssMissingFor(plan).length > 0, known: retirementKnown(plan, T), stands: lastsWithoutSs(plan, { today: T }),
     says: { "Get started": tileSays(st), Dashboard: rowSays(retireRow(st, { plan: c(plan), today: T })), "Needs attention": attentionSays(alerts(c(plan), { today: T })),
-      "Your plan": planSays(yourPlan(c(plan), { today: T })), "Quick answers": quickSays(quick(c(plan), { today: T })), Timeline: timelineSays(run(() => timeline(c(plan), { today: T }))) } };
+      "Your plan": planSays(yourPlan(c(plan), { today: T })), "Quick answers": quickSays(quick(c(plan), { today: T })), Timeline: timelineSays(run(() => timeline(c(plan), { today: T }))),
+      "Health score": healthSays(run(() => health(c(plan), { today: T }))) } };
 });
 const RC = RUNS.find((r) => r.name === "fixture retired-couple-plan.mjs:retiredCouplePlan");
 
@@ -252,7 +261,12 @@ test("Your plan and Quick answers quote the answer that stands, with the sentenc
 
 test("Ruth and Sam, by name: every page says what Will the money last? says", () => {
   assert.equal(RC.page, "lasts");
-  assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none", "Your plan": "lasts", "Quick answers": "lasts", Timeline: "lasts" });
+  assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none", "Your plan": "lasts", "Quick answers": "lasts", Timeline: "lasts", "Health score": "lasts" });
+  const hs = health(c(RC.plan), { today: T }), part = (id) => hs.parts.find((x) => x.id === id);
+  assert.deepEqual([part("retirement").points, part("retirement").detail, part("retirement").fix], [25, "The plan can carry about $7,120 a month against the $2,780 it plans (256%). Sam's Social Security is not counted yet.", null]);
+  // the stress tests still wait for it (a shock failed without it might pass with it), in their own words
+  assert.deepEqual([part("protection").share, part("protection").detail], [null, "Not scored yet: the stress tests need Social Security for Sam first."]);
+  assert.match(part("protection").fix, /^Add Social Security for Sam on the Social Security page/);
   const tl = timeline(c(RC.plan), { today: T });
   assert.deepEqual([tl.headline.lastsTo, tl.headline.needsSS, tl.headline.needs, tl.headline.withoutSs], [2054, false, null, "Sam's Social Security"]);
   const end = tl.events.find((e) => e.id === "lasts");
@@ -261,5 +275,5 @@ test("Ruth and Sam, by name: every page says what Will the money last? says", ()
   assert.deepEqual(retireRow(RC.st, { plan: c(RC.plan), today: T }), { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" });
   // a single adult short without Social Security: every page keeps asking, as the page's notice asks first
   const one = RUNS.find((r) => r.name === "01-single-adult/base");
-  assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard, one.says["Your plan"], one.says["Quick answers"], one.says.Timeline], ["short", "asks-ss", "asks-ss", "asks-ss", "asks", "asks-ss"]);
+  assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard, one.says["Your plan"], one.says["Quick answers"], one.says.Timeline, one.says["Health score"]], ["short", "asks-ss", "asks-ss", "asks-ss", "asks", "asks-ss", "asks-ss"]);
 });

@@ -295,3 +295,48 @@ test("nothing saved for retirement and nothing going in: retirement and protecti
   const r1 = compute(one, { today: T16 }).parts.find((x) => x.id === "retirement");
   assert.notEqual(r1.status, "unknown"); assert.match(r1.detail, /^The money runs out in \d{4}/);
 });
+
+test("z1: Social Security the only gap and the money lasting without it: the retirement part is scored on that answer", async () => {
+  const { compute: score } = await import("./compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const part = (d, id) => d.parts.find((x) => x.id === id);
+  // Ruth and Sam: Sam has no Social Security figure; Will the money last? says the money lasts without it (256% carried)
+  const d = score(retiredCouplePlan(T), { today: T });
+  assert.deepEqual([part(d, "retirement").points, part(d, "retirement").status, part(d, "retirement").fix], [25, "ok", null]);
+  assert.equal(part(d, "retirement").detail, "The plan can carry about $7,120 a month against the $2,780 it plans (256%). Sam's Social Security is not counted yet.");
+  // the stress tests still wait for Sam's figure, and no longer say "like the retirement part"
+  assert.deepEqual([part(d, "protection").share, part(d, "protection").detail], [null, "Not scored yet: the stress tests need Social Security for Sam first."]);
+  assert.match(part(d, "protection").fix, /^Add Social Security for Sam on the Social Security page \(an estimate from ssa\.gov\/myaccount is enough\), or say there that Sam will not get it\.$/);
+  assert.equal(d.score, 76);
+  // spending three times as high: short without it, so neither part is scored, as before
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  const h = score(high, { today: T });
+  assert.deepEqual([part(h, "retirement").share, part(h, "retirement").detail], [null, "Not scored yet: whether the money lasts needs Social Security for Sam."]);
+  assert.equal(part(h, "protection").detail, "Not scored yet: the stress tests need Social Security for Sam first, like the retirement part.");
+  assert.equal(part(h, "protection").fix, "Scored as soon as the retirement part above is.");
+  // Sam's figure typed: scored, with no sentence about it
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  assert.doesNotMatch(part(score(typed, { today: T }), "retirement").detail, /not counted yet/);
+});
+
+test("z1 fix P4: one missing Social Security figure is one ask: \"The plan knows enough\" names it as the one Protection asks for", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const d = compute(retiredCouplePlan(T), { today: T });
+  const part = (id) => d.parts.find((x) => x.id === id);
+  // the ask itself: Protection, the biggest gain, says where and how
+  assert.equal(d.gains[0].id, "protection");
+  assert.match(part("protection").fix, /^Add Social Security for Sam on the Social Security page/);
+  // the completeness part says it is that same figure, not a third ask (it said "add a Social Security figure for every adult")
+  assert.equal(part("knows").fix, "Still to do: add Sam's Social Security (as above); say what you will spend in retirement; look over your assumptions (once a year).");
+  // "as above" holds wherever both show: Protection comes before it in the parts and in the gains (15 points against at most 10)
+  const at = (list, id) => list.findIndex((x) => x.id === id);
+  assert.ok(at(d.parts, "protection") < at(d.parts, "knows") && at(d.gains, "protection") < at(d.gains, "knows"));
+  // a plan whose answer waits for the figure (spending three times as high): the line as it was
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  assert.match(compute(high, { today: T }).parts.find((x) => x.id === "knows").fix, /add a Social Security figure for every adult/);
+  // Sam's figure typed: nothing to add
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  assert.doesNotMatch(compute(typed, { today: T }).parts.find((x) => x.id === "knows").fix ?? "", /Social Security/);
+});

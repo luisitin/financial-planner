@@ -100,7 +100,12 @@ export const STRIP = {
     const years = (d?.years ?? []).map((y) => ({ ...omit(y, ["gapBefore"]), events: y.events.filter(keep) })).filter((y) => y.events.length);
     return { ...d, events: (d?.events ?? []).filter(keep), years, headline: omit(d?.headline, ["lastsTo", "shortYear", "needsSS", "needs", "withoutSs"]) };
   },
-  health: (d) => ({ ...omit(d, ["score", "band"]), parts: (d?.parts ?? []).filter((x) => x.id !== "retirement" && x.id !== "protection"), gains: (d?.gains ?? []).filter((x) => x.id !== "retirement" && x.id !== "protection") }),
+  // (fix round, critic P4: "The plan knows enough" names the Social Security figure Protection asks for as the same one, "add Sam's
+  // Social Security (as above)", for a plan the rule lifts; put back as the words it had, a no-op on the code before the change)
+  health: (d) => {
+    const knows = (x) => (x.id === "knows" && typeof x.fix === "string" ? { ...x, fix: x.fix.replace(/add (?:your|[^;:]+?'s) Social Security \(as above\)/, "add a Social Security figure for every adult") } : x);
+    return { ...omit(d, ["score", "band"]), parts: (d?.parts ?? []).filter((x) => x.id !== "retirement" && x.id !== "protection").map(knows), gains: (d?.gains ?? []).filter((x) => x.id !== "retirement" && x.id !== "protection").map(knows) };
+  },
   quick: (d) => ({ ...d, answers: (d?.answers ?? []).filter((x) => x.guide !== "retire"), needsFirst: (d?.needsFirst ?? []).filter((x) => x.guide !== "retire") }),
   path: (d) => ({ ...d, parts: (d?.parts ?? []).map((x) => (x.key === "retire" ? omit(x, ["waiting"]) : x)), gaps: (d?.gaps ?? []).filter((x) => x.key !== "retire") }),
   guide: (d) => ({ ...d, journeys: (d?.journeys ?? []).map((j) => (j.id === "plan" ? { ...j, steps: (j.steps ?? []).map((x) => (x.key === "retire" ? omit(x, ["waiting"]) : x)) } : j)) }),
