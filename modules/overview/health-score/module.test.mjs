@@ -67,7 +67,11 @@ test("no retirement verdict before Social Security is known: not scored, the top
   const d = compute(p, { today: T });
   const r = d.parts.find((x) => x.id === "retirement"), pr = d.parts.find((x) => x.id === "protection");
   assert.equal(r.status, "unknown"); assert.equal(r.points, 0); assert.match(r.detail, /^Not scored yet/); assert.doesNotMatch(r.detail, /runs out/);
-  assert.match(r.fix, /^Add Social Security for Ana and Bo on the Social Security page .*, or say there that you will not get it\.$/); assert.deepEqual(r.go, ["retirement", "social-security"]);
+  // one ask (ha2), in short words; what adding it does to the score is said under "How this is worked out" (`unlock`, ha2 fix F2)
+  assert.equal(r.fix, "Add a Social Security estimate for Ana and Bo from ssa.gov/myaccount, or say who won't get it."); assert.deepEqual(r.go, ["retirement", "social-security"]);
+  // (5 of 7 things shown 7.1, 6 of 7 shown 8.6: the gain as the part shows it, 1.5, ha2 fix F4)
+  assert.equal(r.unlock, 'Not in the score yet: Social Security for Ana and Bo. Once added, "The plan knows enough" gains 1.5 points, and "Retirement on track" (out of 25) and "Protection" (out of 15) are scored on what you add.');
+  assert.deepEqual(r.query, { show: "person-p-ana" }, "the link opens Ana's row on the Social Security page (ha2 fix P4)");
   assert.equal(pr.status, "unknown");
   assert.equal(d.gains[0].id, "retirement", "the biggest gain is adding Social Security, not spending less");
   assert.equal(answerFor("retire", p, { today: T }), null);
@@ -80,11 +84,12 @@ test("no retirement verdict before Social Security is known: not scored, the top
   const rb = compute(nb, { today: T }).parts.find((x) => x.id === "retirement");
   assert.equal(rb.status, "unknown");
   assert.equal(rb.detail, "Not scored yet: whether the money lasts needs Bo's birth date."); assert.equal(rb.fix, "Add Bo's birth date on People."); assert.deepEqual(rb.go, ["household", "people"]);
+  assert.equal(rb.query, undefined, "a birth date: People, no Social Security row to open");
   const tb = timeline(nb, { today: T }).events.find((e) => e.id === "needs-ss");
   assert.match(tb.detail, /Bo's birth date on People/); assert.deepEqual(tb.go, ["household", "people"]);
   // one figure missing: named
   const half = familyPlan(T); delete half.retirement.socialSecurity["p-bo"];
-  assert.match(compute(half, { today: T }).parts.find((x) => x.id === "retirement").fix, /^Add Social Security for Bo on the Social Security page .*, or say there that Bo will not get it\.$/);
+  assert.equal(compute(half, { today: T }).parts.find((x) => x.id === "retirement").fix, "Add Bo's Social Security estimate from ssa.gov/myaccount, or say Bo won't get it.");
   // said as "none" for both, it is judged again
   p.guide = { setup: { ss: { "p-ana": "none", "p-bo": "none" } } };
   assert.notEqual(compute(p, { today: T }).parts.find((x) => x.id === "retirement").status, "unknown");
@@ -304,10 +309,11 @@ test("z1: Social Security the only gap and the money lasting without it: the ret
   // Ruth and Sam: Sam has no Social Security figure; Will the money last? says the money lasts without it (256% carried)
   const d = score(retiredCouplePlan(T), { today: T });
   assert.deepEqual([part(d, "retirement").points, part(d, "retirement").status, part(d, "retirement").fix], [25, "ok", null]);
-  assert.equal(part(d, "retirement").detail, "The plan can carry about $7,120 a month against the $2,780 it plans (256%). Sam's Social Security is not counted yet.");
-  // the stress tests still wait for Sam's figure, and no longer say "like the retirement part"
-  assert.deepEqual([part(d, "protection").share, part(d, "protection").detail], [null, "Not scored yet: the stress tests need Social Security for Sam first."]);
-  assert.match(part(d, "protection").fix, /^Add Social Security for Sam on the Social Security page \(an estimate from ssa\.gov\/myaccount is enough\), or say there that Sam will not get it\.$/);
+  assert.equal(part(d, "retirement").detail, "The plan can carry about $7,120 a month; you plan to spend $2,780. Sam's Social Security is not counted yet.");
+  // the stress tests still wait for Sam's figure, and no longer say "like the retirement part"; said in plain words on the first
+  // view, where this is the one ask (ha2 fix P3: "the stress tests" read as jargon there)
+  assert.deepEqual([part(d, "protection").share, part(d, "protection").detail], [null, "Not scored yet: checking life's shocks, like a death or a long life, needs Social Security for Sam."]);
+  assert.equal(part(d, "protection").fix, "Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get it.");
   assert.equal(d.score, 76);
   // spending three times as high: short without it, so neither part is scored, as before
   const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
@@ -315,28 +321,237 @@ test("z1: Social Security the only gap and the money lasting without it: the ret
   assert.deepEqual([part(h, "retirement").share, part(h, "retirement").detail], [null, "Not scored yet: whether the money lasts needs Social Security for Sam."]);
   assert.equal(part(h, "protection").detail, "Not scored yet: the stress tests need Social Security for Sam first, like the retirement part.");
   assert.equal(part(h, "protection").fix, "Scored as soon as the retirement part above is.");
+  assert.equal(part(h, "protection").askedIn, "retirement", "its points wait on the retirement part's ask (ha2)");
   // Sam's figure typed: scored, with no sentence about it
   const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
   assert.doesNotMatch(part(score(typed, { today: T }), "retirement").detail, /not counted yet/);
 });
 
-test("z1 fix P4: one missing Social Security figure is one ask: \"The plan knows enough\" names it as the one Protection asks for", async () => {
+test("ha2: Ruth and Sam: Sam's missing Social Security is ONE ask, which says what it unlocks; nothing says 'as above'", async () => {
   const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
   const T = "2026-11-16";
   const d = compute(retiredCouplePlan(T), { today: T });
   const part = (id) => d.parts.find((x) => x.id === id);
-  // the ask itself: Protection, the biggest gain, says where and how
+  // the ask itself: Protection, the biggest gain, says how in short words (ha2 fix P2); what it does to the score is `unlock`, for
+  // "How this is worked out": the one sure gain, 1 of the 7 things "The plan knows enough" counts (5.7 -> 7.1, "1.4"), and
+  // Protection scored on what is added (ha2 fix F2: "This unlocks up to 15 points" read as the prize); its link opens Sam's row
   assert.equal(d.gains[0].id, "protection");
-  assert.match(part("protection").fix, /^Add Social Security for Sam on the Social Security page/);
-  // the completeness part says it is that same figure, not a third ask (it said "add a Social Security figure for every adult")
-  assert.equal(part("knows").fix, "Still to do: add Sam's Social Security (as above); say what you will spend in retirement; look over your assumptions (once a year).");
-  // "as above" holds wherever both show: Protection comes before it in the parts and in the gains (15 points against at most 10)
-  const at = (list, id) => list.findIndex((x) => x.id === id);
-  assert.ok(at(d.parts, "protection") < at(d.parts, "knows") && at(d.gains, "protection") < at(d.gains, "knows"));
-  // a plan whose answer waits for the figure (spending three times as high): the line as it was
+  assert.equal(part("protection").fix, "Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get it.");
+  assert.equal(part("protection").unlock, 'Not in the score yet: Social Security for Sam. Once added, "The plan knows enough" gains 1.4 points, and "Protection" (out of 15) is scored on what you add.');
+  assert.deepEqual([part("protection").go, part("protection").query], [["retirement", "social-security"], { show: "person-p-sam" }]);
+  // the completeness part does not ask again (it said "add Sam's Social Security (as above)"); its points and count are the same
+  assert.equal(part("knows").fix, "Still to do: say what you will spend in retirement; look over your assumptions (once a year).");
+  assert.equal(part("knows").detail, "4 of 7 things the score depends on are filled in and up to date.");
+  assert.deepEqual([part("knows").points, part("knows").askedIn], [5.7, undefined], "two other things to do: its own row");
+  // one ask on the whole output: Sam's Social Security is asked for once, and no part says "as above"
+  const json = JSON.stringify(d.parts);
+  assert.equal((json.match(/Sam's Social Security estimate/g) ?? []).length, 1);
+  assert.doesNotMatch(json, /as above|add Sam's Social Security|a Social Security figure for every adult|unlocks up to/);
+  assert.equal(d.score, 76);
+  // a plan whose answer waits for the figure (spending three times as high): the retirement part asks, with both parts' points
   const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
-  assert.match(compute(high, { today: T }).parts.find((x) => x.id === "knows").fix, /add a Social Security figure for every adult/);
-  // Sam's figure typed: nothing to add
+  const h = compute(high, { today: T }), hp = (id) => h.parts.find((x) => x.id === id);
+  assert.equal(hp("retirement").fix, "Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get it.");
+  assert.equal(hp("retirement").unlock, 'Not in the score yet: Social Security for Sam. Once added, "The plan knows enough" gains 1.4 points, and "Retirement on track" (out of 25) and "Protection" (out of 15) are scored on what you add.');
+  assert.equal(hp("protection").askedIn, "retirement");
+  assert.doesNotMatch(hp("knows").fix, /Social Security/);
+  // Sam's figure typed: nothing to add, and the completeness part counts it (5 of 7)
   const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
-  assert.doesNotMatch(compute(typed, { today: T }).parts.find((x) => x.id === "knows").fix ?? "", /Social Security/);
+  const t = compute(typed, { today: T });
+  assert.doesNotMatch(JSON.stringify(t.parts), /Social Security for Sam|Sam's Social Security|"unlock"|"show"/);
+  assert.equal(t.parts.find((x) => x.id === "knows").points, 7.1);
+});
+
+test("ha2: 'won't get it' on the Social Security page counts as known for 'The plan knows enough', as every retirement page counts it", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const none = retiredCouplePlan(T); none.guide = { ...(none.guide ?? {}), setup: { ...(none.guide?.setup ?? {}), ss: { "p-sam": "none" } } };
+  const d = compute(none, { today: T }), k = d.parts.find((x) => x.id === "knows");
+  // the ask offered "or say there that Sam will not get it": saying it earns the 1.4 the ask promised, and nothing asks again
+  assert.equal(k.points, 7.1); assert.equal(k.detail, "5 of 7 things the score depends on are filled in and up to date.");
+  assert.doesNotMatch(JSON.stringify(d.parts), /Social Security for Sam|Sam's Social Security|a Social Security figure|"unlock"/);
+  assert.notEqual(d.parts.find((x) => x.id === "protection").status, "unknown", "Protection is scored now");
+});
+
+test("ha2: the one ask, case by case: Social Security, a birth date, both; the completeness clause only when the ask fills it", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-16";
+  const ask = (plan) => { const d = compute(plan, { today: T }); return Object.fromEntries(d.parts.map((p) => [p.id, p])); };
+  // 01-single-adult (no Social Security, short or not known without it): the retirement part asks; Protection waits on it
+  const one = ask(ARCHETYPES.find((a) => a.id === "01-single-adult").build());
+  assert.equal(one.retirement.fix, "Add your Social Security estimate from ssa.gov/myaccount, or say you won't get it.");
+  assert.equal(one.retirement.unlock, 'Not in the score yet: your Social Security. Once added, "The plan knows enough" gains 1.4 points, and "Retirement on track" (out of 25) and "Protection" (out of 15) are scored on what you add.');
+  assert.deepEqual([one.protection.askedIn, one.protection.fix], ["retirement", "Scored as soon as the retirement part above is."]);
+  assert.equal(one.knows.fix, "Still to do: say what you will spend in retirement; look over your assumptions (once a year).");
+  // a birth date and Social Security both missing: one ask, two of the seven things (2 x 10 / 7 = 2.86, "2.9")
+  const both = familyPlan(T); both.retirement.socialSecurity = {}; delete both.household.people.find((x) => x.id === "p-bo").birthDate;
+  const b = ask(both);
+  assert.equal(b.retirement.fix, "Add a Social Security estimate for Ana and Bo from ssa.gov/myaccount, or say who won't get it. Add Bo's birth date on People.");
+  assert.match(b.retirement.unlock, /^Not in the score yet: Social Security for Ana and Bo and Bo's birth date\. Once added, "The plan knows enough" gains 2\.9 points, and /);
+  assert.doesNotMatch(b.knows.fix ?? "", /birth date|Social Security/);
+  // Bo's figure missing and Ana said "won't get it": the ask fills the completeness part's Social Security thing too (both known)
+  const mixed = familyPlan(T); delete mixed.retirement.socialSecurity["p-ana"]; delete mixed.retirement.socialSecurity["p-bo"];
+  mixed.guide = { ...(mixed.guide ?? {}), setup: { ...(mixed.guide?.setup ?? {}), ss: { "p-ana": "none" } } };
+  assert.equal(ask(mixed).retirement.fix, "Add Bo's Social Security estimate from ssa.gov/myaccount, or say Bo won't get it.");
+  assert.match(ask(mixed).retirement.unlock, /"The plan knows enough" gains 1\.5 points, and "Retirement on track" \(out of 25\) and "Protection" \(out of 15\) are scored on what you add\.$/);
+  // nothing else missing in the completeness part: its points wait on the ask (no fix of its own, askedIn), never a second row
+  const lone = familyPlan(T); lone.retirement.socialSecurity = {}; lone.assumptions.reviewedAt = T;
+  const l = ask(lone);
+  assert.deepEqual([l.knows.points, l.knows.detail, l.knows.fix, l.knows.askedIn], [8.6, "6 of 7 things the score depends on are filled in and up to date.", null, "retirement"]);
+});
+
+test("ha2: unlockWords: the sure gain as a figure, the parts that wait scored on what is added; askWords, one adult, one of several, several, a birth date", async () => {
+  const { unlockWords, askWords } = await import("./compute.js");
+  const K = "The plan knows enough";
+  assert.equal(unlockWords({ what: "Social Security for Sam", sure: [{ title: K, points: 1.4 }], scored: [{ title: "Protection", max: 15 }] }), 'Not in the score yet: Social Security for Sam. Once added, "The plan knows enough" gains 1.4 points, and "Protection" (out of 15) is scored on what you add.');
+  assert.equal(unlockWords({ what: "your Social Security", sure: [{ title: K, points: 1.5 }], scored: [{ title: "Retirement on track", max: 25 }, { title: "Protection", max: 15 }] }), 'Not in the score yet: your Social Security. Once added, "The plan knows enough" gains 1.5 points, and "Retirement on track" (out of 25) and "Protection" (out of 15) are scored on what you add.');
+  // the completeness thing not filled by the ask: no figure at all; whole points and one point
+  assert.equal(unlockWords({ what: "Social Security for Bo", sure: [], scored: [{ title: "Protection", max: 15 }] }), 'Not in the score yet: Social Security for Bo. Once added, "Protection" (out of 15) is scored on what you add.');
+  assert.equal(unlockWords({ what: "x", sure: [{ title: K, points: 1 }] }), 'Not in the score yet: x. Once added, "The plan knows enough" gains 1 point.');
+  // nowhere a figure that reads as the prize (ha2 fix F2)
+  assert.doesNotMatch(unlockWords({ what: "x", sure: [], scored: [{ title: "Protection", max: 15 }] }), /up to|unlocks|\b15 points/);
+  assert.equal(askWords({ ss: ["you"], dates: [] }, true), "Add your Social Security estimate from ssa.gov/myaccount, or say you won't get it.");
+  assert.equal(askWords({ ss: ["Sam"], dates: [] }, false), "Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get it.");
+  assert.equal(askWords({ ss: ["you"], dates: [] }, false), "Add your Social Security estimate from ssa.gov/myaccount, or say you won't get it.");
+  assert.equal(askWords({ ss: ["Ana", "Bo"], dates: ["Bo"] }, false), "Add a Social Security estimate for Ana and Bo from ssa.gov/myaccount, or say who won't get it. Add Bo's birth date on People.");
+  assert.equal(askWords({ ss: [], dates: ["Ana", "Bo"] }, false), "Add the birth dates of Ana and Bo on People.");
+  assert.equal(askWords({ ss: ["you"], dates: ["you"] }, true), "Add your Social Security estimate from ssa.gov/myaccount, or say you won't get it. Add your birth date on People.");
+});
+
+test("ha2 fix F1: a Social Security line on Income that ended in the past is missing for the ask too: one ask naming everyone it lacks, never asked again", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const T = "2026-11-16";
+  const base = () => { const p = ARCHETYPES.find((a) => a.id === "02-couple-no-kids").build(); p.retirement = { ...(p.retirement ?? {}), socialSecurity: {} }; p.income = p.income.filter((i) => i.type !== "social"); return p; };
+  const adults = (p) => p.household.people.filter((x) => x.role !== "dependent");
+  const line = (p, who, endDate) => ({ id: `i-ss-${who.id}`, name: "Social Security", type: "social", personId: who.id, amount: 1800, period: "monthly", growth: 0, taxable: true, endDate });
+  for (const [label, ended] of [["both lines ended", [0, 1]], ["one line ended, the other adult none", [0]]]) {
+    const p = base(); const [a, b] = adults(p);
+    for (const i of ended) p.income.push(line(p, [a, b][i], "2025-01-01"));
+    const d = compute(p, { today: T }), part = (id) => d.parts.find((x) => x.id === id);
+    // it said "Add Social Security on the Social Security page." with nothing named (both ended), or named only the adult with no line
+    assert.equal(part("retirement").detail, `Not scored yet: whether the money lasts needs Social Security for ${a.name} and ${b.name}.`, label);
+    assert.equal(part("retirement").fix, `Add a Social Security estimate for ${a.name} and ${b.name} from ssa.gov/myaccount, or say who won't get it.`, label);
+    assert.ok(part("retirement").unlock, label);
+    assert.equal(part("protection").askedIn, "retirement", label);
+    // "The plan knows enough" no longer asks "add a Social Security figure for every adult" beside it
+    assert.doesNotMatch(part("knows").fix ?? "", /Social Security/, label);
+    assert.equal(JSON.stringify(d.parts).match(/Social Security estimate/g).length, 1, label);
+  }
+  // a line still going counts, as before: nothing asked
+  const going = base(); for (const x of adults(going)) going.income.push(line(going, x, "2060-01-01"));
+  assert.doesNotMatch(JSON.stringify(compute(going, { today: T }).parts), /Social Security estimate|"unlock"/);
+});
+
+test("ha2 fix F3, P5: no adult with a birth date: the retirement part asks for one in plain words, and 'The plan knows enough' does not ask again", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const plans = [...ARCHETYPES.map((a) => [a.id, a.build()]), ["Ruth and Sam", retiredCouplePlan(T)]];
+  for (const [name, p] of plans) {
+    for (const x of p.household.people) if (x.role !== "dependent") delete x.birthDate;
+    const d = compute(p, { today: T }), part = (id) => d.parts.find((x) => x.id === id);
+    assert.equal(part("retirement").detail, "We can't tell yet whether your money lasts.", name);   // it said "The plan cannot be run yet."
+    assert.match(part("retirement").fix, /birth date/, name);
+    // the birth date is asked once: it said "add a birth date for every adult" here too, in every household
+    assert.doesNotMatch(part("knows").fix ?? "", /birth date/, name);
+    assert.equal((JSON.stringify(d.parts).match(/birth date/g) ?? []).length, 1, name);
+    // no sentence on what it unlocks (more may be missing, and one date of two fills nothing there yet)
+    assert.equal(part("retirement").unlock, undefined, name);
+  }
+});
+
+test("ha2 fix F4: the sure gain the ask states is what the part's shown points move by once the figure is in", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const T = "2026-11-16";
+  const noSs = (p) => { p.retirement = { ...(p.retirement ?? {}), socialSecurity: {} }; p.income = (p.income ?? []).filter((i) => i.type !== "social"); return p; };
+  const plans = [...ARCHETYPES.map((a) => [a.id, noSs(a.build())]), ["Ruth and Sam", retiredCouplePlan(T)], ["family", noSs(familyPlan(T))],
+    ["family, assumptions looked over", (() => { const p = noSs(familyPlan(T)); p.assumptions.reviewedAt = T; return p; })()]];
+  let seen = new Set();
+  for (const [name, p] of plans) {
+    const d = compute(p, { today: T }), ask = d.parts.find((x) => x.unlock);
+    if (!ask) continue;
+    const stated = /"The plan knows enough" gains ([\d.]+) point/.exec(ask.unlock);
+    if (!stated) continue;
+    // the figure typed for every adult it names ("won't get it" fills the same thing)
+    const filled = structuredClone(p); filled.guide = { ...(filled.guide ?? {}), setup: { ...(filled.guide?.setup ?? {}), ss: Object.fromEntries(filled.household.people.filter((x) => x.role !== "dependent").map((x) => [x.id, "none"])) } };
+    const k0 = d.parts.find((x) => x.id === "knows").points, k1 = compute(filled, { today: T }).parts.find((x) => x.id === "knows").points;
+    assert.equal(Number(stated[1]), Math.round((k1 - k0) * 10) / 10, `${name}: ${k0} -> ${k1}`);
+    seen.add(stated[1]);
+  }
+  assert.ok(seen.has("1.4") && seen.has("1.5"), [...seen].join(", "));
+});
+
+test("ha2: the retirement part's sentences, one per case: lasts (no percent; the share is `ratio`), runs out (as before)", async () => {
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const { renterDebtPlan } = await import("../../../qa/fixtures/renter-debt-plan.mjs");
+  const T = "2026-11-16";
+  const r = compute(familyPlan(T), { today: T }).parts.find((x) => x.id === "retirement");
+  assert.equal(r.detail, "The plan can carry about $8,430 a month; you plan to spend $7,000.");
+  assert.ok(Math.abs(r.ratio - 1.2) < 0.01 && Math.round(r.ratio * 100) === 120, String(r.ratio));
+  assert.doesNotMatch(r.detail, /%/);
+  // short of lasting: the same sentence as before, and the share for "How this is worked out"
+  const one = renterDebtPlan(); one.accounts.find((a) => a.id === "k401").balance = 1;
+  const s = compute(one, { today: T }).parts.find((x) => x.id === "retirement");
+  assert.match(s.detail, /^The money runs out in \d{4}: it can carry about \$[\d,]+ a month against the \$[\d,]+ planned\.$/);
+  assert.ok(s.ratio < 1);
+  // not scored: no share
+  const e = compute(renterDebtPlan(), { today: T }).parts.find((x) => x.id === "retirement");
+  assert.equal(e.ratio, undefined);
+});
+
+// ---------------------------------------------------------------- invariance (ha2, gap spec 3.5)
+// One ask for a missing Social Security figure and the retirement part in plain words (ha2, 2026-11-17) change words only. Over
+// every invented household (qa/fixtures *-plan.mjs, the 14 households' base plans, the phone-built ones, round 8, the four Get
+// started personas after the questions, the demo and the empty plan), with nothing new typed: the score's whole output, and the
+// yearly review's steps that quote it, with 452408a's words put back (tests/health-score-words.mjs), is byte for byte what
+// 452408a gave (digests in ./invariance.json, written from that code: PRINT=1 node --test on it); the score, the band and every
+// part's points are the same without putting anything back.
+test("invariance: with 452408a's words put back, the score's output is 452408a's over every invented household", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const crypto = await import("node:crypto");
+  const { pathToFileURL, fileURLToPath } = await import("node:url");
+  const { migrate, emptyPlan: empty } = await import("../../../core/schema/migrate.js");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { demoHousehold } = await import("../../../qa/fixtures/demo-household.mjs");
+  const { compute: annual } = await import("../../reports/annual-review/compute.js");
+  const back = await import("../../../tests/health-score-words.mjs");
+  const T = "2026-11-16";
+  const plans = [];
+  const dir = fileURLToPath(new URL("../../../qa/fixtures/", import.meta.url));
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `fixture ${f}:${name}`, plan: fn(T) });
+  }
+  for (const a of ARCHETYPES) plans.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") plans.push({ name: `phone ${name}`, plan: fn() });
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) plans.push({ name: `round8 ${name}`, plan: fn() });
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) plans.push({ name: `persona ${n}`, plan: personas.finishSetup(n, personas[n](T), T) });
+  plans.push({ name: "demo", plan: demoHousehold(T) });
+  plans.push({ name: "empty plan", plan: empty() });
+  const dig = (v) => crypto.createHash("sha256").update(JSON.stringify(v) ?? "undefined").digest("base64url").slice(0, 22);
+  const run = (f) => { try { return f(); } catch (e) { return { threw: String(e.message) }; } };
+  const now = {}, scores = {};
+  for (const { name, plan: raw } of plans) {
+    const plan = migrate(structuredClone(raw));
+    const h = run(() => compute(structuredClone(plan), { today: T }));
+    const steps = run(() => annual(structuredClone(plan), { today: T, year: 2026 }).ahead?.steps ?? null);
+    now[name] = { health: dig(back.healthBack(h, plan, T)), annualSteps: dig(back.stepsBack(steps, plan, T)) };
+    scores[name] = h?.ready ? [h.score, h.band, h.parts.map((p) => `${p.id} ${p.points}`).join(", ")] : null;
+  }
+  const file = new URL("./invariance.json", import.meta.url);
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "Plan health score at 452408a (ha2), today 2026-11-16; PRINT=1 writes them again: only on that code", today: T, plans: now, scores }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.ok(plans.length >= 45, `${plans.length} households`);
+  assert.deepEqual(Object.keys(now), Object.keys(was.plans));
+  for (const name of Object.keys(now)) {
+    assert.deepEqual(scores[name], was.scores[name], `${name}: the score, its band and every part's points`);
+    assert.deepEqual(now[name], was.plans[name], `${name}: the output with 452408a's words put back`);
+  }
 });

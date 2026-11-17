@@ -1,0 +1,449 @@
+{
+ "note": "Plan health score at 452408a (ha2), today 2026-11-16; PRINT=1 writes them again: only on that code",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "health": "C0xdcDRCFXzjbLCaJwPWq2",
+   "annualSteps": "C4A-HRvD760Q7wKeASLedb"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "health": "I49TmM_pCc1-XDra6tq5HM",
+   "annualSteps": "ZSlSeRC6BbG2DKi1Dv1ZPS"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "health": "C0xdcDRCFXzjbLCaJwPWq2",
+   "annualSteps": "C4A-HRvD760Q7wKeASLedb"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "health": "0s63Q11Coj9KaZy5cu88ey",
+   "annualSteps": "qcOP4iVgtjMZaye1h7vBBM"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "health": "L5ANS3tGx34sXR6E2hZJd0",
+   "annualSteps": "C4A-HRvD760Q7wKeASLedb"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "health": "8FlFSfTssJTzr2SaZM6UhC",
+   "annualSteps": "KUroW9t-LTvftj8M2jVKPZ"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "health": "RXTlkhzcCnbnsStXbYGOgn",
+   "annualSteps": "63FYV72ZFYDeTqcooR0Ryw"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "health": "zxMjjCWCJszfNAGUeRXJ_c",
+   "annualSteps": "0JiigBKMikg9qZBqOGxotN"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "health": "7meAfMzI5up25abaVxSYfo",
+   "annualSteps": "H5ty3nGJx_Z0eSNqLR3kYr"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "health": "5ySoShBk6akLrhSNVHlG9a",
+   "annualSteps": "KUroW9t-LTvftj8M2jVKPZ"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "health": "BTHef5hGck2Asyh7CvpDw8",
+   "annualSteps": "ZSlSeRC6BbG2DKi1Dv1ZPS"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "health": "B9CGoRoC2ovQ4JTmTlhrXP",
+   "annualSteps": "KUroW9t-LTvftj8M2jVKPZ"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "health": "vte5sdudhVq-KS3qGcsrxs",
+   "annualSteps": "9hsI765DfCChPE6r1txOyt"
+  },
+  "01-single-adult/base": {
+   "health": "9lyzJCDg8bJSQbWZoKmYud",
+   "annualSteps": "woDnv-3lfuYb5wd7-TjhAG"
+  },
+  "02-couple-no-kids/base": {
+   "health": "rUPG7a3lihT3-lekW2PYVe",
+   "annualSteps": "AiPqUiDbpCGfugpyZoKejJ"
+  },
+  "03-single-parent/base": {
+   "health": "YSLEe5VtHcZo3rlbEuEgEz",
+   "annualSteps": "VUJpIs6eIRsKEQAApkPfxQ"
+  },
+  "04-two-parents/base": {
+   "health": "_sbVj2Z349Mx2Ha0hSDZeJ",
+   "annualSteps": "w-x42GN-ExZfq1UIctefvc"
+  },
+  "05-stay-at-home-parent/base": {
+   "health": "xQztzs-W4OBgt0H-aI2kSX",
+   "annualSteps": "4dvXmnitdj-W5Pkdb-J5bV"
+  },
+  "06-blended-family/base": {
+   "health": "IyUJTLBmNgOZqRWobe290U",
+   "annualSteps": "4kLsiRI6qrcmwHFKqlE5a2"
+  },
+  "07-multigenerational/base": {
+   "health": "E5cL97YADikI9NLOJ0n_au",
+   "annualSteps": "nVR4KonGCiFUzFQWpePI-r"
+  },
+  "08-retired/base": {
+   "health": "E7J38t3JnhjWg0hbX1RuSQ",
+   "annualSteps": "gQDGpHLCIU-FUK2xgaOz92"
+  },
+  "09-near-retirement/base": {
+   "health": "-fkthoGfJByCyz_leNh7hL",
+   "annualSteps": "94I40LXGjKo_y3LxuvQkIp"
+  },
+  "10-student-and-starter/base": {
+   "health": "KnluFOd8oasUtdoQabeCjE",
+   "annualSteps": "AzZsAw3zD0lQDOK2fvqysN"
+  },
+  "11-self-employed/base": {
+   "health": "v4ShqVFeX7IvyKi-_ADbBR",
+   "annualSteps": "Ud9pd8fDn8E6B2AvyTUmUt"
+  },
+  "12-high-net-worth/base": {
+   "health": "teoOiACUEsdUCSQiLm3Z-O",
+   "annualSteps": "jJxF0o3KdHV8A7FaDdTNF4"
+  },
+  "13-in-crisis/base": {
+   "health": "dRMTM4amR1NKSZX3Wgt5Rw",
+   "annualSteps": "VcdkdowwWQfSjxB4a9-W6p"
+  },
+  "14-unusual-structures/base": {
+   "health": "hCpn8GmkHBAEJ5RUwJmzKi",
+   "annualSteps": "_V86tLdNPNJoGAP3QG6xMA"
+  },
+  "phone casey": {
+   "health": "MzeQNBEt3gPtUcKgj-JsNF",
+   "annualSteps": "fmILUMvSgJ4L7dUir3hned"
+  },
+  "phone danaLee": {
+   "health": "NcpwYtLeHt4U-a1r4dcDCm",
+   "annualSteps": "vbBqHaeTD-c3G_C6k-Rdlc"
+  },
+  "phone jamie": {
+   "health": "vn5CeDTBhM3NvN60Wl06UF",
+   "annualSteps": "pIdD-gF6p-f0Ou0ZTfjQ6a"
+  },
+  "phone morgan": {
+   "health": "bi0qCd63W2d-c_LczhBEoZ",
+   "annualSteps": "EYAIs16PAVK3O8VTZGNm8d"
+  },
+  "phone robin": {
+   "health": "si8AKiCVTBdJMbqqbm2nGv",
+   "annualSteps": "l5kUDKE6e9NMJgRFpMmkdS"
+  },
+  "round8 earlyRetireePlan": {
+   "health": "xICO40ipBGnFPmQk1jWIYt",
+   "annualSteps": "YbR2oGffHOc3yWODrb3OsR"
+  },
+  "round8 equityPlan": {
+   "health": "Bd2nanEGBio6eP8ZooS8jv",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 firstRmdPlan": {
+   "health": "U0J_D4ZPazkwaIzkcFPvyh",
+   "annualSteps": "6B6CtXFX03jX0m8-7FTrtY"
+  },
+  "round8 freelancerPlan": {
+   "health": "Bd2nanEGBio6eP8ZooS8jv",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 highFreelancerPlan": {
+   "health": "Bd2nanEGBio6eP8ZooS8jv",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 landlordBusinessPlan": {
+   "health": "Bd2nanEGBio6eP8ZooS8jv",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 landlordPlan": {
+   "health": "dWGNVafM-sG1V74K9bEQyK",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 parentLoanPlan": {
+   "health": "-z5eeyAPl59aeLPOKj2Byx",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 stockAndBusinessPlan": {
+   "health": "Bd2nanEGBio6eP8ZooS8jv",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 studentLoanPlan": {
+   "health": "hQHiNkNvIiqO6HYkKoYwXR",
+   "annualSteps": "i2YHjZux6sTmd6HsEGEq2K"
+  },
+  "round8 widowPlan": {
+   "health": "lBfKHHCJa87RcSTZc6yjdS",
+   "annualSteps": "auH8KyFF1uxdyXMCvlS3cH"
+  },
+  "persona sam": {
+   "health": "QKh-K3SESvpztMs4yZ0zNv",
+   "annualSteps": "NEnR1XMQ64RnFpnirXUkYg"
+  },
+  "persona jordan": {
+   "health": "A3hUtsG0KVC7ry1AhNLJJA",
+   "annualSteps": "qBylitAxQNW9J2M3ZtswX_"
+  },
+  "persona patLee": {
+   "health": "QVyG1Rkx_UWq0th73z3dJU",
+   "annualSteps": "JTjyVSLHvaQjZ42UdhATGw"
+  },
+  "persona ruth": {
+   "health": "8QTxpjBRF4-bicgF4FZPSb",
+   "annualSteps": "65z6t0M7UZpiv9D5HLPeHX"
+  },
+  "demo": {
+   "health": "ztprzCUkuBlTyhsDJUgbmb",
+   "annualSteps": "C4A-HRvD760Q7wKeASLedb"
+  },
+  "empty plan": {
+   "health": "ydnyBc47gTfMNOP8YKKgjH",
+   "annualSteps": "T5FTvi4e-MWZ6NrvDE-cu9"
+  }
+ },
+ "scores": {
+  "fixture card-gap-plan.mjs:cardGapPlan": [
+   76,
+   "Good",
+   "cushion 2.2, saving 15, debt 13.5, retirement 25, protection 10, goals 1.3, knows 8.6"
+  ],
+  "fixture debt-plan.mjs:debtPlan": [
+   14,
+   "Needs work",
+   "cushion 0, saving 0, debt 12.3, retirement 0, protection 0, goals 0, knows 1.4"
+  ],
+  "fixture family-plan.mjs:familyPlan": [
+   76,
+   "Good",
+   "cushion 2.2, saving 15, debt 13.5, retirement 25, protection 10, goals 1.3, knows 8.6"
+  ],
+  "fixture guessed-plan.mjs:guessedPlan": [
+   77,
+   "Good",
+   "cushion 11.6, saving 15, debt 13.8, retirement 21.2, protection 5, goals 0, knows 10"
+  ],
+  "fixture held-plan.mjs:heldPlan": [
+   76,
+   "Good",
+   "cushion 2.2, saving 15, debt 13.5, retirement 25, protection 10, goals 1.3, knows 8.6"
+  ],
+  "fixture investments-plan.mjs:investmentsPlan": [
+   92,
+   "Strong",
+   "cushion 15, saving 15, debt 15, retirement 25, protection 15, goals 0, knows 7.1"
+  ],
+  "fixture renter-debt-plan.mjs:renterDebtPlan": [
+   14,
+   "Needs work",
+   "cushion 1, saving 1.4, debt 2.5, retirement 0, protection 0, goals 0, knows 8.6"
+  ],
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": [
+   15,
+   "Needs work",
+   "cushion 1.2, saving 0.1, debt 5, retirement 0, protection 0, goals 0, knows 8.6"
+  ],
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": [
+   76,
+   "Good",
+   "cushion 15, saving 15, debt 15, retirement 25, protection 0, goals 0, knows 5.7"
+  ],
+  "fixture retirement-plan.mjs:retirementPlan": [
+   92,
+   "Strong",
+   "cushion 15, saving 15, debt 15, retirement 25, protection 15, goals 0, knows 7.1"
+  ],
+  "fixture sample-plan.mjs:samplePlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "fixture tax-plan.mjs:taxPlan": [
+   92,
+   "Strong",
+   "cushion 15, saving 15, debt 15, retirement 25, protection 15, goals 0, knows 7.1"
+  ],
+  "fixture widow-plan.mjs:widowPlan": [
+   91,
+   "Strong",
+   "cushion 12.8, saving 15, debt 15, retirement 25, protection 15, goals 0, knows 8.6"
+  ],
+  "01-single-adult/base": [
+   38,
+   "Needs work",
+   "cushion 3, saving 15, debt 13.8, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "02-couple-no-kids/base": [
+   51,
+   "Fair",
+   "cushion 15, saving 15, debt 15, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "03-single-parent/base": [
+   36,
+   "Needs work",
+   "cushion 1.3, saving 15, debt 13.7, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "04-two-parents/base": [
+   37,
+   "Needs work",
+   "cushion 2.1, saving 15, debt 13.9, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "05-stay-at-home-parent/base": [
+   38,
+   "Needs work",
+   "cushion 2.8, saving 14.5, debt 14.6, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "06-blended-family/base": [
+   36,
+   "Needs work",
+   "cushion 1.5, saving 15, debt 14.1, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "07-multigenerational/base": [
+   26,
+   "Needs work",
+   "cushion 0, saving 6.4, debt 14.1, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "08-retired/base": [
+   77,
+   "Good",
+   "cushion 15, saving 15, debt 13.7, retirement 25, protection 0, goals 2.5, knows 5.7"
+  ],
+  "09-near-retirement/base": [
+   42,
+   "Needs work",
+   "cushion 6.3, saving 15, debt 15, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "10-student-and-starter/base": [
+   35,
+   "Needs work",
+   "cushion 1.1, saving 15, debt 13, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "11-self-employed/base": [
+   22,
+   "Needs work",
+   "cushion 1.4, saving 1.3, debt 13.2, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "12-high-net-worth/base": [
+   41,
+   "Needs work",
+   "cushion 15, saving 3.1, debt 14.4, retirement 0, protection 0, goals 2.5, knows 5.7"
+  ],
+  "13-in-crisis/base": [
+   11,
+   "Needs work",
+   "cushion 0.3, saving 0, debt 5, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "14-unusual-structures/base": [
+   74,
+   "Good",
+   "cushion 10.7, saving 15, debt 15, retirement 25, protection 0, goals 2.5, knows 5.7"
+  ],
+  "phone casey": [
+   55,
+   "Fair",
+   "cushion 15, saving 9, debt 15, retirement 7.1, protection 0, goals 0, knows 8.6"
+  ],
+  "phone danaLee": [
+   83,
+   "Good",
+   "cushion 15, saving 15, debt 15, retirement 21.8, protection 7.5, goals 0, knows 8.6"
+  ],
+  "phone jamie": [
+   49,
+   "Needs work",
+   "cushion 15, saving 13.9, debt 6.3, retirement 5.6, protection 0, goals 0, knows 8.6"
+  ],
+  "phone morgan": [
+   47,
+   "Needs work",
+   "cushion 12.3, saving 10.8, debt 15, retirement 0, protection 0, goals 0, knows 8.6"
+  ],
+  "phone robin": [
+   71,
+   "Good",
+   "cushion 15, saving 15, debt 15, retirement 17.8, protection 0, goals 0, knows 8.6"
+  ],
+  "round8 earlyRetireePlan": [
+   4,
+   "Needs work",
+   "cushion 0, saving 0, debt 0, retirement 0, protection 0, goals 0, knows 4.3"
+  ],
+  "round8 equityPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 firstRmdPlan": [
+   39,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 18.7, protection 0, goals 0, knows 5.7"
+  ],
+  "round8 freelancerPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 highFreelancerPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 landlordBusinessPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 landlordPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 parentLoanPlan": [
+   21,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 5.7"
+  ],
+  "round8 stockAndBusinessPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 studentLoanPlan": [
+   18,
+   "Needs work",
+   "cushion 0, saving 0, debt 15, retirement 0, protection 0, goals 0, knows 2.9"
+  ],
+  "round8 widowPlan": [
+   61,
+   "Fair",
+   "cushion 0, saving 0, debt 15, retirement 25, protection 15, goals 0, knows 5.7"
+  ],
+  "persona sam": [
+   37,
+   "Needs work",
+   "cushion 2.1, saving 15, debt 12.3, retirement 0, protection 0, goals 0, knows 7.1"
+  ],
+  "persona jordan": [
+   29,
+   "Needs work",
+   "cushion 0, saving 6.7, debt 15, retirement 0, protection 0, goals 0, knows 7.1"
+  ],
+  "persona patLee": [
+   92,
+   "Strong",
+   "cushion 15, saving 15, debt 15, retirement 25, protection 15, goals 0, knows 7.1"
+  ],
+  "persona ruth": [
+   92,
+   "Strong",
+   "cushion 15, saving 13.3, debt 15, retirement 25, protection 15, goals 0, knows 8.6"
+  ],
+  "demo": [
+   76,
+   "Good",
+   "cushion 2.2, saving 15, debt 13.5, retirement 25, protection 10, goals 1.3, knows 8.6"
+  ],
+  "empty plan": [
+   0,
+   "Needs work",
+   "cushion 0, saving 0, debt 0, retirement 0, protection 0, goals 0, knows 0"
+  ]
+ }
+}

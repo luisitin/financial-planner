@@ -176,6 +176,7 @@ test("z2 invariance: the plan summary is e223a42's for every household, but the 
   const run = (f) => { try { return f(); } catch (e) { return { threw: e.message }; } };
   // the gated sheet with the score's own retirement step and titles back and without the new fields: what e223a42 gave
   const { compute: health } = await import("../../overview/health-score/compute.js");
+  const healthWords = await import("../../../tests/health-score-words.mjs");
   const sheetSteps = Object.values(UNKNOWN_STEPS).map((x) => x.title);
   const whys = [], steps = [], noWhy = (d) => (d?.health ? { ...d, health: { ...d.health, parts: d.health.parts.map(({ why: _w, step: _s, ...x }) => x) } } : d);
   const putBack = (d0, plan) => {
@@ -202,7 +203,8 @@ test("z2 invariance: the plan summary is e223a42's for every household, but the 
       if (why.length) whys.push(name);
       if (step) steps.push(name);
     }
-    now[name] = dig(process.env.PRINT ? d : putBack(d, q));
+    // (ha2: the next steps quote Plan health score's fixes, whose words for a missing figure changed: put back, tests/health-score-words.mjs)
+    now[name] = dig(process.env.PRINT ? d : putBack(healthWords.summaryBack(d, q, T), q));
   }
   const file = new URL("./z2-invariance.json", import.meta.url);
   if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "Plan summary at e223a42 (z2), maxPaths 200; PRINT=1 writes them again: only on that code", today: T, plans: now }, null, 1)}\n`); return; }

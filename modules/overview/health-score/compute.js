@@ -35,7 +35,12 @@ const clamp01 = (x) => Math.min(1, Math.max(0, x));
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, score (0-100, whole), band, parts: [{ id, title, points, max, share, status: "ok"|"warn"|"bad"|"unknown", detail, fix, go,
- *            hint?, query? (retirement only: the ways without the score's words; Goal seek's target for the link) }],
+ *            hint?, query? (retirement only: the ways without the score's words; Goal seek's target for the link),
+ *            ratio? (a scored retirement part: what the plan can carry / what it plans, the share's measure),
+ *            askedIn? (the id of the part whose fix asks for the one thing this part's points wait on: never a second row for it),
+ *            unlock? (on the part that asks for a missing Social Security figure or birth date: what adding it does to the score,
+ *            unlockWords; the page says it under "How this is worked out"), query? also { show: "person-<id>" } on that part, so
+ *            its link opens that person's row on the Social Security page, where "won't get it" is }],
  *   gains: parts sorted by points missing (largest first),
  *   scored: false until the plan holds people, accounts and income or spending (the view then says "No score yet")
  * }
@@ -100,6 +105,14 @@ export function compute(plan, params = {}) {
   if (!li.rows.length && !yearly) add("debt", "Debt", null, "No debts and no income on file yet, so debt cannot be judged.", "Add what comes in on Income, and any loans or cards on Debts.", ["cashflow", "income"]);
   else add("debt", "Debt", (highShare * 2 + dtiShare) / 3, [expensiveOwed > 0 ? `${money(expensiveOwed)} of debt at 10% or more (${expensive.map((r) => r.name).join(", ")}).` : "No debt at 10% or more.", dtiWords].join(" "), expensiveOwed > 0 ? `Paying off ${theList(expensive.map((r) => r.name))} earns these points back fastest.` : `Bring debt payments under ${Math.round(line.good * 100)}% of income before tax.`, ["debt", "payoff"]);
 
+  // the adults, and whose Social Security the plan knows (used by the retirement ask and by "The plan knows enough" below):
+  // a figure, an earnings record, Social Security on the Income page that has not ended by today, or the Social Security
+  // page's "won't get it" (ha2: that answer was never counted there, so a person who gave it, as the ask offers, was asked again
+  // for "a Social Security figure for every adult"; every retirement page counts it, projection retirementKnown)
+  const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
+  const ss = plan.retirement?.socialSecurity ?? {}, said = plan.guide?.setup?.ss ?? {};
+  const ssKnownHere = (p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || said[p.id] === "none" || ssOnIncome(plan, p.id, today);
+
   // 4. retirement: the spending the plan can carry against the spending it plans
   const pr = computeProjection(plan, { today });
   // whether the money lasts is judged only once Social Security is known for each adult (an estimate, typed on Income, or
@@ -110,18 +123,33 @@ export function compute(plan, params = {}) {
   // page asks; z1): this same run's answer stands, so the part is scored as for a checked plan and says whose it leaves out
   const without = known || !pr.ready ? null : lastsWithoutSs(plan, { today, proj: pr });
   const answered = known || !!without;
-  // what is missing, named: a birth date goes to People, Social Security to its page (setup's retirementGap, review 2026-11-02)
-  const gap = known ? null : retirementGap(plan);
+  // what is missing, named: a birth date goes to People, Social Security to its page (setup's retirementGap, review 2026-11-02).
+  // With today, as `known` and "The plan knows enough" count it (ha2 fix F1: a Social Security line on Income that ended in the
+  // past counted as known here and not there, so the ask was the bare "Add Social Security ...", named one adult of two, or none)
+  const gap = known ? null : retirementGap(plan, { today });
   // nothing saved for retirement and nothing going in: Will the money last? says "We don't know yet" (savingsUnknown on this same
   // run), so the score does not say "The money runs out in 2067" either (whole-app sweep x3, fix round, critic F2)
   const unknown = pr.ready && answered && savingsUnknown(pr) ? unknownParts({ nothingSaved: nothingSaved(plan) }, "whether the money lasts") : null;
-  if (!pr.ready) add("retirement", "Retirement on track", null, "The plan cannot be run yet.", `Add ${andList(pr.missing.map(needItem))}.`, ["retirement", "projection"]);
-  else if (!answered) add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap?.fix ?? "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
-  else if (unknown) add("retirement", "Retirement on track", null, `Not scored yet. ${unknown.sentence}`, unknown.next, ["balance", "net-worth"]);
+  // one missing figure is ONE ask (ha2, 2026-11-17): the first part that asks for what the retirement check is missing (Social
+  // Security, a birth date) says what filling it unlocks; the parts that wait on it say so in their own words and never ask again
+  // (`askedIn`), and "The plan knows enough" leaves it out of its list (it said "add Sam's Social Security (as above)")
+  let ask = null;
+  if (!pr.ready) {
+    add("retirement", "Retirement on track", null, "We can't tell yet whether your money lasts.", `Add ${andList(pr.missing.map(needItem))}.`, ["retirement", "projection"]);
+    // no adult with a birth date: this part asks for one, so "The plan knows enough" does not ask again (ha2 fix F3); no sentence
+    // on what it unlocks, as more may be missing and one date of two fills nothing there yet
+    if (pr.missing.some((m) => /^a person with a birth date/.test(m))) ask = { id: "retirement", waits: [], fills: ["birth"], quiet: true };
+  } else if (!answered) {
+    add("retirement", "Retirement on track", null, `Not scored yet: whether the money lasts needs ${gap?.what ?? "Social Security and birth dates"}.`, gap ? askWords(gap, people.length === 1) : "Add Social Security on the Social Security page.", gap?.go ?? ["retirement", "social-security"]);
+    if (gap) ask = { id: "retirement", waits: ["retirement", "protection"] };
+  } else if (unknown) add("retirement", "Retirement on track", null, `Not scored yet. ${unknown.sentence}`, unknown.next, ["balance", "net-worth"]);
   else {
     const ratio = pr.spendingYearly > 0 ? pr.affordable / pr.spendingYearly : 1;
     const ways = ratio < FULL_RETIREMENT ? retirementWays(plan, { today, ratio, money }) : null;
-    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, `${pr.result.success ? `The plan can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} it plans (${Math.round(ratio * 100)}%).` : `The money runs out in ${pr.shortYear}: it can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`}${without ? ` ${ssLeftOutLine(without.words)}` : ""}`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
+    // the pair in plain words (ha2): what the plan can carry beside what you plan; the share (256%) is the score's own measure,
+    // said in "How this is worked out" beside "nothing at 60%, full marks at 115%" (`ratio`)
+    add("retirement", "Retirement on track", (ratio - 0.6) / 0.55, `${pr.result.success ? `The plan can carry about ${est(pr.affordable / 12)} a month; you plan to spend ${money(pr.spendingYearly / 12)}.` : `The money runs out in ${pr.shortYear}: it can carry about ${est(pr.affordable / 12)} a month against the ${money(pr.spendingYearly / 12)} planned.`}${without ? ` ${ssLeftOutLine(without.words)}` : ""}`, ways ? hintText(ways) : null, ["scenarios", "goal-seek"]);
+    parts[parts.length - 1].ratio = ratio;
     // the link opens Goal seek on the target the hint was worked out for ("Just last"), and the hint without the score's own
     // words for reports that say how to make the money last (Plan summary)
     if (ways) Object.assign(parts[parts.length - 1], { hint: ways.text, ...(ways.query ? { query: ways.query } : {}) });
@@ -132,7 +160,13 @@ export function compute(plan, params = {}) {
   const life = st?.ready ? st.scenarios.filter((s) => s.group === "life") : [];
   // (the retirement part scored on the answer that stands without the Social Security not in yet: a shock the plan fails without
   // it might pass with it, so the stress tests still wait for it, and say so in their own words; z1)
-  if (pr.ready && !known) add("protection", "Protection", null, without ? `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first.` : `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first, like the retirement part.`, without ? gap?.fix ?? "Add Social Security on the Social Security page." : "Scored as soon as the retirement part above is.", gap?.go ?? ["retirement", "social-security"]);
+  if (pr.ready && !known) {
+    // the one ask on the first view says what the stress tests are in plain words (ha2 fix P3: "the stress tests" read as jargon there)
+    add("protection", "Protection", null, without ? `Not scored yet: checking life's shocks, like a death or a long life, needs ${gap?.what ?? "Social Security"}.` : `Not scored yet: the stress tests need ${gap?.what ?? "Social Security"} first, like the retirement part.`, without ? (gap ? askWords(gap, people.length === 1) : "Add Social Security on the Social Security page.") : "Scored as soon as the retirement part above is.", gap?.go ?? ["retirement", "social-security"]);
+    // the retirement part above asks for it; with that part scored without the figure, this part is the one that asks
+    if (ask) parts[parts.length - 1].askedIn = ask.id;
+    else if (without && gap) ask = { id: "protection", waits: ["protection"] };
+  }
   // the stress tests say "we can't say which shocks your plan would survive yet" for the same plan: not scored either
   else if (unknown) add("protection", "Protection", null, "Not scored yet: the stress tests need what you own first, like the retirement part.", "Scored as soon as the retirement part above is.", ["balance", "net-worth"]);
   else if (!life.length) add("protection", "Protection", null, "The stress tests need the plan basics first.", "Fill in the basics on Will the money last?", ["scenarios", "stress-tests"]);
@@ -160,23 +194,45 @@ export function compute(plan, params = {}) {
       short.length ? `${short.map((g) => g.name).join(", ")} ${short.length === 1 ? "needs" : "need"} more each month (Goals).${later ? ` ${later}` : ""}` : later, ["goals", "goals"]);
   }
 
-  // 7. the plan knows enough, and it is current
-  const people = (plan.household?.people ?? []).filter((p) => p.role !== "dependent");
-  const ss = plan.retirement?.socialSecurity ?? {};
+  // 7. the plan knows enough, and it is current (who the adults are and whose Social Security is known: above, part 4)
   const checks = [
-    ["add a birth date for every adult", people.length > 0 && people.every((p) => p.birthDate)],
-    ["add your accounts", (plan.accounts ?? []).length > 0],
-    ["update your balances (at least every 90 days)", (plan.accounts ?? []).length > 0 && (plan.accounts ?? []).every((a) => a.asOf && daysBetween(a.asOf, today) <= 90)],
-    ["enter your income and expenses", (plan.income ?? []).length > 0 && (plan.expenses ?? []).length > 0],
-    // (the retirement part scored without the Social Security not in yet: Protection above already asks for it, so this one says
-    // it is the same figure, not a third ask; z1 fix round, critic P4)
-    [without ? `add ${without.words} (as above)` : "add a Social Security figure for every adult", people.length > 0 && people.every((p) => (ss[p.id] && (Number(ss[p.id].monthlyAtFRA) > 0 || (ss[p.id].record ?? []).length)) || ssOnIncome(plan, p.id, today))],
+    ["birth", "add a birth date for every adult", people.length > 0 && people.every((p) => p.birthDate)],
+    ["accounts", "add your accounts", (plan.accounts ?? []).length > 0],
+    ["balances", "update your balances (at least every 90 days)", (plan.accounts ?? []).length > 0 && (plan.accounts ?? []).every((a) => a.asOf && daysBetween(a.asOf, today) <= 90)],
+    ["flows", "enter your income and expenses", (plan.income ?? []).length > 0 && (plan.expenses ?? []).length > 0],
+    ["ss", "add a Social Security figure for every adult", people.length > 0 && people.every(ssKnownHere)],
     // retired: what they spend now is what they spend in retirement (the setup does not ask it)
-    ["say what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0 || householdRetired(plan, { today })],
-    ["look over your assumptions (once a year)", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],
+    ["spend", "say what you will spend in retirement", Number(plan.retirement?.spendingMonthly) > 0 || householdRetired(plan, { today })],
+    ["assumptions", "look over your assumptions (once a year)", !!plan.assumptions?.reviewedAt && daysBetween(plan.assumptions.reviewedAt, today) <= 365],
   ];
-  const have = checks.filter((c) => c[1]);
-  add("knows", "The plan knows enough", have.length / checks.length, have.length === checks.length ? "Everything the score depends on is filled in and current." : `${have.length} of ${checks.length} things the score depends on are filled in and up to date.`, `Still to do: ${checks.filter((c) => !c[1]).map((c) => c[0]).join("; ")}.`, ["overview", "alerts"]);
+  // what the one ask above fills is not asked here again (it said "add Sam's Social Security (as above)", a second row for one
+  // figure): Social Security when the ask names it (retirementGap with today names every adult not known here: the same rule,
+  // ha2 fix F1); birth dates when the ask names them (all of them), or the plan cannot run without one (ha2 fix F3)
+  const asked = new Set(!ask ? [] : [
+    ...((gap?.ss ?? []).length ? ["ss"] : []),
+    ...((gap?.dates ?? []).length ? ["birth"] : []),
+    ...(ask.fills ?? []),
+  ]);
+  const have = checks.filter((c) => c[2]);
+  const todo = checks.filter((c) => !c[2] && !asked.has(c[0]));
+  const filled = checks.filter((c) => !c[2] && asked.has(c[0])).length;
+  add("knows", "The plan knows enough", have.length / checks.length, have.length === checks.length ? "Everything the score depends on is filled in and current." : `${have.length} of ${checks.length} things the score depends on are filled in and up to date.`, todo.length ? `Still to do: ${todo.map((c) => c[1]).join("; ")}.` : null, ["overview", "alerts"]);
+  // nothing else to do here: its points wait on the ask, which names them
+  if (!todo.length && filled) parts[parts.length - 1].askedIn = ask.id;
+  // what the ask does to the score, for "How this is worked out" (ha2 fix F2, P2: the first view said "This unlocks up to 25 points
+  // in ..., 15 in ... and 1.4 in ...", read as the prize while the figure often earns far less; the sure gain and the parts it
+  // lets be scored, behind the fold), and its link opens the first adult it names on the Social Security page, where "won't get
+  // it" is (ha2 fix P4: that row was shut on arrival)
+  if (ask && !ask.quiet && gap) {
+    const of = (id) => parts.find((p) => p.id === id);
+    // the gain as the part's own points show it, rounded the same way (ha2 fix F4: 10 / 7 = 1.43 said "1.4", while 7.1 -> 8.6 shows 1.5)
+    const shown = (n) => Math.round((n / checks.length) * PARTS.knows * 10) / 10;
+    const gain = Math.round((shown(have.length + filled) - shown(have.length)) * 10) / 10;
+    const p = of(ask.id);
+    p.unlock = unlockWords({ what: gap.what, sure: filled ? [{ title: of("knows").title, points: gain }] : [], scored: ask.waits.map((id) => ({ title: of(id).title, max: PARTS[id] })) });
+    const first = people.find((x) => !ssKnownHere(x));
+    if (gap.ss.length && first && p.go.join("/") === "retirement/social-security") p.query = { show: `person-${first.id}` };
+  }
 
   const score = Math.round(parts.reduce((s, p) => s + p.points, 0));
   const band = BANDS.find((b) => score >= b.min).label;
@@ -209,6 +265,39 @@ export function compute(plan, params = {}) {
  *  - A spending cut of more than half the planned spending is left out when another way gets there (a couple short only in the
  *    two years before Social Security read "save about $70 ... or spend about $2,040 a month less"); Goal seek still shows it.
  */
+/**
+ * unlockWords({ what, sure: [{ title, points }], scored: [{ title, max }] }) -> what one ask does to the score, for "How this is
+ * worked out" (ha2): 'Not in the score yet: Social Security for Sam. Once added, "The plan knows enough" gains 1.4 points, and
+ * "Protection" (out of 15) is scored on what you add.' Only the sure gain is a figure (ha2 fix F2: "This unlocks up to 25 points
+ * in ..., 15 in ... and 1.4 in ..." read as the prize, while filling Social Security earned 1 to 5 points in four of the invented
+ * households); a part that waits is scored on what is added, from nothing to its whole weight. Points to one decimal, as the
+ * parts show them.
+ */
+export function unlockWords({ what, sure = [], scored = [] }) {
+  const pts = (n) => { const r = Math.round(n * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+  const gains = sure.map((x) => `"${x.title}" gains ${pts(x.points)} point${pts(x.points) === "1" ? "" : "s"}`);
+  const waits = scored.length ? `${andList(scored.map((x) => `"${x.title}" (out of ${x.max})`))} ${scored.length === 1 ? "is" : "are"} scored on what you add` : null;
+  const then = [...gains, waits].filter(Boolean);
+  return `Not in the score yet: ${what}.${then.length ? ` Once added, ${then.join(", and ")}.` : ""}`;
+}
+
+/**
+ * askWords(gap, one) -> the one ask for what the retirement check is missing, short (ha2 fix P2: setup's retirementGap fix plus
+ * the unlock sentence ran nine lines on a phone): 'Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get
+ * it.' (one adult of several), 'Add your Social Security estimate ...' (one adult), 'Add a Social Security estimate for Ana and Bo
+ * from ssa.gov/myaccount, or say who won't get it.' (several), then 'Add Bo's birth date on People.' as retirementGap says it. The
+ * row's link opens the Social Security page, on the first adult it names (`query.show`). `gap`: retirementGap's { ss, dates }.
+ */
+export function askWords(gap, one) {
+  const own = (n) => (n === "you" ? "your" : `${n}'s`);
+  const ss = gap?.ss ?? [], dates = gap?.dates ?? [];
+  const ssAsk = !ss.length ? null : one ? "Add your Social Security estimate from ssa.gov/myaccount, or say you won't get it."
+    : ss.length === 1 ? `Add ${own(ss[0])} Social Security estimate from ssa.gov/myaccount, or say ${ss[0]} won't get it.`
+      : `Add a Social Security estimate for ${andList(ss)} from ssa.gov/myaccount, or say who won't get it.`;
+  const dateAsk = !dates.length ? null : `Add ${one ? "your birth date" : dates.length === 1 ? `${own(dates[0])} birth date` : `the birth dates of ${andList(dates)}`} on People.`;
+  return [ssAsk, dateAsk].filter(Boolean).join(" ");
+}
+
 /** Debt names in a sentence: "the Visa card, the Store card and the Mastercard"; a name that already says whose ("Pat's car loan") has no "the". */
 export function theList(names) {
   const xs = names.map((n) => { const t = String(n ?? "").trim(); return /['\u2019]s\b/i.test(t) ? t : `the ${t}`; });

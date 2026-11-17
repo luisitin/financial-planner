@@ -7,7 +7,7 @@
 Through other pages' computes: Emergency fund (`balance/liquidity`), Next best action (the spare money), Debts (`balance/liabilities`), Will the money last? (`retirement/projection`), Stress tests, Goals; and the plan's people, accounts, Social Security, retirement spending and assumptions for the completeness check. Writes nothing. `heavy: true` (it runs the stress tests).
 
 ## Outputs
-`{ ready, missing, score, band, parts[], gains[] }`; each part `{ id, title, points, max, share, status: ok|warn|bad|unknown, detail, fix, go }`; `gains` = parts missing half a point or more, largest gap first.
+`{ ready, missing, score, band, parts[], gains[], scored }`; each part `{ id, title, points, max, share, status: ok|warn|bad|unknown, detail, fix, go }`, and, where they apply, `hint` and `query` (retirement), `ratio` (a scored retirement part: what the plan can carry / what it plans), `askedIn` (the id of the part whose fix asks for the one thing this part's points wait on) and, on the part that asks for a missing Social Security figure or birth date, `unlock` (what adding it does to the score) and `query: { show: "person-<id>" }`; `gains` = parts missing half a point or more, largest gap first. `askWords(gap, one)` words the ask, `unlockWords({ what, sure, scored })` what it does to the score.
 
 ## The parts (`PARTS`, out of 100)
 | part | points | full marks when | share |
@@ -18,7 +18,7 @@ Through other pages' computes: Emergency fund (`balance/liquidity`), Next best a
 | Retirement on track | 25 | the plan can carry 115% of its planned spending | (affordable / planned - 0.6) / 0.55 |
 | Protection | 15 | the money lasts through every life shock in the stress tests | shocks survived / life shocks |
 | Goals | 5 | every dated goal done or on track | share on track |
-| The plan knows enough | 10 | seven things filled in and current: adults' birth dates, accounts, balances within 90 days, income and expenses, Social Security for every adult, retirement spending, assumptions looked over in the last year | share present |
+| The plan knows enough | 10 | seven things filled in and current: adults' birth dates, accounts, balances within 90 days, income and expenses, Social Security for every adult (a figure, an earnings record, Social Security on Income, or "won't get it"), retirement spending, assumptions looked over in the last year | share present |
 Bands (`BANDS`): Strong from 85, Good from 70, Fair from 50, Needs work below. A part the plan cannot judge yet scores 0 ("unknown") and says what to add.
 
 Income after tax (2026-11-02) takes off the state's income tax and business costs too, as Next best action's month does.
@@ -36,7 +36,7 @@ the plan ran without Social Security and the score said "runs out in 2067" and t
 month less spending; now the biggest gain is adding Social Security.
 
 ## Tests
-`module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), and a better plan scoring higher.
+`module.test.mjs`: weights and bands, an empty plan, the family part by part (total = sum, gains order), a better plan scoring higher, and the cases in the sections below.
 
 ## Review fixes 2026-11-02
 Saving: the share is worked on the careful month on both sides (after-tax income less `spare.held`, the part of uneven pay
@@ -190,5 +190,68 @@ adult; ..."). While the retirement part is scored on that answer, "The plan know
 Protection asks for: "Still to do: add Sam's Social Security (as above); ...". Protection always comes before it, in the seven
 parts and in the gains (15 points against at most 10), so "as above" holds on this page and in the next steps of Plan summary
 and the yearly review, which list the gains in the same order (test "z1 fix P4", `tests/one-answer.test.mjs`). The points do
-not change. Kept as they are, for every plan: the "(256%)" (the score's own measure; "How the score is worked out" says
-nothing at 60%, full marks at 115%) and "Open Goal seek ›" (each part names the page it opens, OV-5).
+not change. (Superseded by ha2 below: one ask, no "as above", no "(256%)".)
+
+## One missing figure, one ask; the retirement part in plain words (ha2, 2026-11-17)
+
+**What was wrong.** For the invented retired couple Ruth and Sam (`qa/fixtures/retired-couple-plan.mjs`: Sam has no Social
+Security figure, the money lasts without it) the page asked for Sam's figure twice, as two rows of "Where the points are":
+"+15 Protection: Add Social Security for Sam ..." and "+4 The plan knows enough: Still to do: add Sam's Social Security (as
+above); ...", and "All seven parts" repeated both. In 11 of the 14 base households (`qa/households`, 01 to 07 and 09 to 13: no
+Social Security, the money not known to last without it) "Retirement on track" asked for it, Protection said "Scored as soon
+as the retirement part above is." and "The plan knows enough" asked again ("add a Social Security figure for every adult").
+The retirement part read "The plan can carry about $7,120 a month against the $2,780 it plans (256%)." and its row "Open Goal
+seek ›".
+
+**One ask, short; what it does to the score one tap away.** The first part that asks for what the retirement check is
+missing (setup's `retirementGap(plan, { today })`: Social Security, birth dates) says it in its own short words, `askWords`:
+"Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get it." (one adult of several), "Add your Social
+Security estimate from ssa.gov/myaccount, or say you won't get it." (one adult), "Add a Social Security estimate for Ana and Bo
+from ssa.gov/myaccount, or say who won't get it." (several), then "Add Bo's birth date on People." as `retirementGap` says
+it. Its link opens the Social Security page on the first adult it names (`query: { show: "person-<id>" }`; `core/ui/more.js`
+opens that person's part), where the "won't get it" button is. Its gap is worked out with today, as `retirementKnown` and
+"The plan knows enough" count Social Security: a line on Income that ended in the past is missing for all three.
+- Protection asks (the retirement part scored without the figure, z1), its reason in plain words: "Not scored yet: checking
+  life's shocks, like a death or a long life, needs Social Security for Sam."
+- "Retirement on track" asks (short or unknown without it). Protection, waiting on it, carries `askedIn: "retirement"` (its
+  words are as before) and is never one of the rows of "Where the points are".
+- No adult with a birth date (the plan cannot run): "Retirement on track" says "We can't tell yet whether your money lasts."
+  and asks for one ("Add a birth date on the People page."), so "The plan knows enough" does not ask for birth dates beside
+  it. No `unlock` there: more may be missing, and one date of two fills nothing in "The plan knows enough" yet.
+- What the ask does to the score is the asking part's `unlock` (`unlockWords`), said under "How this is worked out": 'Not
+  in the score yet: Social Security for Sam. Once added, "The plan knows enough" gains 1.4 points, and "Protection" (out of
+  15) is scored on what you add.' Only the sure gain is a figure. "The plan knows enough" counts seven things, and its gain
+  is the part's shown points after less before, each rounded to one decimal as the part shows them (points = round(10 x n /
+  7, 1)): 4 to 5 of 7 is 5.7 to 7.1, "1.4"; 5 to 6 is 7.1 to 8.6, "1.5"; Social Security and a birth date both are two
+  things. A waiting part is scored on what is added, from nothing to its weight (`PARTS`: 25, 15), so its weight is said as
+  "(out of 25)", never as a gain. Ruth and Sam: 76 now; with Sam's figure typed or "won't get it", "The plan knows enough"
+  goes from 4 to 5 of 7 (5.7 to 7.1) and Protection is scored on the stress tests (0 to 15). (The brief's "4 more points"
+  was that part's whole gap, 10 - 5.71 = 4.29, three things; Sam's figure is one of them.)
+- Critics' round (2026-11-17): the first version ended the ask with 'This unlocks up to 25 points in "Retirement on track",
+  15 in "Protection" and 1.4 in "The plan knows enough".' on the first view: read as the prize, while $2,000 a month of
+  Social Security for every adult earned 3, 1, 1 and 5 points in the base households 01, 03, 10 and 13; the row ran nine
+  lines at 390 px; it said 1.4 where the part moved 1.5; it called `retirementGap` without today (an ended Social Security
+  line on Income made the ask bare, or name one adult of two, while "The plan knows enough" asked again); and with no birth
+  date at all both "Retirement on track" and "The plan knows enough" asked for one.
+- "The plan knows enough" leaves out of its list what the ask fills: Social Security when the ask names it (`retirementGap`
+  with today names every adult not known there), birth dates when the ask names them or the plan cannot run without one.
+  With nothing else left it has no fix of its own and `askedIn` (Plan summary and the yearly review skip a gain with no fix;
+  the page skips it in "Where the points are").
+- "Won't get it" (the Social Security page's answer, `guide.setup.ss[id] === "none"`) now counts as known for "The plan
+  knows enough", as every retirement page counts it (projection `retirementKnown`). Before, a person who gave it, as the ask
+  offers, was asked for "a Social Security figure for every adult" again and never earned the 1.4 the ask now names. No
+  invented household holds that answer, so no invented score moves (the invariance test below).
+
+**The retirement part in plain words.** Lasting: "The plan can carry about $7,120 a month; you plan to spend $2,780." (the
+pair a person compares; "Sam's Social Security is not counted yet." after it when z1 lifts it). Short: unchanged ("The money
+runs out in 2054: it can carry about $X a month against the $Y planned."). The share, 2.56 for Ruth and Sam, is the part's
+`ratio`, for the page to say beside the rule it is measured against ("nothing at 60%, full marks at 115%"). The part's formula is unchanged: share = (ratio - 0.6) / 0.55, clamped.
+
+**Tests** (`module.test.mjs`): "ha2: Ruth and Sam ...", "'won't get it' ...", "the one ask, case by case ...",
+"unlockWords ...", "the retirement part's sentences ..."; `tests/one-answer.test.mjs` (Plan summary's
+and the yearly review's steps ask once). **Invariance**: over every invented household (49: the qa fixtures plans, the 14
+base households, the phone-built ones, round 8, the four personas, the demo, the empty plan) the score's whole output and the
+yearly review's steps, with 452408a's words put back (`tests/health-score-words.mjs`), are byte for byte what 452408a gave
+(`invariance.json`), and every score, band and part's points are the same without putting anything back. The three digest
+tests that read the score's words (`tests/one-answer-invariance.test.mjs`, `tests/chance-draws-invariance.test.mjs`, Plan
+summary's z2) put the same words back.

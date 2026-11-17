@@ -282,10 +282,10 @@ test("Ruth and Sam, by name: every page says what Will the money last? says", ()
   assert.equal(RC.page, "lasts");
   assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none", "Your plan": "lasts", "Quick answers": "lasts", Timeline: "lasts", "Health score": "lasts" });
   const hs = health(c(RC.plan), { today: T }), part = (id) => hs.parts.find((x) => x.id === id);
-  assert.deepEqual([part("retirement").points, part("retirement").detail, part("retirement").fix], [25, "The plan can carry about $7,120 a month against the $2,780 it plans (256%). Sam's Social Security is not counted yet.", null]);
-  // the stress tests still wait for it (a shock failed without it might pass with it), in their own words
-  assert.deepEqual([part("protection").share, part("protection").detail], [null, "Not scored yet: the stress tests need Social Security for Sam first."]);
-  assert.match(part("protection").fix, /^Add Social Security for Sam on the Social Security page/);
+  assert.deepEqual([part("retirement").points, part("retirement").detail, part("retirement").fix], [25, "The plan can carry about $7,120 a month; you plan to spend $2,780. Sam's Social Security is not counted yet.", null]);
+  // the stress tests still wait for it (a shock failed without it might pass with it), in their own words (plain ones: ha2 fix P3)
+  assert.deepEqual([part("protection").share, part("protection").detail], [null, "Not scored yet: checking life's shocks, like a death or a long life, needs Social Security for Sam."]);
+  assert.equal(part("protection").fix, "Add Sam's Social Security estimate from ssa.gov/myaccount, or say Sam won't get it.");
   const tl = timeline(c(RC.plan), { today: T });
   assert.deepEqual([tl.headline.lastsTo, tl.headline.needsSS, tl.headline.needs, tl.headline.withoutSs], [2054, false, null, "Sam's Social Security"]);
   const end = tl.events.find((e) => e.id === "lasts");
@@ -299,12 +299,12 @@ test("Ruth and Sam, by name: every page says what Will the money last? says", ()
     assert.deepEqual([r.health?.score ?? r.score, r.health?.band ?? r.band], [hs.score, hs.band], name);
     assert.ok(!JSON.stringify(r).includes("Scored as soon as the retirement part above is"), `${name}: no "like the retirement part" left`);
   }
-  // their next steps quote the Health score's asks: Sam's figure is asked once, by Protection, and "The plan knows enough"
-  // under it says "(as above)" (fix round, critic P4)
+  // their next steps quote the Health score's asks: Sam's figure is asked once, by Protection, in its short words, and no other
+  // step asks for it again (fix round, critic P4; ha2: it said "add Sam's Social Security (as above)" under it)
   for (const [name, steps] of [["plan summary", sum.nextSteps], ["annual review", ann.ahead?.steps]]) {
     const at = (re) => (steps ?? []).findIndex((x) => re.test(x.detail));
-    assert.ok(at(/^Add Social Security for Sam on the Social Security page/) >= 0, name);
-    assert.ok(at(/add Sam's Social Security \(as above\)/) > at(/^Add Social Security for Sam/), `${name}: "as above" comes after the ask`);
+    assert.ok(at(/^Add Sam's Social Security estimate from ssa\.gov\/myaccount, or say Sam won't get it\.$/) >= 0, name);
+    assert.equal((steps ?? []).filter((x) => /Sam's Social Security|Social Security for Sam|a Social Security figure/.test(x.detail)).length, 1, `${name}: one ask`);
   }
   // a single adult short without Social Security: every page keeps asking, as the page's notice asks first
   const one = RUNS.find((r) => r.name === "01-single-adult/base");

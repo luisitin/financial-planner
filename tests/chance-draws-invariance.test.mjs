@@ -37,6 +37,9 @@ import { compute as fire } from "../modules/retirement/fire/compute.js";
 import { compute as goals } from "../modules/goals/goals/compute.js";
 import { compute as compare } from "../modules/scenarios/compare/compute.js";
 import { retirementUnknown } from "../modules/retirement/projection/compute.js";
+// ha2 (2026-11-17): the plan summary's next steps quote Plan health score's fixes, whose words for a missing figure changed (one ask
+// that says what it unlocks; no "as above"): put back as 452408a wrote them (tests/health-score-words.mjs), a no-op on the code before
+import { summaryBack } from "./health-score-words.mjs";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const T = "2026-11-15";
@@ -93,7 +96,7 @@ function figures(name, plan) {
   return {
     ...chanceFigures(name, plan),
     report: run(() => sansUnknown(reportRetirement(p(), { today: T, maxPaths: 200 }), u)),
-    ...(() => { const s = sansWhy(run(() => summary(p(), { today: T, maxPaths: 200 }))); return { summary: s, summaryButJobLoss: butJobLoss(s), jobLossFails: !!s?.protection?.failing?.some((f) => JOB_LOSS.test(f.title)) }; })(),
+    ...(() => { const s = sansWhy(run(() => summaryBack(summary(p(), { today: T, maxPaths: 200 }), plan, T))); return { summary: s, summaryButJobLoss: butJobLoss(s), jobLossFails: !!s?.protection?.failing?.some((f) => JOB_LOSS.test(f.title)) }; })(),
     fire: run(() => sansUnknown(fire(p(), { today: T }), u)),
     goals: run(() => goals(p(), { today: T })),
     compare: run(() => compare(p(), { today: T, paths: 100 })),

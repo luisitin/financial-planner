@@ -60,6 +60,9 @@ const quick = await imp("modules/overview/quick/compute.js");
 const guide = await imp("modules/overview/guide/compute.js");
 const start = await imp("modules/overview/start/compute.js");
 const nextBest = await imp("modules/overview/next-best-action/compute.js");
+// Plan health score's words of 452408a put back (ha2: one ask for a missing figure, the retirement part in plain words; a no-op on
+// the score's output before that change): only those words moved, tests/health-score-words.mjs says which
+const healthWords = await import("./health-score-words.mjs");
 
 /** The left-overs typed into question 6 that the spending search is tried with (a month: none, a usual one, more than any pay). */
 const LEFTS = [0, 750, 100000];
@@ -75,7 +78,7 @@ function figures(plan) {
     plan: run(() => yourPlan.compute(p(), { today: T })),
     timeline: run(() => timeline.compute(p(), { today: T })),
     alerts: run(() => alerts.compute(p(), { today: T })),
-    health: run(() => health.compute(p(), { today: T })),
+    health: run(() => healthWords.healthBack(health.compute(p(), { today: T }), plan, T)),
     quick: run(() => quick.compute(p(), { today: T })),
     path: run(() => guide.pathSummary(p(), { today: T })),
     guide: run(() => guide.compute(p(), { today: T })),
