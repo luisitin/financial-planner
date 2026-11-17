@@ -3525,7 +3525,13 @@ async function hbPlans() {
 }
 
 // Invariance: with nothing new typed, the done screen's compute, standing(), the tile's line and Get started's compute are what
-// c5057c0 gave, byte for byte (digests in ./hb-invariance.json, written from that code: PRINT=1 node --test on it).
+// c5057c0 gave, byte for byte (digests in ./hb-invariance.json, written from that code: PRINT=1 node --test on it). One string
+// moved on purpose since, in hb1's smoke fixes: the path's own line (guide/journeys.js) no longer repeats "About 20 minutes in
+// all; stop any time." (Step by step's row and page say the minutes beside it); Get started's unused `featured.line` quotes it,
+// so the test puts c5057c0's line back there before the digest, and checks that nothing else in that output moved.
+const HB_PATH_LINE_WAS = "A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time.";
+const HB_PATH_LINE_NOW = "A few easy questions, then a quick look at each step.";
+const hbStartBack = (d) => (d?.featured?.line === HB_PATH_LINE_NOW ? { ...d, featured: { ...d.featured, line: HB_PATH_LINE_WAS } } : d);
 test("hb1 invariance: the done screen's compute, standing(), the tile's words and Get started's compute are c5057c0's over every invented household", async () => {
   const crypto = await import("node:crypto");
   const { compute: start } = await import("../start/compute.js");
@@ -3539,7 +3545,7 @@ test("hb1 invariance: the done screen's compute, standing(), the tile's words an
       done: dig(run(() => S.compute(structuredClone(plan), { screen: "done", today: D }))),
       standing: dig(st),
       tile: run(() => (st && !st.threw ? S.retireTileWords(st) : null)),
-      start: dig(run(() => start(structuredClone(plan), { today: D }))),
+      start: dig(run(() => hbStartBack(start(structuredClone(plan), { today: D })))),
     };
   }
   const file = new URL("./hb-invariance.json", import.meta.url);

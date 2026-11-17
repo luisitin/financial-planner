@@ -48,7 +48,7 @@
   "overview/alerts": {"plan":{"words":270},"empty":{"words":120}},
   "overview/benchmarks": {"plan":{"words":340,"figs":28}},
   "overview/dashboard": {"plan":{"words":200,"figs":11}},
-  "overview/guide": {"plan":{"words":320},"empty":{"words":240}},
+  "overview/guide": {"plan":{"words":310},"empty":{"words":240}},
   "overview/monthly-review": {"plan":{"words":210}},
   "overview/next-best-action": {"plan":{"words":700,"figs":37}},
   "overview/pages": {"empty":{"words":3970,"figs":4}},

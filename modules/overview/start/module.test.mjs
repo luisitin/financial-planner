@@ -52,7 +52,7 @@ test("the featured panel follows the path: Build my plan, Continue my plan, See 
   const p = empty();
   let f = featured(p, { today: T });
   assert.deepEqual([f.label, f.state, f.href, f.doneCount], ["Build my plan", "new", "#/overview/setup/you", 0]);
-  assert.match(f.line, /About 20 minutes in all/);
+  assert.equal(f.line, "A few easy questions, then a quick look at each step.", "the guide's own line (the minutes are said once, beside it: hb1)");
   const fam = migrate(familyPlan(T));
   f = featured(fam, { today: T });
   assert.deepEqual([f.label, f.state], ["Continue my plan", "started"]);

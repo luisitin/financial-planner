@@ -67,6 +67,16 @@ const healthWords = await import("./health-score-words.mjs");
 /** The left-overs typed into question 6 that the spending search is tried with (a month: none, a usual one, more than any pay). */
 const LEFTS = [0, 750, 100000];
 
+// hb1 (2026-11-17, Step by step's smoke fix): the path's own line (guide/journeys.js) no longer ends "About 20 minutes in all;
+// stop any time." (the row and the page say the minutes beside it). That one string moved on purpose since e223a42, in the
+// guide's journeys and in Get started's `featured.line`, which quotes it; it is put back before the digest, so everything else
+// in those outputs is still checked byte for byte.
+const PATH_LINE_WAS = "A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time.";
+const PATH_LINE_NOW = "A few easy questions, then a quick look at each step.";
+const lineBack = (x) => (x?.line === PATH_LINE_NOW ? { ...x, line: PATH_LINE_WAS } : x);
+const pathLineBack = (d) => (Array.isArray(d?.journeys) ? { ...d, journeys: d.journeys.map(lineBack) } : d);
+const startLineBack = (d) => (d?.featured ? { ...d, featured: lineBack(d.featured) } : d);
+
 /** Every touched compute's whole output for one plan, each on a fresh copy. */
 function figures(plan) {
   const p = () => structuredClone(plan);
@@ -81,8 +91,8 @@ function figures(plan) {
     health: run(() => healthWords.healthBack(health.compute(p(), { today: T }), plan, T)),
     quick: run(() => quick.compute(p(), { today: T })),
     path: run(() => guide.pathSummary(p(), { today: T })),
-    guide: run(() => guide.compute(p(), { today: T })),
-    start: run(() => start.compute(p(), { today: T })),
+    guide: run(() => pathLineBack(guide.compute(p(), { today: T }))),
+    start: run(() => startLineBack(start.compute(p(), { today: T }))),
     nextBest: run(() => nextBest.compute(p(), { today: T })),
   };
   // the spending worked out from a typed left-over (question 6, and Expenses' "what's left over" box), only where there is pay

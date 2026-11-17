@@ -216,7 +216,8 @@ export const PATH_STEPS = [
 export const JOURNEYS = [
   {
     id: PATH_ID, icon: "🧭", title: "Build my plan", minutes: 20,
-    line: "A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time.",
+    // (the minutes and "stop any time" are said once, by the row's status line and the guide page's own line: hb1)
+    line: "A few easy questions, then a quick look at each step.",
     haveReady: "Nothing special. Rough numbers are fine, and we fill in what you don't know.",
     steps: PATH_STEPS, variant: pathVariant,
     more: [],

@@ -292,3 +292,12 @@ that step asks the same rule. Short or only just lasting without it, the step st
 invented retired couple): the step no longer waits; every other household's path is byte for byte what it was
 (`tests/one-answer-invariance.test.mjs`).
 
+
+## The minutes said once (hb1 smoke fix, 2026-11-17, claude-b; test: module.test.mjs "hb1")
+
+The whole-app phone smoke (`qa/smoke-all.mjs`, the sample household Ana and Bo) showed Step by step's "Build my plan" row as
+"A few easy questions, then a quick look at each step. About 20 minutes in all; stop any time." and under it "About 20 minutes.
+1 of 8 steps is already in your plan."; the guide's own page said it twice too (its line, then "About 20 minutes. Stop any time;
+what you have saved stays in your plan."). The path's line in `journeys.js` is now "A few easy questions, then a quick look at
+each step.", like every other guide's line: the minutes and "stop any time" come from the status line and the page's own line,
+once. Get started's `featured().line` (kept for compatibility, not drawn) quotes it. No figure, nothing in the plan.

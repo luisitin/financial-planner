@@ -860,3 +860,24 @@ test("z1: \"Your retirement\" waits for Social Security only while Will the mone
   const nd = retiredCouplePlan(T); nd.household.people.find((x) => x.id === "p-sam").birthDate = "";
   assert.match(step(nd).waiting.what, /Social Security for Sam and Sam's birth date/);
 });
+
+// hb1 (whole-app phone smoke, 2026-11-17): Step by step's "Build my plan" row read "... About 20 minutes in all; stop any time." and
+// under it "About 20 minutes. 1 of 8 steps is already in your plan."; the guide's own page said the minutes and "stop any time"
+// twice too (its line, then "About 20 minutes. Stop any time; ..."). The minutes are said once, beside the line, on every guide.
+test("hb1: every guide says its minutes and 'stop any time' once, beside its line, never inside it", () => {
+  for (const j of JOURNEYS) assert.ok(!/\bminutes?\b|stop any time/i.test(j.line), `${j.id}: ${j.line}`);
+  const plan = journeyById(PATH_ID);
+  assert.equal(plan.line, "A few easy questions, then a quick look at each step.");
+  // the row as drawn: the line, then the status line; the minutes once
+  const fam = migrate(familyPlan("2026-11-17"));
+  const row = compute(fam, { today: "2026-11-17" }).journeys.find((s) => s.id === PATH_ID);
+  return import("./view.js").then(({ statusLine }) => {
+    const said = `${row.line} ${statusLine(row)}`;
+    assert.equal((said.match(/About 20 minutes/g) ?? []).length, 1, said);
+    assert.equal(statusLine({ ...row, started: false, finished: false, doneCount: 1, total: 8 }), "About 20 minutes. 1 of 8 steps is already in your plan.");
+    // the guide page: its line, then its own "About 20 minutes. Stop any time; ..." line (view.js renderOne)
+    const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+    assert.ok(view.includes('`About ${s.minutes} minutes. Stop any time; what you have saved stays in your plan.`'));
+    assert.equal((`${plan.line} About ${plan.minutes} minutes. Stop any time; what you have saved stays in your plan.`.match(/minutes|stop any time/gi) ?? []).length, 2, "once each");
+  });
+});
