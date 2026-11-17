@@ -14,7 +14,7 @@ import {
   haveArgs, employerPay, pctToMonthly, SAVING_CHIPS, haveKeys, readShareOfPay, parseYear,
   applyLeftOver, solveSpend, leftOverGuess, yearSavingWords, leftMarker, leftReading, spendAnswered, leftFromWords, spareLabel, leftGoalsWords,
   WORK_PLAN, workPlanAcct, workPlanLine, workPlanAdded, goalFundChoices, cushionHave, monthsWords, cushionHeldWords, cushionHeldAsk, IRA_KINDS, iraKindHelp,
-  retireGuessAsk, retireTileWords, retireKindsFor, ssGettingHelp, ssBlankGuess, fullAgeWords, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
+  retireGuessAsk, retireTileWords, retireTileAdd, retireKindsFor, ssGettingHelp, ssBlankGuess, fullAgeWords, goalAmountHelp, eduChildren, GOAL_FUNDS_HELP, goalWords, startAsk,
   payGuesses, payStateLeftOut, payForAge, PAY_GUESS_STORED,
 } from "./compute.js";
 import { overTarget, monthsNear } from "../../../core/words.js";
@@ -223,6 +223,12 @@ select.su-in { font-size: var(--fs-md); }
 .su-stand a.su-fig .st { color: var(--accent-ink); }
 .su-stand a.su-fig.calm .st { color: var(--text-2); }
 .su-stand a.su-fig:hover { border-color: var(--accent); }
+/* the quiet "Add it ›" under the Retirement tile while its line names a Social Security not in yet (hb1): the tile is a link
+   already, so the way to add it sits right under it, as on Quick answers, Your plan and the Timeline; under the right-hand
+   column when the tiles are two by two */
+.su-root .su-stand.su-stand-add { margin-bottom: 0; }
+.su-root .su-add-wrap { margin: 0 0 18px; }
+.su-root .su-add-wrap .su-add { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; font-weight: 600; font-size: var(--fs-sm); }
 .su-h2 { font-size: var(--fs-lg); margin: 0 0 12px; }
 .su-moves { list-style: none; padding: 0; margin: 0 0 24px; display: grid; gap: 10px; }
 .su-moves a { display: flex; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--text); text-decoration: none; min-height: 64px; }
@@ -258,6 +264,7 @@ select.su-in { font-size: var(--fs-md); }
   .su-tiles.three .su-tile.on::after { top: 9px; transform: none; }
   .su-stand .su-fig:first-child { grid-column: auto; }
   .su-stand .su-fig:nth-child(n) .stat-value, .su-stand .su-fig:nth-child(n) .stat-value.long { font-size: var(--fs-xl); }
+  .su-root .su-add-wrap { padding-left: calc(50% + 5px); }
 }
 @media (max-width: 380px) { .su-row { grid-template-columns: 1fr 8rem; } }
 @media (prefers-reduced-motion: reduce) { .su-card, .su-check, .su-dots i { animation: none; } .su-bar > span, .su-tile { transition: none; } }
@@ -2007,7 +2014,13 @@ export function render(page, ctx) {
       // landing on what the answer rests on: the Dashboard's rule (plan/words.js smallChangesHelp; retirement spec L12, C5 follow-up F1)
       : (() => { const ok = st.retire.verdict === "on track", small = ok || smallChangesHelp(st.retire);
         return fig(ok ? "ok" : "warn", "Retirement", ok ? "On track" : st.retire.verdict === "tight" ? "Tight" : st.retire.shortAge ? `Short at ${st.retire.shortAge}` : "Needs a look", retireTileWords(st), ok ? "● The money lasts" : small ? "● Small changes help" : "● Check the numbers first", small ? "#/retirement/projection" : "#/retirement/projection?check=1"); })();
-    add(card, ui.h("div", { class: "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
+    // the tile's line names a Social Security not in yet ("If nothing changes, even without Sam's Social Security."): a quiet
+    // "Add Sam's Social Security ›" right under the tile, as Quick answers, Your plan and the Timeline have their "Add it ›" (hb1,
+    // retireTileAdd); it opens Sam's part on the Social Security page (hb1 fix F1); Back returns here. The words on screen are
+    // the link's whole name: the arrow is drawn, not read (hb1 fix M2)
+    const ssAdd = retireTileAdd(st, plan);
+    add(card, ui.h("div", { class: ssAdd ? "su-stand su-stand-add" : "su-stand" }, nwFig, spareFig, cushionFig, retireFig));
+    if (ssAdd) add(card, ui.h("div", { class: "su-add-wrap" }, ui.h("a", { class: "su-add", href: ssAdd.href }, ssAdd.words, ui.h("span", { "aria-hidden": "true" }, "\u00a0›"))));
     // (the figures are shown as they are at once: they used to count up from $0, so a look at the screen while they ran read
     // $380 and -$10,085 where the next screens say $384 and -$10,200; follow-up B4)
     // what's next: the rest of the path, one page at a time, ending at Your plan. The first moves, our guesses and what the plan

@@ -1,0 +1,300 @@
+{
+ "note": "Set up my plan's done screen and Get started at c5057c0 (hb1), today 2026-11-16; PRINT=1 writes them again: only on that code",
+ "today": "2026-11-16",
+ "plans": {
+  "fixture card-gap-plan.mjs:cardGapPlan": {
+   "done": "PuJYrcFFbaf3Ep_GgD6dOS",
+   "standing": "yrG0VDn4qNFn5e1-luC5yN",
+   "tile": "If nothing changes.",
+   "start": "sBHGIoTdE_Q8q7MBfkp_6q"
+  },
+  "fixture debt-plan.mjs:debtPlan": {
+   "done": "h8hSnlKklNFtpUA6xyg8zm",
+   "standing": "rFhNIZAbP7PvLWA-ezavXg",
+   "tile": "If nothing changes.",
+   "start": "XkMlLqno0c_-S1uqJ9bGke"
+  },
+  "fixture family-plan.mjs:familyPlan": {
+   "done": "ahzb6pYtFJmB5IFNLA03GT",
+   "standing": "9Z3NZtxqvubJGHOKfOk2cP",
+   "tile": "If nothing changes.",
+   "start": "QDtfK4bydAQ32aOyOhSh4V"
+  },
+  "fixture guessed-plan.mjs:guessedPlan": {
+   "done": "Kz5ukraMvnoyHE33l_2xGP",
+   "standing": "sevMSU2zUay779juUeByMf",
+   "tile": "If nothing changes.",
+   "start": "YcrNIEQ7gISV4ctoRxmlfD"
+  },
+  "fixture held-plan.mjs:heldPlan": {
+   "done": "MveauOwPyWDcCyoBQ5hqkT",
+   "standing": "Y0_1E00jqBlVzUSxVmjKte",
+   "tile": "If nothing changes.",
+   "start": "R1wDPIdzKynE-vrbPUxLwl"
+  },
+  "fixture investments-plan.mjs:investmentsPlan": {
+   "done": "R2YV9-0vvqbUqh-PgGbnAU",
+   "standing": "tkxaqbCPye5LnjSiQf-xd3",
+   "tile": "If nothing changes.",
+   "start": "Px2M2TdGu3hrFb8xrX8T7t"
+  },
+  "fixture renter-debt-plan.mjs:renterDebtPlan": {
+   "done": "iAHveK1ww8XtSjk4wLl8Rb",
+   "standing": "xqSxKpA0UDKtYDJOoBIuwr",
+   "tile": "If nothing changes.",
+   "start": "YRZbzz5vLRMzqR32Yd4T_I"
+  },
+  "fixture renter-debt-plan.mjs:renterPayingExtraPlan": {
+   "done": "IDkQSCiHrgngwScEMTbNo1",
+   "standing": "RzN7LJ-oJopQjr5VcdxG6I",
+   "tile": "If nothing changes.",
+   "start": "iSar5xDAowQ_n54aUJ_fi9"
+  },
+  "fixture retired-couple-plan.mjs:retiredCouplePlan": {
+   "done": "4pIbi6Z2j6iFqqxbmyZiPB",
+   "standing": "Ujf_h0-lwb3Yuggcf00luc",
+   "tile": "If nothing changes, even without Sam's Social Security.",
+   "start": "LRwrMPEcOwsa6pZ4BvwP0W"
+  },
+  "fixture retirement-plan.mjs:retirementPlan": {
+   "done": "XhRBjpX1mpvRcpkFb_kWY_",
+   "standing": "-8pwvNVLOAj6N3ewW3CKdF",
+   "tile": "If nothing changes.",
+   "start": "Px2M2TdGu3hrFb8xrX8T7t"
+  },
+  "fixture sample-plan.mjs:samplePlan": {
+   "done": "gwCty8EkxD0ZoS0Bq0l_tf",
+   "standing": "0jo_fQuMPla4wPqaiesSvM",
+   "tile": "If nothing changes.",
+   "start": "iuUMcUjmWvtCjvASVLI_ec"
+  },
+  "fixture tax-plan.mjs:taxPlan": {
+   "done": "SYc7QpBcbA25IZ1IpkoVRO",
+   "standing": "u2nNPBveYoEhgDv7vaJBhJ",
+   "tile": "If nothing changes.",
+   "start": "Px2M2TdGu3hrFb8xrX8T7t"
+  },
+  "fixture widow-plan.mjs:widowPlan": {
+   "done": "x6MHoSQMajveszS30wsRUn",
+   "standing": "XbDsiOCiWAfSYt56ixCoyq",
+   "tile": "If nothing changes.",
+   "start": "GZq-eBXE9jJ_BM37hA_ct0"
+  },
+  "01-single-adult/base": {
+   "done": "66UAWuMyZ9Y6zXkQj1VcvZ",
+   "standing": "Rj5HZuUxUfx2H9RURWOMx3",
+   "tile": "If nothing changes.",
+   "start": "Kq0xVH5yuNiowAjuzuf3ub"
+  },
+  "02-couple-no-kids/base": {
+   "done": "CSZvJp_pjRouLQhGdmVEuR",
+   "standing": "AjkL-4key6JhG6kDuxJeRZ",
+   "tile": "If nothing changes.",
+   "start": "Bvc8ypoGzWIKgTdS-cgmPs"
+  },
+  "03-single-parent/base": {
+   "done": "6n1Pdmj7nO8iKj3K2WZifd",
+   "standing": "SZJ_JGV9ZGuz1qcX4sshH0",
+   "tile": "If nothing changes.",
+   "start": "ZsO7Y5IQV8xWfMD30ao8Q3"
+  },
+  "04-two-parents/base": {
+   "done": "L9fL753RlqVZfb8Hx9tqbi",
+   "standing": "MnM9i5xqrIfuHbSnsh2uI1",
+   "tile": "If nothing changes.",
+   "start": "yu6YZV-0OCTLdO5g01fASk"
+  },
+  "05-stay-at-home-parent/base": {
+   "done": "fudjv4btxsajDctYmET8YZ",
+   "standing": "50cN2SLPcgl5Naw3i1dKKe",
+   "tile": "If nothing changes.",
+   "start": "9t9henRBwTUt094xO863kx"
+  },
+  "06-blended-family/base": {
+   "done": "oZSyZ4h4oQkobSpU2LU4Kw",
+   "standing": "dZAJBkkzIxd7csZDB-7esu",
+   "tile": "If nothing changes.",
+   "start": "lv0fTZ83DdRhIrqvE0T6_j"
+  },
+  "07-multigenerational/base": {
+   "done": "5oXhGqJwKGj3D4ZlwVm9L_",
+   "standing": "WIAcCxVZcK8etZMkvH8SWf",
+   "tile": "If nothing changes.",
+   "start": "7swhW1SfAHGN91SNy_xfs0"
+  },
+  "08-retired/base": {
+   "done": "PFqRZknDPjSuoEClQlKTlk",
+   "standing": "AjGvMEwYXQH93GEZa7tKoX",
+   "tile": "If nothing changes, even without Sam's Social Security.",
+   "start": "PW88_7QesjAGLcQaUhPhJs"
+  },
+  "09-near-retirement/base": {
+   "done": "uUswNW4h7WNHvnID-qIiKI",
+   "standing": "wdTMi7pnma2_NXRGkr46Vl",
+   "tile": "If nothing changes.",
+   "start": "WX2HlkE-9lkmpA8UccYUwl"
+  },
+  "10-student-and-starter/base": {
+   "done": "23JaKBu7UsrpZ8_nXVQAB4",
+   "standing": "eFRYgbyXdCG2RxWgnWHkcP",
+   "tile": "If nothing changes.",
+   "start": "HqA-w-FkR6wJoya2SHX32q"
+  },
+  "11-self-employed/base": {
+   "done": "X8XYylRt9BZKxZ3-gXmdyJ",
+   "standing": "4ivebYNvQ-a7VqTNVX7mxH",
+   "tile": "If nothing changes.",
+   "start": "7W2c8Vst4xrK8YpZgsAcK4"
+  },
+  "12-high-net-worth/base": {
+   "done": "4GByubWVpXfeJzSwdJh1NG",
+   "standing": "vO-u4_lc8AFyqD6rJHKsKu",
+   "tile": "If nothing changes.",
+   "start": "z02rOxJaFIWHi5YzpmVn7p"
+  },
+  "13-in-crisis/base": {
+   "done": "iGG_zQ7Oq5gD3Xwzt8q6X8",
+   "standing": "t_xb5qwV6My0ScQZqA-u-9",
+   "tile": "If nothing changes.",
+   "start": "1d0UI3r6w291nZzXEpPDGv"
+  },
+  "14-unusual-structures/base": {
+   "done": "3VEQEDpb5ApR-BJGNfqnC7",
+   "standing": "MPdAIZU0VTfS2tT5CBnM-D",
+   "tile": "If nothing changes, even without your Social Security.",
+   "start": "PnHoDKr4uZN5hKsJcidzfa"
+  },
+  "phone casey": {
+   "done": "-nQJyoB8Hcq6GZl49btCRy",
+   "standing": "qlvcaPxjmVSN8DoyxAOJue",
+   "tile": "If nothing changes.",
+   "start": "qFpSf74ZhdL575EpwuYdlT"
+  },
+  "phone danaLee": {
+   "done": "sHIVsrDhL21QZARt5z-kIw",
+   "standing": "QJhvIDH-5wXqmspFfYXGzM",
+   "tile": "If nothing changes.",
+   "start": "loTe7S1GhuErJBgiqwSghA"
+  },
+  "phone jamie": {
+   "done": "_MfNRpSmOmAldKu_GmmgMe",
+   "standing": "gHqZrqoEcryBkF5tagBJMt",
+   "tile": "If nothing changes.",
+   "start": "E9rTPMgD6DX4cy7ci7xI7L"
+  },
+  "phone morgan": {
+   "done": "t8T0zWFqvIiKxgHpmvMTKL",
+   "standing": "5k7JdBuOAAl_6Ao_kgXMfJ",
+   "tile": "If nothing changes.",
+   "start": "OU4Ts0xBbCwHtpNEoSzesv"
+  },
+  "phone robin": {
+   "done": "dV_frm9-_foApqZ999XIG5",
+   "standing": "nVlZ7Lpb0IpyYiGnOpvpBe",
+   "tile": "If nothing changes.",
+   "start": "5mXnBuDvELcx_PBh7ozvKo"
+  },
+  "round8 earlyRetireePlan": {
+   "done": "BnrCXbmWpDBq5oKvhS_3rp",
+   "standing": "6NmLPRzhGOn2UzYTwyBo9-",
+   "tile": "If nothing changes.",
+   "start": "rTgn54nLQpILG0uwbhOqpn"
+  },
+  "round8 equityPlan": {
+   "done": "ocsO91iCDrp-XEyb2gy4Sm",
+   "standing": "rCqhq1nhoxYXvXExqmXBOY",
+   "tile": "If nothing changes.",
+   "start": "wJBC316n6HfZs4e6NNlZBB"
+  },
+  "round8 firstRmdPlan": {
+   "done": "o-6XqIorfoJKyqQI2b9xIw",
+   "standing": "nB_QsfHV010niq_pEYnMkh",
+   "tile": "If nothing changes.",
+   "start": "_tCgULh_71-PN5LbDjhlle"
+  },
+  "round8 freelancerPlan": {
+   "done": "RdTpV_FP9LnMlcTyR3lDxM",
+   "standing": "NVY_d4CyvWPcA16Wq5UKbG",
+   "tile": "If nothing changes.",
+   "start": "5Fj2lp6NSGBlx-lGaLbPpD"
+  },
+  "round8 highFreelancerPlan": {
+   "done": "6qeULn_NXqA7mKmq0dH1XE",
+   "standing": "UtcVhyxBOMVTYSLU9t6mR1",
+   "tile": "If nothing changes.",
+   "start": "5Fj2lp6NSGBlx-lGaLbPpD"
+  },
+  "round8 landlordBusinessPlan": {
+   "done": "-n9MscXrDlzuRh_KpzE2TQ",
+   "standing": "Fyx1NigESBGmr1qn-IFvln",
+   "tile": "If nothing changes.",
+   "start": "5Fj2lp6NSGBlx-lGaLbPpD"
+  },
+  "round8 landlordPlan": {
+   "done": "wB5OJgsZTQtbVxN4xQuqnb",
+   "standing": "w0RdJ4zhVg26ObpZv5e74_",
+   "tile": "If nothing changes.",
+   "start": "E-EvXe6zPvppY2F8SJCxlz"
+  },
+  "round8 parentLoanPlan": {
+   "done": "QUXNWGMAoOeHWuzWNhfh45",
+   "standing": "q_L4-e-wn4iLcOHsFLZkN8",
+   "tile": "If nothing changes.",
+   "start": "E99_50I6Eq5f6AEq24GqoI"
+  },
+  "round8 stockAndBusinessPlan": {
+   "done": "0LaJq2besDeShfxgkkg67Z",
+   "standing": "a8nrUrIeP704tVzkj5ADzM",
+   "tile": "If nothing changes.",
+   "start": "5Fj2lp6NSGBlx-lGaLbPpD"
+  },
+  "round8 studentLoanPlan": {
+   "done": "L1YcpuJdjAO6kVQm5n-Qh7",
+   "standing": "lgzQNcgZzRxOg-ihZtzAJm",
+   "tile": "If nothing changes.",
+   "start": "uHJ20maMTYnWtChVlUdmq4"
+  },
+  "round8 widowPlan": {
+   "done": "w1FeutgfU2KOe93QuCexNX",
+   "standing": "c60MumjGZ-5RjpQueGTAF1",
+   "tile": "If nothing changes.",
+   "start": "RNCVeOGxYFGiVX0_RAvDAo"
+  },
+  "persona sam": {
+   "done": "-dPC2JfYbI97Hw7kVBTMnv",
+   "standing": "e7CvDZlG1u6_y2JjDgyCy5",
+   "tile": "If nothing changes.",
+   "start": "s7bqvZvaYJIjqzpu5FlJf4"
+  },
+  "persona jordan": {
+   "done": "9IY3-IxGPkF0nkUOtWKmCV",
+   "standing": "PzSXQQTV1oRh1P2qQZ4uLv",
+   "tile": "If nothing changes.",
+   "start": "Px2M2TdGu3hrFb8xrX8T7t"
+  },
+  "persona patLee": {
+   "done": "s06Imr3Pwg5PPx3XJx8hSK",
+   "standing": "NVwpRrCAckMLFdwYQPkLl2",
+   "tile": "If nothing changes.",
+   "start": "Px2M2TdGu3hrFb8xrX8T7t"
+  },
+  "persona ruth": {
+   "done": "hD4g9kmLe71AT3IEODKaUS",
+   "standing": "rh2Wp5nMW8D-swRGUe9UPH",
+   "tile": "If nothing changes.",
+   "start": "GZq-eBXE9jJ_BM37hA_ct0"
+  },
+  "demo": {
+   "done": "9_JqnutbAZ0ZLj3nphWf1M",
+   "standing": "jqbbiqZf1mhkdhooTShCj7",
+   "tile": "If nothing changes.",
+   "start": "lltifXoh9NTiOCvXmgjjA4"
+  },
+  "empty plan": {
+   "done": "HjVpKNTNlxaZIZej30SBvF",
+   "standing": "88-TVRmO7mxRli0yuEsZXI",
+   "tile": "If nothing changes.",
+   "start": "wHTQGSpI2bnxezjH_pTya8"
+  }
+ }
+}

@@ -535,6 +535,23 @@ export function retireTileWords(st) {
   if (st?.retireGuessed) { const words = retireGuessAsk(st).words; return w ? words.replace(/^Partly our guesses\./, `Partly our guesses, without ${w}.`) : words; }
   return w ? `If nothing changes, even without ${w}.` : "If nothing changes.";
 }
+/** Where every overview page's "Add it" for a Social Security not in yet goes (Quick answers, Your plan, the Timeline). */
+export const SS_ADD_HREF = "#/retirement/social-security";
+/**
+ * retireTileAdd(st, plan) -> { words: "Add Sam's Social Security", href } | null: the quiet link under Get started's Retirement
+ * tile while the tile's line names a Social Security not in yet (retireTileWords with standing().withoutSs: the verdict tile and
+ * the "Partly our guesses, without ..." tile; never "Not known yet" or an open tile, which do not name it). The place and address
+ * of Quick answers', Your plan's and the Timeline's "Add it ›" (hb1); the words name what it adds, as the link stands under the
+ * tile on its own (hb1 fix F2), and they are its whole accessible name (M2). With the plan, the address opens the first missing
+ * person's part on the Social Security page and lands on it (`?show=person-<id>`, core/ui/more.js part(); hb1 fix F1: Sam's row
+ * was shut under the page's long opening). Nothing is written.
+ */
+export function retireTileAdd(st, plan = null) {
+  if (!st?.withoutSs || !st.retire || st.retireSavingsUnknown) return null;
+  let first = null;
+  try { first = plan ? ssMissingFor(plan)[0]?.id ?? null : null; } catch { first = null; }
+  return { words: `Add ${st.withoutSs}`, href: first ? `${SS_ADD_HREF}?show=${encodeURIComponent(`person-${first}`)}` : SS_ADD_HREF };
+}
 /** Q2's own $0 401(k): its own id, so question 4b's "On my own" IRA never takes its place (review UX 4). */
 export const workPlanId = (pid) => `setup-workplan-${pid}`;
 export const workPlanAcct = (p, pid) => byId(L(p, "accounts"), workPlanId(pid)) ?? null;

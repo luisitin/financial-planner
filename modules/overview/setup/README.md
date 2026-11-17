@@ -1190,3 +1190,41 @@ estimated tax, $1,137.76 of it inside the month's tax): `X = 100 + (6,933.33 - 1
 (it said $7,033); a left-over of $6,196 is now refused as more than comes in, not blamed on the bills. Get started's Sam with a
 $600-a-month estimated tax line: $3,396 (it said $3,996). A plan with no such line reads exactly as before (invariance test:
 only Nadia's two ceilings moved, over 49 plans).
+
+## The done screen's "Add Sam's Social Security" for a Social Security not in yet (hb1, 2026-11-17, claude-b; tests: module.test.mjs "hb1")
+
+Quick answers, Your plan and the Timeline end an answer that stands without a Social Security figure with "Sam's Social
+Security is not counted yet." and a quiet "Add it ›" to the Social Security page (z1 fix round, P2). This page's done screen
+gave the same answer on its Retirement tile ("If nothing changes, even without Sam's Social Security.") with no way to add it:
+the tile is one link, to Will the money last?, and a link cannot sit inside another.
+
+Now, right under the tile, a quiet link of the same kind: **"Add Sam's Social Security ›"**, 44 px tall, small bold accent text,
+never a button (the screen keeps one filled button, "Next: ..."). Under the right-hand column when the tiles are two by two (720
+px and wider). It names what it adds, as it stands under the tile on its own (the other pages' "Add it ›" follows a sentence
+that names it; critic F2), and those words are its whole accessible name: the arrow is drawn in an `aria-hidden` span and there
+is no separate label (critic M2). It goes to the Social Security page with Sam's part open, landed on under the top bar
+(`#/retirement/social-security?show=person-<id>`, `part()`'s own `?show=` in core/ui/more.js; the page's id for a person's part
+is `person-<id>`). Before, the page opened at its top, Ruth's part open (the first person's is) and Sam's shut under the
+page's long opening about earnings records (critic F1). The phone's Back from the Social Security page returns to the done
+screen, worked out again: once Sam's figure is saved the tile reads "If nothing changes." and the link is gone.
+
+`retireTileAdd(st, plan) -> { words: "Add <whose> Social Security", href } | null`: non-null exactly when the tile's line names a
+Social Security not in yet, i.e. the tile has an answer (`st.retire`), it is not "Not known yet" (`!st.retireSavingsUnknown`) and
+`standing().withoutSs` is set (both `retireTileWords` cases: the plain verdict and "Partly our guesses, without Sam's Social
+Security. ..."). `href` is `SS_ADD_HREF` with `?show=person-<id>` for the first adult with no figure (`ssMissingFor(plan)`, the
+same list `standing().withoutSs` is worked out from), written with `encodeURIComponent`; without the plan, or if the plan cannot
+be read, plain `SS_ADD_HREF`. An open tile ("Needs Social Security for Sam.") already asks for it itself. No formula, no figure,
+nothing in the plan, nothing written by the tap.
+
+Who sees it (the 49 invented plans): the retired-couple fixture (Ruth and Sam, "Add Sam's Social Security", Sam's part),
+08-retired (Sam) and 14-unusual-structures (Grace, on her own: "Add your Social Security", her part, already the open one).
+Every other household's done screen is as it was. Invariance: the setup `compute(plan, { screen: "done" })`, `standing()`, the tile's words and Get started's `compute()` are
+c5057c0's over all 49 plans, by digest (`hb-invariance.json`, written from that code: `PRINT=1 node --test` on it).
+
+Choices made (no owner input): the link shows on the "Partly our guesses, without ..." tile too, as Your plan's row does; the
+brief's "Get started's done tile" is this screen (the code calls it Get started's done screen); the page titled Get started
+(`overview/start`) shows no retirement figure, so it is unchanged. With two adults both missing a figure the words say "your
+Social Security" (`ssLeftOutWords`) and the first one's part opens (it is the open one anyway). The Social Security page's own
+opening words and the order of its boxes are that page's, not changed here: the link lands below them, on Sam's part, where
+"the figure on your Social Security statement" is the third box. Quick answers', Your plan's and the Timeline's "Add it ›"
+still open the page at its top (their files, not this change).

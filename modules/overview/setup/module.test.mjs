@@ -3497,3 +3497,142 @@ test("F1: the reveal's retirement tile follows the Dashboard: 'Small changes hel
   assert.ok(view.includes('small ? "● Small changes help" : "● Check the numbers first", small ? "#/retirement/projection" : "#/retirement/projection?check=1"'));
   assert.ok(!view.includes('"● Small changes help", "#/retirement/projection");'), "never hard-coded for every short answer");
 });
+
+// ---- hb1: the done screen's Retirement tile gets the same quiet "Add it" link as Quick answers, Your plan and the Timeline
+// The 49 invented plans every one-answer test reads: the qa/fixtures plans, the 14 households, the phone-built ones, round 8, the
+// four personas, the demo and the empty plan.
+async function hbPlans() {
+  const path = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const phone = await import("../../../qa/fixtures/phone-households.mjs");
+  const round8 = await import("../../../qa/fixtures/round8-households.mjs");
+  const personas = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { demoHousehold } = await import("../../../qa/fixtures/demo-household.mjs");
+  const D = "2026-11-16", out = [];
+  const dir = fileURLToPath(new URL("../../../qa/fixtures/", import.meta.url));
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith("-plan.mjs")).sort()) {
+    const m = await import(pathToFileURL(path.join(dir, f)).href);
+    for (const [name, fn] of Object.entries(m)) if (typeof fn === "function" && /Plan$/.test(name)) out.push({ name: `fixture ${f}:${name}`, plan: fn(D) });
+  }
+  for (const a of ARCHETYPES) out.push({ name: `${a.id}/base`, plan: a.build() });
+  for (const [name, fn] of Object.entries(phone)) if (typeof fn === "function") out.push({ name: `phone ${name}`, plan: fn() });
+  for (const [name, fn] of Object.entries(round8)) if (typeof fn === "function" && /Plan$/.test(name)) out.push({ name: `round8 ${name}`, plan: fn() });
+  for (const n of ["sam", "jordan", "patLee", "ruth"]) out.push({ name: `persona ${n}`, plan: personas.finishSetup(n, personas[n](D), D) });
+  out.push({ name: "demo", plan: demoHousehold(D) });
+  out.push({ name: "empty plan", plan: emptyPlan() });
+  return { D, plans: out.map((x) => ({ ...x, plan: migrate(structuredClone(x.plan)) })) };
+}
+
+// Invariance: with nothing new typed, the done screen's compute, standing(), the tile's line and Get started's compute are what
+// c5057c0 gave, byte for byte (digests in ./hb-invariance.json, written from that code: PRINT=1 node --test on it).
+test("hb1 invariance: the done screen's compute, standing(), the tile's words and Get started's compute are c5057c0's over every invented household", async () => {
+  const crypto = await import("node:crypto");
+  const { compute: start } = await import("../start/compute.js");
+  const { D, plans } = await hbPlans();
+  const dig = (v) => crypto.createHash("sha256").update(JSON.stringify(v) ?? "undefined").digest("base64url").slice(0, 22);
+  const run = (f) => { try { return f(); } catch (e) { return { threw: String(e.message) }; } };
+  const now = {};
+  for (const { name, plan } of plans) {
+    const st = run(() => S.standing(structuredClone(plan), { today: D }));
+    now[name] = {
+      done: dig(run(() => S.compute(structuredClone(plan), { screen: "done", today: D }))),
+      standing: dig(st),
+      tile: run(() => (st && !st.threw ? S.retireTileWords(st) : null)),
+      start: dig(run(() => start(structuredClone(plan), { today: D }))),
+    };
+  }
+  const file = new URL("./hb-invariance.json", import.meta.url);
+  if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "Set up my plan's done screen and Get started at c5057c0 (hb1), today 2026-11-16; PRINT=1 writes them again: only on that code", today: D, plans: now }, null, 1)}\n`); return; }
+  const was = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.ok(plans.length >= 45, `${plans.length} households`);
+  assert.deepEqual(Object.keys(now), Object.keys(was.plans));
+  for (const name of Object.keys(now)) assert.deepEqual(now[name], was.plans[name], `${name}: unchanged`);
+});
+
+test("hb1: retireTileAdd, the one sentence case and every case with no link", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { compute: yourPlan } = await import("../plan/compute.js");
+  const D = "2026-11-16";
+  // Ruth and Sam (Sam with no figure): the tile's line, and the link under it
+  const rc = migrate(retiredCouplePlan(D)), st = S.standing(rc, { today: D });
+  assert.equal(S.retireTileWords(st), "If nothing changes, even without Sam's Social Security.");
+  // the words name what it adds (hb1 fix F2), and the address opens Sam's part on the Social Security page (hb1 fix F1)
+  const sam0 = rc.household.people.find((p) => p.name === "Sam");
+  assert.deepEqual(S.retireTileAdd(st, rc), { words: "Add Sam's Social Security", href: `#/retirement/social-security?show=person-${sam0.id}` });
+  // without the plan: the page's own address, as before
+  assert.deepEqual(S.retireTileAdd(st), { words: "Add Sam's Social Security", href: "#/retirement/social-security" });
+  // the same page as Your plan's row (and Quick answers' and the Timeline's, which use the same address)
+  const row = yourPlan(rc, { today: D }).groups.flatMap((g) => g.rows).find((r) => r.key === "retire");
+  assert.equal(row.add.href, S.SS_ADD_HREF);
+  assert.ok(S.retireTileAdd(st, rc).href.startsWith(`${row.add.href}?`));
+  for (const f of ["../quick/view.js", "../timeline/view.js"]) assert.ok(fs.readFileSync(fileURLToPath(new URL(f, import.meta.url)), "utf8").includes('href: "#/retirement/social-security" }, "Add it ›")'), f);
+  // the Social Security page names each person's part person-<id>, and part() opens and lands on the one ?show= names: if
+  // either is renamed, the link would land on a shut row again (hb1 fix F1)
+  const ssView = fs.readFileSync(fileURLToPath(new URL("../../retirement/social-security/view.js", import.meta.url)), "utf8");
+  assert.ok(ssView.includes('root.append(part(ctx, { id: `person-${p.id}`, kind: "item", card: true,'), "the person's part id");
+  const moreJs = fs.readFileSync(fileURLToPath(new URL("../../../core/ui/more.js", import.meta.url)), "utf8");
+  assert.ok(moreJs.includes("const show = ctx.route?.query?.show;") && moreJs.includes("(show === o.id ||"), "part() reads ?show=<part id>");
+  // on her own (14-unusual-structures' Grace): "your Social Security"
+  assert.equal(S.retireTileAdd({ retire: { verdict: "on track" }, withoutSs: "your Social Security" }).words, "Add your Social Security");
+  // the "Partly our guesses, without Sam's Social Security. ..." tile names it too, so it gets the link
+  const g = { retire: { verdict: "on track" }, retireGuessed: true, retireGuessedWhat: "spending", withoutSs: "Sam's Social Security" };
+  assert.match(S.retireTileWords(g), /without Sam's Social Security/);
+  assert.equal(S.retireTileAdd(g).href, "#/retirement/social-security");
+  assert.equal(S.retireTileAdd(g, rc).href, `#/retirement/social-security?show=person-${sam0.id}`);
+  // a person id with a character an address cannot carry is written so it reads back the same
+  const odd = structuredClone(rc); odd.household.people.find((p) => p.name === "Sam").id = "p sam&x";
+  const oddHref = S.retireTileAdd(S.standing(odd, { today: D }), odd)?.href ?? "";
+  const { parse } = await import("../../../core/router.js");
+  assert.equal(parse(oddHref).query.show, "person-p sam&x");
+  // a broken plan never stops the link: it falls back to the page's own address
+  assert.equal(S.retireTileAdd(st, { household: { people: "nonsense" } }).href, "#/retirement/social-security");
+  // no link: nothing missing; no answer (the tile asks for it itself: "Needs Social Security for Sam."); nothing saved ("Not known yet")
+  assert.equal(S.retireTileAdd({ retire: { verdict: "on track" }, withoutSs: null }), null);
+  assert.equal(S.retireTileAdd({ retire: null, withoutSs: "Sam's Social Security" }), null);
+  assert.equal(S.retireTileAdd({ retire: { verdict: "on track" }, retireSavingsUnknown: true, withoutSs: "Sam's Social Security" }), null);
+  assert.equal(S.retireTileAdd(null), null);
+  assert.equal(S.retireTileAdd(undefined), null);
+  // once Sam's figure is in, the tile reads "If nothing changes." and the link goes
+  const typed = structuredClone(rc), sam = typed.household.people.find((p) => p.name === "Sam");
+  typed.retirement.socialSecurity = { ...(typed.retirement.socialSecurity ?? {}), [sam.id]: { monthlyAtFRA: 1400 } };
+  const st2 = S.standing(typed, { today: D });
+  assert.ok(!st2.withoutSs, "nothing left out");
+  assert.equal(S.retireTileWords(st2), "If nothing changes.");
+  assert.equal(S.retireTileAdd(st2), null);
+});
+
+test("hb1: over every invented household, the link shows exactly where the tile's line names a Social Security not in yet", async () => {
+  const { D, plans } = await hbPlans();
+  const withLink = [];
+  for (const { name, plan } of plans) {
+    const st = S.standing(structuredClone(plan), { today: D });
+    const a = S.retireTileAdd(st, plan);
+    const tileNames = !!st.retire && !st.retireSavingsUnknown && / without (Sam's|your) Social Security/.test(S.retireTileWords(st));
+    assert.equal(!!a, tileNames, name);
+    if (!a) continue;
+    // the part it opens is the person the words name (the one missing; on her own, herself)
+    const who = (plan.household?.people ?? []).find((p) => a.href.endsWith(`?show=person-${encodeURIComponent(p.id)}`));
+    assert.ok(who, `${name}: ${a.href} names someone in the plan`);
+    assert.ok(S.ssMissingFor(plan).some((m) => m.id === who.id), `${name}: ${who.name} has no figure yet`);
+    withLink.push(`${name}: ${a.words} (${who.name})`);
+  }
+  assert.deepEqual(withLink, [
+    "fixture retired-couple-plan.mjs:retiredCouplePlan: Add Sam's Social Security (Sam)",
+    "08-retired/base: Add Sam's Social Security (Sam)",
+    "14-unusual-structures/base: Add your Social Security (Grace)",
+  ]);
+});
+
+test("hb1: the done screen draws the link under the Retirement tile, from retireTileAdd only", () => {
+  // the setup view cannot be drawn in the fake DOM: the source says where the link is and that nothing else changes
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes("const ssAdd = retireTileAdd(st, plan);"), "with the plan, so it opens the person's part");
+  assert.ok(view.includes('add(card, ui.h("div", { class: ssAdd ? "su-stand su-stand-add" : "su-stand" }, nwFig, spareFig, cushionFig, retireFig));'), "the four tiles as before, in the same order");
+  // the words on screen are the whole accessible name: no aria-label that could say something else, the arrow not read (M2)
+  assert.ok(view.includes('if (ssAdd) add(card, ui.h("div", { class: "su-add-wrap" }, ui.h("a", { class: "su-add", href: ssAdd.href }, ssAdd.words, ui.h("span", { "aria-hidden": "true" }, "\\u00a0›"))));'), "a plain link right after them");
+  assert.ok(!/su-add[^\n]*aria-label/.test(view), "no separate accessible name");
+  assert.ok(/\.su-root \.su-add-wrap \.su-add \{[^}]*min-height: 44px/.test(view), "44 px to tap");
+  assert.ok(!/su-add[^\n]*class: "btn/.test(view), "a quiet link, never a second filled button");
+  assert.equal((view.match(/retireTileAdd\(/g) ?? []).length, 1, "called once");
+});
