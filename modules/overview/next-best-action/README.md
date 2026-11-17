@@ -111,6 +111,9 @@ could be that much lower." / "... so the month could be that much further short.
 from savings."), with "Check your list ›" to Expenses, where the card's two answers are. For Ruth and Sam: "Your spending
 list may be missing about $1,220 a month, so what is left over could be that much lower." "That's everything" ends it on
 every page.
+The line is quiet (z1 (d), 2026-11-16: `muted small`, the base classes the note under it and the "decides whether" line
+use; nothing added to global CSS): it says what could change, not the answer, so it no longer reads darker and larger than
+the note under it. Its link keeps its 44 px tap target. Test: "z1 (d)".
 
 Sources (read 2026-11-16): IRS "Estimated taxes",
 https://www.irs.gov/businesses/small-businesses-self-employed/estimated-taxes (page reviewed 25-Sep-2026): estimated tax

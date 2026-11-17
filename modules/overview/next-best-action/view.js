@@ -153,7 +153,8 @@ export function render(page, ctx) {
     // not waiting (a left-over the person gave), but a guess could still turn the month short (or not): one quiet line, never a
     // colour (P7)
     !waits && dm && s.range?.crosses ? ui.h("p", { class: "muted small", "data-decides": "month" }, `${dm.whether}: it is our guess for now. `, ui.h("a", { href: dm.href, style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, `${dm.ask} \u203a`)) : null,
-    miss ? ui.h("p", { "data-missing": "spend" }, `${missingWords(s, miss.rest, money, !!d.drawing)} `, ui.h("a", { href: "#/cashflow/expenses", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Check your list \u203a")) : null,
+    // (z1 (d): a quiet line, as the note under it: it says what could change, not the answer)
+    miss ? ui.h("p", { class: "muted small", "data-missing": "spend" }, `${missingWords(s, miss.rest, money, !!d.drawing)} `, ui.h("a", { href: "#/cashflow/expenses", style: { display: "inline-flex", alignItems: "center", minHeight: "44px" } }, "Check your list \u203a")) : null,
     ui.h("p", { class: "muted small" }, `${s.stateTax > 0.5 ? "State income tax is worked out on this income from the State tax page, or from your state's own brackets; local taxes are not counted." : s.stateKnown ? "" : "Your state's income tax is not counted yet: type its rate on the State tax page."} ${spendingOf(s)} what the Contributions and Goals pages already put away${s.held > 0.5 ? "; side income above the careful figure you count on (Side income) is left out of the spare: a bonus to save when it comes" : ""}${s.debtExtra > 0 ? `; the extra on debts is the plan saved on Pay off debts${d.debtPlan?.until ? `, until about ${month(d.debtPlan.until)}, then it is spare again` : ""}` : ""}.`.trim())));
 
   // the order

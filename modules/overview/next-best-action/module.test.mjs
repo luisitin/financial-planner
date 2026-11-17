@@ -1093,3 +1093,28 @@ test("gy1 fix P1: the spending list may be missing money: the same amount the Da
   // our guesses' page not in use: no line (the Dashboard shows no card then either)
   assert.doesNotMatch(draw(retiredCouplePlan(T), false), /may be missing/);
 });
+
+test("z1 (d): the 'may be missing' line has the quiet look of the note under it (muted, small), not body text", async () => {
+  const { render } = await import("./view.js");
+  const fmt = await import("../../../core/format.js");
+  const guesses = await import("../guesses/module.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const node = (tag, kids = [], extra = {}) => { const x = { tag, kids: [], style: {}, ...extra, append(...k) { for (const c of k.flat(Infinity)) if (c !== null && c !== undefined && c !== false) x.kids.push(c); }, prepend(...k) { x.append(...k); }, remove() {}, get textContent() { return x.kids.map((c) => (typeof c === "object" ? c.textContent : String(c))).join(" "); } }; x.append(...kids); return x; };
+  const isAttrs = (a) => a && typeof a === "object" && !Array.isArray(a) && !("kids" in a);
+  const ui = { h: (tag, a, ...k) => node(tag, isAttrs(a) ? k : [a, ...k], isAttrs(a) ? { attrs: a } : {}), card: (t, ...k) => node("card", [t, ...k]), button: (l, fn) => node("button", [l], { onClick: fn }), notice: (lv, t) => node("notice", [t]), row: (...k) => node("row", k), stat: (l, v, s) => node("stat", [l, v, s]), form: () => node("form"), table: () => node("table"), uid: () => "x" };
+  const gm = { ...guesses.default, group: "overview", id: "guesses" };
+  const root = node("root");
+  render(root, { ui, fmt: { ...fmt, today: () => T }, plan: retiredCouplePlan(T), store: { update() {} }, modules: new Map([["overview/guesses", gm]]), isReady: () => true, features: { enabled: () => true } });
+  // the section that holds the line: find it and the note right under it
+  let line = null, after = null;
+  const walk = (x) => { if (!x || typeof x !== "object") return; const i = x.kids.findIndex((c) => c?.attrs?.["data-missing"] === "spend"); if (i >= 0) { line = x.kids[i]; after = x.kids.slice(i + 1).find((c) => c?.tag === "p"); } x.kids.forEach(walk); };
+  walk(root);
+  assert.ok(line, "Ruth and Sam's page has the line");
+  assert.match(line.textContent, /^Your spending list may be missing about \$1,220 a month, so what is left over could be that much lower\./);
+  assert.equal(line.attrs.class, "muted small", "the quiet look");
+  assert.equal(after?.attrs?.class, line.attrs.class, "the same look as the note under it");
+  // its link keeps its 44 px tap target
+  const link = line.kids.find((c) => c?.tag === "a");
+  assert.equal(link.attrs.href, "#/cashflow/expenses"); assert.equal(link.attrs.style.minHeight, "44px");
+});
