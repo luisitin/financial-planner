@@ -153,6 +153,9 @@ export async function invarianceDigests(plans = null) {
   }
   return out;
 }
+// (z1, 2026-11-16: the Annual review quotes Plan health score, which now scores "Retirement on track" when Social Security is the
+// only gap and the money lasts without it; the digests of the three plans that lifts (the retired couple, 08-retired,
+// 14-unusual-structures) were rewritten from a PRINT run after that change, those three only; only their `annual` part moved.)
 test("gap next-60 #16 invariance: with no category inside another, every reader gives exactly what it gave at ce79d70", async () => {
   const fs = await import("node:fs");
   const file = new URL("./invariance.json", import.meta.url);

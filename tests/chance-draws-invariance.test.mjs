@@ -13,6 +13,11 @@
 //   - the same with `draw: "usual"` asked for, with an unknown draw, and with `assumptions.chanceDraw` saved in the plan:
 //     compute never reads the field (the page reads it and asks for the way), so no other page moves when it is kept.
 //
+// z1 (2026-11-16): the plan summary quotes Plan health score, which now scores "Retirement on track" when Social Security is the
+// only gap and the money lasts without it (overview/setup lastsWithoutSs). For the three plans that lifts (the retired couple,
+// 08-retired, 14-unusual-structures) the `summary` and `summaryButJobLoss` digests were rewritten from a PRINT run after that
+// change, those entries only (the score, its band, the retirement part and the list of what would lift it moved; nothing else);
+// tests/one-answer.test.mjs checks the summary quotes the Health score's own answer.
 // To write the digests down again after a deliberate change to these figures: PRINT=1 node --test tests/chance-draws-invariance.test.mjs
 import { test } from "node:test";
 import assert from "node:assert/strict";

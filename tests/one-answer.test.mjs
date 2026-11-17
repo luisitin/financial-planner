@@ -27,6 +27,8 @@ import { compute as health } from "../modules/overview/health-score/compute.js";
 import { pathSummary } from "../modules/overview/guide/compute.js";
 import { retirementGap } from "../modules/overview/setup/compute.js";
 import { markGuess } from "../core/estimate/index.js";
+import { compute as summaryReport } from "../modules/reports/plan-summary/compute.js";
+import { compute as annualReview } from "../modules/reports/annual-review/compute.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const T = "2026-11-16";
@@ -290,6 +292,20 @@ test("Ruth and Sam, by name: every page says what Will the money last? says", ()
   assert.deepEqual([end.title, end.detail], ["The money lasts", "About $966,600 is left at the end, in today's dollars. Sam's Social Security is not counted yet."]);
   assert.ok(!tl.events.some((e) => e.id === "needs-ss"));
   assert.deepEqual(retireRow(RC.st, { plan: c(RC.plan), today: T }), { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" });
+  // the reports that quote Plan health score (the plan summary, the annual review) give its answer: 76, Good, retirement scored
+  assert.deepEqual([hs.score, hs.band], [76, "Good"]);
+  const sum = summaryReport(c(RC.plan), { today: T, maxPaths: 200 }), ann = annualReview(c(RC.plan), { today: T, year: 2026 });
+  for (const [name, r] of [["plan summary", sum], ["annual review", ann]]) {
+    assert.deepEqual([r.health?.score ?? r.score, r.health?.band ?? r.band], [hs.score, hs.band], name);
+    assert.ok(!JSON.stringify(r).includes("Scored as soon as the retirement part above is"), `${name}: no "like the retirement part" left`);
+  }
+  // their next steps quote the Health score's asks: Sam's figure is asked once, by Protection, and "The plan knows enough"
+  // under it says "(as above)" (fix round, critic P4)
+  for (const [name, steps] of [["plan summary", sum.nextSteps], ["annual review", ann.ahead?.steps]]) {
+    const at = (re) => (steps ?? []).findIndex((x) => re.test(x.detail));
+    assert.ok(at(/^Add Social Security for Sam on the Social Security page/) >= 0, name);
+    assert.ok(at(/add Sam's Social Security \(as above\)/) > at(/^Add Social Security for Sam/), `${name}: "as above" comes after the ask`);
+  }
   // a single adult short without Social Security: every page keeps asking, as the page's notice asks first
   const one = RUNS.find((r) => r.name === "01-single-adult/base");
   assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard, one.says["Your plan"], one.says["Quick answers"], one.says.Timeline, one.says["Health score"]], ["short", "asks-ss", "asks-ss", "asks-ss", "asks", "asks-ss", "asks-ss"]);
