@@ -41,7 +41,6 @@
   "overview/alerts": {"empty":{"noStart":1}},
   "overview/benchmarks": {"plan":{"fsWords":160}},
   "overview/guide": {"plan":{"cardCut":1},"empty":{"cardCut":1,"noStart":1}},
-  "overview/health-score": {"plan":{"fsWords":150}},
   "overview/next-best-action": {"plan":{"fsWords":150,"fsFigs":12}},
   "overview/pages": {"empty":{"noStart":1}},
   "overview/quick": {"plan":{"cardCut":1},"empty":{"cardCut":1,"noStart":1}},

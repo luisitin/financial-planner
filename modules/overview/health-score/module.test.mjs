@@ -502,6 +502,86 @@ test("ha2: the retirement part's sentences, one per case: lasts (no percent; the
   assert.equal(e.ratio, undefined);
 });
 
+// ---------------------------------------------------------------- the page, simple first (ha2; opt spec 6.2)
+/** Draw the page for a plan; `first` is what a person meets before any tap (nothing inside a shut part but its row). */
+async function drawScore(plan, today) {
+  const { renderPage, FakeElement } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const r = await renderPage(new URL("./view.js", import.meta.url), plan, today, { computeRemote: { "overview/health-score": compute } });
+  // (the page's own <style> and the aria-hidden chevrons are not words a person reads); `shut`: what a shut part hides is left out
+  const walk = (n, shut) => (!(n instanceof FakeElement) ? n.data : n.hidden || n.tagName === "STYLE" || n.getAttribute("aria-hidden") === "true" ? ""
+    : (n.childNodes.filter((c) => !(shut && n.tagName === "DETAILS" && !n.hasAttribute("open")) || c.tagName === "SUMMARY").map((c) => walk(c, shut)).join(" ")));
+  const words = (shut) => walk(r.root, shut).replace(/\s+/g, " ").trim();
+  return { ...r, first: words(true), all: words(false) };
+}
+const count = (t, s) => t.split(s).length - 1;
+
+test("ha2 view: Ruth and Sam's first view is the score, the two biggest gains with their one step, and two quiet rows", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const { first, all, root } = await drawScore(retiredCouplePlan(T), T);
+  assert.match(first, /Good: 76 out of 100 You can gain the most points in "Protection" and "Goals"\./);
+  // the two rows: Protection's one ask, short and in plain words, saying the score may change (ha2 fix P1, P2, P3), and Goals;
+  // what the ask does to the score and "The plan knows enough" are one tap away (no decimal, no second part's name here)
+  assert.match(first, /Where the points are \+15 Protection Not scored yet: checking life's shocks, like a death or a long life, needs Social Security for Sam\. Add Sam's Social Security estimate from ssa\.gov\/myaccount, or say Sam won't get it\. Your score may change once this is in\. Open the page \+5 Goals No goals with a date yet\. Add what you are saving for, with a date, on the Goals page\./);
+  assert.match(first, /Open the page 5 more parts How this is worked out 7 parts$/);
+  assert.doesNotMatch(first, /The plan knows enough|Still to do|Seven parts, each scored|Retirement on track|stress tests|1\.4|unlocks|up to/);
+  // the ask's link opens Sam's row on the Social Security page, where "won't get it" is (ha2 fix P4)
+  assert.ok(root.all().some((e) => e.tagName === "A" && e.getAttribute("href") === "#/retirement/social-security?show=person-p-sam"));
+  // "How this is worked out" says what the ask does to the score, first: the sure 1.4 and the part it lets be scored
+  assert.match(all, /How this is worked out 7 parts Not in the score yet: Social Security for Sam\. Once added, "The plan knows enough" gains 1\.4 points, and "Protection" \(out of 15\) is scored on what you add\. Seven parts, each scored/);
+  // on the whole page every part's words once: Sam's figure asked for once, never "as above"; the retirement pair in plain words
+  // with its share in "How this is worked out", and its row saying what it shows
+  assert.equal(count(all, "Sam's Social Security estimate"), 1);
+  assert.equal(count(all, "Your score may change"), 1);
+  assert.doesNotMatch(all, /as above|\(256%\)/);
+  assert.equal(count(all, "Still to do: say what you will spend in retirement; look over your assumptions (once a year)."), 1);
+  assert.match(all, /The plan can carry about \$7,120 a month; you plan to spend \$2,780\. Sam's Social Security is not counted yet\. See what would change this ›/);
+  assert.match(all, /nothing at 60%, full marks at 115% \(room for bad luck\)\. Yours is 256%\./);
+  assert.match(all, /Seven parts, each scored by the page that works it out: emergency fund 15, saving 15, debt 15, retirement 25, protection 15, goals 5, a complete plan 10\. Strong from 85, Good from 70, Fair from 50\./);
+  // every fold is the helper's part (no hand-written <details>), two of them, shut
+  const folds = root.all().filter((e) => e.tagName === "DETAILS");
+  assert.deepEqual(folds.map((d) => [d.dataset?.part ?? d.getAttribute("data-part"), d.hasAttribute("open")]), [["parts", false], ["how", false]]);
+});
+
+test("ha2 view: where the retirement part asks (01-single-adult), Protection, which waits on it, is not a row of its own", async () => {
+  const { ARCHETYPES } = await import("../../../qa/households/lib/catalog.mjs");
+  const plan = ARCHETYPES.find((a) => a.id === "01-single-adult").build();
+  const { first, all } = await drawScore(plan, "2026-11-16");
+  const rows = first.slice(first.indexOf("Where the points are"), first.indexOf(" more parts"));
+  assert.match(rows, /^Where the points are \+25 Retirement on track Not scored yet: whether the money lasts needs your Social Security\. Add your Social Security estimate from ssa\.gov\/myaccount, or say you won't get it\. Your score may change once this is in\. Open the page \+\d+ Emergency fund /);
+  assert.doesNotMatch(rows, /\+15 Protection|Scored as soon as/);
+  // Protection is still on the page, once, one tap away
+  assert.equal(count(all, "Not scored yet: the stress tests need your Social Security first, like the retirement part."), 1);
+  assert.equal(count(all, "Add your Social Security estimate"), 1);
+  assert.match(all, /How this is worked out 7 parts Not in the score yet: your Social Security\. Once added, "The plan knows enough" gains 1\.4 points, and "Retirement on track" \(out of 25\) and "Protection" \(out of 15\) are scored on what you add\./);
+});
+
+test("ha2 view: before a score, the seven parts it will score and their worth are the one part 'How this is worked out'", async () => {
+  const { emptyPlan: empty } = await import("../../../core/schema/migrate.js");
+  const { first, all, root } = await drawScore(empty(), "2026-11-16");
+  assert.match(first, /^No score yet /);
+  assert.match(first, /How this is worked out$/);
+  assert.doesNotMatch(first, /Emergency fund|The seven parts it will score/);
+  // the weights and each part's rule, as on a scored page, without a share of its own (no retirement answer yet); the parts'
+  // rows (what each needs) are what the questions ask, and once open they ran 1,440 px on a phone, over a part's 1,300
+  assert.match(all, /How this is worked out Seven parts, each scored by the page that works it out: emergency fund 15, .* Strong from 85, Good from 70, Fair from 50\. Emergency fund: .* Retirement: the steady spending the plan can pay for against what it plans: nothing at 60%, full marks at 115% \(room for bad luck\)\. Protection: /);
+  assert.doesNotMatch(all, /Yours is|not known yet/);
+  // what the retirement check still needs, once, in the words every retirement page uses (l001; the part rows that said it are gone)
+  assert.match(all, /Retirement on track: We can't tell yet whether your money lasts\. Add a birth date on the People page, your accounts on the Net worth page and what you will spend in retirement \(on the Expenses page, or on the Will the money last\? page\)\./);
+  assert.deepEqual(root.all().filter((e) => e.tagName === "DETAILS").map((d) => d.dataset?.part ?? d.getAttribute("data-part")), ["how"]);
+});
+
+test("S11: there is nothing to save on this page, so drawing it and opening every part writes nothing to the plan", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const plan = retiredCouplePlan(T), before = JSON.stringify(plan);
+  const { root, saved } = await drawScore(plan, T);
+  for (const d of root.all().filter((e) => e.tagName === "DETAILS")) { d.setAttribute("open", ""); d.dispatch?.("toggle"); }
+  assert.equal(saved.length, 0);
+  assert.equal(JSON.stringify(plan), before);
+  assert.equal(root.all().filter((e) => e.tagName === "DETAILS" && e.hasAttribute("open")).length, 2);
+});
+
 // ---------------------------------------------------------------- invariance (ha2, gap spec 3.5)
 // One ask for a missing Social Security figure and the retirement part in plain words (ha2, 2026-11-17) change words only. Over
 // every invented household (qa/fixtures *-plan.mjs, the 14 households' base plans, the phone-built ones, round 8, the four Get

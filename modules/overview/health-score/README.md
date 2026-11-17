@@ -190,9 +190,10 @@ adult; ..."). While the retirement part is scored on that answer, "The plan know
 Protection asks for: "Still to do: add Sam's Social Security (as above); ...". Protection always comes before it, in the seven
 parts and in the gains (15 points against at most 10), so "as above" holds on this page and in the next steps of Plan summary
 and the yearly review, which list the gains in the same order (test "z1 fix P4", `tests/one-answer.test.mjs`). The points do
-not change. (Superseded by ha2 below: one ask, no "as above", no "(256%)".)
+not change. (Superseded by ha2 below: one ask, no "as above"; the "(256%)" moved into "How this is worked out"; the
+retirement row's link says what it shows.)
 
-## One missing figure, one ask; the retirement part in plain words (ha2, 2026-11-17)
+## One missing figure, one ask; the retirement part in plain words; simple first (ha2, 2026-11-17)
 
 **What was wrong.** For the invented retired couple Ruth and Sam (`qa/fixtures/retired-couple-plan.mjs`: Sam has no Social
 Security figure, the money lasts without it) the page asked for Sam's figure twice, as two rows of "Where the points are":
@@ -245,10 +246,41 @@ opens that person's part), where the "won't get it" button is. Its gap is worked
 **The retirement part in plain words.** Lasting: "The plan can carry about $7,120 a month; you plan to spend $2,780." (the
 pair a person compares; "Sam's Social Security is not counted yet." after it when z1 lifts it). Short: unchanged ("The money
 runs out in 2054: it can carry about $X a month against the $Y planned."). The share, 2.56 for Ruth and Sam, is the part's
-`ratio`, for the page to say beside the rule it is measured against ("nothing at 60%, full marks at 115%"). The part's formula is unchanged: share = (ratio - 0.6) / 0.55, clamped.
+`ratio` and is said in "How this is worked out" beside the rule it is measured against: "Retirement: ... nothing at 60%, full
+marks at 115% (room for bad luck). Yours is 256%." The part's formula is unchanged: share = (ratio - 0.6) / 0.55, clamped.
+
+**The row's way on.** The retirement row says "See what would change this ›" when it opens Goal seek; every other row keeps
+"Open <page title> ›". OV-5 (stress test 2026-11-11, a tester's finding, not a design-log decision) asked rows to say where
+they go; "Goal seek" is the one title on this page that tells a layperson nothing, and Will the money last? already links to
+the same page as "What would change it ›". The link still opens the same address (with `?target=` as before).
+
+**Simple first (opt spec 6.2, done here because that page's opt commit had not landed; gap spec 3.1).** First view: the
+ring, "Good: 76 out of 100", 'You can gain the most points in "Protection" and "Goals".'; "Where the points are" with the TWO
+parts that would gain the most (`firstRows`: largest gap first, no part with `askedIn`; the asking part first, as it scores
+nothing yet no gain is larger, and on a tie with a 15-point part it still makes the first view), each with its reason, its
+step and its page; the ask's step ends "Your score may change once this is in." (`MAY_CHANGE`: "Good: 76 out of 100" with
+Protection waiting on Sam's figure read as settled); then one card of two quiet rows (`core/ui/more.js` `parts()`): "5 more
+parts" (every other part, as the old "All seven parts" rows) and "How this is worked out" (status "7 parts": first the ask's
+`unlock`, what adding the figure does to the score, then the weights and bands line that sat in the hero, the seven rules,
+"Yours is N%"). Before a score ("No score yet"), the hand-written fold "The seven parts it will score" is the
+part "How this is worked out", with the same body as on a scored page (the weights and bands, the seven rules) and one line
+with what the retirement check still needs, in the words every retirement page uses (l001, `tests/wording-verify.test.mjs`:
+"Retirement on track: We can't tell yet whether your money lasts. Add a birth date on the People page, ..."; found in the
+critics' round, the first version had dropped it with the rows); the seven
+part rows it held (what each part needs, all "not known yet") ran 1,440 px open on a phone, over the 1,300 a part may take
+(docs/OPTIONAL.md R15, `qa/first-view.mjs`), and say what the questions behind the one filled button ask. Every part's reason and step is
+on the page once. No filled button on a scored page; nothing opens or shuts the plan; there is no save on this page. First
+view (`node qa/first-view-node.mjs overview/health-score`): the worst household (the invented family) 413 words and 12
+figures before, 116 words and 1 figure after (Ruth and Sam 375 and 9 to 113 and 0; in the critics' round the shorter ask took the words before any tap, as the
+module test counts them, from 114 to 101, and 01-single-adult's from 133 to 110; the renter 392 and 13 to 99 and 0; the empty plan 37 to 36 words); inside the answer budget (160 words, 8 figures), so its entry in `tests/first-view.known.json`
+(500 words, 17 figures) is gone, and so is its entry in `qa/first-view.known.json` (150 words on the first screen at 390 px;
+the browser check passes every budget for the four households). Walk (phone, sandbox): "5 more parts" opens in place, "See what would change this" opens
+Goal seek, Back comes to the same spot with the part open, a reload keeps it open (`planner.more`, this phone only), opening
+or shutting never changes the plan.
 
 **Tests** (`module.test.mjs`): "ha2: Ruth and Sam ...", "'won't get it' ...", "the one ask, case by case ...",
-"unlockWords ...", "the retirement part's sentences ..."; `tests/one-answer.test.mjs` (Plan summary's
+"unlockWords ...", "ha2 fix F1 / F3, P5 / F4 ...", "the retirement part's sentences ...", the view's first view (the ask's
+short words, "Your score may change", the link to Sam's row, the `unlock` first in "How this is worked out"); `tests/one-answer.test.mjs` (Plan summary's
 and the yearly review's steps ask once). **Invariance**: over every invented household (49: the qa fixtures plans, the 14
 base households, the phone-built ones, round 8, the four personas, the demo, the empty plan) the score's whole output and the
 yearly review's steps, with 452408a's words put back (`tests/health-score-words.mjs`), are byte for byte what 452408a gave
