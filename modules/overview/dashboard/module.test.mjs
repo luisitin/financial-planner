@@ -417,3 +417,43 @@ test("gy1: the retirement row says what Will the money last? says while Social S
   const rn = retireRow(standing(nd, { today: T }), { plan: nd, today: T });
   assert.equal(rn.open, true); assert.match(rn.s, /^Needs Social Security for Sam and birth dates$/);
 });
+
+// ---- z1 (c): a row's screen-reader label says each sentence once, with one stop
+test("z1 (c): rowLabel ends each part with one period, even when the row's line already ends with one", async () => {
+  const { rowLabel } = await import("./compute.js");
+  // the left-over row's line ends with the year's saving sentence, which ends with a period
+  assert.equal(rowLabel({ k: "Left over each month", v: "$3,003", s: "After tax, bills and saving. About $36,000 a year builds up in checking and savings." }),
+    "Left over each month: $3,003. After tax, bills and saving. About $36,000 a year builds up in checking and savings.");
+  // a line without a period gets one (as before)
+  assert.equal(rowLabel({ k: "Emergency fund", v: "9 months", s: "Covered" }), "Emergency fund: 9 months. Covered.");
+  // an open row: its figure is not known yet
+  assert.equal(rowLabel({ k: "Left over each month", v: "Add ›", open: true, s: "Needs what you spend each month" }), "Left over each month: not known yet. Needs what you spend each month.");
+  // an open row with its own spoken figure: the retirement row that lasts on what is listed (retireWaitRow; z1 fix round P1)
+  assert.equal(rowLabel({ k: "Retirement", v: "See below ›", open: true, said: "see below", s: "The money lasts on what you listed" }), "Retirement: see below. The money lasts on what you listed.");
+  // no figure (the check-in done row): its name and line, no ": ."
+  assert.equal(rowLabel({ k: "October check-in done ✓", v: "", s: "Next: early December, to look back at November" }), "October check-in done ✓. Next: early December, to look back at November.");
+  // no line: nothing after the figure
+  assert.equal(rowLabel({ k: "Retirement", v: "On track", s: "" }), "Retirement: On track.");
+  assert.equal(rowLabel({ k: "Retirement", v: "On track", s: "  ..  " }), "Retirement: On track.");
+});
+
+test("z1 (c): on the drawn Dashboard no row's screen-reader label says '..', for the invented retired couple and the family", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { familyPlan } = await import("../../../qa/fixtures/family-plan.mjs");
+  const D = "2026-11-16";
+  // Ruth and Sam once they have said their spending list is everything ("That's everything"): the left-over row says its figure
+  const ruth = retiredCouplePlan(D); ruth.guide = { ...(ruth.guide ?? {}), spendComplete: D };
+  for (const [name, plan] of [["Ruth and Sam", ruth], ["Ruth and Sam, list not confirmed", retiredCouplePlan(D)], ["Ana and Bo", familyPlan(D)]]) {
+    const d = await drawDashboard(plan, D);
+    const links = d.root.querySelectorAll("a").filter((a) => a.closest(".db-rows"));
+    assert.ok(links.length >= 3, `${name}: ${links.length} rows`);
+    for (const a of links) {
+      const label = a.getAttribute("aria-label");
+      assert.ok(label && !/\.\s*\./.test(label) && !/:\s*\./.test(label), `${name}: ${label}`);
+    }
+    if (name === "Ruth and Sam") {
+      const left = links.map((a) => a.getAttribute("aria-label")).find((l) => l.startsWith("Left over each month: "));
+      assert.equal(left, "Left over each month: $3,003. After tax, bills and saving. About $36,000 a year builds up in checking and savings.");
+    }
+  }
+});

@@ -94,6 +94,18 @@ export function spareWaitsRow(st, money) {
 }
 /** A tile's reason (standing().tileWhy: "Needs your savings.") as a row's line, which ends without a period. */
 export const rowWords = (t) => String(t ?? "").replace(/\.$/, "");
+/**
+ * A row's screen-reader label, one sentence stop each (z1 (c)): "Left over each month: $3,003. After tax, bills and saving. That
+ * builds up about $36,040 a year in checking and savings." The line under the row may already end with a period (the year's
+ * saving sentence does): it is said once, never "..". An open row says "not known yet" for its figure; a row with no figure
+ * (the check-in done row) says its name and line only; an empty line adds nothing.
+ */
+export function rowLabel(r) {
+  // (`said`: an open row's own spoken figure, when it is not "not known yet": the retirement row that lasts on what is listed
+  // while the list may be short says "see below"; retireWaitRow, z1 fix round P1)
+  const k = String(r?.k ?? "").trim(), v = r?.open ? String(r?.said ?? "not known yet") : String(r?.v ?? "").trim(), s = String(r?.s ?? "").replace(/[.\s]+$/, "");
+  return `${v ? `${k}: ${v}.` : `${k}.`}${s ? ` ${s}.` : ""}`;
+}
 
 // ---------------------------------------------------------------- one next step (stress test 2026-11-11, FL-HOME)
 /** The checklist's short button words, by step key. */

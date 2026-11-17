@@ -9,7 +9,7 @@ import { checkInDue } from "../monthly-review/compute.js";
 import { setupCard } from "../start/compute.js";
 import { monthsNear } from "../../../core/words.js";
 import { spareLabel, leftGoalsWords } from "../../../core/math/leftover.js";
-import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords, retireRow } from "./compute.js";
+import { homeNext, calmHeadline, SHORT_LABEL, spareWaitsRow, rowWords, retireRow, rowLabel } from "./compute.js";
 import { lookNext } from "../../../core/demo/names.js";
 import { goalsWords, guessedGoals } from "../plan/words.js";
 import { aiHealth } from "../../ai/health.js";
@@ -177,7 +177,7 @@ export function render(root, ctx) {
       root.append(ui.h("section", { class: "card db-now", "aria-labelledby": "db-now-h" },
         ui.h("h1", { id: "db-now-h" }, name ? `Hi ${name}.` : "Where you stand"),
         ui.h("p", { class: "db-head" }, calmHeadline(st.headline, { underWay })),
-        ...[rows.filter((r) => !r.late), rows.filter((r) => r.late)].filter((list) => list.length).map((list, i) => ui.h("ul", { class: `db-rows${i ? " db-later" : ""}` }, list.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": `${r.k}: ${r.open ? "not known yet" : r.v}. ${r.s}.`, ...(r.onClick ? { onClick: r.onClick } : {}) },
+        ...[rows.filter((r) => !r.late), rows.filter((r) => r.late)].filter((list) => list.length).map((list, i) => ui.h("ul", { class: `db-rows${i ? " db-later" : ""}` }, list.map((r) => ui.h("li", {}, ui.h("a", { href: r.href, "aria-label": rowLabel(r), ...(r.onClick ? { onClick: r.onClick } : {}) },
           ui.h("span", { class: `db-dot ${r.dot}`, "aria-hidden": "true" }),
           ui.h("span", { class: "db-k", "aria-hidden": "true" }, r.k, ui.h("span", { class: "db-s" }, r.s)),
           ui.h("span", { class: `db-v${r.open ? " open" : ""}`, "aria-hidden": "true" }, r.v),

@@ -267,3 +267,15 @@ missing about $1,220 a month, the first screen said that while Your plan, Quick 
 After "That's everything" the card goes and the row is `retireRow`'s again ("The money lasts, even without Sam's Social
 Security" / "On track"). The first-view count (qa/first-view-node.mjs) for Ruth and Sam stays at 196 words (the
 page's entry is 200).
+
+### A row's screen-reader label says each sentence once (z1 (c), 2026-11-16; test "z1 (c)")
+
+Each row is one link whose spoken label is built by `rowLabel(r)` (compute.js): `"<name>: <figure>. <line>."`, with "not known
+yet" for the figure of an open row. The line under a row may end with its own period: the left-over row ends with the year's
+saving sentence. The label used to add a second one, so a screen reader met "... in checking and savings.." for the invented
+retired couple once their spending list is confirmed. Now the line's own trailing periods are dropped before the one stop is
+added: "Left over each month: $3,003. After tax, bills and saving. About $36,000 a year builds up in checking and savings."
+Two cases the same function settles: a row with no figure (the "October check-in done" row) reads "<name>. <line>." instead of
+"<name>: . <line>."; an empty line adds nothing. What is on screen does not change. An open row may carry its own spoken
+figure (`said`): the retirement row that lasts on what is listed says "Retirement: see below. The money lasts on what you
+listed.", never "not known yet" before an answer (fix round, P1).
