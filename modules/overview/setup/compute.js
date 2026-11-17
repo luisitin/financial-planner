@@ -7,6 +7,7 @@
 // the plan already has (made on its own page) is shown and not asked again; nothing that another record points at is
 // ever removed; a blank box saves nothing.
 import { CATEGORIES, compute as computeExpenses, BANK_SPREAD } from "../../cashflow/expenses/compute.js";
+import { taxesListedOf } from "../../cashflow/forecast/compute.js";
 import { bankVsPlan } from "../../cashflow/income-statement/compute.js";
 import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeNetWorth, ACCOUNT_TYPES, countedBalance, isLiability } from "../../balance/net-worth/compute.js";
@@ -2036,6 +2037,11 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
     else m = exp.monthly;
     return { w, c, exp, spare, m, rows: setupRowsMonthly(c) };
   };
+  // the pay side of the month, what comes in after tax and saving before any spending: the left-over plus the spending as Next
+  // best action counts it, Expenses' month less the part of a line filed under "Taxes not withheld" that the month's own tax
+  // already holds (cashflow/forecast's shared rule taxesListedOf, with the month's tax as its cover, the call Next best action
+  // makes; z1: Expenses' whole month overstated it by that line)
+  const payable = (r) => r.m + r.exp.monthly - taxesListedOf(r.exp.items, { tax: r.spare.federalTax + r.spare.payrollTax + r.spare.stateTax, state: r.spare.stateKnown ? r.spare.stateTax : 0 });
   const sign = left ? -1 : 1;
   const level = left && target === 0;
   const score = (r) => (level && r.m < 0 ? Infinity : Math.abs(r.m - target));
@@ -2054,12 +2060,12 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
       return { ok: false, why: "more-than-pay", over: Math.max(0, Math.round(r ? Math.abs(target - r.m) : target - seen)), allowed: 0, available: Math.round(seen) };
     }
     if (!last) return { ok: false, why: "pay", over: 0, allowed: 0 };
-    if (left) seen = last.m + last.exp.monthly;
+    if (left) seen = payable(last);
     const diff = (target - last.m) * sign;        // dollars to add to the rows to land on the target
     if (pass > 0 && Math.abs(diff) <= 0.5 + 1e-9) break;
     fig = last.w + diff;
     // the pay side of the month: what comes in after tax and saving, before any spending (the left-over is more than that: nothing can be spent)
-    const available = left ? last.m + last.exp.monthly : null;
+    const available = left ? payable(last) : null;
     if (left && available - target < -0.5) return { ok: false, why: "more-than-pay", over: Math.round(target - available), allowed: 0, available: Math.round(available) };
     // below what the typed groups already add up to, the figure cannot be reached: nothing is left to share
     if (fig < typed - 0.5 || fig < -0.5) {
@@ -2088,7 +2094,7 @@ export function solveSpend(plan, v, want, { today, guess = null } = {}) {
   }
   const others = best.exp.monthly - best.rows;
   // nothing at all to spend on (no bills, no loan payments, and the left-over is all of what comes in): not a month of any household
-  if (best.w === 0 && others < 0.5) return { ok: false, why: "more-than-pay", over: 0, allowed: 0, available: left ? Math.round(best.m + best.exp.monthly) : null };
+  if (best.w === 0 && others < 0.5) return { ok: false, why: "more-than-pay", over: 0, allowed: 0, available: left ? Math.round(payable(best)) : null };
   return { ok: true, figure: best.w, rows: Math.round(best.rows), month: best.exp.monthly, left: left ? best.m : null, spare: best.spare, typed, others, about: left && Math.abs(best.m - target) > 0.5 + 1e-9 };
 }
 /** The most (dollars a month) the left-over a plan that steps reads may be off the one typed; beyond it the answer is refused. */

@@ -2777,6 +2777,33 @@ test("verify: after a raise, Continue with the left-over the plan now reads keep
   assert.ok(Math.abs(leftNow(z) - (now - 200)) <= 0.5);
 });
 
+test("z1 (b): the left-over's ceiling leaves out the income tax filed on Expenses that the month's tax already holds (cashflow/forecast's rule)", async () => {
+  const { taxesListedOf } = await import("../../cashflow/forecast/compute.js");
+  const p = persona("sam");
+  // Sam pays $600 a month of quarterly estimated tax and files it on Expenses ("Taxes not withheld")
+  p.expenses.push({ id: "z1-q-tax", name: "Quarterly estimated taxes", category: "taxes", amount: 1800, period: "quarterly", inflates: false });
+  const n = nextBest(structuredClone(p), { today: PERSONA_TODAY }), s = n.spare;
+  const listed = taxesListedOf(expenses(structuredClone(p), { today: PERSONA_TODAY }).items, { tax: s.federalTax + s.payrollTax + s.stateTax, state: s.stateKnown ? s.stateTax : 0 });
+  assert.ok(listed > 100 && listed <= 600 + 1e-9, `the month's tax holds ${listed} of the line`);
+  assert.ok(Math.abs(listed - s.taxesListed) < 1e-9, "the same rule Next best action asks");
+  // what comes in after tax and saving: the left-over plus the spending as Next best action counts it (Expenses' month less that part)
+  const ceiling = LO.leftOverOf(s) + s.spending;
+  const before = structuredClone(p);
+  const over = S.solveSpend(structuredClone(p), S.spendAnswers(p), { left: 100000 }, { today: PERSONA_TODAY });
+  assert.equal(over.ok, false); assert.equal(over.why, "more-than-pay");
+  assert.ok(Math.abs(over.available - ceiling) <= 1, `${over.available} is the month after tax and saving (${ceiling.toFixed(2)})`);
+  assert.ok(Math.abs(over.available - (LO.leftOverOf(s) + n.spare.spending + listed)) > listed - 1, "not Expenses' whole month, which counts the line twice");
+  // just above the ceiling: refused as more than comes in (before, it was blamed on the bills); the plan is untouched
+  const above = S.applyLeftOver(p, { ...S.spendAnswers(p), left: Math.round(ceiling) + 25 }, PERSONA_TODAY, { guess: null });
+  assert.equal(above.ok, false); assert.equal(above.why, "more-than-pay", JSON.stringify(above)); assert.equal(above.available, Math.round(ceiling));
+  assert.deepEqual(p, before, "nothing written");
+  // a left-over the month can hold still lands on the figure typed
+  const q = structuredClone(p);
+  const r = S.applyLeftOver(q, { ...S.spendAnswers(q), left: 400 }, PERSONA_TODAY, { guess: guessFor(q) });
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.ok(Math.abs(leftNow(q) - 400) <= 0.5, `the left-over now reads ${leftNow(q)}`);
+});
+
 test("verify: a left-over that is all of what comes in, with no bills at all, is said as more than comes in (not 'add your pay')", () => {
   const R = persona("sam");
   R.debts = []; R.expenses = []; R.accounts = (R.accounts ?? []).filter((a) => !/owe/.test(a.id));

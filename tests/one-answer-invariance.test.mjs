@@ -174,4 +174,10 @@ if (process.env.PRINT) {
   test("the plans whose answer moved are the three whose money lasts without the Social Security not in yet, and no other", () => {
     assert.deepEqual(lifted.sort(), ["08-retired/base", "14-unusual-structures/base", "fixture retired-couple-plan.mjs:retiredCouplePlan"]);
   });
+  test("the search's ceiling moved only where an income-tax line on Expenses is held by the month's tax, and lower by that line", () => {
+    // Nadia (11-self-employed) files $1,400 a month of quarterly estimated tax; the month's tax holds $1,137.76 of it: a left-over of
+    // $100,000 is more than comes in after tax and saving, about $5,896 a month (it said $7,033, Expenses' whole month)
+    // ($750 is still refused for her bills, as before: only the ceiling it reports moved)
+    assert.deepEqual(ceilings, ["11-self-employed/base 750: bills 7033 -> bills 5896", "11-self-employed/base 100000: more-than-pay 7033 -> more-than-pay 5896"]);
+  });
 }

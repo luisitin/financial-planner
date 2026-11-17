@@ -1173,3 +1173,20 @@ changes, even without Sam's Social Security.", "● The money lasts" (it read "N
 Sam."), as the Dashboard and Will the money last? say ($85,416 a year the plan can pay for against $33,360 planned). The same
 for 08-retired (Sam) and 14-unusual-structures (Grace, on her own: "your Social Security"). The 14 households' singles and
 couples whose money runs short without it (01-07, 09-13) keep the ask on every page.
+
+## The left-over's ceiling leaves out income tax filed on Expenses (z1 (b), 2026-11-16; tests: this module's "z1 (b)", `tests/one-answer-invariance.test.mjs`)
+
+A left-over typed into question 6 (or Expenses' "what's left over" box) above what comes in after tax and saving is refused
+with "That is more than comes in after tax and saving (about $X a month)". `solveSpend` worked `X` out as the left-over the
+plan reads plus Expenses' whole month. When an estimated or income tax is filed on Expenses ("Taxes not withheld"), part of
+that line is the month's own tax, which the left-over already took out; Next best action leaves that part out of spending
+(gy1), so the ceiling counted it twice. It now asks cashflow/forecast's shared rule, the call Next best action makes:
+
+`X = L + (E - taxesListedOf(items, { tax: federal + payroll + state, state: stateKnown ? state : 0 }))`
+
+with `L` the left-over the month reads (`leftOverOf(spare)`), `E` Expenses' month and `items` Expenses' lines; the cover is the
+month's own tax from the same reading. Arithmetic only, no figure. Nadia (11-self-employed, $1,400 a month of quarterly
+estimated tax, $1,137.76 of it inside the month's tax): `X = 100 + (6,933.33 - 1,137.76) = 5,895.57`, "about $5,896 a month"
+(it said $7,033); a left-over of $6,196 is now refused as more than comes in, not blamed on the bills. Get started's Sam with a
+$600-a-month estimated tax line: $3,396 (it said $3,996). A plan with no such line reads exactly as before (invariance test:
+only Nadia's two ceilings moved, over 49 plans).
