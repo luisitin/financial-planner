@@ -650,3 +650,39 @@ test("#33 the page for a file with several accounts: bank and card accounts only
   m.paste(MONARCH);
   assert.equal(m.all().find((e) => e.tagName === "A" && e.textContent === "It is not on my plan yet").getAttribute("href"), "#/balance/net-worth?add=checking&from=import&name=Joint%20Checking");
 });
+
+// ---- a bank file that sets the balance of an account in another currency or only partly yours (balance/net-worth/worked.js,
+// gap next-60 #18 and #19): the file's figure is the whole, in the account's own currency, worked out through worked.js
+test("worked balances: a euro file offers its balance for an account in euros (worked out at the plan's rate), never for one in dollars; a shared account's file is the whole; Undo puts back the whole too", async () => {
+  const { balanceOffer, setBalanceFromFile, undoBalance } = await import("./compute.js");
+  const { emptyPlan: empty } = await import("../../../core/schema/migrate.js");
+  const p = empty();
+  p.currencyRates = { EUR: { rate: 1.08, asOf: "2026-11-01" } };
+  p.accounts.push({ id: "eu", name: "Paris savings", type: "savings", balance: 12960, asOf: "2026-11-01", currency: "EUR", fullBalance: 12000, history: [] },
+    { id: "cab", name: "Joint savings with my sister", type: "savings", balance: 5000, asOf: "2026-11-01", share: 0.5, fullBalance: 10000, history: [] },
+    { id: "us", name: "Savings", type: "savings", balance: 900, asOf: "2026-11-01", history: [] },
+    { id: "jp", name: "Tokyo savings", type: "savings", balance: 70, asOf: "2026-11-01", currency: "JPY", fullBalance: 10000, history: [] });
+  const file = (currency, balance = 12500) => ({ kind: "savings", balance, balanceDate: "2026-11-15", currency, rows: [] });
+  const o = balanceOffer(p, "eu", file("EUR"), { today: "2026-11-16" });
+  assert.deepEqual(o, { accountId: "eu", amount: 12500, date: "2026-11-15", was: 12000, wasAsOf: "2026-11-01", debt: false, own: { code: "EUR", share: 1, rate: 1.08, dollars: 13500 } });
+  assert.deepEqual(balanceOffer(p, "eu", file(null), { today: "2026-11-16" })?.own?.dollars, 13500, "a file that names no currency: the account's own");
+  assert.equal(balanceOffer(p, "eu", file("USD"), { today: "2026-11-16" }), null, "a dollar file is not this euro account's");
+  assert.equal(balanceOffer(p, "us", file("EUR"), { today: "2026-11-16" }), null, "a euro figure is never saved as dollars (as before)");
+  assert.equal(balanceOffer(p, "jp", file("JPY"), { today: "2026-11-16" }), null, "no yen rate yet: not offered");
+  assert.equal(balanceOffer(p, "eu", file("EUR", 12000), { today: "2026-11-16" })?.amount, 12000, "the whole compared in euros: a newer day with the same figure is still offered");
+  const s = balanceOffer(p, "cab", file(null, 10400), { today: "2026-11-16" });
+  assert.deepEqual([s.was, s.own], [10000, { code: null, share: 0.5, rate: 1, dollars: 5200 }]);
+  // set, then undo: the balance, its whole and its date as they were
+  const d = structuredClone(p);
+  const rec = setBalanceFromFile(d, o);
+  const eu = d.accounts.find((a) => a.id === "eu");
+  assert.deepEqual([eu.balance, eu.fullBalance, eu.asOf], [13500, 12500, "2026-11-15"]);
+  assert.equal(rec.wasFull, 12000);
+  assert.equal(undoBalance(d, { accountId: "eu", balance: rec }), true);
+  assert.deepEqual([eu.balance, eu.fullBalance, eu.asOf], [12960, 12000, "2026-11-01"]);
+  // a plain account's record carries no whole (as before)
+  const d2 = structuredClone(p);
+  const rec2 = setBalanceFromFile(d2, balanceOffer(p, "us", file(null, 950), { today: "2026-11-16" }));
+  assert.ok(!("wasFull" in rec2));
+  assert.equal(d2.accounts.find((a) => a.id === "us").balance, 950);
+});

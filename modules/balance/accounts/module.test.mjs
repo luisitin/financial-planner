@@ -139,3 +139,39 @@ test("the side of the chart: clean steps over the balances, never stuck on a fla
     assert.equal(new Set(l).size, l.length, `${lo}..${hi}: no label twice`);
   }
 });
+
+// An account in another currency or only partly the household's (net-worth/worked.js, gap next-60 #18 and #19): saveBalance
+// works the balance out from the whole in its own currency (`own`), or reads the whole back from a balance in dollars.
+test("saveBalance through worked.js: own = the whole in its own currency, worked out; dollars = the whole read back; a plain account as before", () => {
+  const p = emptyPlan();
+  p.currencyRates = { EUR: { rate: 1.08, asOf: "2026-11-01" } };
+  p.accounts.push({ id: "eu", name: "Paris savings", type: "savings", balance: 12960, asOf: "2026-11-01", currency: "EUR", fullBalance: 12000, history: [] },
+    { id: "cab", name: "Lake cabin", type: "property", balance: 200000, asOf: "2026-11-01", share: 0.5, fullBalance: 400000, history: [] },
+    { id: "jp", name: "Tokyo", type: "savings", balance: 100, currency: "JPY", fullBalance: 15000, history: [] },
+    { id: "chk", name: "Checking", type: "checking", balance: 900, asOf: "2026-11-01", history: [] });
+  const a = (id) => p.accounts.find((x) => x.id === id);
+  assert.deepEqual(saveBalance(p, "eu", "2026-11-15", 12500, { own: true }), { saved: true, onFile: true });
+  assert.deepEqual([a("eu").balance, a("eu").fullBalance, a("eu").asOf, a("eu").history], [13500, 12500, "2026-11-15", [{ date: "2026-11-15", balance: 13500 }]], "EUR 12,500 x 1.08; the point in dollars too");
+  saveBalance(p, "cab", "2026-11-15", 410000, { own: true });
+  assert.deepEqual([a("cab").balance, a("cab").fullBalance], [205000, 410000], "half of $410,000");
+  // in dollars (Account detail, Voice notes): the balance as typed; the whole typed before no longer stands for it
+  saveBalance(p, "eu", "2026-11-16", 13000);
+  assert.deepEqual([a("eu").balance, "fullBalance" in a("eu")], [13000, false]);
+  // its currency has no rate: nothing saved from a whole in yen
+  assert.deepEqual(saveBalance(p, "jp", "2026-11-15", 20000, { own: true }), { saved: false, onFile: false });
+  assert.deepEqual([a("jp").balance, a("jp").history], [100, []]);
+  // a plain account: own or not, the figure is the balance, no whole kept
+  saveBalance(p, "chk", "2026-11-15", 950, { own: true });
+  assert.deepEqual([a("chk").balance, "fullBalance" in a("chk")], [950, false]);
+});
+test("critic F1: the whole read back from dollars, saved again as it is (Update, a bank file): the balance keeps its cents; a new whole is worked out and kept", () => {
+  const p = emptyPlan();
+  p.currencyRates = { EUR: { rate: 1.08, asOf: "2026-11-01" } };
+  p.accounts.push({ id: "eu", name: "Paris savings", type: "savings", balance: 12960, asOf: "2026-11-01", currency: "EUR", fullBalance: 12000, history: [] });
+  const a = p.accounts[0];
+  saveBalance(p, "eu", "2026-11-10", 100.37);                       // Account detail, in dollars: EUR 92.94 read back
+  saveBalance(p, "eu", "2026-11-17", 92.94, { own: true });         // the same whole, untouched
+  assert.deepEqual([a.balance, "fullBalance" in a, a.history.at(-1)], [100.37, false, { date: "2026-11-17", balance: 100.37 }], "not $100.38");
+  saveBalance(p, "eu", "2026-11-18", 93, { own: true });
+  assert.deepEqual([a.balance, a.fullBalance], [100.44, 93]);
+});

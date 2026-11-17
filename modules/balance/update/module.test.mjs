@@ -183,3 +183,133 @@ test("review 2026-11-02: a typo fix moves only the totals saved after the wrong 
   fix(q, "a-sav", 11500);
   assert.equal(q.netWorthHistory[0].netWorth, t.netWorth, "the Oct 20 total held 11,500 all along");
 });
+
+// ---- an account in another currency or only partly yours (net-worth/worked.js, gap next-60 #18 and #19) ---------------------
+const worldPlan = () => ({
+  ...emptyPlan(),
+  currencyRates: { EUR: { rate: 1.08, asOf: "2026-10-15" } },
+  accounts: [
+    { id: "chk", name: "Checking", type: "checking", balance: 3200, asOf: "2026-10-20", history: [] },
+    { id: "eu", name: "Paris savings", type: "savings", balance: 12960, asOf: "2026-10-15", currency: "EUR", fullBalance: 12000, history: [] },
+    { id: "flat", name: "Lyon flat", type: "property", balance: 216000, asOf: "2026-10-15", currency: "EUR", fullBalance: 200000, history: [] },
+    { id: "cab", name: "Lake cabin", type: "property", balance: 200000, asOf: "2026-10-15", share: 0.5, fullBalance: 400000, history: [] },
+  ],
+  netWorthHistory: [],
+});
+test("the list asks the whole in its own currency for such an account, and lists the rate of each currency in use", () => {
+  const d = compute(worldPlan(), { today: TODAY });
+  const by = Object.fromEntries(d.rows.map((r) => [r.id, r]));
+  assert.ok(!("own" in by.chk), "a plain account's row is as before");
+  assert.deepEqual(by.eu.own, { code: "EUR", share: 1, rate: 1.08, full: 12000, words: "in euros at $1.08 a euro" });
+  assert.deepEqual(by.cab.own, { code: null, share: 0.5, rate: 1, full: 400000, words: "the whole account; your half counts" });
+  assert.equal(by.eu.balance, 12960, "the balance as counted, as before");
+  assert.deepEqual(d.rates, [{ code: "EUR", rate: 1.08, asOf: "2026-10-15" }]);
+  assert.ok(!("rates" in compute(plan(), { today: TODAY })), "no key for a plan with every account in dollars");
+});
+test("saveAll through worked.js: a new rate first (every account in it moves), then each whole typed worked into its balance; the slip check in its own currency", () => {
+  const p = worldPlan();
+  const r = saveAll(p, { eu: 12500, cab: 410000, chk: 3300 }, TODAY, { rates: { EUR: 1.1 } });
+  const by = (id) => p.accounts.find((a) => a.id === id);
+  assert.deepEqual([by("eu").balance, by("eu").fullBalance, by("flat").balance, by("cab").balance, by("cab").fullBalance, by("chk").balance], [13750, 12500, 220000, 205000, 410000, 3300]);
+  assert.deepEqual(p.currencyRates.EUR, { rate: 1.1, asOf: TODAY });
+  assert.deepEqual([r.saved, r.changed], [3, 3]);
+  assert.deepEqual(r.rated.map((x) => [x.code, x.from, x.to, x.moved.length]), [["EUR", 1.08, 1.1, 2]]);
+  assert.equal(r.netWorth, 3300 + 13750 + 220000 + 205000);
+  assert.deepEqual(p.netWorthHistory.at(-1), { date: TODAY, assets: 442050, liabilities: 0, netWorth: 442050 });
+  // the same rate typed again: dated today, nothing moved, no `rated`
+  const q = worldPlan();
+  const r2 = saveAll(q, { eu: 12000 }, TODAY, { rates: { EUR: 1.08 } });
+  assert.ok(!("rated" in r2));
+  assert.deepEqual([q.currencyRates.EUR, r2.changed], [{ rate: 1.08, asOf: TODAY }, 0], "EUR 12,000 again: still right today");
+  // the slip check compares the whole in euros: 1,200 typed for 12,000 on file is a dropped digit; 12,960 (the dollars) is no slip
+  assert.deepEqual(slipsIn(worldPlan(), { eu: 1200 }), [{ id: "eu", name: "Paris savings", was: 12000, now: 1200, code: "EUR" }]);
+  assert.deepEqual(slipsIn(worldPlan(), { eu: 12500 }), []);
+  assert.deepEqual(slipsIn(worldPlan(), { cab: 40000 }), [{ id: "cab", name: "Lake cabin", was: 400000, now: 40000 }], "the whole, a zero dropped");
+  // "was a mistake": EUR 1,200 was right all along; what it counts ($1,296) is fixed where it stood
+  const s = worldPlan();
+  s.accounts[1].history = [{ date: "2026-10-15", balance: 12960 }];
+  const r3 = saveAll(s, { eu: 1200 }, TODAY, { corrections: ["eu"] });
+  assert.deepEqual([r3.corrected, r3.changed, s.accounts[1].balance, s.accounts[1].fullBalance, s.accounts[1].history.find((h) => h.date === "2026-10-15").balance], [1, 0, 1296, 1200, 1296]);
+});
+test("the page: a rate box per currency above the list, the whole in euros in its box; Save says the new rate, with Undo", async () => {
+  const { renderPage } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const r = await renderPage(new URL("./view.js", import.meta.url), worldPlan(), TODAY, { computeOf: { "balance/update": compute } });
+  const box = (n) => r.root.all().find((e) => e.getAttribute?.("name") === n);
+  const t = r.text().replace(/ /g, " ");
+  assert.match(t, /Currency rates 1 euro in dollars Your rate of 10\/15\/2026\. Leave it if it is still right today; every account in euros moves with it\. What you own/);
+  assert.match(t, /Paris savings updated 17 days ago EUR Savings \/ MMF · in euros at \$1\.08 a euro|Paris savings updated 17 days ago EUR Savings or money market · in euros at \$1\.08 a euro/);
+  assert.match(t, /Lake cabin updated 17 days ago \$ Real estate · the whole account; your half counts/);
+  assert.equal(box("eu").value, "12,000");
+  assert.equal(box("rate-EUR").value, "1.08");
+  assert.equal(box("eu").getAttribute("aria-label"), "Paris savings: balance in euros");
+  box("rate-EUR").value = "1.1";
+  const form = r.root.all().find((e) => e.tagName === "FORM");
+  form.dispatch("submit");
+  const after = r.saved.at(-1);
+  assert.deepEqual([after.currencyRates.EUR.rate, after.accounts.find((a) => a.id === "flat").balance], [1.1, 220000]);
+});
+
+// ---- the critics' findings, 2026-11-17 ------------------------------------------------------------------------------------
+test("critic F1: Save all balances with nothing touched leaves a balance read back from dollars to the cent, and the rate as it was", () => {
+  // every pairing of a balance in dollars and a rate: the box shows the whole read back; saved as it is, nothing moves
+  let moved = 0, n = 0;
+  for (const rate of [1.08, 1.37, 0.79, 7.25]) for (const share of [1, 0.5, 1 / 3]) for (let b = 100; b < 400; b += 0.37) {
+    const bal = Math.round(b * 100) / 100;
+    const p = { ...emptyPlan(), currencyRates: { EUR: { rate, asOf: "2026-10-15" } }, netWorthHistory: [],
+      accounts: [{ id: "eu", name: "Paris savings", type: "savings", balance: bal, asOf: "2026-10-15", currency: "EUR", ...(share < 1 ? { share } : {}), history: [] }] };
+    const box = compute(p, { today: TODAY }).rows[0].own.full;
+    const r = saveAll(p, { eu: box }, TODAY, { rates: { EUR: rate } });
+    n++;
+    if (Math.abs(p.accounts[0].balance - bal) > 0.001 || r.changed || p.accounts[0].history.some((h) => Math.abs(h.balance - bal) > 0.001)) moved++;
+  }
+  assert.equal(moved, 0, `${moved} of ${n} balances moved with nothing touched`);
+});
+test("critic F2: an account in a currency with no rate: the page asks for the rate, never \"every box was empty\"", async () => {
+  const p = { ...emptyPlan(), netWorthHistory: [], accounts: [{ id: "eu", name: "Paris savings", type: "savings", balance: 500, asOf: "2026-10-15", currency: "EUR", history: [] }] };
+  const r = saveAll(structuredClone(p), { eu: 600 }, TODAY, {});
+  assert.deepEqual([r.saved, r.noRate], [0, [{ id: "eu", name: "Paris savings", code: "EUR" }]]);
+  assert.ok(!("noRate" in saveAll(worldPlan(), { eu: 12500 }, TODAY, {})), "no key when every currency has its rate");
+  // the page as the shell runs it: drawn again after a save (the shell draws once the save is done); the words a box is
+  // refused with, caught
+  const { FakeElement, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const ui = await import("../../../core/ui/dom.js");
+  const fmt = await import("../../../core/format.js");
+  const { migrate } = await import("../../../core/schema/migrate.js");
+  const { render } = await import("./view.js");
+  const page = (plan0) => {
+    const x = { plan: migrate(structuredClone(plan0)), saves: 0, refused: [] };
+    const fieldError = (box, text) => { x.refused.push([box?.getAttribute("name"), text]); return false; };
+    x.draw = () => { x.root = new FakeElement("main"); render(x.root, { ui: { ...ui, fieldError }, fmt: { ...fmt, today: () => TODAY }, plan: x.plan, route: { rest: [] },
+      computeOf: (k, pr = {}) => (k === "balance/update" ? compute(x.plan, { today: TODAY, ...pr }) : null),
+      store: { get: () => x.plan, update: (fn) => { const d = structuredClone(x.plan); fn(d); x.plan = d; x.saves++; } } }); return x; };
+    x.text = () => textOf(x.root).replace(/\u00a0/g, " ");
+    x.box = (nm) => x.root.all().find((e) => e.getAttribute?.("name") === nm);
+    x.send = () => { x.root.all().find((e) => e.tagName === "FORM").dispatch("submit"); x.draw(); };
+    return x.draw();
+  };
+  // a balance typed, the rate box left empty: asked at the rate box, nothing saved
+  const A = page(p);
+  assert.match(A.text(), /1 euro in dollars No rate on file yet: type today's, for example 1\.08 if 1 euro buys \$1\.08\./);
+  A.box("eu").value = "600";
+  A.send();
+  assert.equal(A.saves, 0);
+  assert.deepEqual(A.refused, [["rate-EUR", "Type what 1 euro is worth in dollars first: Paris savings is in euros, and its balance counts at that rate."]]);
+  // left as it was (the box still holds what was on file) and nothing else to save: said with what to type
+  const B = page(p);
+  B.send();
+  assert.match(B.text(), /Nothing was saved\. Paris savings is in euros: type what 1 euro is worth in dollars above it, then save\./);
+  assert.doesNotMatch(B.text(), /every box was empty/);
+  // beside a balance that saves: saved, and the one left as it was is said
+  const q = structuredClone(p);
+  q.accounts.push({ id: "chk", name: "Checking", type: "checking", balance: 900, asOf: "2026-10-15", history: [] });
+  const C = page(q);
+  C.box("chk").value = "950";
+  C.send();
+  assert.equal(C.plan.accounts.find((a) => a.id === "chk").balance, 950);
+  assert.match(C.text(), /Balances saved for today: 1 changed\. Net worth is \$1,450\. Left as it was: Paris savings is in euros: type what 1 euro is worth in dollars above it, then save\./);
+  // with the rate typed it saves
+  const D = page(p);
+  D.box("rate-EUR").value = "1.08"; D.box("eu").value = "600";
+  D.send();
+  assert.deepEqual([D.plan.accounts[0].balance, D.plan.accounts[0].fullBalance, D.refused], [648, 600, []]);
+});

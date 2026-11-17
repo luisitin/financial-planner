@@ -1,5 +1,6 @@
 // modules/balance/update/view.js -- DOM only. Every account in one list with its balance box; one Save at the bottom.
 import { saveAll, slipsIn } from "./compute.js";
+import { ownMoney, rateMoney, currencyName, planCode } from "../net-worth/worked.js";
 
 // The shell re-renders after store.update, so the confirmation waits here for the next render: { kind, text }.
 let pending = null;
@@ -56,48 +57,82 @@ export function render(root, ctx) {
 
   const boxes = [];
   const rowOf = (r) => {
-    const m = ui.moneyBox({ name: r.id, value: r.balance, min: r.debt ? 0 : undefined, label: `${r.name}: ${r.debt ? "amount owed" : "balance"}` });
+    // an account in another currency or only partly yours (net-worth/worked.js): its box asks the whole, in its own currency
+    const o = r.own;
+    const what = o ? `${r.debt ? "amount owed" : "balance"}${o.code ? ` in ${currencyName(o.code)}` : ""}${o.share < 1 ? ", the whole account" : ""}` : r.debt ? "amount owed" : "balance";
+    const m = ui.moneyBox({ name: r.id, value: o ? o.full : r.balance, min: r.debt ? 0 : undefined, label: `${r.name}: ${what}` });
+    if (o?.code) { const sign = m.box.querySelector?.(".money-sign"); if (sign) sign.textContent = o.code; m.input.style.paddingLeft = `${16 + o.code.length * 9}px`; }
     m.input.setAttribute("enterkeyhint", "next");
     boxes.push({ id: r.id, input: m.input });
     const when = r.stale ? ui.h("span", { class: "pill warn" }, r.days === null ? "not dated" : `updated ${age(r.days)}`) : ui.h("span", { class: "bu-sub" }, `updated ${age(r.days)}`);
     return ui.h("label", { class: "bu-row" },
       ui.h("div", { class: "bu-head" }, ui.h("span", { class: "bu-name" }, r.name), when),
       m.box,
-      ui.h("div", { class: "bu-sub", style: { marginTop: "4px" } }, r.debt ? `${r.typeLabel}: what you still owe` : r.typeLabel));
+      ui.h("div", { class: "bu-sub", style: { marginTop: "4px" } }, `${r.debt ? `${r.typeLabel}: what you still owe` : r.typeLabel}${o ? ` \u00b7 ${o.words}` : ""}`));
+  };
+  // the rate of each currency an account is in (net-worth/worked.js): one box each, above the accounts; saved with them, and
+  // every account in that currency moves with it. None for a plan with every account in dollars.
+  const rateBoxes = [];
+  const rateRow = (x) => {
+    const m = ui.numberBox({ name: `rate-${x.code}`, value: x.rate, min: 0, label: `1 ${currencyName(x.code, 1)} in ${currencyName(planCode(plan))}` });
+    m.input.setAttribute("enterkeyhint", "next");
+    rateBoxes.push({ code: x.code, was: x.rate, input: m.input });
+    return ui.h("label", { class: "bu-row" },
+      ui.h("div", { class: "bu-head" }, ui.h("span", { class: "bu-name" }, `1 ${currencyName(x.code, 1)} in ${currencyName(planCode(plan))}`)),
+      m.box,
+      ui.h("div", { class: "bu-sub", style: { marginTop: "4px" } }, x.rate === null ? `No rate on file yet: type today's, for example 1.08 if 1 ${currencyName(x.code, 1)} buys ${rateMoney(1.08, plan)}.` : `Your rate of ${x.asOf ? fmt.date(x.asOf) : "an earlier day"}. Leave it if it is still right today; every account in ${currencyName(x.code)} moves with it.`));
   };
   const own = d.rows.filter((r) => !r.debt), owe = d.rows.filter((r) => r.debt);
   const ask = ui.h("div", { class: "bu-ask" });
   const saveBtn = ui.h("button", { type: "submit" }, "Save all balances");   // hidden while the typing-slip question is open
   let asked = false;
   const closeAsk = () => { ask.replaceChildren(); asked = false; saveBtn.style.display = ""; };
-  const finish = (typed, corrections) => {
+  const finish = (typed, corrections, rates = {}) => {
     let r = null;
-    const before = corrections.length ? structuredClone(plan) : null;
-    store.update((draft) => { r = saveAll(draft, typed, today, { corrections }); });
-    if (!r || !r.saved) { pending = { kind: "error", text: "Nothing was saved: every box was empty. Type at least one balance, then save." }; return; }
+    // (a history fix, or a new rate that moves every account in its currency, can be taken back: the plan as it was)
+    const rateMoves = rateBoxes.some((b) => rates[b.code] !== undefined && rates[b.code] !== null && b.was !== null && Math.abs(rates[b.code] - b.was) > 1e-12);
+    const before = corrections.length || rateMoves ? structuredClone(plan) : null;
+    store.update((draft) => { r = saveAll(draft, typed, today, { corrections, ...(rateBoxes.length ? { rates } : {}) }); });
+    // an account in a currency with no rate yet is left as it was: said, with what to type (never "every box was empty")
+    const noRate = (r?.noRate ?? []).map((x) => `${x.name} is in ${currencyName(x.code)}: type what 1 ${currencyName(x.code, 1)} is worth in ${currencyName(planCode(plan))} above it, then save.`).join(" ");
+    if (!r || !r.saved) { pending = { kind: "error", text: noRate ? `Nothing was saved. ${noRate}` : "Nothing was saved: every box was empty. Type at least one balance, then save." }; return; }
     const kept = r.saved - r.changed - r.corrected;
     const move = r.before && r.netWorth !== null ? (Math.abs(r.netWorth - r.before.netWorth) < 0.5 ? `, the same as on ${fmt.date(r.before.date)}` : `, ${r.netWorth >= r.before.netWorth ? "up" : "down"} ${fmt.money(Math.abs(r.netWorth - r.before.netWorth), cur)} since ${fmt.date(r.before.date)}`) : "";
     const parts = [r.changed || (!r.corrected && !kept) ? `${r.changed} changed` : null, r.corrected ? `${r.corrected} typing mistake${r.corrected === 1 ? "" : "s"} fixed in the history` : null, kept ? `${kept} still right` : null].filter(Boolean);
-    pending = { kind: "ok", text: `Balances saved for today: ${parts.join(", ")}. Net worth is ${fmt.money(r.netWorth, cur)}${move}.`, undo: before };
+    const rateSaid = (r.rated ?? []).map((x) => ` The ${currencyName(x.code, 1)} rate is now ${rateMoney(x.to, plan)} (was ${rateMoney(x.from, plan)}).`).join("");
+    pending = { kind: "ok", text: `Balances saved for today: ${parts.join(", ")}. Net worth is ${fmt.money(r.netWorth, cur)}${move}.${rateSaid}${noRate ? ` Left as it was: ${noRate}` : ""}`, undo: before };
   };
   const form = ui.h("form", { class: "card", novalidate: null, onSubmit: (e) => {
     e.preventDefault();
     if (!form.reportValidity()) return;
     const typed = Object.fromEntries(boxes.map((b) => [b.id, ui.moneyValue(b.input)]));
+    const rates = {};
+    for (const b of rateBoxes) {
+      const n = ui.readNumber ? ui.readNumber(b.input.value) : Number(b.input.value);
+      if (b.input.value.trim() === "") continue;
+      if (!(Number(n) > 0)) return ui.fieldError(b.input, "Type a rate above 0, for example 1.08.");
+      rates[b.code] = Number(n);
+    }
+    // a balance changed for an account in a currency with no rate yet, and its rate box left empty: the rate is asked first, at
+    // its box (left as it was, such a box is passed over and said after the save)
+    const needs = d.rows.find((r) => r.own?.code && r.own.rate === null && rates[r.own.code] === undefined && typed[r.id] !== null && typed[r.id] !== undefined && Math.abs(Number(typed[r.id]) - Number(r.own.full)) > 0.004);
+    const needBox = needs ? rateBoxes.find((b) => b.code === needs.own.code) : null;
+    if (needBox) return ui.fieldError(needBox.input, `Type what 1 ${currencyName(needs.own.code, 1)} is worth in ${currencyName(planCode(plan))} first: ${needs.name} is in ${currencyName(needs.own.code)}, and its balance counts at that rate.`);
     // a new figure that looks like the one on file with a key slipped (11,500 against 115,000): ask before saving, so
     // fixing an old typo is not recorded as a fall in net worth
     const slips = slipsIn(plan, typed);
     if (asked) return;   // the question is open: only its own buttons save (Enter on the last box used to save as "it changed")
     if (slips.length) {
       const one = slips.length === 1;
-      const m = (n) => fmt.money(n, cur);
+      const m0 = (n) => fmt.money(n, cur);
+      const m = (n, x) => (x?.code ? ownMoney(x.code, n) : m0(n));
       const fixBtn = ui.button("Let me fix what I typed", () => { closeAsk(); const b = boxes.find((x) => x.id === slips[0].id); b?.input.focus(); b?.input.select?.(); }, { class: "secondary" });
       // "it changed" is the default answer: a real change can look like a slip (a card paid from $6,400 to $640), and the
       // other answer rewrites the history; with several, each account gets its own answer (review 2026-11-02)
-      if (one) ask.replaceChildren(ui.notice("warn", `${slips[0].name}: ${m(slips[0].was)} on file, ${m(slips[0].now)} typed. Did it change, or was ${m(slips[0].was)} a typing slip?`),
+      if (one) ask.replaceChildren(ui.notice("warn", `${slips[0].name}: ${m(slips[0].was, slips[0])} on file, ${m(slips[0].now, slips[0])} typed. Did it change, or was ${m(slips[0].was, slips[0])} a typing slip?`),
         ui.h("div", { class: "row" },
-          ui.button("It changed", () => finish(typed, [])),
-          ui.button(`${m(slips[0].was)} was a mistake`, () => finish(typed, [slips[0].id]), { class: "secondary" }),
+          ui.button("It changed", () => finish(typed, [], rates)),
+          ui.button(`${m(slips[0].was, slips[0])} was a mistake`, () => finish(typed, [slips[0].id], rates), { class: "secondary" }),
           fixBtn),
         ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened. You can undo it."));
       else {
@@ -106,21 +141,23 @@ export function render(root, ctx) {
           const chips = ui.h("div", { class: "chips", role: "group", "aria-label": x.name });
           const draw = () => chips.replaceChildren(
             ui.h("button", { type: "button", class: `chip${wrong.has(x.id) ? "" : " on"}`, "aria-pressed": wrong.has(x.id) ? "false" : "true", onClick: () => { wrong.delete(x.id); draw(); } }, "It changed"),
-            ui.h("button", { type: "button", class: `chip${wrong.has(x.id) ? " on" : ""}`, "aria-pressed": wrong.has(x.id) ? "true" : "false", onClick: () => { wrong.add(x.id); draw(); } }, `${m(x.was)} was a mistake`));
+            ui.h("button", { type: "button", class: `chip${wrong.has(x.id) ? " on" : ""}`, "aria-pressed": wrong.has(x.id) ? "true" : "false", onClick: () => { wrong.add(x.id); draw(); } }, `${m(x.was, x)} was a mistake`));
           draw();
-          return ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.name)), ui.h("div", { class: "rec-sub" }, `${m(x.was)} on file, ${m(x.now)} typed`), chips);
+          return ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, x.name)), ui.h("div", { class: "rec-sub" }, `${m(x.was, x)} on file, ${m(x.now, x)} typed`), chips);
         };
         ask.replaceChildren(ui.notice("warn", "Some new figures look like a typing slip next to the one on file. For each: did it change, or was the one on file a mistake?"),
           ui.h("ul", { class: "records" }, slips.map(rowFor)),
-          ui.h("div", { class: "row" }, ui.button("Save all balances", () => finish(typed, [...wrong])), fixBtn),
+          ui.h("div", { class: "row" }, ui.button("Save all balances", () => finish(typed, [...wrong], rates)), fixBtn),
           ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened. You can undo it."));
       }
       asked = true; saveBtn.style.display = "none";
       ask.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
-    finish(typed, []);
+    finish(typed, [], rates);
   } },
+    d.rates?.length ? ui.h("h2", { class: "bu-side" }, "Currency rates") : null,
+    d.rates?.length ? ui.h("div", { class: "bu-list" }, d.rates.map(rateRow)) : null,
     own.length ? ui.h("h2", { class: "bu-side" }, "What you own") : null,
     ui.h("div", { class: "bu-list" }, own.map(rowOf)),
     owe.length ? ui.h("h2", { class: "bu-side" }, "What you owe") : null,
@@ -130,8 +167,9 @@ export function render(root, ctx) {
   // the phone keyboard's Next goes to the next box; on the last one it saves
   form.addEventListener("keydown", (e) => {
     if (e.key !== "Enter" || !e.target.matches?.("input")) return;
-    const i = boxes.findIndex((b) => b.input === e.target);
-    if (i >= 0 && i < boxes.length - 1) { e.preventDefault(); boxes[i + 1].input.focus(); boxes[i + 1].input.select?.(); }
+    const all = [...rateBoxes, ...boxes];
+    const i = all.findIndex((b) => b.input === e.target);
+    if (i >= 0 && i < all.length - 1) { e.preventDefault(); all[i + 1].input.focus(); all[i + 1].input.select?.(); }
   });
   boxes[boxes.length - 1]?.input.setAttribute("enterkeyhint", "done");
   // a figure changed while the question is open: the question was about the old figures, so it closes (Save asks again)

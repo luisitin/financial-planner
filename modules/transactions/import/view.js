@@ -11,6 +11,7 @@ import { categoriesOf } from "../categories/compute.js";
 import { txKey, monthLabel, shortDate, isQuietImport } from "../ledger/compute.js";
 import { say as sayOnCategorize } from "../categorize/view.js";
 import { parsePositions } from "../../investments/holdings/compute.js";
+import { ownMoney, rateMoney, currencyName, shareWords } from "../../balance/net-worth/worked.js";
 
 let pending = null;   // the confirmation shown on the next render (the shell re-renders after store.update)
 // folds the person opened on this visit ("See the lines", the columns, "Past imports", ...): the preview is drawn again after
@@ -480,12 +481,16 @@ export function render(root, ctx) {
     else previewHost.append(ui.h("p", { class: "small", style: { margin: "0 0 6px" } }, ui.h("a", { class: "im-tap", href: `#/balance/net-worth?add=${addKey}&from=import` }, `Not ${acctName}? Add the account it belongs to ›`)));
     if (prep.elsewhere) previewHost.append(ui.notice("warn", `${prep.elsewhere.count} of these ${prep.elsewhere.of} lines are already on ${nameOf(prep.elsewhere.accountId)} (same day, amount and description). If this file was imported there by mistake, undo that import below first, or the spending is counted twice.`));
     // (its balance is then never offered: compute.js balanceOffer, otherCurrency; fix round P1, F6)
-    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted${fa.hasBalance ? ", and the bank's balance is left alone" : ""}.`)));
+    if (prep.currency && prep.currency !== (cur || "USD")) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", `This file is in ${prep.currency}, and your plan counts in ${cur || "USD"}. The amounts come in as they are, not converted${prep.balance?.own?.code ? `; the bank's balance is worked out at your rate` : fa.hasBalance ? ", and the bank's balance is left alone" : ""}.`)));
     if (prep.gap) previewHost.append(ui.h("div", { style: { marginTop: "10px" } }, ui.notice("warn", prep.gap.text)));
     const ok = prep.add.length, dup = prep.skip.length, needCat = prep.add.filter((t) => !t.category).length;
     const offer = prep.balance;
-    const owed = (x) => (offer?.debt ? `${fmt.money(x, cur, undefined, 2)} owed` : fmt.money(x, cur, undefined, 2));
-    const offerWords = offer ? `set the balance of ${acctName} to ${owed(offer.amount)}, the bank's figure on ${fmt.date(offer.date)} (on file: ${owed(offer.was)}).` : "";
+    // an account in another currency or only partly yours (balance/net-worth/worked.js): the bank's figure is the whole, in its
+    // own currency, and what it counts in the plan is said after it
+    const ownAmt = (x) => (offer?.own?.code ? ownMoney(offer.own.code, x) : fmt.money(x, cur, undefined, 2));
+    const owed = (x) => (offer?.debt ? `${ownAmt(x)} owed` : ownAmt(x));
+    const counts = offer?.own ? ` That counts ${fmt.money(offer.own.dollars, cur)} in your plan${offer.own.code ? `, at ${rateMoney(offer.own.rate, plan)} a ${currencyName(offer.own.code, 1)}` : ""}${offer.own.share < 1 ? `, your ${shareWords(offer.own.share)} of it` : ""}.` : "";
+    const offerWords = offer ? `set the balance of ${acctName} to ${owed(offer.amount)}, the bank's figure on ${fmt.date(offer.date)} (on file: ${owed(offer.was)}).${counts}` : "";
     const lumpWords = offer?.lump ? ` ${acctName} may stand for more than this one card: do this only if it is your only card.` : "";
     // the figure to save for the answer to "what you owe, or a credit?": a card in credit is saved as nothing owed
     const answered = (o) => (o?.ask ? (creditIs === "owe" ? o : creditIs === "credit" ? { ...o, amount: 0 } : null) : o);

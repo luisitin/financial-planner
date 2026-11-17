@@ -17,6 +17,7 @@ import { isValidDate, isoOf } from "../../../core/math/dates.js";
 import { applyRules, prettyPayee } from "../rules/compute.js";
 import { txKey, coverageByAccount, usualInDays, usualWords } from "../ledger/compute.js";
 import { isLiability, countedBalance } from "../../balance/net-worth/compute.js";
+import { isWorked, workedOf, toBalance } from "../../balance/net-worth/worked.js";
 import { matchHeaders, pickAccount, fileCategories, mergeSplits, profileFor, undoCategories, accountKey, addKindFor, tidyName, plainName, APP_ACCOUNT_TYPES, categoryByName, norm } from "./formats.js";
 import { cleanTags, splitsOf, mainCategory, centsOf } from "../splits.js";
 // the account's usual payments due in some days: one test, in the ledger, for its holes, this page's warning and the Monthly
@@ -696,6 +697,10 @@ export function guessOfxAccount(plan, fileAccount, org = null, { peers = null } 
  * checking balance, a checking figure never what is owed on a card or held in savings); the plan's balance is dated after the
  * file's; the same figure is on file for that day; or the file's date is more than a day ahead of `today` (a typo).
  * A date one day ahead (an evening download stamped in GMT) is taken as today.
+ * An account in another currency or only partly the household's (balance/net-worth/worked.js, gap next-60 #18 and #19): the
+ * file's figure is the whole account in its own currency, offered when the file names that currency or none (a euro file for
+ * an account in euros; never for an account whose currency has no rate yet), compared with the whole on file, and the offer
+ * gains `own: { code, share, rate, dollars }` (what it counts in the plan). Every other account: as before.
  * `ask: "credit"`: a card file whose charges are negative (half its lines or more, or no lines to tell by) and whose BALAMT
  * is positive may be a card in credit, or an issuer that writes what is owed as a positive figure; the sign cannot be
  * trusted, so the person is asked.
@@ -705,13 +710,15 @@ export const otherCurrency = (plan, code) => !!code && String(code).toUpperCase(
 export function balanceOffer(plan, accountId, fileAccount, { today = null } = {}) {
   const a = (plan.accounts ?? []).find((x) => x.id === accountId);
   if (!a || !fileAccount || fileAccount.balance === null || fileAccount.balance === undefined || !fileAccount.balanceDate) return null;
-  if (otherCurrency(plan, fileAccount.currency)) return null;
+  const w = isWorked(plan, a) ? workedOf(plan, a) : null;
+  if (w?.code) { if ((fileAccount.currency && String(fileAccount.currency).toUpperCase() !== w.code) || w.rate === null) return null; }
+  else if (otherCurrency(plan, fileAccount.currency)) return null;
   if (!ofxOwn(fileAccount.kind, a.type)) return null;
   let date = fileAccount.balanceDate;
   if (isValidDate(today) && date > today) { if (date > plusDays(today, 1)) return null; date = today; }
   const debt = isLiability(a.type);
   const amount = Math.round((debt ? Math.abs(fileAccount.balance) : fileAccount.balance) * 100) / 100;
-  const was = debt ? countedBalance(a) : Number(a.balance) || 0;
+  const was = w ? w.full ?? w.balance : debt ? countedBalance(a) : Number(a.balance) || 0;
   const wasAsOf = isValidDate(a.asOf) ? a.asOf : null;
   if (wasAsOf && wasAsOf > date) return null;
   if (wasAsOf === date && Math.abs(was - amount) < 0.005) return null;
@@ -719,7 +726,7 @@ export function balanceOffer(plan, accountId, fileAccount, { today = null } = {}
   // file), or no lines to tell by: a positive figure may be a credit (fix round 2: a two-line file was not asked)
   const rows = fileAccount.rows ?? [], out = rows.filter((r) => r.amount < 0).length;
   const ask = debt && fileAccount.balance > 0 && (!rows.length || out >= rows.length / 2) ? { ask: "credit" } : {};
-  return { accountId, amount, date, was, wasAsOf, debt, ...ask };
+  return { accountId, amount, date, was, wasAsOf, debt, ...ask, ...(w ? { own: { code: w.code, share: w.share, rate: w.rate, dollars: Math.abs(toBalance(plan, a, amount) ?? 0) } } : {}) };
 }
 /**
  * setBalanceFromFile(draft, offer) -> null | { was, wasAsOf, set, setAsOf, point?, kept?, guess? }: use the offer on a draft
@@ -736,11 +743,14 @@ export function setBalanceFromFile(draft, offer) {
   const path = `accounts[${a.id}].balance`;
   const was = a.balance ?? null, wasAsOf = a.asOf ?? null, guess = guessAt(draft, path);
   const point = (a.history ?? []).find((h) => h?.date === offer.date) ?? null;
+  // an account in another currency or partly yours: the bank's figure is the whole, in its own currency (worked.js), and the
+  // whole typed before goes on the record, for Undo
+  const own = isWorked(draft, a), wasFull = own ? a.fullBalance ?? null : undefined;
   const kept = keepOnFile(draft, a, offer.date);
-  const r = saveBalance(draft, a.id, offer.date, offer.amount);
+  const r = saveBalance(draft, a.id, offer.date, offer.amount, own ? { own } : undefined);
   if (!r.saved) return null;
   clearGuess(draft, path);
-  return { was, wasAsOf, set: a.balance, setAsOf: a.asOf, ...(point ? { point: point.balance } : {}), ...(kept ? { kept: true } : {}), ...(guess ? { guess } : {}) };
+  return { was, wasAsOf, set: a.balance, setAsOf: a.asOf, ...(point ? { point: point.balance } : {}), ...(kept ? { kept: true } : {}), ...(guess ? { guess } : {}), ...(own ? { wasFull } : {}) };
 }
 /** setBalanceFromFile as a yes or no (the balance button with nothing to import). */
 export const applyBalanceOffer = (draft, offer) => setBalanceFromFile(draft, offer) !== null;
@@ -761,6 +771,7 @@ export function undoBalance(draft, im) {
   a.history = (a.history ?? []).filter((h) => h?.date !== b.setAsOf && !(b.kept && h?.date === b.wasAsOf));
   if (b.point !== undefined) { a.history.push({ date: b.setAsOf, balance: b.point }); a.history.sort((x, y) => String(x.date).localeCompare(String(y.date))); }
   a.balance = b.was;
+  if (b.wasFull !== undefined) { if (b.wasFull === null) delete a.fullBalance; else a.fullBalance = b.wasFull; }
   if (b.wasAsOf === null || b.wasAsOf === undefined) delete a.asOf; else a.asOf = b.wasAsOf;
   if (b.guess) markGuess(draft, `accounts[${a.id}].balance`, { key: b.guess.k, value: b.guess.v, unit: b.guess.u, sigma: b.guess.s, dataAsOf: b.guess.d }, b.guess.at);
   return true;

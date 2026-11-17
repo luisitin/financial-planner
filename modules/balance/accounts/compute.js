@@ -4,6 +4,7 @@
 // months), its latest transactions, its last checked statement with what the lines since then add up to, and the
 // side of its chart (clean round steps, labelled in thousands from 10,000).
 import { ACCOUNT_TYPES, isLiability } from "../net-worth/compute.js";
+import { isWorked, toBalance, writeTyped, dollarsWritten } from "../net-worth/worked.js";
 import { isoOf, daysBetween, isValidDate } from "../../../core/math/dates.js";
 
 /** Days counted as "the last 30 days". */
@@ -116,13 +117,23 @@ export function addPoint(draft, accountId, date, balance) {
  * Save a balance typed on this page: the point of that day, and when the day is on or after the balance on file's
  * (or there is no dated one), the balance on file too, so Net worth and the top of this page use it. A debt keeps the
  * sign it is stored with (what is owed, typed either way). Changes `draft` in place. -> { saved, onFile }
+ * An account in another currency or only partly the household's (net-worth/worked.js, gap next-60 #18 and #19): with
+ * `own`, the figure is the whole account in its own currency (Update my balances, a bank file), and the balance and the
+ * point are worked out from it (nothing is saved while its currency has no rate); without, it is the balance in dollars
+ * (this page, Voice notes), and the whole typed before is read back from it. A plain account: as before.
  */
-export function saveBalance(draft, accountId, date, balance) {
-  if (!addPoint(draft, accountId, date, balance)) return { saved: false, onFile: false };
-  const a = draft.accounts.find((x) => x.id === accountId), b = num(balance);
+export function saveBalance(draft, accountId, date, balance, { own = false } = {}) {
+  const a0 = (draft.accounts ?? []).find((x) => x.id === accountId);
+  const worked = !!a0 && isWorked(draft, a0), typed = num(balance);
+  const d = worked && own && typed !== null ? toBalance(draft, a0, typed) : null;
+  if (worked && own && typed !== null && d === null) return { saved: false, onFile: false };
+  const pt = d === null ? balance : isLiability(a0.type) ? Math.abs(d) : d;
+  if (!addPoint(draft, accountId, date, pt)) return { saved: false, onFile: false };
+  const a = draft.accounts.find((x) => x.id === accountId), b = num(pt);
   if (isDate(a.asOf) && date < a.asOf) return { saved: true, onFile: false };
   a.balance = isLiability(a.type) ? (Number(a.balance) < 0 ? -Math.abs(b) : Math.abs(b)) : b;
   a.asOf = date;
+  if (worked) { if (own) writeTyped(draft, a, typed); else dollarsWritten(draft, a); }
   return { saved: true, onFile: true };
 }
 /** Remove the saved point of that day (the balance on file itself is not touched). -> true when one went */

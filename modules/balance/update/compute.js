@@ -3,6 +3,7 @@
 // file, its "as of"), and records today's totals on Net worth's history, in one step.
 import { ACCOUNT_TYPES, isLiability, countedBalance, compute as netWorthOf } from "../net-worth/compute.js";
 import { saveBalance, addPoint } from "../accounts/compute.js";
+import { isWorked, workedOf, fullOnFile, toBalance, writeTyped, setRate, rateOf, codeOf, askWords } from "../net-worth/worked.js";
 import { daysBetween, isValidDate } from "../../../core/math/dates.js";
 
 /** A balance older than this many days is shown as needing an update (the monthly review's rhythm). */
@@ -10,7 +11,11 @@ export const STALE_DAYS = 31;
 
 /**
  * params.today ("YYYY-MM-DD"). -> { rows: [{ id, name, typeLabel, debt, balance (as typed: what is owed for a debt),
- * asOf, days, stale }], stale, count, oldest, netWorth, lastSaved }
+ * asOf, days, stale, own? }], stale, count, oldest, netWorth, lastSaved, rates? }
+ * An account in another currency or only partly the household's (net-worth/worked.js, gap next-60 #18 and #19) adds
+ * `own: { code, share, rate, full, words }` to its row: its box asks the whole in its own currency (`full`), and `words`
+ * say so; `rates: [{ code, rate, asOf }]` lists the currencies in use, each with the plan's one rate (null: none yet).
+ * Neither key is there for a plan without them.
  */
 export function compute(plan, params = {}) {
   const today = params.today ?? null;
@@ -19,10 +24,12 @@ export function compute(plan, params = {}) {
     const debt = isLiability(a.type);
     const asOf = isValidDate(a.asOf) ? a.asOf : null;
     const days = asOf && today ? Math.max(0, daysBetween(asOf, today)) : null;
+    const w = workedOf(plan, a);
     return {
       id: a.id, name: a.name || "Unnamed account", typeLabel: (ACCOUNT_TYPES[a.type] ?? ACCOUNT_TYPES.other_asset).label, debt,
       balance: debt ? countedBalance(a) : Number(a.balance) || 0,
       asOf, days, stale: days === null || days > STALE_DAYS,
+      ...(w ? { own: { code: w.code, share: w.share, rate: w.rate, full: w.full ?? w.balance, words: askWords(w, plan) } } : {}),
     };
   });
   // what you own first, biggest first; then what you owe
@@ -30,10 +37,12 @@ export function compute(plan, params = {}) {
   const dated = rows.filter((r) => r.asOf).map((r) => r.asOf).sort();
   const nw = netWorthOf(plan, { today });
   const history = nw.history;
+  const codes = [...new Set(accounts.map((a) => codeOf(plan, a)).filter(Boolean))].sort();
   return {
     rows, count: rows.length, stale: rows.filter((r) => r.stale).length,
     oldest: dated[0] ?? null, netWorth: nw.netWorth,
     lastSaved: history.length ? history[history.length - 1] : null,
+    ...(codes.length ? { rates: codes.map((code) => ({ code, rate: rateOf(plan, code)?.rate ?? null, asOf: rateOf(plan, code)?.asOf ?? null })) } : {}),
   };
 }
 
@@ -137,8 +146,10 @@ export function slipsIn(plan, typed) {
     if (!Object.prototype.hasOwnProperty.call(typed ?? {}, a.id)) continue;
     const v = typed[a.id];
     if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) continue;
-    const was = isLiability(a.type) ? countedBalance(a) : Number(a.balance) || 0;
-    if (looksLikeSlip(was, v)) out.push({ id: a.id, name: a.name || "Account", was, now: Number(v) });
+    // (an account in another currency or partly yours: its box holds the whole in its own currency, compared with the whole on file)
+    const own = isWorked(plan, a);
+    const was = own ? fullOnFile(plan, a) : isLiability(a.type) ? countedBalance(a) : Number(a.balance) || 0;
+    if (looksLikeSlip(was, v)) out.push({ id: a.id, name: a.name || "Account", was, now: Number(v), ...(own && codeOf(plan, a) ? { code: codeOf(plan, a) } : {}) });
   }
   return out;
 }
@@ -150,22 +161,38 @@ export function slipsIn(plan, typed) {
  * Then today's totals go on Net worth's history (replacing an earlier save of the same day). Changes `draft` in place.
  * `corrections`: account ids whose figure on file the person said was a typing mistake (correctSlip first; the wrong
  * figure is not kept as a point). -> { saved: number of accounts dated today, changed: number whose amount changed
- * (a corrected one counts as unchanged), corrected, netWorth, before (the last history point before today, or null) }
+ * (a corrected one counts as unchanged), corrected, netWorth, before (the last history point before today, or null),
+ * rated? (only when a rate moved: [{ code, from, to, moved }], net-worth/worked.js setRate) }
+ * `rates`: { [code]: the plan's currency for one unit } typed on the page: each is the plan's one rate for that currency,
+ * dated today (left as it was, it is still right today), and every account in it is priced again first. An account in
+ * another currency or only partly the household's is typed as the whole, in its own currency: its balance is worked out
+ * from it (saveBalance `own`), and a typing mistake is fixed with what that whole counts. Such an account whose currency has
+ * no rate (none on file, none typed) is left as it is and named in `noRate: [{ id, name, code }]` (only then), so the page
+ * can ask for the rate instead of saying nothing was typed (critic F2, 2026-11-17).
  */
-export function saveAll(draft, typed, today, { corrections = [] } = {}) {
+export function saveAll(draft, typed, today, { corrections = [], rates = {} } = {}) {
   if (!isValidDate(today)) return { saved: 0, changed: 0, corrected: 0, netWorth: null, before: null };
   let saved = 0, changed = 0, corrected = 0;
+  const rated = [], noRate = [];
+  for (const [code, rate] of Object.entries(rates ?? {})) {
+    if (rate === null || rate === undefined || rate === "") continue;
+    const x = setRate(draft, code, rate, today);
+    if (x && x.from !== null && Math.abs(x.from - x.to) > 1e-12) rated.push(x);
+  }
   for (const a of draft.accounts ?? []) {
     if (!Object.prototype.hasOwnProperty.call(typed ?? {}, a.id)) continue;
     const v = typed[a.id];
     if (v === null || v === undefined || v === "" || !Number.isFinite(Number(v))) continue;
+    const own = isWorked(draft, a);
+    if (own && toBalance(draft, a, Number(v)) === null) { noRate.push({ id: a.id, name: a.name || "Account", code: codeOf(draft, a) }); continue; }   // its currency has no rate yet: left as it is
     // a figure on file that was a typing mistake: fix it where it stood instead of keeping it as a point (no fake fall)
-    if (corrections.includes(a.id)) { correctSlip(draft, a.id, Number(v)); corrected++; }
-    const was = isLiability(a.type) ? countedBalance(a) : Number(a.balance) || 0;
+    const counted = own ? (isLiability(a.type) ? Math.abs(toBalance(draft, a, Number(v))) : toBalance(draft, a, Number(v))) : Number(v);
+    if (corrections.includes(a.id)) { correctSlip(draft, a.id, counted); corrected++; }
+    const was = own ? fullOnFile(draft, a) : isLiability(a.type) ? countedBalance(a) : Number(a.balance) || 0;
     if (!corrections.includes(a.id)) keepOnFile(draft, a, today);
-    const r = saveBalance(draft, a.id, today, Number(v));
+    const r = saveBalance(draft, a.id, today, Number(v), own ? { own } : undefined);
     if (!r.saved) continue;
-    if (!r.onFile) { a.balance = isLiability(a.type) ? (Number(a.balance) < 0 ? -Math.abs(Number(v)) : Math.abs(Number(v))) : Number(v); a.asOf = today; }
+    if (!r.onFile) { if (own) writeTyped(draft, a, Number(v)); else a.balance = isLiability(a.type) ? (Number(a.balance) < 0 ? -Math.abs(Number(v)) : Math.abs(Number(v))) : Number(v); a.asOf = today; }
     a.typedOn = today;
     saved++;
     if (Math.abs(Number(v) - was) > 0.004) changed++;
@@ -178,5 +205,5 @@ export function saveAll(draft, typed, today, { corrections = [] } = {}) {
     draft.netWorthHistory = (draft.netWorthHistory ?? []).filter((h) => h.date !== today);
     draft.netWorthHistory.push({ date: today, assets: t.assets, liabilities: t.liabilities, netWorth: t.netWorth });
   }
-  return { saved, changed, corrected, netWorth, before };
+  return { saved, changed, corrected, netWorth, before, ...(rated.length ? { rated } : {}), ...(noRate.length ? { noRate } : {}) };
 }
