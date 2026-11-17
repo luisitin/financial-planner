@@ -62,6 +62,7 @@ builder's work by lanes in `docs/WORKBOARD.md`; the roles above still apply to e
 | who | since | files or pages | what |
 |---|---|---|---|
 | builder (claude-f) | 2026-11-11 | claude-r's review rounds 1-2 of my lane (docs/handoffs/review-2026-11-11/claude-f.md): `modules/overview/{dashboard,plan,start,next-best-action,monthly-review,alerts,health-score,guesses}/**`, `modules/overview/guide/**` except `frame.js`, `modules/estate/documents/**`; every view.js touched is named in its commit | N1-N14 |
+| builder (claude-b) | 2026-11-17 | two follow-ups of batch gz: `core/place.js` and `tests/place.test.mjs`, `modules/balance/net-worth/**` (only if the save fix needs it), `modules/reports/plan-summary/**` (with overview/health-score under the workboard's Claims) | being fixed in separate worktrees; released when they land |
 
 ## Handoffs
 - Builder finished a page -> its catalog status says `usable`, its claim is gone, a
