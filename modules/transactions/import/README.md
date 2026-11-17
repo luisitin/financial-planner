@@ -485,6 +485,17 @@ European banks give (camt.052, the day report, and camt.054, the notice, hold th
   the bank as OFX with another payee text is not always known as the same line (QIF has no bank id; `dedupe`'s cut-name
   check catches "Kroger" against "KROGER #412"). QIF's category list (`!Type:Cat`, income or expense) is not used.
 
+## A balance for an account in another currency or only partly yours (gap list, next 60, items 18 and 19; 2026-11-17)
+A bank file's balance is the whole account, in its own currency. For an account in euros (balance/net-worth/worked.js), a file
+that names EUR, or no currency, now offers its balance ("set the balance of Paris savings to EUR 12,500.00, the bank's figure
+on ... (on file: EUR 12,000.00). That counts $13,500 in your plan, at $1.08 a euro."), compared with the whole on file; a
+file in another currency than its account's is still never offered, nor one for a currency with no rate yet. For an account
+only partly the household's, the file's figure is the whole and only the share counts ("..., your half of it"). The offer
+gains `own: { code, share, rate, dollars }` only for such an account; `setBalanceFromFile` saves through `saveBalance(..., {
+own: true })` and keeps `wasFull` on the import record, so Undo puts the whole back too. The file's lines still come in as
+they are, not converted (said above the preview as before; for an account in that currency, "the bank's balance is worked out
+at your rate"). Every other account: as before.
+
 ## Edge cases
 No accounts: the page asks for one first. Unreadable rows are counted and listed (no date / no amount), never imported. A file already fully on file: "nothing to do". Pasted text works like a file.
 

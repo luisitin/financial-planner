@@ -517,3 +517,120 @@ household (`tests/one-figure-invariance.test.mjs`).
 **Not done**: no "Bank accounts" figure across checking and savings, and none across people (it would change answers);
 Get started is not edited (a Get started row is kept, never removed); a debt with its rate on Debts stays on its own (the
 payoff plan pays each one by its own rate and payment).
+
+## Another currency, a part share, a trust (gap list, next 60, items 18 and 19; 2026-11-17) -- `worked.js`
+
+**What it is for.** A household with savings in euros, a cabin owned half with a sister, or a brokerage account its living
+trust owns. `balance` keeps its meaning everywhere (the household's own share, in the plan's currency): about 70 files read
+it, three in claude-a's folders, and none of them changes. What the person typed is kept beside it, and the balance is
+worked out from it once, in `worked.js`.
+
+**The data** (optional, no version bump; docs/DATA_MODEL.md): `accounts[].currency` (EUR, GBP, CAD, MXN, JPY, CHF, AUD, INR,
+CNY, or USD for a plan kept in another currency), `accounts[].share` (0 < share < 1), `accounts[].fullBalance` (the whole, in
+its own currency, as typed; what is owed for a debt), `accounts[].trust` (the trust's name; saved with `ownerId: ""`; never on
+a 401(k), an IRA, a Roth or an HSA), `accounts[].ownerBeforeTrust` (whose it was before the trust was named, a person's id;
+given back when the trust's name is cleared), and
+`currencyRates: { [code]: { rate, asOf } }` (the plan's currency for one unit, one rate per currency). The rates are a section
+of their own, not inside `meta`: Undo (core/ui/undo.js) never takes back `meta`, and a rate must go back with the balances it
+moved.
+
+**First view: nothing new.** The new boxes are under the account form's "More details (optional)", asked from the second
+account on (as the labels: the empty page's first form is as it was), so the empty page and every invented household draw
+the same words (tests/worked-balance-invariance.test.mjs). One tap away:
+- "Currency of this account" (the plan's own first: "Dollars"); with another one, "Exchange rate, in dollars" and "Rate as of"
+  show, the box's sign becomes the code ("EUR") and one line under the balance box says "Type it in euros.". Our dollar guess
+  leaves the box. The rate box has no grey figure: grey in a box means our guess that counts (docs/CONVENTIONS.md, "Input
+  schemas"), so its labelled example is in the help line under it ("What 1 euro is worth, for example 1.08 if 1 euro buys
+  $1.08: your bank's app or a currency site shows today's.").
+- "How much of it is yours": All of it, Half, A third, A quarter, Two thirds, Three quarters, Another share (then "Your share",
+  a percent above 0 and below 100). Under the balance box: "Type the whole balance: only your share counts."
+- "Owned by a trust": the trust's name (spelled as the plan already spells it, capitals and spaces not counted). Not asked for
+  a 401(k), an IRA, a Roth or an HSA (`NO_TRUST_TYPES`): those are held in one person's name, and Required withdrawals and
+  Money before 59½ give each to one person (the first adult when it has no owner), so a trust there would be counted as that
+  person's; a name left in the box when the type is changed to one of them is not saved, and a trust already on one is taken
+  off at the next save. While a trust's name is typed, "Whose account" is not asked (the trust owns it); the box keeps whose
+  it was, saved as `ownerBeforeTrust`, and shows again with that person in it when the name is cleared.
+- The boxes' own names never change once drawn (wave 1 keeps typing under a form's box names; a renamed box left "Not saved
+  yet" behind after the save, found on the phone walk and also true of gold by weight at e223a42).
+
+**The row** (one sentence per case, `lineOf`): "EUR 12,000 at $1.08 = $12,960, rate of 11/17/2026"; "Your half of $400,000:
+$200,000"; "Your half of EUR 12,000 at $1.08: $6,480"; a debt says "owed" after the whole; a whole worked back from a balance
+some other page wrote in dollars says "About ..."; a currency with no rate on file (a hand edit) says "In euros: no rate on
+file. Tap Edit to type one."; a trust adds "Owned by Rivera Family Trust" on a line of its own (the sum's line already wraps
+at 320 px).
+
+**The green line** (R7, with Undo whenever one of these is involved): "Paris savings added. EUR 12,000 at $1.08 = $12,960.";
+"Lake cabin saved. Your half of $400,000: $200,000."; a new rate that moved other accounts: " The euro rate is now $1.10 (was
+$1.08): Lyon flat moved with it, to $220,000. Net worth is now $X." (several: "2 other accounts in euros moved with it");
+" Owned by Rivera Family Trust: counted as joint money, not as Ana's or Bo's." (the household's two adults by name; three or
+more, or one unnamed: "not as one person's"; one adult: nothing after the name, since nothing changes for them) / " No longer
+owned by Rivera Family Trust.".
+Undo: "Undone: Paris savings and the euro rate are back as they were." / "Undone: Paris savings is off your list.".
+
+**One quiet row and one row per trust**, under the list in the card with "Private investments", drawn only while an account
+has one of these: `part` kind `how`, "How this is worked out", status "1 EUR = $1.08" (or "2 currencies", "1 partly yours";
+at most 20 characters): each rate with its day and its accounts, the accounts only partly yours, how to change a rate, and
+what is not covered. Each trust (at most three, so the card keeps to five rows): `part` kind `item` named for the trust,
+status its total, its accounts, "In all: $612,000 of what you own.", "Counted in what you own, as joint money, not as Ana's
+or Bo's." and what the app does and does not do for a trust.
+
+**Formulas.**
+- Converting: dollars = the amount in its currency x the dollars one unit buys (the person's own rate; no live rates, no
+  network). Part share: your dollars = the whole x your share. Both: `worked({ full, rate, share })` = full x rate x share,
+  rounded to the cent once, at the end. EUR 12,000 x 1.08 = $12,960; x 1/2 = $6,480; JPY 1,000,000 x 0.0067 = $6,700;
+  $40,000 x 1/3 = $13,333.33. Arithmetic only: no figure here needs a source; the rate is an input with a labelled example
+  ("for example, 1.08 if 1 euro buys $1.08: your bank's app or a currency site shows today's").
+- Worked back (a balance a page wrote in dollars): whole = |balance| / (rate x share), to the cent ($13,000 at $1.08 =
+  EUR 12,037.04), said "about". That whole saved again as it is (a box left alone on Update my balances or on Edit, a bank
+  file with the same figure) leaves the balance to the cent (`asItStands`): worked out again from a whole rounded to the
+  cent it could move by a cent or more ($100.37 at $1.08 reads EUR 92.94, and EUR 92.94 x 1.08 = $100.38), a change nobody
+  made. The whole then stays worked back ("about"), since it does not give the balance to the cent.
+- A new rate (`setRate`): every account in that currency = its whole on file (as typed, or worked back at the rate before)
+  x the new rate x its share. A rate changed with the old rate's day still in its box is dated today; a day typed by hand
+  stays. Today's saved totals, when there are some, follow (as a balance typed does). The same rate again (Update my
+  balances sends every rate box, left as it was) moves only its day: no account is priced again.
+- A trust: counted in what you own and saved with `ownerId: ""`, so the tax pages, Balance sheet by owner, Estate tax and
+  Legacy goals read it as they read a joint account. Never on a 401(k), an IRA, a Roth or an HSA: Required withdrawals and
+  Money before 59½ give an account with no owner to the first adult, not to both. Source for "a living trust you can change
+  counts as yours for taxes": IRS, Instructions for Form 1041 and Schedules A, B, G, J, and K-1 (2025), https://www.irs.gov/instructions/i1041,
+  read 2026-11-17: "A revocable living trust ... can be changed or ended at any time during the individual's life ... Because
+  this type of trust is revocable, it is treated as a grantor type trust for tax purposes", and "In general, a grantor trust is
+  ignored for income tax purposes and all of the income, deductions, etc., are treated as belonging directly to the grantor."
+  An irrevocable trust is only said in words ("often its own owner; then its money is not yours to count"), never worked out.
+
+**Every writer of a balance in this lane goes through `worked.js`:** this form (`writeTyped`, `setRate`);
+`balance/accounts` `saveBalance(draft, id, date, amount, { own })` (with `own`, the amount is the whole in the account's own
+currency: Update my balances and a bank file on Import; without, it is dollars, from Account detail and Voice notes, and the
+whole typed before is dropped and read back "about"); Update my balances' rate boxes (`setRate` first, then each balance); Import
+(`balanceOffer` offers a euro file's balance for an account in euros, never for one in dollars or in a currency with no rate;
+`setBalanceFromFile` keeps `wasFull` for Undo). A balance some other page writes in dollars (Get started, the statement reader,
+our guesses, Your home) is read the same way: the whole is worked back from it.
+
+**Also.** One figure or item by item keeps such an account on its own ("it is in another currency, or only partly yours", "a
+trust owns it"): summed with other rows, what it is worked from would be lost. Gold or silver by weight with a currency or a
+share is refused with words (it counts at your price of an ounce). "Hide the amounts" hides every code on the list
+(core/format.js knows INR and CNY now).
+
+**What is not covered (said in "How this is worked out" and under the currency box).** Bank lines and investments listed under these accounts are still
+read as dollars (a euro file's lines come in as they are, as before); a rate that moves is not counted as a gain or a loss of
+income; there is no live rate and no reminder that a rate is old (Update my balances asks it beside the balances). This app
+does not keep a trust's papers, file its tax return or say who gets what from it. A share added to an account already on
+file keeps its earlier points in the history as they were (the whole then), so the chart can show a step on that day.
+
+**Builder's choices (the brief was silent or wrong about the code).** The rates live in `currencyRates`, not `meta` (Undo).
+The new boxes are not asked on the empty page's first form (first view). The empty first account can be put in another
+currency by Edit. Net worth's compute is unchanged (no `trusts` key: the page calls `trustsOf`), so every compute that reads
+accounts gives byte for byte what it gave. The rate's example (1.08 for a euro) is an example in the help line, never a
+figure the app uses (no grey figure in the box: grey means our guess that counts). At most three trusts get their own row.
+Whose account before a trust is kept (`ownerBeforeTrust`, critic F4, 2026-11-17) rather than said in the green line: the
+box hides while the trust is named, so without it clearing the name would have shown "Both of us" for an account that was
+one person's.
+
+**Tests** (module.test.mjs, "worked"): the formula against hand sums, which accounts are worked, worked back, writeTyped and
+toBalance, setRate, trustsOf, every sentence case, the form (boxes asked and not asked, euros with Undo, a new rate moving
+another account with Undo, a part share, back to plain, a trust, refusals, one figure holding them), Hide the amounts, and the
+critics' findings of 2026-11-17 (a whole saved again as it was worked back and the same rate again leave every balance to the
+cent, over every pairing of balance, rate and share tried; Edit saved untouched; no trust on a 401(k), an IRA, a Roth or an
+HSA; "Whose account" hidden while a trust is named and given back when it is cleared; the trust on its own line). The
+writers' tests are in balance/accounts, balance/update and transactions/import; the invariance test is
+tests/worked-balance-invariance.test.mjs.

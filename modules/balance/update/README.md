@@ -74,3 +74,24 @@ future `asOf`, today's totals replace a same-day point, "before" is the last poi
 ## Ideas / not yet
 - Show each account's last statement balance from imported transactions as a hint under the box.
 - A "same as last time" tick per row for accounts that rarely change (the house, the car).
+
+## Another currency, a part share (gap list, next 60, items 18 and 19; 2026-11-17)
+An account in another currency or only partly the household's (balance/net-worth/worked.js) asks its whole, in its own
+currency: the box's sign is the code ("EUR"), its spoken name "Paris savings: balance in euros" (", the whole account" for a
+share), and the line under it "Savings or money market · in euros at $1.08 a euro" / "· the whole account; your half counts".
+`compute()` adds `rows[].own: { code, share, rate, full, words }` and `rates: [{ code, rate, asOf }]` only for such a plan.
+With a currency on file, "Currency rates" comes first: one box "1 euro in dollars" per currency, "Your rate of 11/10/2026.
+Leave it if it is still right today; every account in euros moves with it." `saveAll(draft, typed, today, { corrections,
+rates })` writes each rate first (net-worth/worked.js `setRate`, dated today, as a balance left as it is), then each balance
+through `saveBalance(..., { own: true })`; it returns `rated` only when a rate moved, and the green line adds "The euro rate is
+now $1.10 (was $1.08)." with the page's Undo. The slip check compares the whole in its own currency (EUR 12,000 on file,
+EUR 1,200 typed), and "was a mistake" fixes the history with what that whole counts. A plan without these accounts: as before.
+A box left as it is saves the balance to the cent: a whole read back from a balance written in dollars ($100.37 at $1.08
+reads EUR 92.94) is not worked out again (EUR 92.94 x 1.08 = $100.38 would be a change nobody made), and a rate box left as
+it was moves only the rate's day (net-worth/worked.js `asItStands`, `setRate`; critic F1, 2026-11-17). An account whose
+currency has no rate (none on file, none typed: a hand edit or an old backup) is never saved in dollars: with its balance
+changed and its rate box empty, the rate box is refused first ("Type what 1 euro is worth in dollars first: Paris savings is
+in euros, and its balance counts at that rate."); left as it was, it is passed over and said: `saveAll` returns `noRate:
+[{ id, name, code }]`, and the page reads "Nothing was saved. Paris savings is in euros: type what 1 euro is worth in
+dollars above it, then save." (or, beside balances that saved, "Left as it was: ..."), never "every box was empty" (critic
+F2).
