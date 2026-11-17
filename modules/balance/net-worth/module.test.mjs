@@ -1381,7 +1381,8 @@ test("invariance: with no gold or silver by weight and no private investment, Ne
     now.plans[name] = {
       netWorth: digest(await safe(() => compute(structuredClone(p), { today: TI }))),
       page: digest(await safe(async () => (await renderPage(view, p, TI, { computeOf })).text())),
-      addForm: digest(await safe(async () => (await renderPage(view, p, TI, { computeOf, route: { rest: [], query: { add: "checking" } } })).text())),
+      // (the add form's boxes for another currency, a share and a trust, gap next-60 #18 and #19, are taken out: they came later)
+      addForm: digest(await safe(async () => { const r = await renderPage(view, p, TI, { computeOf, route: { rest: [], query: { add: "checking" } } }); for (const e of r.root.all().filter((x) => ["currency", "rate", "rateOn", "shareOf", "sharePct", "trust"].includes(x.getAttribute?.("name")))) (e.closest("label") ?? e).remove(); return r.text(); })),
     };
   }
   if (process.env.PRINT) { fs.writeFileSync(file, `${JSON.stringify({ note: "digests at dca545e, before gold and silver by weight and the private investment; module.test.mjs says how to write them again", ...now }, null, 1)}\n`); return; }
@@ -1746,4 +1747,453 @@ test("a private investment saved as something else asks first when its amounts w
     P.submit();
     assert.ok(!("private" in P.plan.accounts.find((a) => a.id === "f1")));
   } finally { globalThis.window.confirm = had; }
+});
+
+// =============================================================================================================================
+// An account in another currency, a part share of an account, a trust as its owner (gap list, next 60, items 18 and 19;
+// worked.js): the one formula against hand sums, the whole worked back, a rate that moves every account in its currency, every
+// sentence case, and the form that writes them (each writer of a balance goes through worked.js).
+// =============================================================================================================================
+const WK = await import("./worked.js");
+const TZ = "2026-11-17";
+const euroPlan = () => {
+  const p = withAccount();
+  p.currencyRates = { EUR: { rate: 1.08, asOf: "2026-11-15" } };
+  p.accounts.push(
+    { id: "eu1", name: "Paris savings", type: "savings", balance: 12960, asOf: "2026-11-15", currency: "EUR", fullBalance: 12000, history: [] },
+    { id: "eu2", name: "Lyon flat", type: "property", balance: 216000, asOf: "2026-11-01", currency: "EUR", fullBalance: 200000, history: [] },
+    { id: "gb1", name: "London ISA", type: "brokerage", balance: 12700, currency: "GBP", fullBalance: 10000, history: [] },
+    { id: "cab", name: "Lake cabin", type: "property", balance: 200000, share: 0.5, fullBalance: 400000, history: [] });
+  p.currencyRates.GBP = { rate: 1.27, asOf: "2026-11-10" };
+  return p;
+};
+const dollarsW = (n) => `$${Math.round(n).toLocaleString("en-US")}`;
+
+test("worked: whole x rate x share, to the cent, once; the sign of an overdrawn account kept", () => {
+  assert.equal(WK.worked({ full: 12000, rate: 1.08 }), 12960, "EUR 12,000 at $1.08");
+  assert.equal(WK.worked({ full: 12000, rate: 1.08, share: 0.5 }), 6480, "half of it");
+  assert.equal(WK.worked({ full: 40000, share: 1 / 3 }), 13333.33, "a third of $40,000: 13,333.333 -> 13,333.33");
+  assert.equal(WK.worked({ full: 1000000, rate: 0.0067 }), 6700, "JPY 1,000,000 at $0.0067");
+  assert.equal(WK.worked({ full: 1234.56, rate: 1.0837, share: 0.25 }), 334.47, "1,234.56 x 1.0837 x 0.25 = 334.4658 -> 334.47 (rounded once, at the end)");
+  assert.equal(WK.worked({ full: -500, rate: 1.08 }), -540, "an overdrawn account in euros stays below zero");
+  assert.equal(WK.worked({ full: 0.1 + 0.2, rate: 1 }), 0.3);
+});
+
+test("worked: which accounts are worked, their currency, share and trust; plain ones read as before", () => {
+  const p = euroPlan();
+  const by = (id) => p.accounts.find((a) => a.id === id);
+  assert.deepEqual(["c", "eu1", "gb1", "cab"].map((id) => WK.codeOf(p, by(id))), [null, "EUR", "GBP", null]);
+  assert.deepEqual(["c", "eu1", "cab"].map((id) => WK.isWorked(p, by(id))), [false, true, true]);
+  // the plan's own code, a code off the list, nothing: counted as it stands (nothing converted)
+  for (const c of ["USD", "usd", "XYZ", "", null, 5]) assert.equal(WK.codeOf(p, { currency: c }), null, String(c));
+  const mx = { meta: { currency: "MXN" } };
+  assert.equal(WK.codeOf(mx, { currency: "usd" }), "USD", "a plan in pesos with an account in US dollars");
+  assert.equal(WK.codeOf(mx, { currency: "MXN" }), null);
+  for (const [x, want] of [[0.5, 0.5], [1 / 3, 1 / 3], [1, 1], [0, 1], [-0.5, 1], [1.5, 1], ["abc", 1], [null, 1], [undefined, 1], ["", 1], ["0.25", 0.25]]) assert.equal(WK.shareOf({ share: x }), want, String(x));
+  assert.deepEqual([WK.trustOf({ trust: "  Rivera   Family Trust " }), WK.trustOf({ trust: "" }), WK.trustOf({ trust: "  " }), WK.trustOf({}), WK.trustOf({ trust: 3 })], ["Rivera Family Trust", null, null, null, null]);
+  assert.deepEqual(WK.rateOf(p, "EUR"), { rate: 1.08, asOf: "2026-11-15" });
+  for (const bad of [{ rate: 0 }, { rate: -1 }, { rate: "x" }, null, "1.08"]) assert.equal(WK.rateOf({ currencyRates: { EUR: bad } }, "EUR"), null, JSON.stringify(bad));
+  assert.deepEqual(WK.rateOf({ currencyRates: { EUR: { rate: "1.1", asOf: "soon" } } }, "EUR"), { rate: 1.1, asOf: null });
+  assert.equal(WK.workedOf(p, by("c")), null, "a plain account: nothing worked");
+  assert.equal(WK.fullOnFile(p, by("c")), 5000);
+});
+
+test("workedOf: the whole as typed while the balance is still worked from it; else worked back from the balance (about)", () => {
+  const p = euroPlan();
+  const by = (id) => p.accounts.find((a) => a.id === id);
+  assert.deepEqual(WK.workedOf(p, by("eu1")), { id: "eu1", name: "Paris savings", code: "EUR", rate: 1.08, rateAsOf: "2026-11-15", share: 1, debt: false, balance: 12960, full: 12000, typed: true });
+  assert.deepEqual(WK.workedOf(p, by("cab")), { id: "cab", name: "Lake cabin", code: null, rate: 1, rateAsOf: null, share: 0.5, debt: false, balance: 200000, full: 400000, typed: true });
+  // a page that writes dollars (the statement reader) set $13,500: the whole is read back, 13,500 / 1.08 = 12,500
+  by("eu1").balance = 13500;
+  assert.deepEqual([WK.workedOf(p, by("eu1")).full, WK.workedOf(p, by("eu1")).typed], [12500, false]);
+  by("eu1").balance = 13000;   // 13,000 / 1.08 = 12,037.037 -> 12,037.04
+  assert.equal(WK.workedOf(p, by("eu1")).full, 12037.04);
+  // no rate on file (a plan edited by hand): what was typed, and no rate
+  delete p.currencyRates.EUR;
+  assert.deepEqual([WK.workedOf(p, by("eu2")).rate, WK.workedOf(p, by("eu2")).full, WK.workedOf(p, by("eu2")).typed], [null, 200000, true]);
+  // a debt: what is owed, whatever sign it is stored with
+  const card = { id: "k", name: "Card in euros", type: "credit", balance: -1080, currency: "EUR", fullBalance: -1000 };
+  const q = { currencyRates: { EUR: { rate: 1.08 } } };
+  assert.deepEqual([WK.workedOf(q, card).balance, WK.workedOf(q, card).full, WK.workedOf(q, card).typed, WK.workedOf(q, card).debt], [1080, 1000, true, true]);
+});
+
+test("writeTyped and toBalance: the balance worked from the whole typed; a debt keeps its stored sign; a plain account as before", () => {
+  const p = euroPlan();
+  const eu1 = p.accounts.find((a) => a.id === "eu1");
+  assert.equal(WK.writeTyped(p, eu1, 12500), 13500);
+  assert.deepEqual([eu1.balance, eu1.fullBalance], [13500, 12500]);
+  const card = { id: "k", type: "credit", balance: -100, currency: "EUR" };
+  p.accounts.push(card);
+  assert.equal(WK.writeTyped(p, card, 1000), -1080, "stored negative: stays negative");
+  assert.equal(card.fullBalance, 1000, "the whole owed, never negative");
+  const plain = p.accounts.find((a) => a.id === "c");
+  assert.equal(WK.writeTyped(p, plain, 4321.5), 4321.5);
+  assert.ok(!("fullBalance" in plain), "a plain account gets no whole");
+  // a currency with no rate: nothing written
+  const yen = { id: "y", type: "savings", balance: 7, currency: "JPY" };
+  assert.equal(WK.writeTyped(p, yen, 1000000), null);
+  assert.deepEqual([yen.balance, "fullBalance" in yen], [7, false]);
+  assert.equal(WK.toBalance(p, yen, 1000000, { rate: 0.0067 }), 6700, "with the rate the form typed");
+  // a balance written in dollars elsewhere: the whole typed before goes (read back with about), unless it still fits
+  const eu2 = p.accounts.find((a) => a.id === "eu2");
+  WK.dollarsWritten(p, eu2);
+  assert.equal(eu2.fullBalance, 200000, "216,000 is still 200,000 x 1.08: kept");
+  eu2.balance = 220000; WK.dollarsWritten(p, eu2);
+  assert.ok(!("fullBalance" in eu2));
+  WK.dollarsWritten(p, plain);
+  assert.ok(!("fullBalance" in plain));
+});
+
+test("setRate: the one rate of a currency, and every account in it priced again from its whole (typed, or worked back at the old rate)", () => {
+  const p = euroPlan();
+  p.accounts.find((a) => a.id === "eu2").balance = 220000;   // written in dollars elsewhere: its whole is 220,000 / 1.08 = 203,703.70
+  const r = WK.setRate(p, "eur", 1.1, TZ);
+  assert.deepEqual(r, { code: "EUR", from: 1.08, to: 1.1, moved: [{ id: "eu1", name: "Paris savings", from: 12960, to: 13200 }, { id: "eu2", name: "Lyon flat", from: 220000, to: 224074.07 }] });
+  assert.deepEqual(p.currencyRates.EUR, { rate: 1.1, asOf: TZ });
+  assert.deepEqual(p.currencyRates.GBP, { rate: 1.27, asOf: "2026-11-10" }, "another currency's rate is left alone");
+  assert.equal(p.accounts.find((a) => a.id === "gb1").balance, 12700, "and its account");
+  assert.deepEqual(p.accounts.find((a) => a.id === "eu2").fullBalance, 203703.7, "the whole read back is now kept, in step");
+  // the first rate of a currency: from null; no account in it yet: nothing moved; no day: none kept
+  const q = withAccount();
+  assert.deepEqual(WK.setRate(q, "CHF", 1.25), { code: "CHF", from: null, to: 1.25, moved: [] });
+  assert.deepEqual(q.currencyRates, { CHF: { rate: 1.25 } });
+  for (const [code, rate] of [["USD", 1], ["XYZ", 1], ["EUR", 0], ["EUR", -1], ["EUR", "x"]]) assert.equal(WK.setRate(withAccount(), code, rate, TZ), null, `${code} ${rate}`);
+});
+
+test("trustsOf: each trust once (capitals and spaces not counted), its accounts and totals as Net worth counts them", () => {
+  const p = euroPlan();
+  p.accounts.push({ id: "t1", name: "Index fund", type: "brokerage", balance: 400000, trust: "Rivera Family Trust" },
+    { id: "t2", name: "Rental", type: "property", balance: 212000, trust: "rivera  family trust" },
+    { id: "t3", name: "Rental loan", type: "mortgage", balance: -88000, trust: "Rivera Family Trust" },
+    { id: "t4", name: "Bonds", type: "brokerage", balance: 50000, trust: "Ana's trust" });
+  assert.deepEqual(WK.trustsOf(p), [
+    { name: "Ana's trust", ids: ["t4"], names: ["Bonds"], count: 1, assets: 50000, liabilities: 0, net: 50000, hasDebts: false },
+    { name: "Rivera Family Trust", ids: ["t1", "t2", "t3"], names: ["Index fund", "Rental", "Rental loan"], count: 3, assets: 612000, liabilities: 88000, net: 524000, hasDebts: true }]);
+  assert.equal(WK.spellTrust("RIVERA family TRUST ", p), "Rivera Family Trust", "spelled as the plan already spells it");
+  assert.equal(WK.spellTrust(" New  Trust", p), "New Trust");
+  assert.deepEqual(WK.trustsOf(withAccount()), []);
+});
+
+test("the words: one sentence per case for the row, the box on Update, the green line, a rate, a trust, the status", () => {
+  const p = euroPlan();
+  const by = (id) => p.accounts.find((a) => a.id === id);
+  const w = (id) => WK.workedOf(p, by(id));
+  // (a code and its amount are held together by a no-break space, so a phone never wraps between them: read as a space here)
+  const sp = (t) => (typeof t === "string" ? t.replace(/\u00a0/g, " ") : t);
+  assert.equal(sp(WK.lineOf(w("eu1"), dollarsW, p)), "EUR 12,000 at $1.08 = $12,960");
+  assert.equal(sp(WK.lineOf(w("cab"), dollarsW, p)), "Your half of $400,000: $200,000");
+  by("eu1").share = 0.5; by("eu1").balance = 6480;
+  assert.equal(sp(WK.lineOf(w("eu1"), dollarsW, p)), "Your half of EUR 12,000 at $1.08: $6,480");
+  by("eu1").balance = 6500;   // written in dollars elsewhere: 6,500 / (1.08 x 0.5) = 12,037.04
+  assert.equal(sp(WK.lineOf(w("eu1"), dollarsW, p)), "Your half of about EUR 12,037.04 at $1.08: $6,500");
+  delete by("eu1").share; by("eu1").balance = 13500;
+  assert.equal(sp(WK.lineOf(w("eu1"), dollarsW, p)), "About EUR 12,500 at $1.08 = $13,500");
+  p.accounts.push({ id: "m", name: "Mortgage abroad", type: "mortgage", balance: 97200, currency: "EUR", fullBalance: 90000 }, { id: "s", name: "Shared loan", type: "loan", balance: 3000, share: 0.25, fullBalance: 12000 });
+  assert.equal(sp(WK.lineOf(w("m"), dollarsW, p)), "EUR 90,000 owed at $1.08 = $97,200");
+  assert.equal(sp(WK.lineOf(w("s"), dollarsW, p)), "Your quarter of $12,000 owed: $3,000");
+  p.accounts.push({ id: "f", name: "Family land", type: "property", balance: 16000, share: 0.4, fullBalance: 40000 });
+  assert.equal(sp(WK.lineOf(w("f"), dollarsW, p)), "Your 40% of $40,000: $16,000");
+  p.accounts.push({ id: "j", name: "Tokyo savings", type: "savings", balance: 6700, currency: "JPY", fullBalance: 1000000 });
+  assert.equal(sp(WK.lineOf(w("j"), dollarsW, p)), "In Japanese yen: no rate on file. Tap Edit to type one.");
+  p.currencyRates.JPY = { rate: 0.0067 };
+  assert.equal(sp(WK.lineOf(w("j"), dollarsW, p)), "JPY 1,000,000 at $0.0067 = $6,700");
+  assert.equal(sp(WK.lineOf(null, dollarsW, p)), null);
+  // shares in words; money in its own currency; a rate with the decimals typed
+  assert.deepEqual([1 / 2, 1 / 3, 1 / 4, 2 / 3, 3 / 4, 0.4, 0.125, 0.3333].map(WK.shareWords), ["half", "third", "quarter", "two thirds", "three quarters", "40%", "12.5%", "33.33%"]);
+  assert.deepEqual([WK.ownMoney("EUR", 12000), WK.ownMoney("EUR", 12037.04), WK.ownMoney("JPY", 1000000), WK.ownMoney("GBP", -50.5)], ["EUR 12,000", "EUR 12,037.04", "JPY 1,000,000", "-GBP 50.50"]);
+  assert.deepEqual([WK.rateMoney(1.08, p), WK.rateMoney(1.1, p), WK.rateMoney(0.0067, p), WK.rateMoney(17.25, { meta: { currency: "MXN" } })], ["$1.08", "$1.10", "$0.0067", "MX$17.25"]);
+  // what to type on Update my balances
+  assert.equal(sp(WK.askWords(w("eu2"), p)), "in euros at $1.08 a euro");
+  assert.equal(sp(WK.askWords(w("cab"), p)), "the whole account; your half counts");
+  assert.equal(sp(WK.askWords(w("s"), p)), "the whole debt; your quarter counts");
+  by("eu2").share = 0.5; by("eu2").balance = 108000;
+  assert.equal(sp(WK.askWords(w("eu2"), p)), "in euros, the whole account; your half counts at $1.08 a euro");
+  delete p.currencyRates.JPY;
+  assert.equal(sp(WK.askWords(w("j"), p)), "in Japanese yen: no rate on file yet");
+  // the green line after a save; a rate that moved others; a trust set, changed, taken off
+  assert.equal(sp(WK.savedWords("Paris savings", true, WK.workedOf(euroPlan(), euroPlan().accounts.find((a) => a.id === "eu1")), dollarsW, p)), "Paris savings added. EUR 12,000 at $1.08 = $12,960.");
+  assert.equal(sp(WK.savedWords("Lake cabin", false, w("cab"), dollarsW, p)), "Lake cabin saved. Your half of $400,000: $200,000.");
+  const r = { code: "EUR", from: 1.08, to: 1.1, moved: [{ id: "eu1", name: "Paris savings", to: 13200 }, { id: "eu2", name: "Lyon flat", to: 220000 }] };
+  assert.equal(WK.rateWords(r, dollarsW, p, "eu1"), " The euro rate is now $1.10 (was $1.08): Lyon flat moved with it, to $220,000.");
+  assert.equal(WK.rateWords({ ...r, moved: [...r.moved, { id: "x", name: "X", to: 1 }] }, dollarsW, p, "eu1"), " The euro rate is now $1.10 (was $1.08): 2 other accounts in euros moved with it.");
+  assert.equal(WK.rateWords({ ...r, moved: [r.moved[0]] }, dollarsW, p, "eu1"), " The euro rate is now $1.10 (was $1.08).");
+  assert.equal(WK.rateWords({ ...r, from: null }, dollarsW, p, "eu1"), "", "a first rate: the line says it already");
+  assert.equal(WK.rateWords({ ...r, to: 1.08 }, dollarsW, p, "eu1"), "", "the same rate (another day): nothing to say");
+  assert.equal(WK.rateWords(null, dollarsW, p), "");
+  // (critic P2: plain words, no "pages that split by person"; the adults by name when there are two, nothing for one adult)
+  const two = ["Sam", "Ana"];
+  assert.deepEqual([WK.trustWords(null, "Rivera Family Trust", two), WK.trustWords("Old Trust", "Rivera Family Trust", two), WK.trustWords("Rivera Family Trust", "rivera family trust", two), WK.trustWords("Rivera Family Trust", null, two), WK.trustWords(null, null, two)],
+    [" Owned by Rivera Family Trust: counted as joint money, not as Sam's or Ana's.", " Owned by Rivera Family Trust: counted as joint money, not as Sam's or Ana's.", "", " No longer owned by Rivera Family Trust.", ""]);
+  assert.deepEqual([WK.trustWords(null, "Rivera Family Trust", ["Sam"]), WK.trustWords(null, "Rivera Family Trust"), WK.trustWords(null, "Rivera Family Trust", ["Sam", "Ana", "Lee"]), WK.trustWords(null, "Rivera Family Trust", ["Sam", ""])],
+    [" Owned by Rivera Family Trust.", " Owned by Rivera Family Trust.", " Owned by Rivera Family Trust: counted as joint money, not as one person's.", " Owned by Rivera Family Trust: counted as joint money, not as one person's."]);
+  assert.deepEqual([WK.trustCounted(two), WK.trustCounted(["Sam"])], ["Counted in what you own, as joint money, not as Sam's or Ana's.", "Counted in what you own."]);
+  for (const t of [WK.trustWords(null, "X", two), WK.trustCounted(two), WK.TRUST_WORDS, WK.NOT_COVERED]) assert.doesNotMatch(t, /split by person|pages that/, "no builder's words on screen");
+  // the status of "How this is worked out": at most 20 characters
+  p.currencyRates.JPY = { rate: 0.0067123 };
+  const st = [WK.howStatus(p, ["EUR"], 0), WK.howStatus(p, ["JPY"], 0), WK.howStatus(p, ["EUR", "GBP"], 1), WK.howStatus(p, [], 2), WK.howStatus(p, ["CHF"], 0)];
+  assert.deepEqual(st, ["1 EUR = $1.08", "1 JPY = $0.0067123", "2 currencies", "2 partly yours", "no rate yet"]);
+  for (const x of st) assert.ok(x.length <= 20, x);
+  assert.equal(WK.currencyName("USD"), "dollars");
+  assert.equal(WK.currencyName("EUR", 1), "euro");
+});
+
+// ---- the form: Net worth's account form is the first writer through worked.js ----------------------------------------------
+const NEW_KEYS = ["currency", "rate", "rateOn", "shareOf", "sharePct", "trust"];
+const nbsp = (t) => String(t).replace(/ /g, " ");
+const said = (P) => nbsp(P.notice()[0] ?? "").replace(/ Undo$/, "");   // (the notice's own Undo button reads as its last word)
+const fill = (P, k, v) => { P.box(k).value = v; if (P.box(k).tagName === "SELECT") P.box(k).dispatch("change"); };
+
+test("the new boxes: asked under More details from the second account on (never on the empty page's first form); left alone, Save writes what it wrote before", async () => {
+  const E = await nwPage(emptyPlan());
+  for (const k of NEW_KEYS) assert.equal(E.box(k), null, `${k} not on the first form`);
+  const P = await nwPage(withAccount(), { add: "checking" });
+  for (const k of NEW_KEYS) assert.ok(P.box(k), k);
+  const fold = P.box("currency").closest("details");
+  assert.ok(fold && String(fold.className).includes("form-more"), "under More details (optional)");
+  assert.ok(!fold.open, "shut: nothing in it holds anything");
+  for (const k of ["rate", "rateOn", "sharePct"]) assert.equal(P.label(k).hidden, true, `${k} hidden until its choice asks`);
+  assert.match(nbsp(P.textOf(fold)), /Its currency Dollars, like the rest of the plan Euros \(EUR\) British pounds \(GBP\) Canadian dollars \(CAD\) Mexican pesos \(MXN\) Japanese yen \(JPY\) Swiss francs \(CHF\) Australian dollars \(AUD\) Indian rupees \(INR\) Chinese yuan \(CNY\) Its balance counts in dollars at the rate you type\. Its bank lines and investments here are still read as dollars\./);
+  assert.match(P.textOf(fold), /How much of it is yours All of it Half A third A quarter Two thirds Three quarters Another share For an account you share with someone outside your household, such as a parent or a sibling: type its whole balance above, and only your share counts\. /);
+  assert.match(P.textOf(fold), /Owned by a trust The trust's name, if a trust owns it\. Leave it empty if not\./);
+  fill(P, "name", "Rainy day"); fill(P, "balance", "2,500");
+  P.submit();
+  const a = P.plan.accounts.at(-1);
+  assert.deepEqual(Object.keys(a).sort(), ["asOf", "balance", "history", "id", "institution", "name", "ownerId", "type"]);
+  assert.ok(!("currencyRates" in P.plan));
+  assert.deepEqual(said(P), "Rainy day added.", "the plain green line, as before");
+});
+
+test("an account in euros: the box asks the balance in euros, the rate is asked once, the balance is worked out; said in green with Undo; the row and the part say it", async () => {
+  const P = await nwPage(withAccount(), { add: "savings" });
+  fill(P, "name", "Paris savings"); fill(P, "balance", "12,000"); fill(P, "currency", "EUR");
+  assert.equal(P.label("rate").hidden, false); assert.equal(P.label("rateOn").hidden, false);
+  assert.equal(P.textOf(P.label("rate").querySelector(".field-label")), "1 euro in dollars");
+  assert.equal(P.textOf(P.label("rate").querySelector(".help")), "For example, 1.08 if 1 euro buys $1.08: your bank's app or a currency site shows today's. One rate for all your accounts in euros.");
+  assert.equal(P.textOf(P.label("balance").querySelector(".field-label")), "Current balance, in euros");
+  assert.equal(P.textOf(P.label("balance").querySelector(".money-sign")), "EUR");
+  // no rate: refused, nothing saved
+  P.submit();
+  assert.equal(P.saved.length, 0, "no rate typed");
+  fill(P, "rate", "0"); P.submit();
+  assert.equal(P.saved.length, 0, "a rate of 0");
+  fill(P, "rate", "1.08"); P.submit();
+  const a = P.plan.accounts.find((x) => x.name === "Paris savings");
+  assert.deepEqual([a.balance, a.currency, a.fullBalance, "share" in a, "trust" in a], [12960, "EUR", 12000, false, false]);
+  assert.deepEqual(P.plan.currencyRates, { EUR: { rate: 1.08, asOf: TW } }, "the rate, dated today (its day box left empty)");
+  assert.equal(said(P), "Paris savings added. EUR 12,000 at $1.08 = $12,960.");
+  assert.match(nbsp(P.text()), /Paris savings Edit Delete Savings or money market \$12,960 as of 11\/16\/2026 EUR 12,000 at \$1\.08 = \$12,960, rate of 11\/16\/2026/);
+  assert.equal(compute(P.plan).netWorth, 5000 + 12960, "every page reads the balance: $12,960");
+  const how = P.part("worked");
+  assert.ok(how && !how.open, "one quiet row, shut");
+  assert.equal(how.dataset.kind, "how");
+  assert.match(nbsp(P.textOf(how)), /^How this is worked out 1 EUR = \$1\.08 › 1 euro = \$1\.08, your rate of 11\/16\/2026, for Paris savings\. Each balance in euros times the rate is what counts here\. To change a rate, tap Edit on one of its accounts, or type it on Update all balances: every account in that currency moves with it in one save, and you can undo it\. Bank lines and investments in these accounts still count as dollars\. A rate that moves is not counted as a gain or a loss\.$/);
+  // Undo: off the list, and its rate with it
+  P.button("Undo").click(); P.draw();   // (the shell draws again 50 ms after a change: the Undo's words are in by then)
+  assert.ok(!P.plan.accounts.some((x) => x.name === "Paris savings"));
+  assert.ok(!P.plan.currencyRates?.EUR, "the rate typed with it goes too");
+  assert.equal(said(P), "Undone: Paris savings is off your list.");
+});
+
+test("a new rate typed on one account moves every account in that currency, in one save, with Undo; dated today unless dated by hand", async () => {
+  const P = await nwPage(euroPlan(), { edit: "eu1" });
+  assert.equal(P.box("balance").value, "12,000", "the box holds the whole in euros");
+  assert.deepEqual([P.box("currency").value, P.box("rate").value, P.box("rateOn").value], ["EUR", "1.08", "2026-11-15"]);
+  assert.ok(P.box("currency").closest("details").open, "More details opens by itself: it holds the currency");
+  fill(P, "rate", "1.10");
+  P.submit();
+  const by = (id) => P.plan.accounts.find((a) => a.id === id);
+  assert.deepEqual([by("eu1").balance, by("eu1").fullBalance, by("eu2").balance, by("eu2").fullBalance, by("gb1").balance], [13200, 12000, 220000, 200000, 12700]);
+  assert.deepEqual(P.plan.currencyRates.EUR, { rate: 1.1, asOf: TW }, "a changed rate with the old rate's day left in its box: today's");
+  const nw = compute(P.plan).netWorth;
+  assert.equal(nw, 5000 + 13200 + 220000 + 12700 + 200000);
+  assert.equal(said(P), `Paris savings saved. EUR 12,000 at $1.10 = $13,200. The euro rate is now $1.10 (was $1.08): Lyon flat moved with it, to $220,000. Net worth is now ${dollarsW(nw)}.`);
+  P.button("Undo").click(); P.draw();   // (the shell draws again 50 ms after a change: the Undo's words are in by then)
+  assert.deepEqual([by("eu1").balance, by("eu2").balance, P.plan.currencyRates.EUR.rate, P.plan.currencyRates.EUR.asOf], [12960, 216000, 1.08, "2026-11-15"]);
+  assert.equal(said(P), "Undone: Paris savings and the euro rate are back as they were.");
+  // a rate dated by hand keeps its day
+  const Q = await nwPage(euroPlan(), { edit: "eu2" });
+  fill(Q, "rate", "1.05"); fill(Q, "rateOn", "2026-11-12");
+  Q.submit();
+  assert.deepEqual(Q.plan.currencyRates.EUR, { rate: 1.05, asOf: "2026-11-12" });
+  assert.equal(said(Q), `Lyon flat saved. EUR 200,000 at $1.05 = $210,000. The euro rate is now $1.05 (was $1.08): Paris savings moved with it, to $12,600. Net worth is now ${dollarsW(compute(Q.plan).netWorth)}.`);
+});
+
+test("a part share: the whole typed, your share counted; a share of your own; back to dollars and all of it, as a plain account", async () => {
+  const P = await nwPage(withAccount(), { add: "property" });
+  fill(P, "name", "Lake cabin"); fill(P, "balance", "400,000"); fill(P, "shareOf", "1/2");
+  assert.equal(P.textOf(P.label("balance").querySelector(".field-label")), "What it would sell for today (all of it)");
+  assert.equal(P.label("sharePct").hidden, true);
+  P.submit();
+  const a = P.plan.accounts.find((x) => x.name === "Lake cabin");
+  assert.deepEqual([a.balance, a.share, a.fullBalance, "currency" in a], [200000, 0.5, 400000, false]);
+  assert.equal(said(P), "Lake cabin added. Your half of $400,000: $200,000.");
+  assert.match(P.text(), /Your half of \$400,000: \$200,000/);
+  assert.match(P.textOf(P.part("worked")), /^How this is worked out 1 partly yours › Only your half of Lake cabin counts: its whole balance times your share\.$/);
+  // another share: 40%, refused at 0 and 100 and when empty
+  const Q = await nwPage(withAccount(), { add: "property" });
+  fill(Q, "name", "Family land"); fill(Q, "balance", "40,000"); fill(Q, "shareOf", "own");
+  assert.equal(Q.label("sharePct").hidden, false);
+  for (const bad of ["", "0", "100", "120"]) { fill(Q, "sharePct", bad); Q.submit(); assert.equal(Q.saved.length, 0, `share ${bad}`); }
+  fill(Q, "sharePct", "40"); Q.submit();
+  assert.deepEqual(Q.plan.accounts.at(-1).share, 0.4);
+  assert.equal(Q.plan.accounts.at(-1).balance, 16000);
+  assert.equal(said(Q), "Family land added. Your 40% of $40,000: $16,000.");
+  // back to all of it: the figure typed is the balance, the share and the whole go
+  const R = await nwPage(euroPlan(), { edit: "cab" });
+  assert.deepEqual([R.box("balance").value, R.box("shareOf").value], ["400,000", "1/2"]);
+  fill(R, "shareOf", ""); fill(R, "balance", "210,000");
+  R.submit();
+  const c = R.plan.accounts.find((x) => x.id === "cab");
+  assert.deepEqual([c.balance, "share" in c, "fullBalance" in c], [210000, false, false]);
+  assert.equal(said(R), "Lake cabin saved.");
+  // and an account in euros back to dollars: the figure typed is dollars again, the rate stays for the others
+  const S = await nwPage(euroPlan(), { edit: "eu1" });
+  fill(S, "currency", ""); fill(S, "balance", "13,000");
+  S.submit();
+  const e = S.plan.accounts.find((x) => x.id === "eu1");
+  assert.deepEqual([e.balance, "currency" in e, "fullBalance" in e, S.plan.currencyRates.EUR.rate], [13000, false, false, 1.08]);
+});
+
+test("a trust as owner: spelled as the plan spells it, saved as shared (ownerId \"\"), said, listed under the trust with what the app does not do", async () => {
+  const p = euroPlan();
+  p.household.people.push({ id: "p2", name: "Ana", role: "partner", birthDate: "1991-01-01" });
+  p.accounts.push({ id: "t1", name: "Index fund", type: "brokerage", balance: 400000, ownerId: "", trust: "Rivera Family Trust", history: [] });
+  const P = await nwPage(p, { add: "property" });
+  fill(P, "name", "Rental"); fill(P, "balance", "212,000"); fill(P, "ownerId", "p2"); fill(P, "trust", "  rivera family   trust ");
+  P.submit();
+  const a = P.plan.accounts.find((x) => x.name === "Rental");
+  assert.deepEqual([a.trust, a.ownerId, a.balance], ["Rivera Family Trust", "", 212000]);
+  assert.equal(said(P), "Rental added. Owned by Rivera Family Trust: counted as joint money, not as Sam's or Ana's.");
+  assert.match(P.text(), /Rental Edit Delete A home or land \$212,000 as of 11\/16\/2026 Owned by Rivera Family Trust/);
+  assert.equal(a.ownerBeforeTrust, "p2", "whose it was is kept (critic F4)");
+  const t = P.root.all().find((e) => e.tagName === "DETAILS" && e.dataset.kind === "item" && P.textOf(e).startsWith("Rivera Family Trust"));
+  assert.ok(t && !t.open, "a row named for the trust, shut");
+  assert.equal(P.textOf(t), `Rivera Family Trust $612,000 › Index fund $400,000 Rental $212,000 In all: $612,000 of what you own. Counted in what you own, as joint money, not as Sam's or Ana's. ${WK.TRUST_WORDS}`);
+  // taken off
+  // Edit: the trust's name in its box, "Whose account" not asked while it is there (critic P1: it read "Both of us" beside it)
+  const Q = await nwPage(P.plan, { edit: a.id });
+  assert.equal(Q.box("trust").value, "Rivera Family Trust");
+  assert.equal(Q.label("ownerId").hidden, true, "the trust owns it: whose account is not asked");
+  assert.equal(Q.box("ownerId").value, "p2", "it holds whose it was before the trust");
+  // taken off: "Whose account" comes back with Ana in it, and the account is hers again (critic F4)
+  fill(Q, "trust", ""); Q.box("trust").dispatch("input");
+  assert.equal(Q.label("ownerId").hidden, false);
+  Q.submit();
+  const back = Q.plan.accounts.find((x) => x.id === a.id);
+  assert.deepEqual(["trust" in back, "ownerBeforeTrust" in back, back.ownerId], [false, false, "p2"]);
+  assert.equal(said(Q), "Rental saved. No longer owned by Rivera Family Trust.");
+  // typed on the add form: "Whose account" goes as the name is typed, and comes back when it is cleared
+  const R = await nwPage(p, { add: "brokerage" });
+  assert.equal(R.label("ownerId").hidden, false);
+  fill(R, "trust", "Rivera"); R.box("trust").dispatch("input");
+  assert.equal(R.label("ownerId").hidden, true);
+  fill(R, "trust", " "); R.box("trust").dispatch("input");
+  assert.equal(R.label("ownerId").hidden, false);
+  // "Both of us" before the trust: nothing to keep
+  fill(R, "name", "Bonds"); fill(R, "balance", "1,000"); fill(R, "trust", "Rivera Family Trust");
+  R.submit();
+  const b = R.plan.accounts.find((x) => x.name === "Bonds");
+  assert.deepEqual([b.ownerId, "ownerBeforeTrust" in b], ["", false]);
+});
+
+test("refused with words at the box: a currency with no balance, gold by weight with a currency; one figure keeps these accounts on their own", async () => {
+  const P = await nwPage(withAccount(), { add: "savings" });
+  fill(P, "name", "Bank abroad"); fill(P, "currency", "GBP"); fill(P, "rate", "1.27");
+  P.submit();
+  assert.equal(P.saved.length, 0, "no balance in pounds");
+  const G = await nwPage(withAccount(), { add: "checking" });
+  fill(G, "name", "Coins"); fill(G, "type", "other_asset"); fill(G, "kindOf", "gold"); fill(G, "weight", "10"); fill(G, "price", "2400"); fill(G, "shareOf", "1/2");
+  G.submit();
+  assert.equal(G.saved.length, 0, "gold counts at its price of an ounce");
+  const OF = await import("./one-figure.js");
+  const p = euroPlan();
+  p.accounts.push({ id: "s2", name: "Savings two", type: "savings", balance: 3000, history: [] }, { id: "s3", name: "Savings three", type: "savings", balance: 2000, trust: "Rivera Family Trust", history: [] });
+  const s = OF.sectionsOf(p, { all: true }).find((x) => x.type === "savings");
+  assert.deepEqual(s.held.map((h) => [h.id, h.why]).sort(), [["eu1", "it is in another currency, or only partly yours"], ["s3", "a trust owns it"]]);
+});
+
+// ---- the critics' findings, 2026-11-17 --------------------------------------------------------------------------------------
+test("critic F1: a whole saved again as it was worked back (a balance written in dollars) leaves the balance to the cent; the same rate again moves nothing", () => {
+  // Account detail wrote $100.37 to an account in euros: the whole is worked back, EUR 92.94 (92.94 x 1.08 = 100.3752 -> $100.38)
+  const p = euroPlan();
+  const eu = p.accounts.find((a) => a.id === "eu1");
+  eu.balance = 100.37; delete eu.fullBalance;
+  const w = WK.workedOf(p, eu);
+  assert.deepEqual([w.full, w.typed], [92.94, false]);
+  assert.equal(WK.asItStands(p, eu, 92.94), true);
+  assert.equal(WK.toBalance(p, eu, 92.94), 100.37, "not $100.38: nothing was changed");
+  assert.equal(WK.toBalance(p, eu, 92.95), 100.39, "a whole typed anew is worked out as ever");
+  assert.equal(WK.writeTyped(p, eu, 92.94), 100.37);
+  assert.ok(!("fullBalance" in eu), "the whole stays worked back (said \"about\"): 92.94 does not give $100.37 to the cent");
+  assert.equal(WK.writeTyped(p, eu, 95), 102.6);
+  assert.deepEqual([eu.balance, eu.fullBalance], [102.6, 95], "a new whole is kept as typed");
+  // a debt keeps its stored sign
+  const d = { meta: { currency: "USD" }, currencyRates: { EUR: { rate: 1.37 } }, accounts: [{ id: "m", type: "mortgage", balance: -1000.01, currency: "EUR" }] };
+  const whole = WK.workedOf(d, d.accounts[0]).full;
+  assert.equal(WK.toBalance(d, d.accounts[0], whole), -1000.01);
+  // the same rate again (Update my balances sends every rate box): only its day moves, for every balance and share
+  let moved = 0, n = 0;
+  for (const rate of [1.08, 1.37, 0.0067, 7.25, 1.2345]) for (const share of [1, 0.5, 1 / 3]) for (let b = 100; b < 700; b += 0.37) {
+    const bal = Math.round(b * 100) / 100;
+    const q = { meta: { currency: "USD" }, currencyRates: { EUR: { rate, asOf: "2026-11-01" } }, accounts: [{ id: "a", type: "savings", balance: bal, currency: "EUR", ...(share < 1 ? { share } : {}) }] };
+    const r = WK.setRate(q, "EUR", rate, TW);
+    n++; if (Math.abs(q.accounts[0].balance - bal) > 0.001 || r.moved.length) moved++;
+    assert.deepEqual(q.currencyRates.EUR, { rate, asOf: TW });
+  }
+  assert.equal(moved, 0, `the same rate moved ${moved} of ${n} balances`);
+  // left without a day, the same rate keeps the day it had
+  const k = euroPlan();
+  WK.setRate(k, "EUR", 1.08);
+  assert.deepEqual(k.currencyRates.EUR, { rate: 1.08, asOf: "2026-11-15" });
+});
+
+test("critic F1: Edit, Save changes with nothing touched, on an account worked back from dollars: the balance stays to the cent", async () => {
+  const p = euroPlan();
+  const eu = p.accounts.find((a) => a.id === "eu1");
+  eu.balance = 100.37; delete eu.fullBalance;
+  const P = await nwPage(p, { edit: "eu1" });
+  assert.equal(P.box("balance").value, "92.94", "the whole worked back");
+  P.submit();
+  const a = P.plan.accounts.find((x) => x.id === "eu1");
+  assert.equal(a.balance, 100.37);
+  assert.ok(!(a.history ?? []).some((h) => Math.abs(h.balance - 100.38) < 0.001), "no point at $100.38");
+});
+
+test("critic F3: no trust on a 401(k), an IRA, a Roth or an HSA (the retirement pages give each to one person); a name left in the box is not saved", async () => {
+  assert.deepEqual(["401k", "ira", "roth", "hsa", "brokerage", "savings", "property", "529", "cash_value_life"].map(WK.trustAsked), [false, false, false, false, true, true, true, true, true]);
+  (await import("../../../qa/fixtures/fake-dom.mjs")).fullSelectors();   // the page finds its Type box with 'select[name="type"]'
+  const p = euroPlan();
+  p.household.people.push({ id: "p2", name: "Ana", role: "partner", birthDate: "1991-01-01" });
+  const P = await nwPage(p, { add: "brokerage" });
+  assert.equal(P.label("trust").hidden, false);
+  fill(P, "name", "Ana's IRA"); fill(P, "balance", "50,000"); fill(P, "ownerId", "p2"); fill(P, "trust", "Rivera Family Trust"); P.box("trust").dispatch("input");
+  assert.equal(P.label("ownerId").hidden, true);
+  fill(P, "type", "ira");
+  assert.equal(P.label("trust").hidden, true, "not asked for an IRA");
+  assert.equal(P.label("ownerId").hidden, false, "whose IRA it is: asked again");
+  P.submit();
+  const a = P.plan.accounts.find((x) => x.name === "Ana's IRA");
+  assert.deepEqual([a.ownerId, "trust" in a, "ownerBeforeTrust" in a], ["p2", false, false]);
+  assert.equal(said(P), "Ana's IRA added.");
+  // a trust's brokerage account made an IRA: the trust goes, said, and it is Ana's again
+  const Q = await nwPage(p, { add: "brokerage" });
+  fill(Q, "name", "Index fund"); fill(Q, "balance", "9,000"); fill(Q, "ownerId", "p2"); fill(Q, "trust", "Rivera Family Trust");
+  Q.submit();
+  const id = Q.plan.accounts.find((x) => x.name === "Index fund").id;
+  const R = await nwPage(Q.plan, { edit: id });
+  fill(R, "type", "ira");
+  R.submit();
+  const b = R.plan.accounts.find((x) => x.id === id);
+  assert.deepEqual([b.ownerId, "trust" in b, "ownerBeforeTrust" in b], ["p2", false, false]);
+  assert.equal(said(R), "Index fund saved. No longer owned by Rivera Family Trust.");
+});
+
+test("critic P5: the trust is said on a line of its own under the row's sum", async () => {
+  const p = euroPlan();
+  p.accounts.find((a) => a.id === "eu1").trust = "Rivera Family Trust";
+  const P = await nwPage(p);
+  const rec = P.root.all().find((e) => e.tagName === "LI" && P.textOf(e).startsWith("Paris savings"));
+  const subs = rec.all().filter((e) => String(e.className) === "rec-sub").map((e) => nbsp(P.textOf(e)));
+  assert.deepEqual(subs.slice(-2), ["EUR 12,000 at $1.08 = $12,960, rate of 11/15/2026", "Owned by Rivera Family Trust"]);
+  assert.ok(!subs.some((t) => t.includes("· Owned by")), "no longer joined with a dot");
 });

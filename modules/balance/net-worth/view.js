@@ -12,6 +12,8 @@ import { isMetal, metalOf, metalValue, metalLine, metalSaid, NEED_WEIGHT, NEED_P
 import { isPrivate, privateOf, privatesOf, promisedOf, flowsOf, planFlow, addFlow, removeFlow, privateSentence, staleLine, keepReadyLine, keepReadyAll, rowRate, rowPromised,
   privateStatus, flowTitle, flowAsk, flowAddedSaid, flowRemovedSaid, FLOW_UNDONE, HOW } from "./private-fund.js";
 import { sectionsOf, sectionKey, asOne, itemize, unmarkOnAdd, rowLine, statusWords as oneStatus, sectionLine, holdWords, askWords, doneWords, itemizeWords, undoneWords as oneUndone, addWords, INTRO, PART_TITLE } from "./one-figure.js";
+import { CURRENCIES, SHARES, codeOf, shareOf, trustOf, trustAsked, rateOf, workedOf, fullOnFile, toBalance, writeTyped, setRate, trustsOf, spellTrust, lineOf, savedWords as workedSavedWords, rateWords,
+  trustWords, trustCounted, howStatus, currencyName, ownMoney, rateMoney, planCode, shareWords, TRUST_WORDS, NOT_COVERED, CHANGE_RATE } from "./worked.js";
 
 // The shell re-renders after store.update, so a confirmation waits here for the next render:
 // { card: "accounts" | "history", text }.
@@ -47,6 +49,34 @@ const KIND_FIELDS = [
   { key: "price", label: "Price of one ounce", type: "money", min: 0, max: 1e7, help: "Type the price you see: this app never looks prices up." },
   { key: "promised", label: "Still promised", type: "money", min: 0, help: "money you agreed to put in but have not put in yet; leave it empty if none" },
 ];
+// An account in another currency, a part share of it, a trust as its owner (gap list, next 60, items 18 and 19; worked.js): their
+// boxes sit under "More details (optional)", asked from the second account on (as the labels: the empty page's first form stays as
+// it was). The rate, its day and an exact share show only when the choice above them asks for them (showWorked below).
+const capital = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+const WORKED_KEYS = ["currency", "rate", "rateOn", "shareOf", "sharePct", "trust"];
+const rateLabel = (code, plan) => `1 ${currencyName(code, 1)} in ${currencyName(planCode(plan))}`;
+const rateHelp = (code, plan) => `For example, 1.08 if 1 ${currencyName(code, 1)} buys ${rateMoney(1.08, plan)}: your bank's app or a currency site shows today's. One rate for all your accounts in ${currencyName(code)}.`;
+function workedFields(plan) {
+  const pc = planCode(plan), ours = currencyName(pc);
+  return [
+    { key: "currency", label: "Its currency", type: "select", more: true, options: [{ value: "", label: `${capital(ours)}, like the rest of the plan` }, ...CURRENCIES.filter((c) => c.code !== pc).map((c) => ({ value: c.code, label: `${capital(c.many)} (${c.code})` }))],
+      help: `Its balance counts in ${ours} at the rate you type. Its bank lines and investments here are still read as ${ours}.` },
+    { key: "rate", label: rateLabel("EUR", plan), type: "number", more: true, min: 0, step: "any", help: rateHelp("EUR", plan) },
+    { key: "rateOn", label: "Rate as of", type: "date", more: true, max: "today", help: "Leave it empty if it is today's rate." },
+    { key: "shareOf", label: "How much of it is yours", type: "select", more: true, options: [{ value: "", label: "All of it" }, ...SHARES.map((x) => ({ value: x.value, label: x.label })), { value: "own", label: "Another share" }],
+      help: "For an account you share with someone outside your household, such as a parent or a sibling: type its whole balance above, and only your share counts." },
+    { key: "sharePct", label: "Your share", type: "percent", more: true, min: 0, max: 100 },
+    { key: "trust", label: "Owned by a trust", type: "text", more: true, help: "The trust's name, if a trust owns it. Leave it empty if not." },
+  ];
+}
+/** The adults' names, in order (a trust's accounts count as joint money between them: worked.js jointWords). */
+const adultNames = (plan) => (plan.household?.people ?? []).filter((p) => p.role !== "dependent").map((p) => p.name || "");
+/** The boxes' starting values for an account (an empty set for a new one). */
+function workedStart(plan, a) {
+  const code = a ? codeOf(plan, a) : null, sh = a ? shareOf(a) : 1, r = code ? rateOf(plan, code) : null;
+  const preset = SHARES.find((x) => Math.abs(x.share - sh) < 1e-6);
+  return { currency: code ?? "", rate: r?.rate ?? null, rateOn: r?.asOf ?? "", shareOf: sh < 1 ? preset?.value ?? "own" : "", sharePct: sh < 1 && !preset ? sh : null, trust: (a && trustOf(a)) ?? "" };
+}
 /** Sets an account's kind details as the form saved them (`kp`: { metal?, private?, drop }); nothing without `kp`. */
 const applyKind = (acc, kp) => { if (!acc || !kp) return; for (const k of kp.drop ?? []) delete acc[k]; if (kp.metal) acc.metal = kp.metal; if (kp.private) acc.private = kp.private; };
 const ADD_AS = {
@@ -210,7 +240,7 @@ export function render(root, ctx) {
     };
     const ask = ui.h("div");   // "was the old figure a typing mistake?", above the form
     formHost.append(ask);
-    const save = (v, typo, g = null, kp = null) => {
+    const save = (v, typo, g = null, kp = null, wk = null) => {
       const was = editing;
       const id = newId;
       // the green line is drawn where the form was (where the thumb is), with what comes next: the page that sent you here,
@@ -247,15 +277,18 @@ export function render(root, ctx) {
             markGuess(p, `accounts[${was.id}].balance`, g, fmt.today());
             setLabels(p.accounts[i]);
             applyKind(p.accounts[i], kp);
+            applyWorked(p, p.accounts[i], wk);
           } else if (i >= 0) {
             const old = p.accounts[i];
             const moved = Number(v.balance) !== Number(old.balance);
             // a typing mistake is fixed where it stood (its points and the saved totals), never kept as a point
-            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; markTyped(p, old.id, fmt.today()); setLabels(p.accounts[i]); applyKind(p.accounts[i], kp); return; }
+            if (moved && typo) { correctSlip(p, old.id, Number(v.balance)); p.accounts[i] = { ...p.accounts[i], ...v, balance: p.accounts[i].balance }; applyWorked(p, p.accounts[i], wk); markTyped(p, old.id, fmt.today()); setLabels(p.accounts[i]); applyKind(p.accounts[i], kp); return; }
             // a new balance is today's unless you dated it yourself; the old one stays a point on its own date
             if (moved) keepOnFile(p, old, v.asOf && v.asOf !== (old.asOf ?? "") ? v.asOf : fmt.today());
             p.accounts[i] = { ...p.accounts[i], ...v, ...(moved && (v.asOf ?? "") === (old.asOf ?? "") ? { asOf: fmt.today() } : {}) };
-            if (moved) markTyped(p, old.id, fmt.today());
+            // another currency, a share, a trust (worked.js): the terms, the rate (every account in it moves) and the balance from them
+            const wr = applyWorked(p, p.accounts[i], wk);
+            if (moved) markTyped(p, old.id, fmt.today()); else if (wr?.moved.length) totalsToday(p);
             // saved from the form, even unchanged, the balance is the person's: it is no longer our guess (spec S2)
             clearGuess(p, `accounts[${old.id}].balance`);
             escrowKept(p, held, fmt.today());
@@ -269,16 +302,22 @@ export function render(root, ctx) {
           if (g) markGuess(p, `accounts[${id}].balance`, g, fmt.today());
           setLabels(p.accounts.at(-1));
           applyKind(p.accounts.at(-1), kp);
+          if (applyWorked(p, p.accounts.at(-1), wk)?.moved.length) totalsToday(p);
           if (unmark) unmarkOnAdd(p, p.accounts.at(-1));
         }
       };
-      // gold and silver by weight, a private investment: the green line has Undo (every other save stays as it was)
-      if (kp) {
+      // another currency, a share, a trust: the green line says what the balance is worked from (R7), worked out on a copy first
+      if (!specialText && wk) pending.text = workedSaid(v, was, wk, id, labelled, relisted, mutate);
+      // gold and silver by weight, a private investment, another currency, a share, a trust: the green line has Undo (every other
+      // save stays as it was)
+      if (kp || wk) {
         let undo = null;
         const name = v.name || was?.name || "";
+        // (a rate changed with it: the rate goes back too, and every account in that currency)
+        const rated = wk?.rateSet && wk.before.rate !== null ? ` and the ${currencyName(wk.rateSet.code, 1)} rate are` : " is";
         pending.undo = () => undo?.();
-        pending.undone = (res) => { pending = { card: "form", text: ui.undoneWords(res, was ? `Undone: ${name} is back as it was.` : `Undone: ${name} is off your list.`) }; };
-        if (kp.private && !was) privOpen = true;   // the row where its amounts go opens once, under the list
+        pending.undone = (res) => { pending = { card: "form", text: ui.undoneWords(res, was ? `Undone: ${name}${rated} back as ${rated === " is" ? "it was" : "they were"}.` : `Undone: ${name} is off your list${rated === " is" ? "" : `, and the ${currencyName(wk.rateSet.code, 1)} rate is back as it was`}.`) }; };
+        if (kp?.private && !was) privOpen = true;   // the row where its amounts go opens once, under the list
         undo = ui.undoable(store, mutate);
       } else store.update(mutate);
       // done with what the address asked: Back or Reload must not open an empty "Add a loan or card" again (walk 2026-11-11);
@@ -292,6 +331,9 @@ export function render(root, ctx) {
     const w = wordsFor(values.type);
     const g0 = guessFor(values.type, values.ownerId ?? "");
     if (ourBalance) values.balance = null;
+    // an account in another currency or only partly yours: its box holds the whole, in its own currency (worked.js)
+    const wasWorked = editing ? workedOf(plan, editing) : null;
+    if (wasWorked && wasWorked.full !== null) values.balance = wasWorked.full;
     const fields = FIELDS.map((f) => f.key === "name" ? { ...f, label: w.name, ...(!editing && asked?.hint ? { help: exampleOf(asked.hint) } : editing ? { help: null } : {}) }
       : f.key === "balance" && forImport && !editing ? { ...f, label: w.balance, required: false, help: balanceLater(fmt.money(0, cur)) }
       // (where our guesses apply, the box's grey figure and its line say what it is: "for a loan or card, the amount still owed" goes,
@@ -304,19 +346,23 @@ export function render(root, ctx) {
     fields.splice(fields.findIndex((f) => f.key === "type") + 1, 0, ...KIND_FIELDS);
     const mo = editing ? metalOf(editing) : null;
     const kindStart = { kindOf: editing ? kindOfAccount(editing) : "", weight: mo?.weight ?? null, unit: mo?.unit ?? "oz", price: mo ? mo.price : null, promised: editing && isPrivate(editing) ? promisedOf(editing) || null : null };
+    // a trust's account: "Whose account" holds whose it was before the trust (shown again once the trust's name is cleared)
+    if (!empty && editing && trustOf(editing) && typeof editing.ownerBeforeTrust === "string") values.ownerId = editing.ownerBeforeTrust;
     const owner = ownerField(plan, values.ownerId);
     // your own labels (gap next-60 #44): not asked on the first account (the empty page's first view stays as it was)
     const known = planLabels(plan);
     const askLabels = !empty;
+    // another currency, a part share, a trust (gap next-60 #18, #19): asked from the second account on, as the labels
+    const askWorked = !empty;
     let labelsNow = null;   // what Save writes: null = the form had no labels box (nothing changes)
     if (askLabels && editing) values.labelsText = labelsOf(editing).join(", ");
-    const start = { ownerId: "", ...values, ...kindStart };
+    const start = { ownerId: "", ...values, ...kindStart, ...(askWorked ? workedStart(plan, editing) : {}) };
     // cleared on Edit, a typed balance is asked for again with the way back in view (P5, round 2: "Type an amount first." alone)
-    const keepWords = typedBalance ? `Type the ${w === WORDS.debt ? "amount owed" : w === WORDS.thing ? "value" : "balance"}, or tap Cancel to keep ${fmt.money(Math.abs(Number(editing.balance) || 0), cur)}.` : null;
-    const theForm = ui.form([...fields.map((f) => (keepWords && f.key === "balance" ? { ...f, missing: keepWords } : f)), ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : []), ...(askLabels ? [LABELS_FIELD] : [])], start, (typed0, meta) => {
+    const keepWords = typedBalance ? `Type the ${w === WORDS.debt ? "amount owed" : w === WORDS.thing ? "value" : "balance"}, or tap Cancel to keep ${wasWorked?.code && wasWorked.full !== null ? ownMoney(wasWorked.code, Math.abs(wasWorked.full)) : fmt.money(Math.abs(wasWorked?.full ?? (Number(editing.balance) || 0)), cur)}.` : null;
+    const theForm = ui.form([...fields.map((f) => (keepWords && f.key === "balance" ? { ...f, missing: keepWords } : f)), ...(owner ? [w === WORDS.asset ? owner : { ...owner, label: "Whose it is" }] : []), ...(askWorked ? workedFields(plan) : []), ...(askLabels ? [LABELS_FIELD] : [])], start, (typed0, meta) => {
       // the labels box is read apart: Save writes `labels` (or takes it off), never the box's text; the kind's boxes are read
       // apart too (kindPatch): only for "Something else I own", and they never go on the account as they are typed
-      const { labelsText, kindOf, weight, unit, price, promised, ...typed } = typed0;
+      const { labelsText, kindOf, weight, unit, price, promised, currency, rate, rateOn, shareOf: sharePick, sharePct, trust, ...typed } = typed0;
       if (askLabels) { const r = readLabels(labelsText, known); if (r.error) return ui.fieldError(theForm.querySelector('[name="labelsText"]'), r.error); labelsNow = r.list; }
       // no "Whose account" box (one adult): the owner saved is what the box would have held, as before
       let v = owner ? typed : { ...typed, ownerId: start.ownerId ?? "" };
@@ -325,27 +371,37 @@ export function render(root, ctx) {
       if (kk?.error) return ui.fieldError(theForm.querySelector(`[name="${kk.field}"]`), kk.error);
       const kp = kk?.kp ?? null;
       if (kk?.balance !== undefined) v = { ...v, balance: kk.balance, asOf: v.asOf || fmt.today() };
+      // another currency, a part share, a trust: the whole typed is worked into the balance (worked.js); null = none of it
+      const wk = askWorked ? workedPatch(v, kp, { currency, rate, rateOn, sharePick, sharePct, trust }) : null;
+      if (wk?.error) return ui.fieldError(theForm.querySelector(`[name="${wk.field}"]`), wk.error);
+      if (wk?.worked) v = { ...v, balance: wk.dollars };
+      // a trust owns it: saved as joint (ownerId ""), and whose it was is kept, for the day the trust's name is cleared
+      if (wk?.trust) { wk.ownerWas = v.ownerId ?? ""; v = { ...v, ownerId: "" }; }
       // the balance box left empty over our grey figure: that guess, for the kind and owner the form holds now
       const g = meta?.guessed?.has("balance") ? guessFor(v.type, v.ownerId ?? "") ?? meta.guess.balance : null;
-      if (g) { save({ ...v, balance: g.value }, false, g, kp); return; }
+      if (g) { save({ ...v, balance: g.value }, false, g, kp, wk); return; }
       // added for a file on Import with the balance left empty: $0 for now, with no date (it is not a balance anyone saw)
       if (forImport && !editing && (v.balance === null || v.balance === undefined || v.balance === "")) v = { ...v, balance: 0, asOf: "", later: true };
       // a new figure that looks like the old one with a key slipped (115,000 for 11,500): ask once which it was (never about our
       // guess: nobody typed it, so it cannot be a slip, F3)
-      if (editing && !ourBalance && looksLikeSlip(editing.balance, v.balance)) {
-        const wrong = fmt.money(Math.abs(Number(editing.balance)), cur), right = fmt.money(Math.abs(Number(v.balance)), cur);
+      // (an account in another currency or partly yours: the whole is compared, in its own currency, while its terms stay the same)
+      const slipWas = wk?.worked ? (wk.sameTerms ? fullOnFile(plan, editing) : null) : editing?.balance;
+      const slipNow = wk?.worked ? wk.full : v.balance;
+      const slipMoney = (n) => (wk?.worked && wk.code ? ownMoney(wk.code, Math.abs(Number(n))) : fmt.money(Math.abs(Number(n)), cur));
+      if (editing && !ourBalance && slipWas !== null && looksLikeSlip(slipWas, slipNow)) {
+        const wrong = slipMoney(slipWas), right = slipMoney(slipNow);
         // "it changed" is the default answer (a real change can look like a slip); the other rewrites the history (review 2026-11-02)
         ask.replaceChildren(ui.notice("warn", `${wrong} on file, ${right} typed. Did it change, or was ${wrong} a typing slip?`),
           ui.h("div", { class: "row" },
-            ui.button("It changed", () => save(v, false, null, kp)),
-            ui.button(`${wrong} was a mistake`, () => save(v, true, null, kp), { class: "secondary" }),
+            ui.button("It changed", () => save(v, false, null, kp, wk)),
+            ui.button(`${wrong} was a mistake`, () => save(v, true, null, kp, wk), { class: "secondary" }),
             ui.button("Let me fix what I typed", () => { ask.replaceChildren(); ask.style.marginBottom = ""; const box = formHost.querySelector('input[name="balance"]'); box?.focus(); box?.select?.(); }, { class: "secondary" })),
           ui.h("p", { class: "muted small" }, "A mistake on file is fixed in the history too, so net worth does not show a fall (or a jump) that never happened."));
         ask.style.marginBottom = "16px";
         ask.scrollIntoView({ behavior: "smooth", block: "center" });
         return false;   // keep the form as typed behind the question
       }
-      save(v, false, null, kp);
+      save(v, false, null, kp, wk);
     }, { submitLabel: editing ? "Save changes" : asked && w !== WORDS.asset ? w.submit : "Add account", resetAfter: !editing, onCancel: (editing || !empty) ? () => { editing = null; showForm = false; drawForm(); } : null });
     formHost.append(theForm);
     if (askLabels) labelPicks(ui, theForm, known);
@@ -360,6 +416,7 @@ export function render(root, ctx) {
       if (lab("institution")) { set("institution", x.institution ?? WORDS.asset.institution); lab("institution").hidden = !x.institution; lab("institution").style.display = x.institution ? "" : "none"; }
       showKind();   // (first: a kind's guess, set next, decides whether the worth box is asked)
       ui.setGuess?.(theForm, "balance", guessFor(typeSel.value, ownerSel?.value ?? start.ownerId ?? ""));
+      showWorked();   // (last: the balance box's words and sign follow another currency or a share, and lose our guess)
     });
     // "What it is" (only for "Something else I own"): gold or silver ask the weight and the price of one ounce in place of the
     // worth (the worth is worked out from them); a private investment asks what is still promised. Hidden boxes are not asked.
@@ -387,11 +444,54 @@ export function render(root, ctx) {
         set("balance", k === "private" ? "What it is worth now" : WORDS.thing.balance);
       } else if (asOfSet) { set("asOf", asOf0); asOfSet = false; }
     }
-    kindSel?.addEventListener("change", showKind);
+    kindSel?.addEventListener("change", () => { showKind(); showWorked(); });
     showKind();
     // a retirement account's guess is its owner's: it follows "Whose account"
     const ownerSel = formHost.querySelector('select[name="ownerId"]');
-    ownerSel?.addEventListener("change", () => ui.setGuess?.(theForm, "balance", guessFor(typeSel?.value ?? values.type, ownerSel.value)));
+    ownerSel?.addEventListener("change", () => { ui.setGuess?.(theForm, "balance", guessFor(typeSel?.value ?? values.type, ownerSel.value)); showWorked(); });
+    // Another currency, a part share (worked.js): the rate and its day show only with a currency, the exact share only with
+    // "Another share"; the balance box asks the whole in that currency ("Current balance, in euros (all of it)", its sign "EUR")
+    // and our dollar guess leaves it (a guess in dollars is no balance in euros). Back to dollars and all of it: as it was.
+    const wbox = (k) => formHost.querySelector(`[name="${k}"]`);
+    const signEl = wbox("balance")?.parentNode?.querySelector?.(".money-sign") ?? null;
+    const sign0 = signEl?.textContent ?? "$";
+    let balSuffix = "", wasWorkedNow = false;
+    function showWorked() {
+      if (!askWorked || !wbox("currency")) return;
+      const code = wbox("currency").value || "", pick = wbox("shareOf")?.value || "";
+      const hide = (key, h) => { const l = kLab(key); if (l) { l.hidden = h; l.style.display = h ? "none" : ""; } };
+      const set = (key, text) => { const l = kLab(key)?.querySelector(".field-label"); if (l && text && l.textContent !== text) l.textContent = text; };
+      hide("rate", !code); hide("rateOn", !code); hide("sharePct", pick !== "own");
+      showOwner();
+      if (code) {
+        set("rate", rateLabel(code, plan));
+        const help = kLab("rate")?.querySelector(".help"); if (help) help.textContent = rateHelp(code, plan);
+        // the plan's rate for it, when it has one and nothing is typed yet
+        const r = rateOf(plan, code);
+        if (r && !wbox("rate").value) { wbox("rate").value = String(r.rate); if (r.asOf && !wbox("rateOn").value) wbox("rateOn").value = r.asOf; }
+      }
+      const part = pick !== "";
+      const suffix = `${code ? `, in ${currencyName(code)}` : ""}${part ? " (all of it)" : ""}`;
+      const l = kLab("balance")?.querySelector(".field-label");
+      if (l) { const base = balSuffix && l.textContent.endsWith(balSuffix) ? l.textContent.slice(0, -balSuffix.length) : l.textContent; l.textContent = base + suffix; balSuffix = suffix; }
+      if (signEl) { signEl.textContent = code || sign0; if (balBox) balBox.style.paddingLeft = `${16 + (code || sign0).length * 9}px`; }
+      const now = !!code || part;
+      if (now) ui.setGuess?.(theForm, "balance", null);
+      else if (wasWorkedNow) ui.setGuess?.(theForm, "balance", guessFor(typeSel?.value ?? values.type, ownerSel?.value ?? start.ownerId ?? ""));
+      wasWorkedNow = now;
+    }
+    for (const k of ["currency", "shareOf"]) wbox(k)?.addEventListener("change", showWorked);
+    // A trust: not asked for a 401(k), an IRA, a Roth or an HSA (worked.js NO_TRUST_TYPES: held in one person's name); while a
+    // trust's name is typed, "Whose account" is not asked (the trust owns it; whose it was comes back if the name is cleared)
+    function showOwner() {
+      if (!askWorked || !wbox("trust")) return;
+      const hide = (key, h) => { const l = kLab(key); if (l) { l.hidden = h; l.style.display = h ? "none" : ""; } };
+      const asks = trustAsked(typeSel?.value ?? values.type);
+      hide("trust", !asks);
+      hide("ownerId", asks && !!String(wbox("trust").value ?? "").trim());
+    }
+    wbox("trust")?.addEventListener("input", showOwner);
+    showWorked();
   };
   drawForm();
 
@@ -419,6 +519,90 @@ export function render(root, ctx) {
     const n = hadPrivate ? flowsOf(editing).length : 0;
     if (n && !ui.confirm(`${editing.name} has ${n} ${n === 1 ? "amount" : "amounts"} put in or paid back on file. Saved as something else, ${n === 1 ? "it is" : "they are"} no longer kept. Save it anyway?`)) return false;
     return { kp: { drop: ["metal", "private"] } };
+  }
+  /**
+   * What the form's boxes for another currency, a part share and a trust save (gap list, next 60, items 18 and 19; worked.js),
+   * for the account `v` the form holds now (its balance as typed: the whole, in its own currency): null when none of it is
+   * asked now or was on the account before (every other save is as it was); { field, error } for a box it needs; else
+   * { worked, code, share, trust, before: { code, share, trust, rate }, rateSet: { code, rate, asOf } | null, full, dollars,
+   * sameTerms }: `dollars` the balance worked out on the terms typed (the rate typed counts already).
+   */
+  function workedPatch(v, kp, { currency, rate, rateOn, sharePick, sharePct, trust }) {
+    const was = editing;
+    const code = currency && currency !== planCode(plan) && CURRENCIES.some((c) => c.code === currency) ? currency : null;
+    let share = 1;
+    if (sharePick === "own") {
+      const x = Number(sharePct);
+      if (sharePct === null || sharePct === undefined || sharePct === "" || !Number.isFinite(x)) return { field: "sharePct", error: "Type your share, for example 50 for half." };
+      if (!(x > 0) || !(x < 1)) return { field: "sharePct", error: "Type a share above 0% and below 100%. All of it is yours? Pick \"All of it\" above." };
+      share = x;
+    } else share = SHARES.find((x) => x.value === sharePick)?.share ?? 1;
+    const t = String(trust ?? "").replace(/\s+/g, " ").trim();
+    if (t.length > 80) return { field: "trust", error: "Keep the trust's name to 80 letters or fewer." };
+    // (a 401(k), an IRA, a Roth or an HSA: its trust box is not asked, and a name left in it is not saved)
+    const trustName = t && trustAsked(v.type) ? spellTrust(t, plan) : null;
+    const before = { code: was ? codeOf(plan, was) : null, share: was ? shareOf(was) : 1, trust: was ? trustOf(was) : null, rate: null };
+    const worked = !!code || share < 1;
+    if (!worked && !before.code && before.share === 1 && !trustName && !before.trust) return null;
+    // gold or silver is worked from its weight and the price of an ounce, in dollars: not from a whole in another currency
+    if (worked && kp?.metal) return { field: code ? "currency" : "shareOf", error: "Gold or silver counts at your price of an ounce: leave its currency and share as they are." };
+    let rateSet = null, r = null;
+    if (code) {
+      r = Number(rate);
+      if (rate === null || rate === undefined || rate === "" || !Number.isFinite(r)) return { field: "rate", error: `Type what 1 ${currencyName(code, 1)} is worth in ${currencyName(planCode(plan))}.` };
+      if (!(r > 0)) return { field: "rate", error: "Type a rate above 0." };
+      // a new rate is today's unless you dated it yourself (the day box still holding the old rate's day: today), as a balance is
+      const now = rateOf(plan, code);
+      const moved = !now || Math.abs(now.rate - r) > 1e-12;
+      const on = !rateOn || (moved && now && rateOn === (now.asOf ?? "")) ? fmt.today() : rateOn;
+      before.rate = now?.rate ?? null;
+      if (moved || (now.asOf ?? "") !== on) rateSet = { code, rate: r, asOf: on };
+    }
+    if (worked && (v.balance === null || v.balance === undefined || v.balance === "")) return { field: "balance", error: code ? `Type its balance in ${currencyName(code)}.` : "Type the whole balance." };
+    const full = worked ? Number(v.balance) : null;
+    const terms = { type: v.type, balance: was?.balance ?? 0, ...(code ? { currency: code } : {}), ...(share < 1 ? { share } : {}) };
+    const dollars = worked ? toBalance({ meta: { currency: planCode(plan) }, currencyRates: { [code ?? "_"]: { rate: r } } }, terms, full) : undefined;
+    return { worked, code, share, trust: trustName, before, rateSet, full, dollars, sameTerms: worked && before.code === code && Math.abs(before.share - share) < 1e-12 };
+  }
+  /** The terms the form saved, on the account `acc` of the plan `p` (inside the save's update): the rate first (every account
+   *  in that currency is priced again: setRate), then the currency, the share and the trust, then the balance from the whole
+   *  typed (writeTyped). -> what setRate did, or null. */
+  function applyWorked(p, acc, wk) {
+    if (!acc || !wk) return null;
+    const r = wk.rateSet ? setRate(p, wk.rateSet.code, wk.rateSet.rate, wk.rateSet.asOf) : null;
+    if (wk.code) acc.currency = wk.code; else delete acc.currency;
+    if (wk.share < 1) acc.share = wk.share; else delete acc.share;
+    if (wk.trust) {
+      acc.trust = wk.trust; acc.ownerId = "";
+      if (wk.ownerWas) acc.ownerBeforeTrust = wk.ownerWas; else delete acc.ownerBeforeTrust;
+    } else {
+      // no trust (taken off): whose it was is in "Whose account" again, and saved from there
+      delete acc.trust; delete acc.ownerBeforeTrust;
+    }
+    if (wk.worked) writeTyped(p, acc, wk.full); else delete acc.fullBalance;
+    return r;
+  }
+  /** Today's saved totals, when there are some, follow balances a new rate moved (as markTyped does for a balance typed). */
+  function totalsToday(p) {
+    const i = (p.netWorthHistory ?? []).findIndex((h) => h?.date === fmt.today());
+    if (i < 0) return;
+    const t = worthOf(p, { today: fmt.today() });
+    p.netWorthHistory[i] = { ...p.netWorthHistory[i], assets: t.assets, liabilities: t.liabilities, netWorth: t.netWorth };
+  }
+  /** The green line after such a save (R7), worked out on a copy of the plan: "Paris savings added. EUR 12,000 at $1.08 =
+   *  $12,960.", what a new rate moved, net worth when other accounts moved, and the trust. */
+  function workedSaid(v, was, wk, id, labelled, relisted, mutate) {
+    const dry = structuredClone(plan);
+    mutate(dry);
+    const acc = dry.accounts.find((a) => a.id === id);
+    const name = v.name || was?.name || "";
+    const money0 = (n) => fmt.money(n, cur);
+    const w = acc ? workedOf(dry, acc) : null;
+    const head = w ? workedSavedWords(name, !was, w, money0, dry) : `${name} ${was ? "saved" : "added"}.`;
+    const r = wk.rateSet ? { code: wk.rateSet.code, from: wk.before.rate, to: wk.rateSet.rate, moved: (dry.accounts ?? []).filter((a) => a.id !== id && codeOf(dry, a) === wk.rateSet.code).map((a) => ({ id: a.id, name: a.name || "An account", to: countedBalance(a) })) } : null;
+    const rate = rateWords(r, money0, dry, id);
+    const nw = rate && r.moved.length ? ` Net worth is now ${money0(worthOf(dry, { today: fmt.today() }).netWorth)}.` : "";
+    return `${head}${rate}${nw}${trustWords(wk.before.trust, wk.trust, adultNames(plan))}${labelled}${relisted}`;
   }
   /** The green line after the form saves one of these kinds (null for every other save: its own words, as before). */
   function kindWords(v, was, kp, labelled) {
@@ -451,6 +635,13 @@ export function render(root, ctx) {
     return `${a.asOf ? `as of ${fmt.date(a.asOf)}` : "no day typed"}${rr ? ` \u00b7 ${rr}` : ""}`;
   };
   const callsLine = (a) => (isPrivate(a) ? rowPromised(privateOf(a, { today: fmt.today() }), (n) => fmt.money(n, cur)) : "");
+  // another currency, a part share, a trust (worked.js): the row says what its balance is worked from, and on a line of its own
+  // who owns it; none for every other row (which reads as before): "EUR 12,000 at $1.08 = $12,960, rate of 11/17/2026" /
+  // "Owned by Rivera Family Trust"
+  const workedLines = (a) => {
+    const wd = workedOf(plan, a), t = trustOf(a);
+    return [wd ? `${lineOf(wd, (n) => fmt.money(n, cur), plan)}${wd.code && wd.rateAsOf && wd.rate !== null ? `, rate of ${fmt.date(wd.rateAsOf)}` : ""}` : null, t ? `Owned by ${t}` : null].filter(Boolean);
+  };
   const rows = [...plan.accounts].filter((a) => !shownLabel || hasLabel(a, shownLabel)).sort((a, b) => Number(isLiability(a.type)) - Number(isLiability(b.type)) || Math.abs(b.balance) - Math.abs(a.balance));
   const redrawHere = () => (ctx.redraw ? ctx.redraw() : (root.replaceChildren(), render(root, ctx)));
   const filter = ownLabels.length ? ui.h("div", { dataset: { labels: "" } },
@@ -458,7 +649,7 @@ export function render(root, ctx) {
     shownLabel ? ui.h("p", { class: "small" }, labelLine(labelTotals(plan, shownLabel), (n) => fmt.money(n, cur))) : null) : null;
   // Desktop: a table. Phone: one stacked record per account (tester F-002).
   const table = ui.h("div", { class: "only-wide" }, ui.table([
-    { key: "name", label: "Account", render: (a) => (labelsOf(a).length || oneLine(a) || kindLine(a) ? ui.h("span", {}, a.name ?? "", ...pills(a), oneLine(a) ? ui.h("div", { class: "muted small" }, oneLine(a)) : null, kindLine(a) ? ui.h("div", { class: "muted small" }, kindLine(a)) : null, callsLine(a) ? ui.h("div", { class: "small" }, callsLine(a)) : null) : (a.name ?? "")) },
+    { key: "name", label: "Account", render: (a) => (labelsOf(a).length || oneLine(a) || kindLine(a) || workedLines(a).length ? ui.h("span", {}, a.name ?? "", ...pills(a), oneLine(a) ? ui.h("div", { class: "muted small" }, oneLine(a)) : null, kindLine(a) ? ui.h("div", { class: "muted small" }, kindLine(a)) : null, ...workedLines(a).map((l) => ui.h("div", { class: "muted small" }, l)), callsLine(a) ? ui.h("div", { class: "small" }, callsLine(a)) : null) : (a.name ?? "")) },
     { key: "type", label: "Type", render: typeLabel },
     { key: "institution", label: "Bank or company" },
     { key: "balance", label: "Balance", align: "right", render: balance },
@@ -474,7 +665,8 @@ export function render(root, ctx) {
       ui.h("span", { class: "rec-actions" }, ui.button("Edit", () => edit(a), { class: "secondary small" }), ui.button("Delete", () => del(a), { class: "danger small" }))),
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-sub" }, [typeLabel(a), a.institution].filter(Boolean).join(" \u00b7 ")), ui.h("span", { class: "rec-value" }, balance(a))),
     ui.h("div", { class: "rec-sub" }, guessed(a) ? "Our guess for now. Tap Edit to type the real one." : kindLine(a) ?? (oneLine(a) ? `${oneLine(a)}${a.asOf ? `, as of ${fmt.date(a.asOf)}` : ""}` : a.asOf ? `as of ${fmt.date(a.asOf)}` : ""), ...pills(a)),
-    callsLine(a) ? ui.h("div", { class: "rec-sub" }, callsLine(a)) : null)));
+    callsLine(a) ? ui.h("div", { class: "rec-sub" }, callsLine(a)) : null,
+    ...workedLines(a).map((l) => ui.h("div", { class: "rec-sub" }, l)))));
   // a debt typed here beside one Get started guessed: asked once on Our guesses for you, so it is not counted twice
   const twins = guessTwins(plan);
   if (twins.length) root.append(ui.h("ul", { class: "page-list" }, twins.map((t) => ui.h("li", {}, ui.h("a", { href: "#/overview/guesses", class: "muted" }, `Is ${t.twinName} the ${t.name.toLowerCase()} we guessed? Tell us, so it counts once ›`)))));
@@ -489,7 +681,8 @@ export function render(root, ctx) {
 
   // "Private investments" (gap list, next 60, item 45): one quiet row under the list, drawn only while one is on file
   const pp = privatePart();
-  if (pp) root.append(ui.h("div", {}, parts(ctx, pp)));
+  const wparts = workedParts();
+  if (pp || wparts.length) root.append(ui.h("div", {}, parts(ctx, pp, ...wparts)));
   // the green line with its next steps, in view (on a small phone it sat under the top bar after the form folded away)
   if (shownNote) { const r = shownNote.getBoundingClientRect(); if (r.top < 70 || r.bottom > window.innerHeight) shownNote.scrollIntoView({ block: "start" }); }
   // landed here to add or change one thing: the form in view and its first box ready (the page scrolls itself, so the shell's
@@ -549,6 +742,37 @@ export function render(root, ctx) {
     const note = said ? ui.notice("ok", said.text, said.undo ? { undo: said.undo, undone: (res) => { oneOpen = true; oneSaid = { text: ui.undoneWords(res, oneUndone(said.r, money, said.nw)) }; } } : {}) : null;
     return ui.h("div", { class: "folds", style: { marginTop: "8px" } }, part(ctx, { id: "asOne", kind: "own", title: PART_TITLE, says: oneStatus(shown),
       open: !!said || oneOpen, body: [note, ui.h("p", {}, INTRO), ...shown.map(block)] }));
+  }
+  // ---- another currency, a part share, a trust (gap list, next 60, items 18 and 19; worked.js): drawn only while an account
+  // has one. "How this is worked out": each rate with its day and its accounts, the accounts only partly yours, how to change a
+  // rate and what is not covered. Each trust (at most three, so the card keeps to five rows): its accounts, its total, and what
+  // this app does and does not do for it.
+  function workedParts() {
+    const money0 = (n) => fmt.money(n, cur);
+    const list = Array.isArray(plan.accounts) ? plan.accounts : [];
+    const inCur = list.filter((a) => codeOf(plan, a)), shared = list.filter((a) => shareOf(a) < 1);
+    const codes = [...new Set(inCur.map((a) => codeOf(plan, a)))];
+    const out = [];
+    if (inCur.length || shared.length) {
+      const body = [];
+      for (const c of codes) {
+        const r = rateOf(plan, c), names = inCur.filter((a) => codeOf(plan, a) === c).map((a) => a.name || "An account");
+        body.push(ui.h("p", {}, `${r ? `1 ${currencyName(c, 1)} = ${rateMoney(r.rate, plan)}, ${r.asOf ? `your rate of ${fmt.date(r.asOf)}` : "your rate, with no day typed"}` : `${capital(currencyName(c))}: no rate on file yet`}, for ${names.length === 1 ? names[0] : `${names.length} accounts: ${names.join(", ")}`}. Each balance in ${currencyName(c)} times the rate is what counts here.`));
+      }
+      if (shared.length === 1) body.push(ui.h("p", {}, `Only your ${shareWords(shareOf(shared[0]))} of ${shared[0].name || "an account"} counts: its whole balance times your share.`));
+      else if (shared.length) body.push(ui.h("p", {}, `Only your share counts for ${shared.length} accounts: ${shared.map((a) => `${a.name || "An account"} (your ${shareWords(shareOf(a))})`).join(", ")}. Each whole balance times your share is what counts here.`));
+      if (codes.length) body.push(ui.h("p", { class: "muted small" }, CHANGE_RATE), ui.h("p", { class: "muted small" }, NOT_COVERED));
+      out.push({ id: "worked", kind: "how", says: howStatus(plan, codes, shared.length), body });
+    }
+    for (const t of trustsOf(plan).slice(0, 3)) {
+      const accts = list.filter((a) => trustOf(a)?.toLowerCase() === t.name.toLowerCase());
+      out.push({ id: `trust-${t.ids[0]}`, kind: "item", title: t.name, says: money0(t.hasDebts ? t.net : t.assets), body: [
+        ui.h("ul", { class: "records" }, accts.map((a) => ui.h("li", {}, ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, a.name || "An account"), ui.h("span", { class: "rec-value" }, balance(a)))))),
+        ui.h("p", {}, t.hasDebts ? `In all: ${money0(t.assets)} owned and ${money0(t.liabilities)} owed, ${money0(t.net)} counted in your net worth.` : `In all: ${money0(t.assets)} of what you own.`),
+        ui.h("p", { class: "muted small" }, `${trustCounted(adultNames(plan))} ${TRUST_WORDS}`),
+      ] });
+    }
+    return out;
   }
   // ---- "Private investments": each one's own yearly return from its dated amounts, what it can still ask for, and the form
   // that adds money put in or paid back (private-fund.js; asked first and with Undo for a removal, Undo after an add)

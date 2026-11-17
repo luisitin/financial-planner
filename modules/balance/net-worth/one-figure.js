@@ -18,6 +18,7 @@
 import { countedBalance, isLiability } from "./compute.js";
 import { labelsOf, sameLabel } from "./labels.js";
 import { isGuess } from "../../../core/estimate/index.js";
+import { codeOf, shareOf, trustOf } from "./worked.js";
 
 /** The kinds a person can keep as one figure: bank accounts, investments, retirement accounts, cards and loans. Not the
  * mortgage (tied to a home), a home, a car, something else owned, the HSA, college savings (one per child), a policy. */
@@ -88,6 +89,8 @@ const PLACES = {
   "retirement.happenings": "a money move in your retirement plan uses it", guide: "it is an answer in Get started",
 };
 const OTHER_PLACE = "another page keeps something about it";
+const WORKED = "it is in another currency, or only partly yours";
+const TRUSTED = "a trust owns it";
 // a row whose id is missing or shared with another row: the plan cannot say which row a change is for (review 2026-11-16, F3:
 // three savings rows "a", "a", "b" put together removed all three, and net worth fell to $0)
 const SAME_ID = "the app cannot tell it apart from another account on your list";
@@ -117,6 +120,10 @@ const isSetup = (id) => typeof id === "string" && id.startsWith("setup-");
 /** Why a row cannot go into one figure on its own account (its id missing or shared, held elsewhere, our guess), or null. */
 function ownWhy(plan, a, places, seen) {
   if (typeof a.id !== "string" || !a.id || seen.get(a.id) > 1) return SAME_ID;
+  // its balance is worked from a whole in another currency or a share, or a trust owns it (worked.js): summed with other rows,
+  // what it is worked from would be lost (absent on every other row: nothing changes for them)
+  if (codeOf(plan, a) || shareOf(a) < 1) return WORKED;
+  if (trustOf(a)) return TRUSTED;
   const p = places.find((x) => !FOLLOWS.has(x) && x !== "guide");
   if (p) return PLACES[p] ?? OTHER_PLACE;
   if (typeof a.id === "string" && isGuess(plan, `accounts[${a.id}].balance`)) return "its balance is our guess for now: type the real one first";

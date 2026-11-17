@@ -1,7 +1,7 @@
 // tests/worked-balance-invariance.test.mjs -- an account in another currency, a part share of an account and a trust as its
 // owner (gap list, next 60, items 18 and 19; modules/balance/net-worth/worked.js) change nothing for a plan where nobody uses
 // them. Over every qa/fixtures/*-plan.mjs plan, the 14 households' base plans, the phone-built ones, the round 8 households,
-// the four Get started personas and the empty plan (none holds `currency`, `share`, `fullBalance`, `trust` or `meta.rates`):
+// the four Get started personas and the empty plan (none holds `currency`, `share`, `fullBalance`, `trust` or `currencyRates`):
 //   - every module whose manifest reads `accounts` gives, byte for byte, the compute() output it gave before;
 //   - Net worth, Update my balances, Account detail and Import draw the very words they drew before, and Net worth's add form
 //     too once its new boxes ("Its currency", the rate, "How much of it is yours", "Owned by a trust") are taken out;
@@ -95,7 +95,7 @@ test(`no plan holds a currency, a share, a whole balance, a trust or a rate toda
   assert.ok(READERS.length >= 100, `${READERS.length} readers`);
   for (const { name, plan } of ALL) {
     for (const a of plan.accounts ?? []) for (const k of ["currency", "share", "fullBalance", "trust"]) assert.ok(!(a && k in a), `${name}: ${a?.name} holds ${k}`);
-    assert.ok(!("rates" in (plan.meta ?? {})), `${name}: meta.rates`);
+    assert.ok(!("currencyRates" in plan) && !("rates" in (plan.meta ?? {})), `${name}: currencyRates`);
   }
 });
 
