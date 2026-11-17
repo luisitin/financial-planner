@@ -42,3 +42,19 @@ path falling to zero against the projection with a cross year, life cover and th
 - Feed the after-tax value to Life needs as an alternative to its income-replacement method.
 
 Review 2026-11-06 (round 7): "No life insurance on you: the household would lose this pay if you died" says you for the unnamed first adult ("Me") and "your spouse" for the unnamed partner; typed names read as before (core/words.js; view only).
+
+## The steadiness line in plain words (hb1 smoke fix, 2026-11-17, claude-b; test: module.test.mjs "hb1")
+
+The whole-app phone smoke showed the shut "How steady is each job?" row with the status "average, average" (the stored choices
+joined). `steadinessWords(people)` now says it the way a person would: one earner "average"; everyone the same "both average" or
+"all average"; otherwise each by name, "Ana: steady, Bo: average"; the volatile choice reads "uneven". For the sample family Ana
+and Bo, nothing chosen: "both average". Words only: `compute()` is unchanged, no figure moves, and opening the row changes nothing.
+
+Names (critic M1): a typed name as the page's sentences say it ("My spouse" is "Your spouse", core/words.js `NameIn`); the first
+person left unnamed ("Me", or no name) is "You", and any later unnamed one "Person 2", "Person 3" by its place among the earners,
+so a couple with a blank second name reads "You: average, Person 2: steady", never "You: average, You: steady".
+
+One word for each kind of job (critic F3): the status said "uneven" while the choice inside read "Volatile (commission, a
+start-up, your own business)". The choices now read "Steady (...)", "Average" and "Uneven (commission, a start-up, your own
+business)", each starting with its status word (`STEADY_WORDS`, a test ties the two), and each earner's line and "What it means"
+say "an uneven job" and "Uneven pay behaves like a stock". The stored key stays `volatile` (no data change).

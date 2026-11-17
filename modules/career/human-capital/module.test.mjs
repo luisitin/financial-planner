@@ -62,3 +62,72 @@ test("life cover against each earner's after-tax pay; the raise worth having", (
   assert.equal(d.people.find((x) => x.name === "Bo").cover, 0);
   assert.ok(d.raiseGain > 0);
 });
+
+// hb1 (whole-app phone smoke, 2026-11-17): the "How steady is each job?" fold's status read "average, average" (the stored keys).
+test("hb1: the steadiness status in plain words, one sentence per case", async () => {
+  const { steadinessWords } = await import("./compute.js");
+  const fs = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const P = (name, risk) => ({ name, risk });
+  assert.equal(steadinessWords([]), "");
+  assert.equal(steadinessWords([P("Ana", "average")]), "average");
+  assert.equal(steadinessWords([P("Ana", "average"), P("Bo", "average")]), "both average");
+  assert.equal(steadinessWords([P("Ana", "steady"), P("Bo", "steady"), P("Cy", "steady")]), "all steady");
+  assert.equal(steadinessWords([P("Ana", "steady"), P("Bo", "average")]), "Ana: steady, Bo: average");
+  assert.equal(steadinessWords([P("Me", "volatile"), P("Bo", "average")]), "You: uneven, Bo: average");
+  assert.equal(steadinessWords([P("Ana", "volatile"), P("Bo", "volatile")]), "both uneven");
+  assert.equal(steadinessWords([P("Ana", "nonsense")]), "average", "an unknown choice reads as compute() counts it");
+  // the family (Ana and Bo, nothing chosen yet): both average, as the page now says
+  const d = compute(familyPlan(TODAY), { today: TODAY });
+  assert.deepEqual(d.people.map((p) => p.risk), ["average", "average"]);
+  assert.equal(steadinessWords(d.people), "both average");
+  // a choice saved for Bo shows by name
+  const p = familyPlan(TODAY); const bo = d.people.find((x) => x.name === "Bo");
+  p.whatIfs = { ...(p.whatIfs ?? {}), humanCapital: { [bo.id]: "volatile" } };
+  assert.equal(steadinessWords(compute(p, { today: TODAY }).people), "Ana: average, Bo: uneven");
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes('ui.h("span", { class: "fold-status" }, steadinessWords(d.people))'), "the view draws it");
+  assert.ok(!view.includes('d.people.map((p) => p.risk).join(", ")'), "never the stored keys");
+});
+
+// hb1 fix M1: a couple whose second adult has no name read "You: average, You: steady"
+test("hb1 fix: only one person is 'You'; a later unnamed adult is 'Person N'; a partner is 'Your spouse'", async () => {
+  const { steadinessWords } = await import("./compute.js");
+  const P = (name, risk) => ({ name, risk });
+  assert.equal(steadinessWords([{ risk: "average" }, { risk: "steady" }]), "You: average, Person 2: steady");
+  assert.equal(steadinessWords([P("Me", "steady"), P("", "average")]), "You: steady, Person 2: average");
+  assert.equal(steadinessWords([P("Me", "steady"), P("Me", "average"), P("  ", "volatile")]), "You: steady, Person 2: average, Person 3: uneven");
+  assert.equal(steadinessWords([P("Ana", "steady"), P("Me", "average")]), "Ana: steady, You: average", "the unnamed one is you wherever it stands");
+  assert.equal(steadinessWords([P("Me", "steady"), P("My spouse", "volatile")]), "You: steady, Your spouse: uneven", "as the page's sentences say it");
+  assert.equal(steadinessWords([P("Ana", "steady"), P("Bo", "average")]), "Ana: steady, Bo: average", "typed names as before");
+  // never two "You"
+  for (const names of [["", ""], ["Me", "Me"], [undefined, null], ["you", "Me", ""]]) {
+    const line = steadinessWords(names.map((n, i) => P(n, i ? "steady" : "average")));
+    assert.equal((line.match(/\bYou\b/g) ?? []).length, 1, line);
+  }
+});
+
+// hb1 fix F3: the shut row's status said "uneven" while the choice inside read "Volatile (commission, a start-up, ...)"
+test("hb1 fix: the status, the choices and the page's sentences use the same word for each kind of job", async () => {
+  const { RISK, STEADY_WORDS, steadinessWords } = await import("./compute.js");
+  const fs = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  assert.deepEqual(Object.keys(STEADY_WORDS), Object.keys(RISK));
+  for (const [k, r] of Object.entries(RISK)) {
+    const w = STEADY_WORDS[k];
+    assert.ok(r.label.startsWith(w.charAt(0).toUpperCase() + w.slice(1)), `${k}: "${r.label}" starts with the status word "${w}"`);
+    assert.equal(steadinessWords([{ name: "Ana", risk: k }]), w);
+  }
+  assert.equal(RISK.volatile.label, "Uneven (commission, a start-up, your own business)");
+  const view = fs.readFileSync(fileURLToPath(new URL("./view.js", import.meta.url)), "utf8");
+  assert.ok(view.includes('volatile: "an uneven" }[p.risk]'), "each earner's line: an uneven job");
+  assert.ok(view.includes('"Uneven pay behaves like a stock:'), "What it means: uneven pay");
+  // "volatile" is left only as the stored key the code reads, never in words on screen
+  assert.ok(!/volatile/i.test(view.replace('volatile: "an uneven" }[p.risk]', "").replace('p.risk !== "volatile"', "")), "no other word for it on screen");
+  // the choice saved is still the stored key, and still counts as before
+  const p = familyPlan(TODAY); const d0 = compute(p, { today: TODAY }); const bo = d0.people.find((x) => x.name === "Bo");
+  p.whatIfs = { humanCapital: { [bo.id]: "volatile" } };
+  const d1 = compute(p, { today: TODAY });
+  assert.equal(d1.people.find((x) => x.id === bo.id).risk, "volatile");
+  assert.ok(d1.people.find((x) => x.id === bo.id).value < bo.value);
+});

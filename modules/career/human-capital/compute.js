@@ -6,14 +6,39 @@ import { compute as computeIncome } from "../../cashflow/income/compute.js";
 import { compute as computeRetirement } from "../../retirement/projection/compute.js";
 import { compute as computeNext } from "../../overview/next-best-action/compute.js";
 import { compute as computeNetWorth } from "../../balance/net-worth/compute.js";
+import { isYou, NameIn } from "../../../core/words.js";
 
-/** How steady the pay is sets the discount: a steady job like a bond (the plan's bond return), an average one two points more, a volatile one (commission, a start-up) like stocks. */
+/** How steady the pay is sets the discount: a steady job like a bond (the plan's bond return), an average one two points more, an
+ * uneven one (stored "volatile": commission, a start-up) like stocks. Each choice's label starts with the word the status line
+ * and the page's sentences use for it (hb1 fix F3: the choice read "Volatile" and the status "uneven"). */
 export const RISK = {
   steady: { label: "Steady (government, tenured, long-standing employer)", add: 0 },
   average: { label: "Average", add: 0.02 },
-  volatile: { label: "Volatile (commission, a start-up, your own business)", add: null },
+  volatile: { label: "Uneven (commission, a start-up, your own business)", add: null },
 };
 const PAY_TYPES = ["salary", "bonus", "business"];
+/** How steady each earner's pay is, in the plain words the "How steady is each job?" fold's status line uses. */
+export const STEADY_WORDS = { steady: "steady", average: "average", volatile: "uneven" };
+/**
+ * steadinessWords(people) -> the fold's one-line status (hb1 smoke fix: it read "average, average", the stored keys joined):
+ * one earner "average"; everyone the same "both average" (two) or "all average" (three or more); else each by name, "Ana: steady,
+ * Bo: average". A typed name is said as the page says it in a sentence ("My spouse" is "Your spouse", core/words.js); the first
+ * one left unnamed ("Me", or no name) is "You", and any later unnamed one "Person 2", "Person 3" by its place in the list, so two
+ * people never both read "You" (hb1 fix M1). "uneven" is the volatile choice (pay that swings a lot: commission, a start-up,
+ * your own business). Nothing worked out here: `people` is compute()'s list.
+ */
+export function steadinessWords(people = []) {
+  const words = people.map((p) => STEADY_WORDS[p.risk] ?? STEADY_WORDS.average);
+  if (!words.length) return "";
+  if (words.every((w) => w === words[0])) return words.length === 1 ? words[0] : `${words.length === 2 ? "both" : "all"} ${words[0]}`;
+  let you = false;
+  const who = (p, i) => {
+    if (!isYou(p.name)) return NameIn(String(p.name).trim());
+    if (!you) { you = true; return "You"; }
+    return `Person ${i + 1}`;
+  };
+  return people.map((p, i) => `${who(p, i)}: ${words[i]}`).join(", ");
+}
 
 /** Present value of pay `pay0` a year for `years` years, growing `g` a year, discounted at `r` (all real), paid at each year's end. */
 export function presentValue(pay0, years, g, r) {

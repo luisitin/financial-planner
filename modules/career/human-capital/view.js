@@ -1,7 +1,7 @@
 // modules/career/human-capital/view.js -- DOM only. What your future pay is worth today, per earner; the pay
 // still to come against your savings over the years (the two lines cross); what it means for insurance and
 // investing; how steady each job is in a fold.
-import { compute, RISK } from "./compute.js";
+import { compute, RISK, steadinessWords } from "./compute.js";
 import { lineChart } from "../../retirement/charts.js";
 import { nameIn } from "../../../core/words.js";
 
@@ -39,7 +39,7 @@ export function render(page, ctx) {
 
   root.append(ui.card("Each earner", ui.h("ul", { class: "records" }, d.people.map((p) => ui.h("li", {},
     ui.h("div", { class: "rec-head" }, ui.h("span", { class: "rec-title" }, `${p.name}, ${p.age}`), ui.h("span", { class: "rec-value" }, money(p.value))),
-    ui.h("div", { class: "rec-sub" }, `${money(p.pay)} a year for ${p.years} more year${p.years === 1 ? "" : "s"} (to ${p.retireAge}); ${{ steady: "a steady", average: "an average", volatile: "a volatile" }[p.risk]} job: its future pay is reduced by ${(p.rate * 100).toFixed(1)}% for each year away, to give its value today. ${money(p.afterTax)} after tax.`),
+    ui.h("div", { class: "rec-sub" }, `${money(p.pay)} a year for ${p.years} more year${p.years === 1 ? "" : "s"} (to ${p.retireAge}); ${{ steady: "a steady", average: "an average", volatile: "an uneven" }[p.risk]} job: its future pay is reduced by ${(p.rate * 100).toFixed(1)}% for each year away, to give its value today. ${money(p.afterTax)} after tax.`),
     ui.h("div", { class: `rec-sub${p.coverShare !== null && p.coverShare < 0.5 ? " hc-warn" : ""}` }, p.cover > 0 ? `Life insurance on ${nameIn(p.name)}: ${money(p.cover)}, ${pct(p.coverShare)} of it.` : `No life insurance on ${nameIn(p.name)}: the household would lose this pay if ${nameIn(p.name)} died.`))))));
 
   const marks = d.crossYear ? [{ year: d.crossYear, label: "savings pass it" }] : [];
@@ -52,12 +52,12 @@ export function render(page, ctx) {
   const steady = d.people.every((p) => p.risk !== "volatile");
   root.append(ui.card("What it means", ui.h("ul", {},
     ui.h("li", {}, ui.h("b", {}, "Protect it. "), "Insurance on your life and your ability to work is how this value reaches your family if you cannot earn it: see Life insurance and Disability insurance below."),
-    ui.h("li", {}, ui.h("b", {}, "Invest around it. "), steady ? "Steady pay behaves like a bond: it lets your savings take more stock risk while you work." : "Volatile pay behaves like a stock: keep more of your savings steady, and avoid piling into your own employer's shares."),
+    ui.h("li", {}, ui.h("b", {}, "Invest around it. "), steady ? "Steady pay behaves like a bond: it lets your savings take more stock risk while you work." : "Uneven pay behaves like a stock: keep more of your savings steady, and avoid piling into your own employer's shares."),
     ui.h("li", {}, ui.h("b", {}, "Grow it. "), `Raises one percentage point bigger every year would add about ${money(d.raiseGain)} of pay over your careers, in today's dollars: skills and job moves are often your best investment.`)),
     ui.row(ui.h("a", { class: "btn secondary", href: "#/insurance/life-needs" }, "Life insurance"), ui.h("a", { class: "btn secondary", href: "#/insurance/disability" }, "Disability insurance"))));
 
   const s = plan.whatIfs?.humanCapital ?? {};
-  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How steady is each job?"), ui.h("span", { class: "fold-status" }, d.people.map((p) => p.risk).join(", ")), ui.h("span", { class: "fold-chev" }, "›")),
+  root.append(ui.h("details", { class: "card fold fold-card" }, ui.h("summary", {}, ui.h("h2", {}, "How steady is each job?"), ui.h("span", { class: "fold-status" }, steadinessWords(d.people)), ui.h("span", { class: "fold-chev" }, "›")),
     ui.form(d.people.map((p) => ({ key: p.id, label: p.name, type: "select", options: Object.entries(RISK).map(([value, r]) => ({ value, label: r.label })) })), Object.fromEntries(d.people.map((p) => [p.id, s[p.id] ?? "average"])), (v) => {
       pending = "Saved.";
       store.update((p) => { p.whatIfs = p.whatIfs ?? {}; p.whatIfs.humanCapital = { ...(p.whatIfs.humanCapital ?? {}), ...v }; });
