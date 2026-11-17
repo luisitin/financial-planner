@@ -845,3 +845,18 @@ test("L12: the retirement step asks to read the answer, then check the numbers i
   const src = fs.readFileSync(new URL("./journeys.js", import.meta.url), "utf8");
   assert.ok(src.includes("Your retirement savings are not in the plan yet, so this page cannot say whether the money lasts."));
 });
+
+test("z1: \"Your retirement\" waits for Social Security only while Will the money last? cannot answer without it", async () => {
+  const { pathSummary } = await import("./compute.js");
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  const step = (p) => pathSummary(p, { today: T }).parts.find((x) => x.key === "retire");
+  // Ruth and Sam: Sam has no figure, the money lasts without it: the page answers, so the step does not wait
+  assert.equal(step(retiredCouplePlan(T)).waiting, null);
+  // spending three times as high: short without it, so the step still asks for it
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  assert.deepEqual(step(high).waiting, { what: "Social Security for Sam", href: "#/retirement/social-security" });
+  // a birth date missing too: it waits, for both
+  const nd = retiredCouplePlan(T); nd.household.people.find((x) => x.id === "p-sam").birthDate = "";
+  assert.match(step(nd).waiting.what, /Social Security for Sam and Sam's birth date/);
+});

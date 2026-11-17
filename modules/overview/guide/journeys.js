@@ -27,7 +27,7 @@
 // A guide may also have variant(plan, { today, off }) -> null | { line?, haveReady?, more?, finish?, steps: { [key]: fields | null } }:
 // other words for this plan, a step's fields replaced, or a step left out (null). guide/compute.js forPlan applies it.
 import { compute as setupSteps } from "../dashboard/compute.js";
-import { picks, retirementGap } from "../setup/compute.js";
+import { picks, retirementGap, lastsWithoutSs } from "../setup/compute.js";
 import { isLiability } from "../../balance/net-worth/compute.js";
 import { compute as liabilities } from "../../balance/liabilities/compute.js";
 import { compute as categorize } from "../../transactions/categorize/compute.js";
@@ -168,15 +168,17 @@ export const pathVariant = (p, { today = null, off = [] } = {}) => {
   // the step card says only what the page shows (stress test 2026-11-11, j-first-freelancer/F5): no "rows marked our guess"
   // over a page with no rows, no "read the answer at the top" over a forecast that cannot answer yet
   if (steps.month !== null) steps.month = { ...(steps.month ?? {}), ask: monthAsk(p, { today, retired }) };
-  if (steps.retire !== null && !retired && retirementKnown(p, today)) {
+  if (steps.retire !== null && !retired && (retirementKnown(p, today) || lastsWithoutSs(p, { today }))) {
     let unknown = false;
     try { unknown = savingsUnknown(projection(p, { today })); } catch { unknown = false; }
     if (unknown) steps.retire = { ask: "Your retirement savings are not in the plan yet, so this page cannot say whether the money lasts. Tap Add what you own, or go on and come back." };
   }
   return { steps };
 };
-/** What "Your retirement" waits for: the Social Security figure (setup's retirementGap), never blocking. */
-const retireWaits = (p) => { try { const g = retirementGap(p); return g ? { what: g.what, href: `#/${g.go.join("/")}` } : null; } catch { return null; } };
+/** What "Your retirement" waits for: the Social Security figure (setup's retirementGap), never blocking. Nothing when that is
+ * the only gap and the page says the money lasts even without it (setup's lastsWithoutSs, the one rule every overview page
+ * asks; z1): the page answers, and its own notice still offers "Add Social Security". */
+const retireWaits = (p, { today = null } = {}) => { try { const g = retirementGap(p); return g && !lastsWithoutSs(p, { today }) ? { what: g.what, href: `#/${g.go.join("/")}` } : null; } catch { return null; } };
 
 /** What "Your month" waits for: the pay (what is left each month needs it; the page itself takes the spending), never blocking
  * (stress test 2026-11-11, j-first-freelancer/F5: the step said "read what is left each month at the top" over a page with no pay). */

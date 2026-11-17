@@ -280,3 +280,15 @@ yours on Our guesses for you)".
 - The "Your retirement" step's ask: "Read the answer at the top, then check the numbers it rests on, just under it." (the
   "What this answer rests on" card on Will the money last?, levers.js). No new step (D-D1: the check lives on the page the
   retirement step opens). With no retirement savings on file the step still says the page cannot answer yet.
+
+## "Your retirement" no longer waits when the answer stands (z1, 2026-11-16; tests `tests/one-answer.test.mjs`)
+
+The path's "Your retirement" step said "This step needs Social Security for Sam first" whenever an adult's figure was missing
+(`retireWaits`, setup's `retirementGap`). Will the money last? answers without it when Social Security is the only gap and the
+money lasts even so (overview/setup `lastsWithoutSs`, the one rule every overview page asks), so the step then waits for
+nothing and reads its own ask ("Read the answer at the top, then check the numbers it rests on, just under it."); the page's
+own notice still offers "Add Social Security" and "Sam won't get Social Security". `pathVariant`'s "nothing saved yet" ask for
+that step asks the same rule. Short or only just lasting without it, the step still waits for the figure. Ruth and Sam (the
+invented retired couple): the step no longer waits; every other household's path is byte for byte what it was
+(`tests/one-answer-invariance.test.mjs`).
+

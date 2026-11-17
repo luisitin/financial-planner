@@ -4,9 +4,10 @@
 // output is checked against a digest written down from the code before the change (commit e223a42). What may move:
 //   - a plan whose only retirement gap is Social Security and whose money lasts without it (overview/setup lastsWithoutSs): the
 //     retirement answer on Get started's standing(), Your plan, Quick answers, the Timeline, Health score and the path's "Your
-//     retirement" step. Each of those outputs, with the parts that say the retirement answer taken out (`strip` below, the same
-//     function on both sides), is byte for byte what it was; the Dashboard's row, Next best action, Needs attention, Start and
-//     the Dashboard's compute are what they were in full. tests/one-answer.test.mjs says what the moved parts now say.
+//     retirement" step (on Step by step and on Start). Each of those outputs, with the parts that say the retirement answer
+//     taken out (`STRIP` below, the same function on both sides), is byte for byte what it was; the Dashboard's row, Next best
+//     action, Needs attention and the Dashboard's compute are what they were in full. tests/one-answer.test.mjs says what the
+//     moved parts now say.
 //   - the spending worked out from a typed left-over (overview/setup solveSpend), for a plan with an income-tax line filed on
 //     Expenses: only its ceiling (`available`, and `over` where the ceiling decides it), now lower by exactly that line's part
 //     the month's tax holds (cashflow/forecast taxesListedOf). Every other plan's answer is what it was, byte for byte.
@@ -109,6 +110,8 @@ export const STRIP = {
   quick: (d) => ({ ...d, answers: (d?.answers ?? []).filter((x) => x.guide !== "retire"), needsFirst: (d?.needsFirst ?? []).filter((x) => x.guide !== "retire") }),
   path: (d) => ({ ...d, parts: (d?.parts ?? []).map((x) => (x.key === "retire" ? omit(x, ["waiting"]) : x)), gaps: (d?.gaps ?? []).filter((x) => x.key !== "retire") }),
   guide: (d) => ({ ...d, journeys: (d?.journeys ?? []).map((j) => (j.id === "plan" ? { ...j, steps: (j.steps ?? []).map((x) => (x.key === "retire" ? omit(x, ["waiting"]) : x)) } : j)) }),
+  // Start shows the path's summary too (its steps, which of them wait)
+  start: (d) => ({ ...d, path: d?.path ? STRIP.path(d.path) : d?.path }),
 };
 /** The pages whose retirement answer may move, for a plan whose answer stands without the Social Security not in yet. */
 const MAY_MOVE = Object.keys(STRIP);

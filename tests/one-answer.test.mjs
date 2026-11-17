@@ -24,6 +24,8 @@ import { compute as yourPlan } from "../modules/overview/plan/compute.js";
 import { compute as quick, answerFor } from "../modules/overview/quick/compute.js";
 import { compute as timeline } from "../modules/overview/timeline/compute.js";
 import { compute as health } from "../modules/overview/health-score/compute.js";
+import { pathSummary } from "../modules/overview/guide/compute.js";
+import { retirementGap } from "../modules/overview/setup/compute.js";
 import { markGuess } from "../core/estimate/index.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -138,6 +140,21 @@ test("every page agrees with Will the money last?, for every household", () => {
       assert.equal(said, r.page, at);
     }
   }
+});
+
+test("Step by step: \"Your retirement\" waits for Social Security only while the page cannot answer without it", () => {
+  let lifted = 0, waits = 0;
+  for (const r of RUNS) {
+    const part = pathSummary(c(r.plan), { today: T }).parts.find((x) => x.key === "retire");
+    if (!part) continue;
+    const gap = retirementGap(r.plan);
+    if (r.stands) { assert.equal(part.waiting, null, r.name); lifted++; continue; }
+    if (gap) { assert.equal(part.waiting?.what, gap.what, r.name); waits++; continue; }
+    assert.equal(part.waiting, null, r.name);
+  }
+  assert.equal(lifted, 3); assert.ok(waits >= 10, `${waits}`);
+  // Ruth and Sam: the step reads its own ask, not "This step needs Social Security for Sam first"
+  assert.equal(pathSummary(c(RC.plan), { today: T }).gaps.some((x) => x.key === "retire"), false);
 });
 
 test("the one rule: Social Security the only gap and the money lasting without it", () => {
