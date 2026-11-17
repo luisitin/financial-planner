@@ -121,7 +121,9 @@ test("z2 (c): Riley's and Sam's sheets say not known yet everywhere, in Will the
   assert.match(t, /Nothing saved yet Retirement savings/);
   assert.match(t, /Not known yet Does the money last\?/);
   assert.match(t, /Start saving for retirement\. Once you add what you have saved, we can say whether the money will last\./);
-  assert.match(t, /Retirement not known yet Protection not known yet Goals 0 out of 5 /);
+  // (ha (b), 2026-11-17: the Goals row says why under its name, in the score's words, with the score's step for it (not among
+  // Riley's Next steps; fix round P1), and keeps its points)
+  assert.match(t, /Retirement not known yet Protection not known yet Goals No goals with a date yet\. Add what you are saving for, with a date, on the Goals page\. 0 out of 5 /);
   assert.doesNotMatch(t, /0 out of 25/);
   assert.doesNotMatch(t, /runs out/);
   const s = await z2Draw(await z2Sam(T), T);
@@ -143,6 +145,10 @@ test("z2 (c): Riley's and Sam's sheets say not known yet everywhere, in Will the
 // for byte what it gave at e223a42 (z2-invariance.json, written by this test on that code); a plan the gate calls unknown gives it
 // once its new words are put back (`retirement.nothingSaved` taken off, the step and the row titled as the score titles them).
 // To write the digests down again (only on the code before a deliberate change): PRINT=1 node --test modules/reports/plan-summary/module.test.mjs
+// ha (b), 2026-11-17: a Goals part the score could not judge carries `why`, the score's own `detail`, and `step`, its `fix` unless
+// the sheet's Next steps hold it (fix round P1); taken off here, every sheet is what it was (these digests pass at 452408a, so
+// without them every output is 452408a's), and they are on exactly the households whose score could not judge Goals and whose
+// sheet lists no goal with a date (fix round F1), with the score's words.
 test("z2 invariance: the plan summary is e223a42's for every household, but the retirement words where it is not known yet", async () => {
   const fs = await import("node:fs");
   const path = await import("node:path");
@@ -171,7 +177,9 @@ test("z2 invariance: the plan summary is e223a42's for every household, but the 
   // the gated sheet with the score's own retirement step and titles back and without the new fields: what e223a42 gave
   const { compute: health } = await import("../../overview/health-score/compute.js");
   const sheetSteps = Object.values(UNKNOWN_STEPS).map((x) => x.title);
-  const putBack = (d, plan) => {
+  const whys = [], steps = [], noWhy = (d) => (d?.health ? { ...d, health: { ...d.health, parts: d.health.parts.map(({ why: _w, step: _s, ...x }) => x) } } : d);
+  const putBack = (d0, plan) => {
+    const d = noWhy(d0);
     if (!d?.retirement?.unknown) return d;
     const { nothingSaved: _n, ...retirement } = d.retirement;
     const fix = health(plan, { today: T }).parts.find((x) => x.id === "retirement").fix;
@@ -184,6 +192,16 @@ test("z2 invariance: the plan summary is e223a42's for every household, but the 
     const q = migrate(structuredClone(plan));
     const d = run(() => compute(q, { today: T, maxPaths: 200 }));
     if (d?.retirement?.unknown) gated.push(name);
+    if (d?.health) {
+      const goals = health(q, { today: T }).parts.find((x) => x.id === "goals");
+      const why = d.health.parts.filter((x) => "why" in x);
+      const says = goals.status === "unknown" && !d.goals.some((g) => g.targetDate);
+      const step = says && !d.nextSteps.some((x) => x.detail === goals.fix);
+      assert.deepEqual(why.map((x) => [x.title, x.why, x.step]), says ? [["Goals", goals.detail, step ? goals.fix : undefined]] : [], name);
+      assert.ok(d.health.parts.every((x) => !("step" in x) || "why" in x), `${name}: a step only with its reason`);
+      if (why.length) whys.push(name);
+      if (step) steps.push(name);
+    }
     now[name] = dig(process.env.PRINT ? d : putBack(d, q));
   }
   const file = new URL("./z2-invariance.json", import.meta.url);
@@ -192,6 +210,8 @@ test("z2 invariance: the plan summary is e223a42's for every household, but the 
   assert.ok(Object.keys(now).length >= 50, `${Object.keys(now).length} households`);
   assert.deepEqual(now, was);
   assert.deepEqual(gated, ["fixture renter-debt-plan.mjs:renterDebtPlan", "fixture renter-debt-plan.mjs:renterPayingExtraPlan", "persona sam", "persona jordan"]);
+  assert.ok(whys.length >= 10 && whys.includes("fixture renter-debt-plan.mjs:renterDebtPlan") && !whys.includes("fixture family-plan.mjs:familyPlan"), `${whys.length}: ${whys.join(", ")}`);
+  assert.ok(steps.length >= 4 && steps.length < whys.length && steps.includes("persona sam") && !steps.includes("persona ruth"), `steps ${steps.length}: ${steps.join(", ")}`);
 });
 
 // ---------------------------------------------------------------- z2 fix round (2026-11-17): the step and the table rows
@@ -249,4 +269,101 @@ test("z2 fix (M2, P4): under not known yet only the parts waiting for that answe
   // a sheet with an answer: no part carries the flag, whatever its status
   const f = compute(familyPlan(T), { today: T, maxPaths: 100 });
   assert.ok(f.health.parts.every((p) => !("notKnown" in p)));
+});
+
+// ---------------------------------------------------------------- ha (b), 2026-11-17: the Goals row says why it has no points
+// Riley (the renter-debt fixture: 24, an Emergency fund goal of $14,500 with no date): the sheet lists the goal, and the health
+// table said "Goals 0 out of 5" with no reason. The Plan health score says why for that part ("No goals with a date yet.", its
+// own `detail`); the row now says it too, under the part's name, from the score itself (never a copy), and keeps its points so
+// the table adds up to the score (z2 fix round M2/P4). Only Goals (`WHY_PARTS`): every other row reads as before.
+test("ha (b) compute: a Goals part the score could not judge carries the score's own reason; nothing else does", async () => {
+  const { WHY_PARTS } = await import("./compute.js");
+  assert.deepEqual(WHY_PARTS, ["goals"]);
+  const T = "2026-11-17";
+  const plan = await z2Riley();
+  assert.equal(plan.goals.length, 1); assert.equal(plan.goals[0].target, 14500); assert.equal(plan.goals[0].targetDate, "", "one goal, no date");
+  const r = compute(plan, { today: T, maxPaths: 100 });
+  const g = r.health.parts.find((p) => p.title === "Goals");
+  const scored = health(plan, { today: T }).parts.find((p) => p.id === "goals");
+  assert.equal(scored.status, "unknown");
+  assert.equal(g.why, scored.detail, "the score's own words");
+  assert.equal(g.why, "No goals with a date yet.");
+  // (fix round P1: the score's next step for it, its own words, as Riley's Next steps do not carry it)
+  assert.equal(g.step, scored.fix, "the score's own step");
+  assert.equal(g.step, "Add what you are saving for, with a date, on the Goals page.");
+  assert.ok(!r.nextSteps.some((s) => s.detail === scored.fix));
+  assert.deepEqual([g.points, g.max, g.status], [0, 5, "unknown"], "its points, as before");
+  assert.deepEqual(r.health.parts.filter((p) => "why" in p).map((p) => p.title), ["Goals"], "retirement and protection say not known yet, no reason line");
+  // a dated goal judged: no reason line
+  const dated = await z2Riley();
+  dated.goals[0].targetDate = "2028-11-01";
+  const d = compute(dated, { today: T, maxPaths: 100 });
+  assert.notEqual(health(dated, { today: T }).parts.find((p) => p.id === "goals").status, "unknown");
+  assert.ok(d.health.parts.every((p) => !("why" in p)));
+  // no goals at all: the score says the same, and so does the row
+  const none = await z2Riley();
+  none.goals = [];
+  const n = compute(none, { today: T, maxPaths: 100 });
+  assert.equal(n.health.parts.find((p) => p.title === "Goals").why, "No goals with a date yet.");
+  // the family (dated goals): no new field anywhere
+  assert.ok(compute(familyPlan(T), { today: T, maxPaths: 100 }).health.parts.every((p) => !("why" in p)));
+});
+
+test("ha (b) drawn: Riley's Goals row says why under its name and keeps 0 out of 5; the family's table as before", async () => {
+  const T = "2026-11-17";
+  const t = await z2Draw(await z2Riley(), T);
+  assert.match(t, /Retirement not known yet Protection not known yet Goals No goals with a date yet\. Add what you are saving for, with a date, on the Goals page\. 0 out of 5 /);
+  assert.match(t, /🛟 Emergency fund \$14,500/, "the goal it speaks of, listed above");
+  const f = await z2Draw(familyPlan(T), T);
+  assert.doesNotMatch(f, /No goals with a date yet/);
+  assert.match(f, /Goals [\d.]+ out of 5 /, "the family's Goals row: its points only");
+});
+
+// ---------------------------------------------------------------- ha (b) fix round (2026-11-17): critics F1 and P1
+// F1: the score counts a goal as dated only with an amount too, so a goal with a date and no amount (0, or below 0: "no amount")
+// left the score at "No goals with a date yet." while the sheet listed that goal with its date. The reason is said only where it
+// reads true beside the sheet (no goal listed with a date); there the row reads as at 452408a, and the goal's own line says "no
+// amount".
+test("ha (b) fix F1: a goal listed with a date but no amount: no 'No goals with a date yet.' under the Goals row", async () => {
+  const T = "2026-11-17";
+  for (const target of [0, -5]) {
+    const plan = await z2Riley();
+    plan.goals[0].target = target; plan.goals[0].targetDate = "2028-01-01";
+    const scored = health(plan, { today: T }).parts.find((p) => p.id === "goals");
+    assert.deepEqual([scored.status, scored.detail], ["unknown", "No goals with a date yet."], "the score: not dated, for want of an amount");
+    const r = compute(plan, { today: T, maxPaths: 100 });
+    assert.deepEqual(r.goals.map((g) => [g.name, g.targetDate, g.status]), [["Emergency fund", "2028-01-01", "no amount"]], "the sheet lists it with its date");
+    const g = r.health.parts.find((p) => p.title === "Goals");
+    assert.deepEqual(g, { title: "Goals", points: 0, max: 5, status: "unknown" }, `${target}: its points only, as at 452408a`);
+    const t = await z2Draw(plan, T);
+    assert.match(t, /Jan 2028/);
+    assert.doesNotMatch(t, /No goals with a date yet/);
+    assert.match(t, /Protection not known yet Goals 0 out of 5 /);
+  }
+  // a second goal with no date beside it: still a goal listed with a date, still no line
+  const two = await z2Riley();
+  two.goals = [{ ...two.goals[0], id: "g-x", target: 0, targetDate: "2028-01-01" }, two.goals[0]];
+  assert.ok(!("why" in compute(two, { today: T, maxPaths: 100 }).health.parts.find((p) => p.title === "Goals")));
+});
+
+// P1: the row gave the reason and not what to do. It now says the score's own next step for Goals (its fix) after the reason,
+// unless the sheet's Next steps already say it (Ruth, 72, no goals: "Goals. Add what you are saving for, with a date, on the
+// Goals page." is her first step), so the sheet never says it twice.
+test("ha (b) fix P1: the score's next step under the reason, unless Next steps above already say it", async () => {
+  const T = "2026-11-17";
+  const P = await import("../../../qa/fixtures/setup-personas.mjs");
+  const { freelancerPlan } = await import("../../../qa/fixtures/round8-households.mjs");
+  const FIX = "Add what you are saving for, with a date, on the Goals page.";
+  for (const [name, plan, inSteps] of [["sam", P.finishSetup("sam", P.sam(T), T), false], ["jordan", P.finishSetup("jordan", P.jordan(T), T), false],
+    ["freelancer", freelancerPlan(), false], ["ruth", P.finishSetup("ruth", P.ruth(T), T), true]]) {
+    const scored = health(plan, { today: T }).parts.find((p) => p.id === "goals");
+    assert.equal(scored.fix, FIX, name);
+    const r = compute(plan, { today: T, maxPaths: 100 });
+    const g = r.health.parts.find((p) => p.title === "Goals");
+    assert.equal(r.nextSteps.some((s) => s.detail === FIX), inSteps, `${name}: the step among Next steps`);
+    assert.deepEqual([g.why, g.step], ["No goals with a date yet.", inSteps ? undefined : FIX], name);
+    const t = await z2Draw(plan, T);
+    assert.equal(t.split(FIX).length - 1, 1, `${name}: the step said once on the sheet`);
+    assert.match(t, inSteps ? /Goals No goals with a date yet\. 0 out of 5 / : /Goals No goals with a date yet\. Add what you are saving for, with a date, on the Goals page\. 0 out of 5 /, name);
+  }
 });

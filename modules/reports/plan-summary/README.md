@@ -140,3 +140,40 @@ of 25". Invariance against e223a42 over every invented household (`z2-invariance
 four gated households byte for byte once the score's retirement step and titles are put back and `retirement.nothingSaved` and
 `notKnown` are taken off.
 
+## The Goals row says why it has no points (ha (b), 2026-11-17)
+Riley (the renter-debt fixture: 24, an Emergency fund goal of $14,500 with no date) reads his goal in the Goals section, then
+"Goals 0 out of 5" in the Plan health table with no reason. The Plan health score says why for that part, in its own words (its
+`detail`): "No goals with a date yet." The row now says it too, under the part's name in the sheet's small grey line (as a guess
+mark sits under a figure), and keeps its points, so the table still adds up to the score and the row never reads "not known yet"
+beside a goal the sheet lists (the z2 fix round's M2 and P4 stand):
+
+    Goals
+    No goals with a date yet. Add what you   0 out of 5
+    are saving for, with a date, on the
+    Goals page.
+
+- compute: a part in `WHY_PARTS` (only `"goals"`) whose status is `"unknown"` carries `why`, the score's part's `detail`, read from
+  overview/health-score's compute and never copied, so the row follows the score's words if they change. The score decides when
+  it could not judge Goals (no goal with both a date and an amount), and what it says.
+- With it, `step`: the score's own next step for that part (its `fix`, "Add what you are saving for, with a date, on the Goals
+  page."), unless the sheet's Next steps already hold it (Ruth, 72, no goals: it is her first step), so the sheet says it once
+  (fix round, critic P1: the row gave the reason and not what to do).
+- Only while the reason reads true beside the sheet (`whyHolds.goals`: no goal listed with a date; fix round, critic F1). The score
+  counts a goal as dated only with an amount too, so a goal with a date and no amount ($0, or below $0) is listed as "Jan 2028, no
+  amount" while the score says "No goals with a date yet."; then the row reads as at 452408a ("0 out of 5", nothing under it) and the
+  goal's own line says what is missing. Decided here and not in the score: the score's words are its own page's (another change is
+  open on that page), and the sheet only chooses when to quote them.
+- view: the Part cell is the title with `why` (and `step`, after it) under it in one small grey line; the Points cell as before.
+- Not changed: every other part the score could not judge keeps "0 out of N" with no line under it (the emergency fund with no
+  bills marked, saving with no income, and retirement or protection waiting for Social Security on the 14 base households). Saying
+  why there too is the same one-line change to `WHY_PARTS`, left for a design that looks at those sheets (it would move about
+  thirty of them).
+- Tests (`module.test.mjs`, "ha (b)"): Riley's Goals part carries the score's own detail and fix, 0 out of 5, and only it; a dated
+  goal and the family carry no `why`; no goals at all says the same as the score; Riley's drawn sheet reads "Goals No goals with a
+  date yet. Add what you are saving for, with a date, on the Goals page. 0 out of 5" under the goal it speaks of, the family's row
+  its points only. Fix round: a goal with a date and $0 or -$5 gets no line (F1); Sam, Jordan and the freelancer get the step,
+  Ruth (whose Next steps say it) the reason only, and the step is said once on every sheet (P1). Invariance: the z2 test over every
+  invented household takes `why` and `step` off and still matches its e223a42 digests (which 452408a matches), and checks they are
+  on exactly the households whose score could not judge Goals and whose sheet lists no goal with a date, in the score's words, the
+  step only where Next steps do not hold it; tests/chance-draws-invariance.test.mjs takes them off the same way.
+

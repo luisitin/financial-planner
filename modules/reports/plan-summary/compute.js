@@ -44,11 +44,25 @@ export const UNKNOWN_PART = "Retirement";
  * other sheet (critic M2, P4).
  */
 export const NOT_KNOWN_PARTS = ["retirement", "protection"];
+/**
+ * The parts whose row says why the score could not judge them (`why`: the Plan health score's own words for that part, its
+ * `detail`, read from the score and never copied), under a row that keeps its points: Goals, where no goal has a date ("No
+ * goals with a date yet."), beside the goal the sheet lists (ha (b), 2026-11-17: Riley's row said "0 out of 5" and nothing
+ * else). With it, `step`: the score's own next step for that part (its `fix`), unless the sheet's Next steps already say it
+ * (fix round P1). Every other part reads as before.
+ */
+export const WHY_PARTS = ["goals"];
+/**
+ * When the score's reason reads true beside the sheet (fix round F1): the score counts a goal as dated only with an amount
+ * too, so a goal with a date and no amount is listed on the sheet with its date ("Jan 2028, no amount") while the score says
+ * "No goals with a date yet."; then the row says nothing under it, as before, and the goal's own line says "no amount".
+ */
+export const whyHolds = { goals: (goals) => !goals.some((g) => g.targetDate) };
 
 /**
  * compute(plan, { today }) -> {
  *   ready, missing, today, household: { name, people: [{ name, role, age }], filing, state },
- *   netWorth, cashflow (next-best-action's spare) | null, health: { score, band, parts: [{ title, points, max, status, notKnown? (under "not known yet": a part waiting for the same answer) }] } | null,
+ *   netWorth, cashflow (next-best-action's spare) | null, health: { score, band, parts: [{ title, points, max, status, notKnown? (under "not known yet": a part waiting for the same answer), why? (WHY_PARTS the score could not judge, while whyHolds: its own reason), step? (with why: the score's fix, unless nextSteps hold it) }] } | null,
  *   retirement: { ready, unknown (Will the money last?'s "We don't know yet"), nothingSaved? (with unknown: told us nothing is saved), verdict, retireYear, atRetirementReal, success, lastsTo, shortYear, shortAge, affordableMonthly, spendingMonthly, chance, medianEndReal, socialSecurityMonthly, hint } ,
  *   protection: { passed, total, failing: [{ title, failAge, failYear }] } | null,
  *   goals: [...], debts: [...], milestones: [timeline events, next MILESTONE_YEARS], nextSteps: [{ title, detail }], assumptions,
@@ -99,6 +113,11 @@ export function compute(plan, params = {}) {
     if (!nextSteps.some((s) => s.detail === step.detail)) nextSteps.push({ title: step.title, detail: step.detail });
   }
 
+  // a part the score could not judge says why under its row, in the score's words, while they read true beside the sheet; and
+  // the score's step for it unless Next steps above say it already (ha (b) and its fix round: F1, P1)
+  const whyOf = (p) => (p.status === "unknown" && WHY_PARTS.includes(p.id) && p.detail && (whyHolds[p.id]?.(gl.goals) ?? true)
+    ? { why: p.detail, ...(p.fix && !nextSteps.some((s) => s.detail === p.fix) ? { step: p.fix } : {}) } : {});
+
   const ours = summaryMarks(plan, { nb, pr, gl, li, estimates: !!params.estimates });
   return {
     ...(ours ? { ours } : {}),
@@ -106,7 +125,7 @@ export function compute(plan, params = {}) {
     household: { name: plan.meta?.name || "", people: ppl.people.map((p) => ({ name: p.name, role: p.role, age: p.age, retirementAge: p.role === "dependent" ? null : p.retirementAge })), filing: ppl.filingLabel, state: ppl.state },
     netWorth: { assets: nw.assets, liabilities: nw.liabilities, netWorth: nw.netWorth, cash: nw.cash, investable: nw.investable, byTaxBucket: nw.byTaxBucket, change: nw.change },
     cashflow: nb.ready ? nb.spare : null,
-    health: health.ready ? { score: health.score, band: health.band, parts: health.parts.map((p) => ({ title: unknown && p.id === "retirement" ? UNKNOWN_PART : p.title, points: p.points, max: p.max, status: p.status, ...(unknown && p.status === "unknown" && NOT_KNOWN_PARTS.includes(p.id) ? { notKnown: true } : {}) })) } : null,
+    health: health.ready ? { score: health.score, band: health.band, parts: health.parts.map((p) => ({ title: unknown && p.id === "retirement" ? UNKNOWN_PART : p.title, points: p.points, max: p.max, status: p.status, ...(unknown && p.status === "unknown" && NOT_KNOWN_PARTS.includes(p.id) ? { notKnown: true } : {}), ...whyOf(p) })) } : null,
     retirement,
     protection: st?.ready ? { passed: st.passed, total: st.total, failing: st.scenarios.filter((s) => !s.success).map((s) => ({ title: s.title, failAge: s.failAge, failYear: s.failYear, roomMonthly: s.roomMonthly })) } : null,
     // a goal waiting its turn on Next best action reads "starts later", as on Goals and the Timeline (review 2026-11-02)

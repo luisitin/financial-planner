@@ -117,8 +117,10 @@ export function render(page, ctx) {
 
     // (retirement not known yet: the parts waiting for that answer, retirement and protection, read "not known yet", as the Plan
     // health page says it, not "0 out of 25"; every other part keeps its points, as on every sheet; z2 and its fix round, M2)
+    // (a part the score could not judge for its own reason, Goals with no dated goal, says that reason under its name in the
+    // score's words, as a guess mark sits under a figure, and the score's next step for it when Next steps above do not; ha (b))
     if (d.health) sheet.append(section(ui, `Plan health: ${d.health.score} out of 100`,
-      rtable(ui, [{ label: "Part", get: (p) => p.title }, { label: "Points", num: true, get: (p) => (p.notKnown ? "not known yet" : `${Number.isInteger(p.points) ? p.points : p.points.toFixed(1)} out of ${p.max}`) }], d.health.parts)));
+      rtable(ui, [{ label: "Part", get: (p) => (p.why ? ui.h("span", {}, p.title, ui.h("span", { class: "rp-sub", style: { display: "block" } }, p.step ? `${p.why} ${p.step}` : p.why)) : p.title) }, { label: "Points", num: true, get: (p) => (p.notKnown ? "not known yet" : `${Number.isInteger(p.points) ? p.points : p.points.toFixed(1)} out of ${p.max}`) }], d.health.parts)));
 
     const as = d.assumptions;
     sheet.append(section(ui, "Assumptions",

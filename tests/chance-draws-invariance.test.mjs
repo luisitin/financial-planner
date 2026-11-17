@@ -70,6 +70,9 @@ const SAYS_UNKNOWN = new Set(ALL.filter(({ plan }) => retirementUnknown(plan, { 
  * code before that change, where every other digest here was the same as at 81a5288. */
 const JOB_LOSS = / out of work for /;
 const butJobLoss = (s) => (s?.protection ? { ...s, protection: { ...s.protection, failing: s.protection.failing.filter((f) => !JOB_LOSS.test(f.title)) } } : s);
+/** The plan summary without its Goals row's reason and step (ha (b), 2026-11-17: `why` and `step`, the Plan health score's own
+ * words where it could not judge Goals; modules/reports/plan-summary/module.test.mjs pins them): without them, what it was. */
+const sansWhy = (s) => (s?.health ? { ...s, health: { ...s.health, parts: s.health.parts.map(({ why: _w, step: _s, ...x }) => x) } } : s);
 const skipped = (name, k, jobLossFails) => (k === "summary" && (SAYS_UNKNOWN.has(name) || jobLossFails)) || (k === "summaryButJobLoss" && SAYS_UNKNOWN.has(name));
 /** The careful figure (thousands of runs) only for the plans the module tests use. */
 const CAREFUL = new Set(["fixture family-plan.mjs:familyPlan", "fixture retirement-plan.mjs:retirementPlan", "fixture widow-plan.mjs:widowPlan"]);
@@ -90,7 +93,7 @@ function figures(name, plan) {
   return {
     ...chanceFigures(name, plan),
     report: run(() => sansUnknown(reportRetirement(p(), { today: T, maxPaths: 200 }), u)),
-    ...(() => { const s = run(() => summary(p(), { today: T, maxPaths: 200 })); return { summary: s, summaryButJobLoss: butJobLoss(s), jobLossFails: !!s?.protection?.failing?.some((f) => JOB_LOSS.test(f.title)) }; })(),
+    ...(() => { const s = sansWhy(run(() => summary(p(), { today: T, maxPaths: 200 }))); return { summary: s, summaryButJobLoss: butJobLoss(s), jobLossFails: !!s?.protection?.failing?.some((f) => JOB_LOSS.test(f.title)) }; })(),
     fire: run(() => sansUnknown(fire(p(), { today: T }), u)),
     goals: run(() => goals(p(), { today: T })),
     compare: run(() => compare(p(), { today: T, paths: 100 })),
