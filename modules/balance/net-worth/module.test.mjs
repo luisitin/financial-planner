@@ -1952,7 +1952,7 @@ test("the new boxes: asked under More details from the second account on (never 
   assert.ok(fold && String(fold.className).includes("form-more"), "under More details (optional)");
   assert.ok(!fold.open, "shut: nothing in it holds anything");
   for (const k of ["rate", "rateOn", "sharePct"]) assert.equal(P.label(k).hidden, true, `${k} hidden until its choice asks`);
-  assert.match(nbsp(P.textOf(fold)), /Its currency Dollars, like the rest of the plan Euros \(EUR\) British pounds \(GBP\) Canadian dollars \(CAD\) Mexican pesos \(MXN\) Japanese yen \(JPY\) Swiss francs \(CHF\) Australian dollars \(AUD\) Indian rupees \(INR\) Chinese yuan \(CNY\) Its balance counts in dollars at the rate you type\. Its bank lines and investments here are still read as dollars\./);
+  assert.match(nbsp(P.textOf(fold)), /Currency of this account Dollars Euros \(EUR\) British pounds \(GBP\) Canadian dollars \(CAD\) Mexican pesos \(MXN\) Japanese yen \(JPY\) Swiss francs \(CHF\) Australian dollars \(AUD\) Indian rupees \(INR\) Chinese yuan \(CNY\) The balance counts in dollars at the rate you type\. Bank lines and investments in this account are still read as dollars\./);
   assert.match(P.textOf(fold), /How much of it is yours All of it Half A third A quarter Two thirds Three quarters Another share For an account you share with someone outside your household, such as a parent or a sibling: type its whole balance above, and only your share counts\. /);
   assert.match(P.textOf(fold), /Owned by a trust The trust's name, if a trust owns it\. Leave it empty if not\./);
   fill(P, "name", "Rainy day"); fill(P, "balance", "2,500");
@@ -1967,9 +1967,18 @@ test("an account in euros: the box asks the balance in euros, the rate is asked 
   const P = await nwPage(withAccount(), { add: "savings" });
   fill(P, "name", "Paris savings"); fill(P, "balance", "12,000"); fill(P, "currency", "EUR");
   assert.equal(P.label("rate").hidden, false); assert.equal(P.label("rateOn").hidden, false);
-  assert.equal(P.textOf(P.label("rate").querySelector(".field-label")), "1 euro in dollars");
-  assert.equal(P.textOf(P.label("rate").querySelector(".help")), "For example, 1.08 if 1 euro buys $1.08: your bank's app or a currency site shows today's. One rate for all your accounts in euros.");
-  assert.equal(P.textOf(P.label("balance").querySelector(".field-label")), "Current balance, in euros");
+  assert.equal(P.textOf(P.label("rate").querySelector(".field-label")), "Exchange rate, in dollars");
+  assert.equal(P.textOf(P.label("rate").querySelector(".help")), "What 1 euro is worth, for example 1.08 if 1 euro buys $1.08: your bank's app or a currency site shows today's. One rate for all your accounts in euros.");
+  // (a box's name never changes once drawn: wave 1 keeps typing under the form's box names; the line under the box says it)
+  assert.equal(P.textOf(P.label("balance").querySelector(".field-label")), "Current balance");
+  assert.equal(P.textOf(P.label("balance").querySelector(".worked-note")), "Type it in euros.");
+  fill(P, "currency", "GBP");
+  assert.equal(P.textOf(P.label("rate").querySelector(".help")), "What 1 British pound is worth, for example 1.08 if 1 British pound buys $1.08: your bank's app or a currency site shows today's. One rate for all your accounts in British pounds.");
+  assert.equal(P.textOf(P.label("balance").querySelector(".money-sign")), "GBP");
+  fill(P, "currency", ""); 
+  assert.equal(P.label("balance").querySelector(".worked-note"), null, "back to dollars: the line goes");
+  assert.equal(P.textOf(P.label("balance").querySelector(".money-sign")), "$");
+  fill(P, "currency", "EUR");
   assert.equal(P.textOf(P.label("balance").querySelector(".money-sign")), "EUR");
   // no rate: refused, nothing saved
   P.submit();
@@ -2021,7 +2030,11 @@ test("a new rate typed on one account moves every account in that currency, in o
 test("a part share: the whole typed, your share counted; a share of your own; back to dollars and all of it, as a plain account", async () => {
   const P = await nwPage(withAccount(), { add: "property" });
   fill(P, "name", "Lake cabin"); fill(P, "balance", "400,000"); fill(P, "shareOf", "1/2");
-  assert.equal(P.textOf(P.label("balance").querySelector(".field-label")), "What it would sell for today (all of it)");
+  assert.equal(P.textOf(P.label("balance").querySelector(".worked-note")), "Type the whole balance: only your share counts.");
+  fill(P, "currency", "EUR");
+  assert.equal(P.textOf(P.label("balance").querySelector(".worked-note")), "Type the whole balance, in euros: only your share counts.");
+  assert.equal(P.root.all().filter((e) => String(e.className).includes("worked-note")).length, 1, "one line, rewritten");
+  fill(P, "currency", "");
   assert.equal(P.label("sharePct").hidden, true);
   P.submit();
   const a = P.plan.accounts.find((x) => x.name === "Lake cabin");
@@ -2110,6 +2123,14 @@ test("refused with words at the box: a currency with no balance, gold by weight 
   p.accounts.push({ id: "s2", name: "Savings two", type: "savings", balance: 3000, history: [] }, { id: "s3", name: "Savings three", type: "savings", balance: 2000, trust: "Rivera Family Trust", history: [] });
   const s = OF.sectionsOf(p, { all: true }).find((x) => x.type === "savings");
   assert.deepEqual(s.held.map((h) => [h.id, h.why]).sort(), [["eu1", "it is in another currency, or only partly yours"], ["s3", "a trust owns it"]]);
+});
+
+test("Hide the amounts: every currency an account can be in is hidden on screen like dollars (core/format.js maskAmounts)", async () => {
+  const { maskAmounts } = await import("../../../core/format.js");
+  for (const c of WK.CURRENCIES) {
+    const said = `${WK.ownMoney(c.code, 12000)} at ${WK.rateMoney(1.08, {})} = $12,960`;
+    assert.equal(maskAmounts(said).replace(/ /g, " "), `${c.code} ••• at $••• = $•••`, c.code);
+  }
 });
 
 // ---- the critics' findings, 2026-11-17 --------------------------------------------------------------------------------------

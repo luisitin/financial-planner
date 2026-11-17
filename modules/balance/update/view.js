@@ -61,7 +61,7 @@ export function render(root, ctx) {
     const o = r.own;
     const what = o ? `${r.debt ? "amount owed" : "balance"}${o.code ? ` in ${currencyName(o.code)}` : ""}${o.share < 1 ? ", the whole account" : ""}` : r.debt ? "amount owed" : "balance";
     const m = ui.moneyBox({ name: r.id, value: o ? o.full : r.balance, min: r.debt ? 0 : undefined, label: `${r.name}: ${what}` });
-    if (o?.code) { const sign = m.box.querySelector?.(".money-sign"); if (sign) sign.textContent = o.code; m.input.style.paddingLeft = `${16 + o.code.length * 9}px`; }
+    if (o?.code) { const sign = m.box.querySelector?.(".money-sign"); if (sign) sign.textContent = o.code; m.input.style.paddingLeft = `${20 + o.code.length * 11}px`; }
     m.input.setAttribute("enterkeyhint", "next");
     boxes.push({ id: r.id, input: m.input });
     const when = r.stale ? ui.h("span", { class: "pill warn" }, r.days === null ? "not dated" : `updated ${age(r.days)}`) : ui.h("span", { class: "bu-sub" }, `updated ${age(r.days)}`);

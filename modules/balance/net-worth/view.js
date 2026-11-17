@@ -54,14 +54,16 @@ const KIND_FIELDS = [
 // it was). The rate, its day and an exact share show only when the choice above them asks for them (showWorked below).
 const capital = (t) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 const WORKED_KEYS = ["currency", "rate", "rateOn", "shareOf", "sharePct", "trust"];
-const rateLabel = (code, plan) => `1 ${currencyName(code, 1)} in ${currencyName(planCode(plan))}`;
-const rateHelp = (code, plan) => `For example, 1.08 if 1 ${currencyName(code, 1)} buys ${rateMoney(1.08, plan)}: your bank's app or a currency site shows today's. One rate for all your accounts in ${currencyName(code)}.`;
+// (the boxes' own names never change once drawn: wave 1 keeps typing under a form's box names, and a name changed after typing
+// left the typing behind as "Not saved yet" after the save; what follows the currency is said in the help line under a box)
+const rateLabel = (plan) => `Exchange rate, in ${currencyName(planCode(plan))}`;
+const rateHelp = (code, plan) => `What 1 ${currencyName(code, 1)} is worth, for example 1.08 if 1 ${currencyName(code, 1)} buys ${rateMoney(1.08, plan)}: your bank's app or a currency site shows today's. One rate for all your accounts in ${currencyName(code)}.`;
 function workedFields(plan) {
   const pc = planCode(plan), ours = currencyName(pc);
   return [
-    { key: "currency", label: "Its currency", type: "select", more: true, options: [{ value: "", label: `${capital(ours)}, like the rest of the plan` }, ...CURRENCIES.filter((c) => c.code !== pc).map((c) => ({ value: c.code, label: `${capital(c.many)} (${c.code})` }))],
-      help: `Its balance counts in ${ours} at the rate you type. Its bank lines and investments here are still read as ${ours}.` },
-    { key: "rate", label: rateLabel("EUR", plan), type: "number", more: true, min: 0, step: "any", help: rateHelp("EUR", plan) },
+    { key: "currency", label: "Currency of this account", type: "select", more: true, options: [{ value: "", label: capital(ours) }, ...CURRENCIES.filter((c) => c.code !== pc).map((c) => ({ value: c.code, label: `${capital(c.many)} (${c.code})` }))],
+      help: `The balance counts in ${ours} at the rate you type. Bank lines and investments in this account are still read as ${ours}.` },
+    { key: "rate", label: rateLabel(plan), type: "number", more: true, min: 0, step: "any", help: rateHelp("EUR", plan) },
     { key: "rateOn", label: "Rate as of", type: "date", more: true, max: "today", help: "Leave it empty if it is today's rate." },
     { key: "shareOf", label: "How much of it is yours", type: "select", more: true, options: [{ value: "", label: "All of it" }, ...SHARES.map((x) => ({ value: x.value, label: x.label })), { value: "own", label: "Another share" }],
       help: "For an account you share with someone outside your household, such as a parent or a sibling: type its whole balance above, and only your share counts." },
@@ -454,27 +456,28 @@ export function render(root, ctx) {
     // and our dollar guess leaves it (a guess in dollars is no balance in euros). Back to dollars and all of it: as it was.
     const wbox = (k) => formHost.querySelector(`[name="${k}"]`);
     const signEl = wbox("balance")?.parentNode?.querySelector?.(".money-sign") ?? null;
-    const sign0 = signEl?.textContent ?? "$";
-    let balSuffix = "", wasWorkedNow = false;
+    const sign0 = signEl?.textContent ?? "$", pad0 = balBox?.style?.paddingLeft ?? "";   // (a code is wider than "$": its box leaves it room)
+    let wasWorkedNow = false;
     function showWorked() {
       if (!askWorked || !wbox("currency")) return;
       const code = wbox("currency").value || "", pick = wbox("shareOf")?.value || "";
       const hide = (key, h) => { const l = kLab(key); if (l) { l.hidden = h; l.style.display = h ? "none" : ""; } };
-      const set = (key, text) => { const l = kLab(key)?.querySelector(".field-label"); if (l && text && l.textContent !== text) l.textContent = text; };
       hide("rate", !code); hide("rateOn", !code); hide("sharePct", pick !== "own");
       showOwner();
       if (code) {
-        set("rate", rateLabel(code, plan));
         const help = kLab("rate")?.querySelector(".help"); if (help) help.textContent = rateHelp(code, plan);
         // the plan's rate for it, when it has one and nothing is typed yet
         const r = rateOf(plan, code);
         if (r && !wbox("rate").value) { wbox("rate").value = String(r.rate); if (r.asOf && !wbox("rateOn").value) wbox("rateOn").value = r.asOf; }
       }
       const part = pick !== "";
-      const suffix = `${code ? `, in ${currencyName(code)}` : ""}${part ? " (all of it)" : ""}`;
-      const l = kLab("balance")?.querySelector(".field-label");
-      if (l) { const base = balSuffix && l.textContent.endsWith(balSuffix) ? l.textContent.slice(0, -balSuffix.length) : l.textContent; l.textContent = base + suffix; balSuffix = suffix; }
-      if (signEl) { signEl.textContent = code || sign0; if (balBox) balBox.style.paddingLeft = `${16 + (code || sign0).length * 9}px`; }
+      // under the balance box, one line on what to type there (its name stays as drawn)
+      const said = code && part ? `Type the whole balance, in ${currencyName(code)}: only your share counts.` : code ? `Type it in ${currencyName(code)}.` : part ? "Type the whole balance: only your share counts." : "";
+      const lb = kLab("balance");
+      let note = lb?.querySelector?.(".worked-note") ?? null;
+      if (lb && said && !note) { note = ui.h("small", { class: "help worked-note" }); lb.append(note); }
+      if (note) { if (said) note.textContent = said; else note.remove(); }
+      if (signEl) { signEl.textContent = code || sign0; if (balBox) balBox.style.paddingLeft = code ? `${20 + code.length * 11}px` : pad0; }
       const now = !!code || part;
       if (now) ui.setGuess?.(theForm, "balance", null);
       else if (wasWorkedNow) ui.setGuess?.(theForm, "balance", guessFor(typeSel?.value ?? values.type, ownerSel?.value ?? start.ownerId ?? ""));

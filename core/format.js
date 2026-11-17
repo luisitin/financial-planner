@@ -44,7 +44,7 @@ let HIDDEN = false;
 export const setHidden = (on) => { HIDDEN = !!on; };
 export const hidden = () => HIDDEN;
 export const MASK = "•••";
-const SYM = "(?:[A-Z]{1,3})?[$€£¥]", CODE = "(?:USD|EUR|MXN|GBP|CAD|AUD|NZD|CHF|JPY)", GAP = "[ \\u00a0\\u202f]", SIGN = "[-+\\u2212]";
+const SYM = "(?:[A-Z]{1,3})?[$€£¥]", CODE = "(?:USD|EUR|MXN|GBP|CAD|AUD|NZD|CHF|JPY|INR|CNY)", GAP = "[ \\u00a0\\u202f]", SIGN = "[-+\\u2212]";
 // a big figure in a tile carries a zero-width space after each comma, so it may wrap there (core/ui/dom.js stat);
 // thousands may also be set off by an apostrophe ("1'234") or by a space before exactly three digits ("1 234")
 const NUMBER = `\\d+(?:[.,'\\u2019\\u202f]\\u200b?\\d+|${GAP}\\d{3}(?!\\d))*`;
