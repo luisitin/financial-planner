@@ -111,3 +111,22 @@ nothingSaved }` and `headline.shortYear` is null, so the box reads "Will it last
 retirement yet" (told) or "add what you own" (not told); the "short" event becomes, on the plan's last year, "Whether the money
 lasts" with the projection's sentence (`unknownWords(unknown, "whether the money lasts")`), opening Net worth. Every other plan:
 the same events and headline as before.
+
+## One retirement answer (z1, 2026-11-16; tests `tests/one-answer.test.mjs`)
+
+Whether the money lasts was said only once every adult's Social Security was in (`retirementKnown`). It is now also said when
+Social Security is the only gap and Will the money last? says the money lasts even counting the missing figure as none
+(overview/setup `lastsWithoutSs`, the one rule every overview page asks; its README, "One retirement answer"): the run is the
+same one this page draws, and it lasts. The plan's last moment then reads "The money lasts: About $X is left at the end, in
+today's dollars." plus the shared sentence "Sam's Social Security is not counted yet." (`ssLeftOutLine`), and the top box
+"The money lasts" / the year / "to the end of the plan, even without Sam's Social Security" (`headline.withoutSs`, only then).
+Short or only just lasting without it, the page keeps "Whether the money lasts: Not worked out yet. Add Social Security for
+Sam ..." as before.
+
+Ruth and Sam (the invented retired couple, Sam with no figure): "Not yet known / needs Social Security for Sam" becomes "The
+money lasts 2054, to the end of the plan, even without Sam's Social Security", and the last moment "The money lasts: About
+$966,600 is left at the end, in today's dollars. Sam's Social Security is not counted yet." Every other household's Timeline
+is byte for byte what it was (`tests/one-answer-invariance.test.mjs`).
+
+Fix round (critic P2): under the plan's last moment, while `headline.withoutSs` is set, one more link, "Add it ›", opens the
+Social Security page (the card itself still opens Will the money last?; the link sits beside it, 44 px tall). View only.

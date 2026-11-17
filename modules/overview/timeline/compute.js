@@ -14,7 +14,7 @@ import { buildInputs, retirementKnown, retirementUnknown, unknownWords } from ".
 import { compute as computeSocialSecurity, fullRetirementAge } from "../../retirement/social-security/compute.js";
 import { compute as computePayoff, twoDates } from "../../debt/payoff/compute.js";
 import { compute as computeGoals } from "../../goals/goals/compute.js";
-import { retirementGap } from "../setup/compute.js";
+import { retirementGap, lastsWithoutSs, ssLeftOutLine } from "../setup/compute.js";
 import { compute as computeNext, monthWords } from "../next-best-action/compute.js";
 const listWords = (xs) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 import { goalsBehind } from "../alerts/compute.js";
@@ -112,7 +112,11 @@ export function compute(plan, params = {}) {
   // the projection: savings by year, who withdraws what, whether the money lasts
   const b = buildInputs(plan, { today });
   const run = b.inputs ? project(b.inputs) : null;
-  const known = retirementKnown(plan, today);   // Social Security and birth dates in: the money lasting can be said
+  // Social Security and birth dates in: the money lasting can be said; or Social Security the only gap and the money lasts even
+  // without it (overview/setup lastsWithoutSs, the one rule every overview page asks; z1): then it is said too, with whose
+  // Social Security it leaves out
+  const without = retirementKnown(plan, today) ? null : lastsWithoutSs(plan, { today });
+  const known = retirementKnown(plan, today) || !!without;
   const unknown = run && known && !run.success ? retirementUnknown(plan, { today }) : null;   // nothing saved yet (projection's rule)
   const gap = known ? null : retirementGap(plan);
   const rows = run ? run.rows : [];
@@ -244,7 +248,7 @@ export function compute(plan, params = {}) {
     // out" here either (whole-app sweep x3, 2026-11-16); the plan's last year says it is not known yet, with the way on
     else if (!run.success && unknown) add({ id: "unknown", kind: "end", year: rows[rows.length - 1].year, title: "Whether the money lasts", detail: unknownWords(unknown, "whether the money lasts"), go: ["balance", "net-worth"] });
     else if (!run.success) add({ id: "short", kind: "short", year: run.failYear, title: "The savings run out", detail: `In ${run.failYear}${run.failAge ? `, when ${nameIn(self.name)} would be ${run.failAge}` : ""}. Spending less, working longer or saving more moves this date; the stress tests and goal seek show by how much.`, tone: "bad", go: ["retirement", "projection"] });
-    else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.`, tone: "ok", go: ["retirement", "projection"] });
+    else add({ id: "lasts", kind: "end", date: ordered.map((p) => p.planEndDate).sort().pop(), title: "The money lasts", detail: `About ${money(run.endBalanceReal)} is left at the end, in today's dollars.${without ? ` ${ssLeftOutLine(without.words)}` : ""}`, tone: "ok", go: ["retirement", "projection"] });
   }
 
   // things that will happen (retirement.happenings, set on Will the money last?): each on its first year, in the words that page
@@ -285,6 +289,8 @@ export function compute(plan, params = {}) {
     lastsTo: run && known ? (run.success ? rows[rows.length - 1].year : null) : null, shortYear: run && known && !run.success && !unknown ? run.failYear : null, needsSS: !!run && !known, needs: run && !known ? gap?.what ?? null : null,
     fiYear: events.find((e) => e.kind === "fi")?.year ?? null, endYear,
     ...(unknown ? { unknown } : {}),
+    // (only for an answer that stands without the Social Security not in yet: whose it leaves out, "Sam's Social Security")
+    ...(without && run ? { withoutSs: without.words } : {}),
   };
   return {
     ready: true, missing: [], notes, startYear, endYear,

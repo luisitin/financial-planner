@@ -326,3 +326,40 @@ test("a move between accounts, set on Will the money last?, is on its year with 
   ]);
   assert.equal(d.events.length, base.events.length + 2);
 });
+
+test("z1: Social Security the only gap and the money lasting without it: the Timeline says it lasts, and whose it leaves out", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const T = "2026-11-16";
+  // Ruth and Sam: Sam has no Social Security figure; Will the money last? says the money lasts without it
+  const d = compute(retiredCouplePlan(T), { today: T });
+  assert.deepEqual([d.headline.lastsTo, d.headline.shortYear, d.headline.needsSS, d.headline.needs, d.headline.withoutSs], [2054, null, false, null, "Sam's Social Security"]);
+  const end = d.events.find((e) => e.id === "lasts");
+  assert.equal(end.detail, "About $966,600 is left at the end, in today's dollars. Sam's Social Security is not counted yet.");
+  assert.ok(!d.events.some((e) => e.id === "needs-ss"));
+  // spending three times as high: short without it, so the Timeline keeps asking for Sam's Social Security, as before
+  const high = retiredCouplePlan(T); for (const x of high.expenses) x.amount *= 3;
+  const h = compute(high, { today: T });
+  assert.deepEqual([h.headline.lastsTo, h.headline.needsSS, h.headline.needs, h.headline.withoutSs], [null, true, "Social Security for Sam", undefined]);
+  assert.match(h.events.find((e) => e.id === "needs-ss").detail, /^Not worked out yet\. Add Social Security for Sam on the Social Security page/);
+  // Sam's figure typed: the money lasts, and nothing is left out to name
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  const t = compute(typed, { today: T });
+  assert.ok(t.headline.lastsTo); assert.equal(t.headline.withoutSs, undefined);
+  assert.doesNotMatch(t.events.find((e) => e.id === "lasts").detail, /not counted yet/);
+});
+
+test("z1 fix P2: the last moment that leaves Sam's Social Security out ends with 'Add it', to the Social Security page", async () => {
+  const { retiredCouplePlan } = await import("../../../qa/fixtures/retired-couple-plan.mjs");
+  const { renderPage, textOf } = await import("../../../qa/fixtures/fake-dom.mjs");
+  const T = "2026-11-16";
+  const toSs = async (p) => (await renderPage(new URL("./view.js", import.meta.url), p, T)).root.querySelectorAll("a").filter((a) => a.getAttribute("href") === "#/retirement/social-security");
+  const adds = await toSs(retiredCouplePlan(T));
+  assert.deepEqual(adds.map((a) => textOf(a)), ["Add it ›"]);
+  // beside the card that says so, which still opens Will the money last?
+  const li = adds[0].parentNode;
+  assert.match(textOf(li), /Sam's Social Security is not counted yet\. March 10 › Add it ›$/);
+  assert.equal(li.childNodes[0].getAttribute("href"), "#/retirement/projection");
+  // Sam's figure typed: nothing to add
+  const typed = retiredCouplePlan(T); typed.retirement.socialSecurity = { "p-sam": { monthlyAtFRA: 1500 } };
+  assert.deepEqual(await toSs(typed), []);
+});

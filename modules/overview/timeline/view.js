@@ -34,6 +34,7 @@ const STYLE = `
 .tl-root .tl-era { position: relative; margin: 10px 0 12px -30px; padding: 10px 14px; border-radius: var(--radius-sm); font-weight: 650; background: var(--ok-soft); color: var(--ok); }
 .tl-root .stat-value.bad { color: var(--bad); }
 .tl-root .stat-value.good { color: var(--ok); }
+.tl-root .tl-add { display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px; margin: -6px 0 0; font-weight: 600; font-size: var(--fs-sm); }
 `;
 
 export function render(page, ctx) {
@@ -61,7 +62,8 @@ export function render(page, ctx) {
       statBox(h.retireIn > 0 ? "Retirement" : "Retired", h.retireIn > 0 ? String(h.retireYear) : "Now", h.retireIn > 0 ? `in ${h.retireIn} year${h.retireIn === 1 ? "" : "s"}` : "the plan is in retirement"),
       statBox("Debt-free", h.debtFreeYear ? String(h.debtFreeYear) : "Now", h.debtFreeYear ? "the last loan or card paid off" : "no debts left that need payments"),
       h.shortYear ? statBox("Savings run out", String(h.shortYear), "before the plan ends", "bad")
-        : h.lastsTo ? statBox("The money lasts", String(h.lastsTo), "to the end of the plan", "good")
+        // (an answer that stands without the Social Security not in yet says whose it leaves out, as the Dashboard does; z1)
+        : h.lastsTo ? statBox("The money lasts", String(h.lastsTo), h.withoutSs ? `to the end of the plan, even without ${h.withoutSs}` : "to the end of the plan", "good")
         : statBox("Will it last?", "Not yet known", h.unknown ? (h.unknown.nothingSaved ? "nothing saved for retirement yet" : "add what you own") : h.needsSS ? `needs ${h.needs ?? "Social Security and birth dates"}` : "add accounts and spending"),
     )));
 
@@ -89,7 +91,9 @@ export function render(page, ctx) {
       const isNow = y.events.some((e) => e.kind === "now");
       list.append(ui.h("li", { class: `tl-year ${y.era}${isNow ? " now" : ""}` },
         ui.h("div", { class: "tl-head" }, ui.h("span", { class: "tl-y" }, String(y.year)), ui.h("span", { class: "tl-ages" }, y.ages.map((a) => `${a.name} ${a.age}`).join(" · "))),
-        ui.h("ul", { class: "tl-events" }, evs.map((e) => { shown++; return ui.h("li", {}, card(ui, e)); }))));
+        // (the money lasts without the Social Security not in yet: the sentence that says so ends with a way to add it, beside
+        // the card, which opens Will the money last?; z1 fix round, critic P2)
+        ui.h("ul", { class: "tl-events" }, evs.map((e) => { shown++; return ui.h("li", {}, card(ui, e), e.id === "lasts" && h.withoutSs ? ui.h("a", { class: "tl-add", href: "#/retirement/social-security" }, "Add it ›") : null); }))));
     }
     if (!shown) list.append(ui.h("li", { class: "muted" }, "Nothing of this kind on the timeline."));
   };

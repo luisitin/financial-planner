@@ -22,6 +22,7 @@ import { retireRow } from "../modules/overview/dashboard/compute.js";
 import { compute as alerts } from "../modules/overview/alerts/compute.js";
 import { compute as yourPlan } from "../modules/overview/plan/compute.js";
 import { compute as quick, answerFor } from "../modules/overview/quick/compute.js";
+import { compute as timeline } from "../modules/overview/timeline/compute.js";
 import { markGuess } from "../core/estimate/index.js";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -81,6 +82,15 @@ function quickSays(d) {
   if (!a) return d.needsFirst.some((x) => x.guide === "retire") ? "asks" : "none";
   return a.verdict === "unknown" ? "unknown" : VERDICT[a.verdict];
 }
+/** The Timeline: its top box (lasts to the end, runs out, not known yet) and what it asks for. It says "lasts" for "only just" too. */
+function timelineSays(d) {
+  const h = d?.headline;
+  if (!h) return "asks";
+  if (h.lastsTo) return "lasts";
+  if (h.shortYear) return "short";
+  if (h.unknown) return "unknown";
+  return h.needsSS && /Social Security/.test(h.needs ?? "") ? "asks-ss" : "asks";
+}
 /** Needs attention: its only retirement item is "Your retirement money runs out at N". */
 const attentionSays = (a) => (a.alerts.some((x) => x.id === "retire-short") ? "short" : "none");
 
@@ -89,7 +99,7 @@ const RUNS = ALL.map(({ name, plan }) => {
   const st = standing(c(plan), { today: T });
   return { name, plan, d, st, page: pageSays(d), missing: ssMissingFor(plan).length > 0, known: retirementKnown(plan, T), stands: lastsWithoutSs(plan, { today: T }),
     says: { "Get started": tileSays(st), Dashboard: rowSays(retireRow(st, { plan: c(plan), today: T })), "Needs attention": attentionSays(alerts(c(plan), { today: T })),
-      "Your plan": planSays(yourPlan(c(plan), { today: T })), "Quick answers": quickSays(quick(c(plan), { today: T })) } };
+      "Your plan": planSays(yourPlan(c(plan), { today: T })), "Quick answers": quickSays(quick(c(plan), { today: T })), Timeline: timelineSays(run(() => timeline(c(plan), { today: T }))) } };
 });
 const RC = RUNS.find((r) => r.name === "fixture retired-couple-plan.mjs:retiredCouplePlan");
 
@@ -114,7 +124,8 @@ test("every page agrees with Will the money last?, for every household", () => {
       if (r.missing && !r.known) { assert.ok(said === "asks-ss" || said === "asks" || (where === "Your plan" && said === "none"), at); assert.ok(!["lasts", "tight", "short"].includes(said), at); continue; }
       if (r.page === "asks") { assert.ok(said === "asks" || said === "asks-ss", at); continue; }
       if (r.page === "unknown") { assert.ok(!["lasts", "tight", "short"].includes(said), at); continue; }
-      // checked and short or tight: the same verdict
+      // checked and short or tight: the same verdict (the Timeline's "The money lasts" covers "only just" too: its run succeeds)
+      if (where === "Timeline" && r.page === "tight") { assert.equal(said, "lasts", at); continue; }
       assert.equal(said, r.page, at);
     }
   }
@@ -241,9 +252,14 @@ test("Your plan and Quick answers quote the answer that stands, with the sentenc
 
 test("Ruth and Sam, by name: every page says what Will the money last? says", () => {
   assert.equal(RC.page, "lasts");
-  assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none", "Your plan": "lasts", "Quick answers": "lasts" });
+  assert.deepEqual(RC.says, { "Get started": "lasts", Dashboard: "lasts", "Needs attention": "none", "Your plan": "lasts", "Quick answers": "lasts", Timeline: "lasts" });
+  const tl = timeline(c(RC.plan), { today: T });
+  assert.deepEqual([tl.headline.lastsTo, tl.headline.needsSS, tl.headline.needs, tl.headline.withoutSs], [2054, false, null, "Sam's Social Security"]);
+  const end = tl.events.find((e) => e.id === "lasts");
+  assert.deepEqual([end.title, end.detail], ["The money lasts", "About $966,600 is left at the end, in today's dollars. Sam's Social Security is not counted yet."]);
+  assert.ok(!tl.events.some((e) => e.id === "needs-ss"));
   assert.deepEqual(retireRow(RC.st, { plan: c(RC.plan), today: T }), { dot: "ok", k: "Retirement", s: "The money lasts, even without Sam's Social Security", v: "On track", href: "#/retirement/projection" });
   // a single adult short without Social Security: every page keeps asking, as the page's notice asks first
   const one = RUNS.find((r) => r.name === "01-single-adult/base");
-  assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard, one.says["Your plan"], one.says["Quick answers"]], ["short", "asks-ss", "asks-ss", "asks-ss", "asks"]);
+  assert.deepEqual([one.page, one.says["Get started"], one.says.Dashboard, one.says["Your plan"], one.says["Quick answers"], one.says.Timeline], ["short", "asks-ss", "asks-ss", "asks-ss", "asks", "asks-ss"]);
 });
